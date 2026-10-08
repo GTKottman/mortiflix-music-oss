@@ -3,7 +3,7 @@ name: mortiflix
 description: Walk the owner through Mortiflix, the motion design studio on their own machine, from inside Claude Code - install, setup, writing a brief, running the studio, and every review gate through to the delivered video. Only when the owner types /mortiflix.
 argument-hint: "[demo | new <pipeline> | review | status | setup]"
 disable-model-invocation: true
-allowed-tools: Bash(command -v mortiflix), Bash(mortiflix list --json), Bash(mortiflix status * --json), Bash(mortiflix review --json), Bash(mortiflix review * --json), Bash(mortiflix pipelines --json), Bash(mortiflix setup status --json), Bash(mortiflix keys --json), Bash(mortiflix doctor)
+allowed-tools: Bash(command -v mortiflix), Bash(mortiflix list --json), Bash(mortiflix status * --json), Bash(mortiflix review --json), Bash(mortiflix review * --json), Bash(mortiflix pipelines --json), Bash(mortiflix setup status --json), Bash(mortiflix keys --json), Bash(mortiflix craft --json), Bash(mortiflix doctor)
 ---
 
 # /mortiflix
@@ -77,6 +77,10 @@ Say what's already there (`tools`), then ask. Use AskUserQuestion for choices. E
   `mortiflix setup publish postiz [--url <their Postiz API address>]` (free, open source, they run it with Docker), or
   `mortiflix setup publish none`. The key is theirs to type: `mortiflix keys set uploadpost` or `mortiflix keys set postiz`.
 - **3D**: only if they want it. `mortiflix setup install blender blender-addons`.
+- **Craft apps**: optional. Open-source remakes of After Effects, Premiere, Photoshop, Illustrator and more, each with
+  its own MCP server. `mortiflix craft install all` or `mortiflix craft install <app>…` (`mortiflix craft --json`
+  lists them). Sessions get them on their own. For the owner's own Claude Code too, `mortiflix craft register`
+  (it changes their Claude Code config: ask first).
 
 Before each install, say what it is, where it goes and how big it is (`tool_info[id]`). Installs can take minutes, so
 run them in the background and report when they finish. Finish with `mortiflix doctor`.

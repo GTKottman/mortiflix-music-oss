@@ -17,6 +17,7 @@ import { Runner, BACKENDS } from '../runner.mjs';
 import * as voice from '../voice/index.mjs';
 import * as keys from '../keys.mjs';
 import * as setup from '../setup.mjs';
+import * as craft from '../craft.mjs';
 import * as booth from '../booth.mjs';
 import * as music from '../music.mjs';
 import * as pub from '../publish.mjs';
@@ -121,6 +122,12 @@ export async function startServer(root, { port = 4646, host = '127.0.0.1', runne
     if (p === '/setup/blender' && method === 'POST') {
       if (!loopback) throw new BadRequest('Blender opens on the studio\'s own screen: use mortiflix blender there');
       return send(res, 200, { path: setup.openBlender(root) });
+    }
+    if (p === '/setup/craft' && method === 'PUT') { craft.saveCraftApps(root, (await json(req)).apps || []); return after(await setupInfo(root, installs)); }
+    if ((m = p.match(/^\/setup\/craft\/([a-z]+)\/(open|remove)$/)) && method === 'POST') {
+      if (m[2] === 'remove') { craft.removeApp(root, m[1]); return after(await setupInfo(root, installs)); }
+      if (!loopback) throw new BadRequest('the Craft apps open on the studio\'s own screen: use mortiflix craft open there');
+      return send(res, 200, { path: craft.openApp(root, m[1]) });
     }
     if ((m = p.match(/^\/setup\/install\/([a-z-]+)$/)) && method === 'POST') {
       const tool = m[1];

@@ -1,11 +1,12 @@
 // Backend: your own Claude Code (`claude -p`), with your own login or plan. Each session is one headless run in
 // the project's working folder; its stream-json transcript is kept in state/<id>/sessions/.
 import { spawn, spawnSync } from 'node:child_process';
-import { createWriteStream, existsSync, realpathSync, mkdirSync } from 'node:fs';
+import { createWriteStream, existsSync, realpathSync, mkdirSync, readFileSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 import { REPO } from '../studio.mjs';
+import { craftDir, craftMcpFile } from '../craft.mjs';
 
 export const name = 'claude-code';
 
@@ -21,7 +22,7 @@ export const PARENT_SESSION_VARS = ['CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT', 'CLA
   'CLAUDE_CODE_EXECPATH', 'CLAUDE_PID'];
 
 export async function run({ root, workdir, prompt, env, transcript, onActivity, signal, config }) {
-  const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose', ...(config.claudeArgs || [])];
+  const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose', ...withCraft(config.claudeArgs || [], workdir)];
   if (config.model) args.push('--model', config.model);
   const sessionEnv = {
     ...process.env,
@@ -78,12 +79,30 @@ export async function run({ root, workdir, prompt, env, transcript, onActivity, 
   return { ok: true, usage, cost_usd: result?.total_cost_usd, billing, summary: result?.result };
 }
 
+// The studio's Craft apps (written by prepareWorkdir when any is installed): their MCP servers, and their tools allowed
+// (mcp__<app> allows every tool of that server), added to the owner's allow list or as one of its own.
+export function withCraft(claudeArgs, workdir) {
+  const file = craftMcpFile(workdir);
+  if (!existsSync(file)) return claudeArgs;
+  let ids;
+  try { ids = Object.keys(JSON.parse(readFileSync(file, 'utf8')).mcpServers || {}); } catch { return claudeArgs; }
+  if (!ids.length) return claudeArgs;
+  const allow = ids.map((id) => `mcp__${id}`).join(' ');
+  const out = [...claudeArgs];
+  const i = out.findIndex((a) => a === '--allowedTools' || a === '--allowed-tools');
+  if (i >= 0 && i + 1 < out.length) out[i + 1] = `${out[i + 1]} ${allow}`;
+  else out.push('--allowedTools', allow);
+  return [...out, '--mcp-config', file];
+}
+
 export function describeTool(name, input = {}) {
   if (name === 'Bash') return `$ ${String(input.command || '').split('\n')[0].slice(0, 200)}`;
   if (['Read', 'Write', 'Edit'].includes(name)) return `${name} ${input.file_path || ''}`;
   if (name === 'WebSearch') return `Search: ${input.query || ''}`;
   if (name === 'WebFetch') return `Fetch: ${input.url || ''}`;
   if (name === 'Skill') return `Skill: ${input.skill || input.name || ''}`;
+  const mcp = /^mcp__([^_]+(?:_[^_]+)*?)__(.+)$/.exec(name);
+  if (mcp) return `${mcp[1]}: ${mcp[2]}${input.path ? ` ${input.path}` : ''}`;
   return name;
 }
 
@@ -127,6 +146,8 @@ export function sandboxArgs({ root, workdir, socket, claudeBin, env }) {
   mkdirSync(shared, { recursive: true });
   a.push('--bind', shared, shared);
   a.push('--ro-bind', REPO, REPO);
+  // The Craft apps' programs (their MCP servers run inside the sandbox, with the session).
+  if (existsSync(craftDir(root))) a.push('--ro-bind', craftDir(root), craftDir(root));
   a.push('--bind', workdir, workdir);
   a.push('--bind', socket, socket);
   a.push('--chdir', workdir, '--setenv', 'HOME', home, '--setenv', 'PATH', env.PATH, '--setenv', 'TMPDIR', '/tmp');

@@ -704,7 +704,7 @@ async function setupSection() {
   const refresh = async () => { info = await api('/api/setup'); draw(); };
 
   // One tool: its status, what installing it means, an Install button and the live log while it runs.
-  const UPDATABLE = ['transitions', 'strudel', 'browser-harness', 'blender-addons'];   // the others are reused when found
+  const UPDATABLE = ['transitions', 'strudel', 'browser-harness', 'blender-addons', 'craft'];   // the others are reused when found
   const toolRow = (id, label = info.tools[id].name) => {
     const st = info.status[id];
     const t = info.tools[id];
@@ -762,6 +762,25 @@ async function setupSection() {
       pb.service === 'none' ? null : h('p', { class: 'meta' }, 'Post a delivered video from a terminal: mortiflix publish <project>. It shows the plan and asks first.'));
   };
 
+  // The Craft apps: tick the ones to have, Install pulls them; installed ones open here or get removed.
+  const craftSetup = () => {
+    const apps = info.status.craft.apps;
+    const save = async (ids) => { try { info = await api('/api/setup/craft', { method: 'PUT', body: { apps: ids } }); draw(); } catch (e) { toast(e.message, true); } };
+    const chosen = () => apps.filter((a) => a.chosen).map((a) => a.id);
+    const act = async (id, what) => {
+      try { const r = await api(`/api/setup/craft/${id}/${what}`, { method: 'POST' }); if (what === 'open') toast(`Opening ${r.path.split(/[\\/]/).pop()}`); else { info = r; draw(); } } catch (e) { toast(e.message, true); }
+    };
+    return h('div', null,
+      h('ul', { class: 'checks-list' }, apps.map((a) => h('li', null,
+        h('label', { class: 'toggle' }, h('input', { type: 'checkbox', checked: a.chosen, onchange: (e) => save(e.target.checked ? [...chosen(), a.id] : chosen().filter((x) => x !== a.id)) }),
+          h('span', null, h('b', null, a.name), h('span', { class: 'meta' }, ` · ${a.replaces} · ${a.use}${a.installed ? ` · ${a.version}` : ''}`))),
+        a.installed ? h('span', { class: 'actions' },
+          h('button', { class: 'btn link', onclick: () => act(a.id, 'open') }, 'Open'),
+          h('button', { class: 'btn link', onclick: () => act(a.id, 'remove') }, 'Remove')) : null))),
+      toolRow('craft'),
+      h('p', { class: 'meta' }, 'Sessions get the installed apps\' MCP servers and a skill for them. To use them in your own Claude Code too: mortiflix craft register. The ArtCraft name is its team\'s trademark; these are their open-source apps, pulled from their own releases.'));
+  };
+
   function draw() {
     const st = info.status;
     const part = (id) => info.parts.find((x) => x.id === id);
@@ -806,6 +825,7 @@ async function setupSection() {
         st.blender.ok ? h('ul', { class: 'checks-list' }, info.addons.map((a) => h('li', null, h('span', null, h('b', null, a.name), h('span', { class: 'meta' }, ` · ${a.about}`))))) : null,
         st['blender-addons'].installed?.length ? h('div', { class: 'actions' }, h('button', { class: 'btn', onclick: async () => { try { await api('/api/setup/blender', { method: 'POST' }); toast('Opening Blender'); } catch (e) { toast(e.message, true); } } }, 'Open the studio\'s Blender'),
           h('span', { class: 'meta' }, 'Camera Flight: 3D Viewport › N › Flight')) : null)),
+      field(part('craft').title, h('div', null, ...intro('craft'), craftSetup())),
     );
   }
   draw();

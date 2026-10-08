@@ -17,6 +17,7 @@ import * as rec from './record.mjs';
 import * as music from './music.mjs';
 import * as plat from './platform.mjs';
 import * as pub from './publish.mjs';
+import * as craft from './craft.mjs';
 
 const C = process.stdout.isTTY && !process.env.NO_COLOR
   ? { b: (s) => `\x1b[1m${s}\x1b[0m`, dim: (s) => `\x1b[2m${s}\x1b[0m`, acc: (s) => `\x1b[38;5;208m${s}\x1b[0m`, red: (s) => `\x1b[31m${s}\x1b[0m`, green: (s) => `\x1b[32m${s}\x1b[0m` }
@@ -26,8 +27,8 @@ export const HELP = `${C.b('mortiflix')}: a motion design studio on your machine
 
   ${C.b('Getting started')}
   mortiflix init [--backend claude-code|anthropic-api|demo]   set up the studio (~/Mortiflix, or $MORTIFLIX_STUDIO)
-  mortiflix setup                                              the walkthrough: Claude, transitions, narration, music, assets, 3D
-  mortiflix setup <claude|transitions|narration|music|daw|assets|3d>  one part (mortiflix setup status: where things stand)
+  mortiflix setup                                              the walkthrough: Claude, transitions, narration, music, your DAW, assets, 3D, Craft apps
+  mortiflix setup <claude|transitions|narration|music|daw|assets|publish|3d|craft>  one part (mortiflix setup status: where things stand)
   mortiflix keys                                               add or change your keys (Anthropic, ElevenLabs, others)
   mortiflix doctor                                             check the tools a pipeline needs
   mortiflix demo                                               a full walk-through with placeholder work (free)
@@ -75,6 +76,14 @@ export const HELP = `${C.b('mortiflix')}: a motion design studio on your machine
   ${C.b('3D')}
   mortiflix blender [file.blend]                               open the studio's Blender, with its toolkits and Camera Flight
 
+  ${C.b('Craft apps')} (open-source remakes of the Adobe apps, each with an MCP server)
+  mortiflix craft                                              which are installed, and what each one is for
+  mortiflix craft install [all | <app>…]                       pull the official builds (checked against their SHA256SUMS)
+  mortiflix craft remove <app>                                 delete one from the studio
+  mortiflix craft open <app> [file]                            open one (e.g. a PSD a session made, in PhotoCraft)
+  mortiflix craft register                                     add their MCP servers to your own Claude Code (user scope)
+  mortiflix craft mcp-config                                   print their MCP servers as JSON (.mcp.json format)
+
   ${C.b('Settings')}
   mortiflix config [key [value]]                               show or change settings
   mortiflix keys set <anthropic|elevenlabs|uploadpost|postiz|NAME>  set one key (typed hidden, or piped on stdin)
@@ -118,6 +127,7 @@ export async function run(argv = process.argv.slice(2)) {
       case 'keys': return a.json ? (needStudio(root), json({ keys: keys.keyStatus(root), session_keys: keys.sessionKeyNames(root) })) : keysCmd(root, rest);
       case 'setup': return setupCmd(root, rest, a);
       case 'blender': needStudio(root); return console.log(`Opening ${setup.openBlender(root, rest)} with the studio's profile (Camera Flight: 3D Viewport › N › Flight).`);
+      case 'craft': return craftCmd(root, rest, a);
       case 'doctor': return doctor(root);
       case 'demo': return demo(root);
       case 'pipelines': return a.json ? json(pipelinesView(root)) : pipelines(root, rest, a);
@@ -225,11 +235,11 @@ async function init(root, a) {
   console.log(`  Backend: ${C.b(backend)} ${C.dim(BACKENDS[backend].available(loadConfig(root), root).detail)}`);
   if (backend === 'demo') console.log(C.dim('  (No Claude Code login or API key found: the demo backend makes placeholder work. Install Claude Code, or add an API key with `mortiflix keys`.)'));
   if (process.stdin.isTTY && !a.yes) {
-    console.log(`\n  Next, the setup walkthrough: what Mortiflix uses (Claude, transitions, narration, music, assets, 3D), why, and what it would`);
+    console.log(`\n  Next, the setup walkthrough: what Mortiflix uses (Claude, transitions, narration, music, assets, 3D, Craft apps), why, and what it would`);
     console.log('  install. Nothing installs without asking, and you can skip any part.');
     if (await confirm('  Set it up now?', true)) await setupWalk(root);
     else console.log(`  Any time: ${C.b('mortiflix setup')}`);
-  } else console.log(`\n  Next: ${C.b('mortiflix setup')} walks through Claude, transitions, narration, music, assets and 3D.`);
+  } else console.log(`\n  Next: ${C.b('mortiflix setup')} walks through Claude, transitions, narration, music, assets, 3D and the Craft apps.`);
   console.log(`\n  Then: ${C.b('mortiflix demo')} for a free walk-through, or ${C.b('mortiflix serve')} to open the studio in your browser.`);
 }
 
@@ -899,6 +909,65 @@ async function setupPart(root, id, st) {
     await offerInstall(root, 'blender-addons', { ask: !st['blender-addons'].ok });
     console.log(`  Open it yourself with ${C.b('mortiflix blender')} (Camera Flight is in the 3D Viewport › N › Flight).`);
   }
+  if (id === 'craft') {
+    showCraft(st.craft);
+    const have = st.craft.apps.filter((x) => x.installed).map((x) => x.id);
+    console.log(C.dim(`  Each is an open-source remake by the ArtCraft team (github.com/${craft.OWNER}), MIT or Apache-2.0, with its own MCP server.`));
+    const pick = (await prompterOnce(`  Which? ${C.dim(`all, none, or names (e.g. effectcraft photocraft)${have.length ? '; Enter keeps what\'s installed' : ''}`)} `)).trim().toLowerCase();
+    if (pick === 'none' || (!pick && !have.length)) return console.log(C.dim('  None: sessions work without them.'));
+    const apps = !pick ? have : pick === 'all' ? craft.APP_IDS : pick.split(/[\s,]+/).filter(Boolean);
+    craft.saveCraftApps(root, apps);
+    await offerInstall(root, 'craft', { ask: false });
+    console.log(`  Sessions get their MCP servers. For your own Claude Code: ${C.b('mortiflix craft register')}`);
+  }
+}
+
+// ---- the Craft apps ----
+
+function showCraft(st) {
+  for (const x of st.apps) {
+    console.log(`  ${x.installed ? C.green('✔') : C.dim('·')} ${x.name.padEnd(12)} ${C.dim(`${x.replaces}:`.padEnd(15))} ${x.use}${x.installed ? C.dim(` (${x.version})`) : ''}`);
+  }
+}
+
+async function craftCmd(root, [sub, ...args], a) {
+  needStudio(root);
+  if (!sub || sub === 'status') {
+    const st = craft.craftStatus(root);
+    if (a.json) return json(st);
+    console.log(C.b('The Craft apps'), C.dim(`(github.com/${craft.OWNER}, MIT or Apache-2.0)`));
+    showCraft(st);
+    return console.log(C.dim(`\n  Install: mortiflix craft install [all | ${craft.APP_IDS.slice(0, 3).join(' ')} …]`));
+  }
+  if (sub === 'install') {
+    ownerOnly();
+    const apps = !args.length ? craft.craftConfig(loadConfig(root)).apps : args.includes('all') ? craft.APP_IDS : args;
+    for (const id of apps) if (!craft.APP_IDS.includes(id)) throw new Error(`unknown app "${id}" (${craft.APP_IDS.join(', ')})`);
+    craft.saveCraftApps(root, [...new Set([...craft.APPS.filter((x) => craft.installed(root, x.id)).map((x) => x.id), ...apps])]);
+    const r = await craft.installCraft(root, { apps, log: (l) => console.log(C.dim(`    ${l}`)) });
+    console.log();
+    showCraft(r);
+    if (r.problems) console.log(C.red(`\n  ✖ ${r.problems}`));
+    return console.log(C.dim('\n  Sessions get their MCP servers. For your own Claude Code: mortiflix craft register'));
+  }
+  if (sub === 'remove') {
+    ownerOnly();
+    if (!args.length) throw new Error('mortiflix craft remove <app>…');
+    for (const id of args) craft.removeApp(root, id);
+    return console.log(`Removed ${args.join(', ')}.`);
+  }
+  if (sub === 'open') {
+    ownerOnly();
+    if (!args[0]) throw new Error('mortiflix craft open <app> [file]');
+    return console.log(`Opening ${craft.openApp(root, args[0], args[1] ? resolve(args[1]) : undefined)}`);
+  }
+  if (sub === 'register') {
+    ownerOnly();
+    const r = craft.registerWithClaude(root, { claudeBin: loadConfig(root).claudeBin || 'claude', apps: args.length ? args : undefined, log: (l) => console.log(l) });
+    return console.log(`\n${C.green('✔')} ${r.added.length} added, ${r.updated.length} updated${r.kept.length ? `, ${r.kept.length} left alone` : ''}. Restart Claude Code to load them; files go in the folder you start it in.`);
+  }
+  if (sub === 'mcp-config') return json(craft.mcpServers(root));
+  throw new Error('mortiflix craft [status|install|remove|open|register|mcp-config]');
 }
 
 async function showSetup(root) {
@@ -918,6 +987,7 @@ async function showSetup(root) {
   row(pubCfg.service === 'none' ? null : Boolean(pubCfg.key), 'Publishing', pubCfg.service === 'none' ? 'off: you post finals yourself'
     : `${pub.SERVICES[pubCfg.service].name}${pubCfg.service === 'postiz' ? ` at ${pubCfg.postiz.url}` : pubCfg.profile ? `, profile ${pubCfg.profile}` : ''}${pubCfg.key ? '' : ', key missing'}`);
   row(st.blender.ok ? st['blender-addons'].ok : null, '3D', st.blender.ok ? `${st.blender.detail}; ${st['blender-addons'].detail}` : 'not set up');
+  row(st.craft.apps.some((x) => x.installed) ? st.craft.ok : null, 'Craft apps', st.craft.detail);
 }
 
 async function setupView(root) {

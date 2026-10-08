@@ -15,6 +15,7 @@ never system-wide and never as root. Deleting `tools/` removes it all.
 | **Music** | an original score, written to the approved animatic | Strudel (`@strudel/web` from npm) and a headless Chrome (yours is reused) | ~20 MB (+~100 MB without Chrome) |
 | **Assets** | stock assets from sites you already use, in your own Chrome | browser-harness (browser-use, via uv) and the list of your sites | ~60 MB |
 | **3D** | 3D scenes rendered in Blender | Blender (yours is reused) and the 3D toolkits, in the studio's own Blender profile | ~350 MB + ~15 MB |
+| **Craft apps** | sessions work in real design apps (After Effects, Photoshop, Illustrator, Premiere… remakes) through their MCP servers | the official builds of the apps you pick, into `tools/craft` | 15–80 MB each, ~900 MB for all 12 |
 
 ## Claude
 
@@ -90,6 +91,52 @@ you (Camera Flight: 3D Viewport › N › Flight).
 **Nova FX**, Mortiflix's own particle engine, **builds on Linux only for now** (gcc with OpenMP, usually already
 installed). On other systems the other toolkits still install; Nova is reported as not built.
 
+## Craft apps
+
+The Craft apps are open-source, clean-room remakes of the Adobe apps (and a few more) written in Rust by the team
+behind ArtCraft ([github.com/storytold](https://github.com/storytold)). Each one is **MIT OR Apache-2.0**, ships
+official builds for Linux, macOS and Windows, and has a command line whose `mcp` subcommand is an MCP server: every
+menu item is a command Claude can run, headless.
+
+| App | Remakes | In a motion design studio |
+|---|---|---|
+| EffectCraft | After Effects | compositions, keyframes, shape and text layers, puppet pins, 3D layers; renders MP4/WebM |
+| FilmCraft | Premiere Pro | editing on a timeline, trims, grades, captions, audio mix |
+| PhotoCraft | Photoshop | layered images and PSD files, adjustment layers, masks, brushes |
+| VectorCraft | Illustrator | vector artwork, logos, paths, Pathfinder; SVG/PDF/PNG |
+| LightCraft | Lightroom | developing photos and raw files |
+| DesignCraft | InDesign | page layout and typography |
+| SoundCraft | Audition | audio editing and cleanup |
+| PdfCraft | Acrobat | PDFs |
+| DeckCraft, WordCraft, GridCraft | PowerPoint, Word, Excel | slides, documents, spreadsheets |
+| CadCraft | CAD | technical drawing |
+
+```
+mortiflix craft install all                 # or: mortiflix craft install effectcraft photocraft vectorcraft
+mortiflix craft                             # what's installed
+mortiflix craft open photocraft out/key.psd # open a file a session made
+mortiflix craft register                    # also give your own Claude Code their MCP servers (user scope)
+mortiflix craft remove <app>
+```
+
+**How they're pulled.** Mortiflix doesn't copy their code. For each app it asks GitHub for the latest release,
+downloads the build for your system (Linux/FreeBSD `.tar.gz`, Windows portable `.zip`, macOS the CLI `.zip` and the
+app's `.dmg`), and checks its SHA-256 against the release's own `SHA256SUMS.txt`. A file that doesn't match, or isn't
+listed, isn't installed. Then it starts the app's MCP server once to check that it runs on your computer, and keeps the
+app in `tools/craft/<app>/` with a `craft.json` that records the version and checksums.
+
+**What sessions get** (claude-code backend): each installed app's MCP server, through `--mcp-config` (the file is
+`.mortiflix/craft-mcp.json` in the project folder), with its tools allowed (`mcp__<app>`). They also get the
+`craft-apps` skill and a line in their CLAUDE.md. The servers run with the project folder as their working folder, so
+files land in the project; PhotoCraft is started with that folder as its only read and write root. VectorCraft is
+started `--headless`. With the sandbox on, `tools/craft` is visible read-only. The command lines are also in
+`$MFX_CRAFT` for long renders through `mfx render` (and for the anthropic-api backend, which has no MCP).
+
+**Be aware.** They are young: most of them came out in October 2026 and change every day. `mortiflix craft
+install` again updates them. The **ArtCraft** name and logo are the ArtCraft team's trademarks and are not open source.
+Mortiflix only names the apps. ArtCraft's own AI app (`storytold/artcraft`) is "fair source", not open source, and
+isn't offered here.
+
 ## Platforms
 
 **Mortiflix has mostly been tested on Linux so far.** A Windows version is coming in the next two weeks (by
@@ -99,5 +146,6 @@ If an install fails, the walkthrough shows the command and its last lines of out
 
 ## Removing things
 
-Delete `~/Mortiflix/tools/` (Strudel, Chrome, Blender, the profile, ComfyUI). browser-harness and uv are your own
+Delete `~/Mortiflix/tools/` (Strudel, Chrome, Blender, the profile, ComfyUI, the Craft apps). If you ran
+`mortiflix craft register`, also `claude mcp remove --scope user <app>` for each one. browser-harness and uv are your own
 tools: `uv tool uninstall browser-harness`, and see uv's docs to remove uv.

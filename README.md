@@ -178,7 +178,7 @@ frames rendered from the two style frames and the chosen transition. Transitions
 ones inspired by it. The screen never goes blank: no dip to a flat colour, no flash to white. A check reads every
 10% of every transition and fails any frame that does.
 
-## Setup: music, assets and 3D
+## Setup: music, assets, 3D and the Craft apps
 
 `mortiflix setup` (or **Settings › Setup**) explains each part, why it's needed and what it installs, then asks.
 Everything goes into the studio folder, never system-wide. Full details: [docs/SETUP.md](docs/SETUP.md).
@@ -195,6 +195,11 @@ Everything goes into the studio folder, never system-wide. Full details: [docs/S
 - **3D.** Blender with the studio's toolkits, in its own profile (your Blender setup is never touched): MoBlend
   (MoGraph), Camera, Animate, Math, Circuits, Camera Flight for flying the camera yourself (`mortiflix blender`), and
   **Nova FX**, Mortiflix's own particle engine (particles, fire, sparks, fireworks), which builds on Linux only for now.
+- **Craft apps.** Optional: EffectCraft, FilmCraft, PhotoCraft, VectorCraft, LightCraft and seven more, the
+  open-source (MIT/Apache-2.0) remakes of the Adobe apps by the team behind [ArtCraft](https://github.com/storytold).
+  `mortiflix craft install` pulls their official builds, checked against each release's SHA256SUMS. Sessions drive
+  them through each app's own MCP server and hand you files you can open and change (PSD, SVG, comps, edits).
+  `mortiflix craft register` adds the servers to your own Claude Code too. [docs/SETUP.md](docs/SETUP.md#craft-apps)
 
 ## Publishing (optional)
 

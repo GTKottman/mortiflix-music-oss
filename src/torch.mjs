@@ -10,6 +10,7 @@ const { opening } = await import(join(REPO, 'pipelines', '_shared', 'skills', 'm
 import { stepView, stepChecks, submissions } from './gates.mjs';
 import { finishesOwnMaster } from './music.mjs';
 import { blenderSkillDirs, blenderDocsDir, browserHarnessSkill, setupStatusSync, DAWS } from './setup.mjs';
+import { mcpServers, craftMcpFile } from './craft.mjs';
 
 // The owner's own words: their direction for this video (outranks the pipeline's defaults, never the gate rules).
 const fence = (label, text) => `<<<${label} (the owner's words)\n${text}\n${label}>>>`;
@@ -52,15 +53,25 @@ function studioSection(root) {
   if (st['blender-addons'].installed?.length) lines.push(`- **3D:** the studio's Blender (\`$MFX_BLENDER\`) with MoBlend, Nova FX, Camera, Animate, Math and Circuits: the **blender-3d** skill.`);
   else if (st.blender.ok) lines.push('- **3D:** Blender is here but the toolkits aren\'t installed (`mortiflix setup 3d`).');
   else lines.push('- **3D:** not set up. If the brief needs 3D, ask at the next gate whether to build it in 2D or wait for `mortiflix setup 3d`.');
+  const crafts = st.craft.apps.filter((a) => a.installed);
+  if (crafts.length) lines.push(`- **Craft apps** (the **craft-apps** skill; their MCP tools are \`mcp__<app>__*\`): ${crafts.map((a) => `${a.name} ${a.version} (${a.replaces})`).join(', ')}.`);
   return lines.join('\n');
 }
 
 // Skills that come from what the studio has set up, not from the pipeline: 3D (the studio's Blender and its toolkits,
-// with the toolkits' own skills and docs) and assets (the owner's asset sites, through browser-harness).
+// with the toolkits' own skills and docs), assets (the owner's asset sites, through browser-harness) and the Craft
+// apps (their MCP servers, for the claude-code backend, in .mortiflix/craft-mcp.json).
 function installStudioSkills(root, work) {
   const skills = join(work, '.claude', 'skills');
   const put = (name, from) => { const dest = join(skills, name); rmSync(dest, { recursive: true, force: true }); cpSync(from, dest, { recursive: true }); return dest; };
-  for (const name of ['blender-3d', 'assets', 'browser-harness', 'blender-camera-director', 'blender-animate', 'blender-math', 'circuit-explainer-video']) rmSync(join(skills, name), { recursive: true, force: true });
+  for (const name of ['blender-3d', 'assets', 'browser-harness', 'blender-camera-director', 'blender-animate', 'blender-math', 'circuit-explainer-video', 'craft-apps']) rmSync(join(skills, name), { recursive: true, force: true });
+  const mcp = mcpServers(root, { dir: work });
+  rmSync(craftMcpFile(work), { force: true });
+  if (Object.keys(mcp.mcpServers).length) {
+    put('craft-apps', join(REPO, 'harness', 'skills', 'craft-apps'));
+    mkdirSync(join(work, '.mortiflix'), { recursive: true });
+    writeFileSync(craftMcpFile(work), `${JSON.stringify(mcp, null, 2)}\n`);
+  }
   const kits = blenderSkillDirs(root);
   if (kits.length) {
     const dest = put('blender-3d', join(REPO, 'harness', 'skills', 'blender-3d'));

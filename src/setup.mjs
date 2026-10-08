@@ -10,6 +10,8 @@
 //   blender         Blender, for 3D work
 //   blender-addons  the 3D toolkits (MoBlend, Nova FX, Camera, Animate, Math, Circuits, Camera Flight), installed into
 //                   the studio's own Blender profile (tools/blender-profile), never into your personal Blender setup
+//   craft           the Craft apps (EffectCraft, PhotoCraft, VectorCraft, …: open-source remakes of the Adobe apps), their
+//                   official builds, checked against their SHA256SUMS, each with its own MCP server (src/craft.mjs)
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, writeFileSync, readFileSync, rmSync, createWriteStream, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -22,6 +24,7 @@ import * as qwen from './voice/qwen.mjs';
 import * as plat from './platform.mjs';
 import { publishConfig } from './publish.mjs';
 import { keySource } from './keys.mjs';
+import * as craft from './craft.mjs';
 
 export const STRUDEL_VERSION = '1.3.0';
 const OS = platform();
@@ -84,6 +87,13 @@ export const PARTS = [
     why: 'Pipelines that build 3D scenes (product shots, music videos, models) render them in Blender.',
     needs: 'Blender (about 350 MB, the official build for your system) and the 3D toolkits: MoBlend (MoGraph), Nova FX (particles, fire, fireworks), Camera, Animate, Math, Circuits, and Camera Flight for flying the camera yourself. Skip it if you only make 2D videos.',
     tools: ['blender', 'blender-addons'],
+  },
+  {
+    id: 'craft',
+    title: 'Craft apps',
+    why: 'Sessions can work in real design apps the way a person does: compositions in EffectCraft, layered images in PhotoCraft, vectors in VectorCraft, edits in FilmCraft, and more. They are open-source remakes of the Adobe apps, and each comes with an MCP server, so Claude runs their menus and tools directly and hands you files you can open in them.',
+    needs: `Optional. The official builds of the apps you pick, from github.com/${craft.OWNER} (MIT or Apache-2.0; 15 to 80 MB each, about 900 MB for all ${craft.APPS.length}), checked against each release's SHA256SUMS. They are young (most are weeks old), so expect gaps.`,
+    tools: ['craft'],
   },
 ];
 
@@ -228,6 +238,7 @@ export async function setupStatus(root) {
     comfyui: await comfyStatus(root),
     blender: blenderStatus(root),
     'blender-addons': addonsStatus(root),
+    craft: craft.craftStatus(root),
     music: musicConfig(config),
     daw: dawConfig(config),
     assets: assetsConfig(config),
@@ -577,7 +588,8 @@ export function openBlender(root, args = []) {
   return b.path;
 }
 
-const INSTALLERS = { transitions: installTransitions, strudel: installStrudel, chrome: installChrome, 'browser-harness': installBrowserHarness, blender: installBlender, 'blender-addons': installAddons, comfyui: installComfy };
+const INSTALLERS = { transitions: installTransitions, strudel: installStrudel, chrome: installChrome, 'browser-harness': installBrowserHarness, blender: installBlender, 'blender-addons': installAddons, comfyui: installComfy,
+  craft: (root, log) => craft.installCraft(root, { log }) };
 export const TOOLS = Object.keys(INSTALLERS);
 
 export const TOOL_INFO = {
@@ -587,6 +599,7 @@ export const TOOL_INFO = {
   'browser-harness': { name: 'browser-harness', what: 'browser-use/browser-harness, installed with uv (Python 3.12) as your own tool', where: '~/.local/bin', size: '~60 MB' },
   comfyui: { name: 'ComfyUI + TTS Audio Suite', what: 'ComfyUI and diodiogod/TTS-Audio-Suite from GitHub, PyTorch with CUDA, in their own Python environment; the Qwen3-TTS models download on first use', where: 'tools/ComfyUI', size: '~10 GB with the models' },
   blender: { name: 'Blender', what: 'the newest official build from download.blender.org (your own Blender is reused if you have one)', where: 'tools/blender', size: '~350 MB' },
+  craft: { name: 'The Craft apps', what: `the official builds of the apps you picked, from github.com/${craft.OWNER}, each checked against its release's SHA256SUMS and started once as an MCP server`, where: 'tools/craft', size: '15-80 MB each' },
   'blender-addons': { name: 'The 3D toolkits', what: 'MoBlend, Camera, Animate, Math, Circuits and Camera Flight from their GitHub repositories, and Nova FX from this repository, installed into the studio\'s own Blender profile', where: 'tools/blender-profile', size: '~15 MB' },
 };
 
@@ -612,6 +625,8 @@ export function sessionToolsEnv(root) {
   if (daw.id) env.MFX_DAW = daw.id;
   const b = blenderStatus(root);
   if (b.ok) Object.assign(env, { MFX_BLENDER: b.path }, addonsStatus(root).installed?.length ? { ...blenderEnv(root), MFX3D: join(REPO_ROOT, 'harness', 'skills', 'blender-3d') } : {});
+  const crafts = craft.sessionCraft(root);
+  if (Object.keys(crafts).length) env.MFX_CRAFT = JSON.stringify(crafts);
   return env;
 }
 
@@ -621,7 +636,7 @@ export const blenderDocsDir = (root) => join(toolsDir(root), 'blender-addons', '
 export function setupStatusSync(root) {
   const config = loadConfig(root);
   return { transitions: transitionsStatus(root), strudel: strudelStatus(root), chrome: chromeStatus(root), 'browser-harness': browserHarnessStatus(), blender: blenderStatus(root),
-    'blender-addons': addonsStatus(root), music: musicConfig(config), daw: dawConfig(config), assets: assetsConfig(config) };
+    'blender-addons': addonsStatus(root), craft: craft.craftStatus(root), music: musicConfig(config), daw: dawConfig(config), assets: assetsConfig(config) };
 }
 
 // The 3D toolkits' own skills (from their repositories), when they're installed.
