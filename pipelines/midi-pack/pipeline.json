@@ -1,0 +1,54 @@
+{
+  "slug": "midi-pack",
+  "name": "MIDI for your DAW",
+  "description": "A piece written as MIDI for you to finish in your own DAW: the genre researched, a blueprint you approve, every part written and checked on its own channel, and a sketch to hear it by. You get the MIDI: every channel, the whole arrangement, a clip per section, and a cue sheet with your DAW's import steps.",
+  "makes": "midi",
+  "shared_skills": ["music"],
+  "intake": [
+    { "id": "genre", "label": "Genre", "type": "text", "required": true, "help": "As specific as you like: \"melodic techno\", \"neo-soul with Dilla drums\", \"cinematic hybrid\"." },
+    { "id": "topic", "label": "What's it about?", "type": "long", "required": true, "help": "The topic, story or feeling. The music tells it without words." },
+    { "id": "parts", "label": "Parts you want", "type": "text", "help": "e.g. \"drums, bass, chords, lead and a counter-melody\". The studio picks the rest from the genre." },
+    { "id": "mood", "label": "Mood", "type": "text" },
+    { "id": "length", "label": "Length", "type": "choice", "choices": ["The genre's usual length", "30 s", "1 min", "2 min", "3 min", "4 min"], "default": "The genre's usual length" },
+    { "id": "fixed", "label": "Anything fixed", "type": "text", "help": "A title, a tempo, a key or a meter you want; the studio chooses the rest." },
+    { "id": "references", "label": "References and must-haves", "type": "long", "help": "Tracks to study (never copied), progressions or moments you want." },
+    { "id": "material", "label": "MIDI to build on", "type": "files", "help": "Optional: a .mid with a progression, a riff or a beat of yours. The studio builds around it and keeps it." }
+  ],
+  "steps": [
+    { "key": "genre", "name": "Genre", "review": "internal", "work": ["research"],
+      "describe": "The genre researched from 5+ sources: its tempo, lineup, beat grids, harmony, hook traits, and the elements that make it unforgettable." },
+    { "key": "blueprint", "name": "Blueprint", "review": "document", "work": ["plan"],
+      "describe": "The plan in words, before any note: the hook, tempo, key, chords, one MIDI channel per part, and the story section by section with its intensity." },
+    { "key": "score", "name": "Score and MIDI", "review": "internal", "work": ["music", "midi"],
+      "describe": "Every part written in Strudel on its own MIDI channel, checked (harmony lock, the story's curve) and captured: every channel, the arrangement, a clip per section, the cue sheet." },
+    { "key": "sketch", "name": "Sketch", "review": "internal", "work": ["instruments", "audio"],
+      "describe": "Sketch sounds for every channel, auditioned, and a render with stems: so you can hear the notes before they go into your DAW." },
+    { "key": "final", "name": "Your MIDI", "review": "midi", "work": ["midi", "audio"], "delivers": true,
+      "describe": "You look and listen: the arrangement as a piano roll, the sketch, the cue sheet, and the MIDI pack to download." }
+  ],
+  "status_lines": {
+    "genre": "Researching the genre",
+    "blueprint": "Planning the piece",
+    "score": "Writing the score",
+    "midi": "Capturing the MIDI",
+    "sketch": "Choosing sketch sounds",
+    "render": "Rendering the sketch",
+    "deliver": "Packaging your MIDI"
+  },
+  "checks": [
+    { "id": "genre-profile", "title": "The genre is researched, not guessed", "applies_to": ["research"],
+      "how": "node .claude/skills/music/strudel.mjs genre passes: every field of the profile, 5+ different sources actually read, 5+ unforgettable elements with at least one for the hook and one for the beat, each with a concrete how." },
+    { "id": "blueprint-holds", "title": "The plan holds together", "applies_to": ["plan"],
+      "how": "node .claude/skills/music/strudel.mjs plan passes: sections contiguous with a function and an intensity, the genre signature uses the profile's elements (hook and beat), the length fits the genre (or the brief), every part on its own channel." },
+    { "id": "music-check", "title": "The score passes its check and is captured as MIDI", "applies_to": ["music"],
+      "how": "node .claude/skills/music/strudel.mjs check ends with 0 problems (harmony locked to the chart, every role playing, nothing past the end, the intensity curve following the sections) and wrote music/notes.json and out/music/midi/." },
+    { "id": "score-is-notes", "title": "The score holds only the music", "applies_to": ["music"],
+      "how": "music/score.strudel.js sets no sounds, effects or gain: notes, velocity and structure only, every part on its role's channel, drums as General MIDI numbers." },
+    { "id": "owners-midi-kept", "title": "The owner's own MIDI is kept", "applies_to": ["music"],
+      "how": "When the brief brought a .mid (input/), its notes are in the score unchanged (same pitches and rhythm on their own channel), or the note says exactly what was changed and why. n/a when there was none." },
+    { "id": "midi-pack-complete", "title": "The MIDI pack is complete", "applies_to": ["midi"],
+      "how": "out/music/midi/ has the arrangement (<title>-all.mid), one .mid per channel that plays, sections/ with a clip per section, and CUE-SHEET.md with the tempo, key, channels and the import steps; out/music/midi.zip holds all of it." },
+    { "id": "sketch-heard", "title": "The sketch plays every part", "applies_to": ["audio"],
+      "how": "strudel.mjs instruments and audition pass, and strudel.mjs render --stems wrote out/music/score.wav with a stem per channel, none silent." }
+  ]
+}

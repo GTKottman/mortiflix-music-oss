@@ -12,8 +12,8 @@ const latest = (root, id, step) => submissions(root, id).filter((s) => s.step ==
 
 test('demo backend: brief to delivered, through the real bridge, with a round of changes', async (t) => {
   const root = tempStudio(t);
-  const p = createProject(root, { pipeline: 'logo-sting', title: 'Acme sting' });
-  await addIntakeFile(root, p.id, { field: 'logo', name: 'logo.svg', buffer: Buffer.from('<svg/>') });
+  const p = createProject(root, { pipeline: 'midi-pack', title: 'Night drive', answers: { genre: 'trip hop', topic: 'a night drive' } });
+  await addIntakeFile(root, p.id, { field: 'material', name: 'riff.mid', buffer: Buffer.from('MThd') });
   startProject(root, p.id);
   const runner = new Runner(root);
   runner.acquire();
@@ -22,34 +22,37 @@ test('demo backend: brief to delivered, through the real bridge, with a round of
   await runner.loop();
   let project = loadProject(root, p.id);
   assert.equal(project.state, 'waiting');
-  const v1 = latest(root, p.id, 'directions');
+  const v1 = latest(root, p.id, 'blueprint');
   assert.equal(v1.version, 1);
-  assert.equal(v1.items.length, 3);
+  assert.equal(v1.items[0].kind, 'text');
 
   // The session brief was written, with the pinned pipeline and its skills beside it.
   const work = projectPaths(root, p.id).work;
-  assert.match(readFileSync(join(work, 'CLAUDE.md'), 'utf8'), /# Mortiflix project: Acme sting/);
-  assert.ok(existsSync(join(work, '.claude', 'skills', 'final-pass', 'qc.mjs')));
+  const brief = readFileSync(join(work, 'CLAUDE.md'), 'utf8');
+  assert.match(brief, /# Mortiflix Music project: Night drive/);
+  assert.match(brief, /The owner's DAW:\*\* not named/);
+  assert.ok(existsSync(join(work, '.claude', 'skills', 'music', 'strudel.mjs')));
+  assert.ok(existsSync(join(work, 'input', 'material', 'riff.mid')));
   assert.ok(existsSync(join(work, '.mortiflix', 'GATES.md')));
 
-  respond(root, p.id, 'directions', 1, { verdict: 'changes', notes: [{ item: 1, x: 0.3, y: 0.6, text: 'bigger circle' }] });
+  respond(root, p.id, 'blueprint', 1, { verdict: 'changes', notes: [{ item: 0, paragraph: 1, text: 'slower, more space' }] });
   await runner.loop();
-  const v2 = latest(root, p.id, 'directions');
+  const v2 = latest(root, p.id, 'blueprint');
   assert.equal(v2.version, 2);
   assert.equal(v2.pin_changes.length, 1);
-  assert.match(readFileSync(join(work, 'CLAUDE.md'), 'utf8'), /bigger circle/);
+  assert.match(readFileSync(join(work, 'CLAUDE.md'), 'utf8'), /slower, more space/);
 
-  respond(root, p.id, 'directions', 2, { verdict: 'approve' });
+  respond(root, p.id, 'blueprint', 2, { verdict: 'approve' });
   await runner.loop();
   const final = latest(root, p.id, 'final');
-  assert.equal(final.items[0].kind, 'video');
+  assert.equal(final.items[0].kind, 'midi');
 
   respond(root, p.id, 'final', 1, { verdict: 'approve' });
   project = loadProject(root, p.id);
   assert.equal(project.state, 'delivered');
   assert.equal(project.deliverables.length, 1);
   assert.ok(existsSync(join(projectPaths(root, p.id).state, project.deliverables[0].file)));
-  assert.ok(stepView(project, projectPipeline(root, p.id)).every((s) => s.state === 'approved'));
+  assert.ok(stepView(project, projectPipeline(root, p.id)).every((s) => ['approved', 'done'].includes(s.state)));
 
   const names = readEvents(root, p.id).map((e) => e.event);
   for (const e of ['CREATED', 'STARTED', 'SESSION_STARTED', 'SUBMITTED', 'CHANGES_REQUESTED', 'HANDOFF', 'APPROVED', 'SESSION_ENDED']) assert.ok(names.includes(e), e);
@@ -58,7 +61,7 @@ test('demo backend: brief to delivered, through the real bridge, with a round of
 
 test('a backend that never moves the project forward gets it paused, not looped', async (t) => {
   const root = tempStudio(t);
-  const p = createProject(root, { pipeline: 'social-short', title: 'Stuck', answers: { message: 'hi' } });
+  const p = createProject(root, { pipeline: 'song', title: 'Stuck', answers: { genre: 'house', topic: 'hi' } });
   startProject(root, p.id);
   const runner = new Runner(root);
   const { BACKENDS } = await import('../src/runner.mjs');
@@ -77,8 +80,7 @@ test('renderPrefix wraps every mfx render (a machine-wide queue)', async (t) => 
   const root = tempStudio(t);
   const { saveConfig } = await import('../src/studio.mjs');
   saveConfig(root, { renderPrefix: ['sh', '-c', 'echo "wrapped:{label}" && exec "$@"', 'wrap'] });
-  const p = createProject(root, { pipeline: 'logo-sting', title: 'Wrap' });
-  await addIntakeFile(root, p.id, { field: 'logo', name: 'l.svg', buffer: Buffer.from('<svg/>') });
+  const p = createProject(root, { pipeline: 'song', title: 'Wrap', answers: { genre: 'house', topic: 'a render' } });
   startProject(root, p.id);
   const { openBridge } = await import('../src/bridge.mjs');
   const { RenderQueue } = await import('../src/renderq.mjs');

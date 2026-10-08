@@ -122,7 +122,7 @@ export function sandboxArgs({ root, workdir, socket, claudeBin, env }) {
   const npmCache = join(root, 'run', 'npm-cache');
   mkdirSync(npmCache, { recursive: true });
   a.push('--bind', npmCache, join(home, '.npm'));
-  // Installs shared by every project (e.g. Remotion, via the remotion-motion skill's setup.mjs).
+  // Installs shared by every project (a pipeline's own tools may keep them here).
   const shared = join(root, 'run', 'shared');
   mkdirSync(shared, { recursive: true });
   a.push('--bind', shared, shared);

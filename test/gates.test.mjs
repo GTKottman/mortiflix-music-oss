@@ -2,86 +2,99 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { writeFileSync, mkdirSync, symlinkSync, existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { tempStudio } from './helpers.mjs';
-import { createProject, startProject, addIntakeFile, projectPaths, loadProject } from '../src/projects.mjs';
+import { tempStudio, songAtBlueprint } from './helpers.mjs';
+import { createProject, startProject, projectPaths, loadProject } from '../src/projects.mjs';
+import { writeMidi } from '../pipelines/_shared/skills/music/lib/midi.mjs';
 import * as gates from '../src/gates.mjs';
 
 const checksFor = (root, id, step) => gates.stepChecks(root, id, step).map((c) => ({ id: c.id, result: 'pass' }));
 
-async function stingProject(root) {
-  const p = createProject(root, { pipeline: 'logo-sting', title: 'Acme sting', answers: { mood: 'calm' } });
-  await addIntakeFile(root, p.id, { field: 'logo', name: 'logo.svg', buffer: Buffer.from('<svg/>') });
-  startProject(root, p.id);
-  const work = projectPaths(root, p.id).work;
-  mkdirSync(join(work, 'out'), { recursive: true });
-  writeFileSync(join(work, 'out', 'a.png'), 'png');
-  return { id: p.id, work };
-}
-
 test('a required intake answer blocks the start', (t) => {
   const root = tempStudio(t);
-  const p = createProject(root, { pipeline: 'logo-sting', title: 'x' });
+  const p = createProject(root, { pipeline: 'song', title: 'x', answers: { genre: 'house' } });
   assert.throws(() => startProject(root, p.id), /required/);
 });
 
 test('submit enforces items, checks, folder and review mode', async (t) => {
   const root = tempStudio(t);
-  const { id, work } = await stingProject(root);
-  const ok = { note: 'Three directions', items: [{ path: 'out/a.png', label: 'A' }], error_checks: checksFor(root, id, 'directions') };
+  const { id, work } = await songAtBlueprint(root);
+  const ok = { note: 'The plan', items: [{ path: 'music/BLUEPRINT.md', label: 'Blueprint' }], error_checks: checksFor(root, id, 'blueprint') };
 
-  assert.throws(() => gates.submit(root, id, 'directions', { ...ok, note: '' }), /note/);
-  assert.throws(() => gates.submit(root, id, 'directions', { ...ok, items: [{ text: 'just words' }] }), /frames step needs/);
-  assert.throws(() => gates.submit(root, id, 'directions', { ...ok, error_checks: [] }), /missing/);
-  assert.throws(() => gates.submit(root, id, 'directions', { ...ok, error_checks: [...ok.error_checks.slice(1), { id: ok.error_checks[0].id, result: 'n/a' }] }), /needs a note/);
-  assert.throws(() => gates.submit(root, id, 'directions', { ...ok, items: [{ path: '../../../etc/passwd' }] }), /outside|doesn't exist/);
-  symlinkSync('/etc/hostname', join(work, 'out', 'sneaky.png'));
-  assert.throws(() => gates.submit(root, id, 'directions', { ...ok, items: [{ path: 'out/sneaky.png' }] }), /outside/);
+  assert.throws(() => gates.submit(root, id, 'blueprint', { ...ok, note: '' }), /note/);
+  mkdirSync(join(work, 'out'), { recursive: true });
+  writeFileSync(join(work, 'out', 'sketch.wav'), 'RIFF');
+  assert.throws(() => gates.submit(root, id, 'blueprint', { ...ok, items: [{ path: 'out/sketch.wav' }] }), /document step needs/);
+  assert.throws(() => gates.submit(root, id, 'blueprint', { ...ok, error_checks: [] }), /missing/);
+  assert.throws(() => gates.submit(root, id, 'blueprint', { ...ok, error_checks: [{ id: ok.error_checks[0].id, result: 'n/a' }] }), /needs a note/);
+  assert.throws(() => gates.submit(root, id, 'blueprint', { ...ok, items: [{ path: '../../../etc/passwd' }] }), /outside|doesn't exist/);
+  symlinkSync('/etc/hostname', join(work, 'out', 'sneaky.md'));
+  assert.throws(() => gates.submit(root, id, 'blueprint', { ...ok, items: [{ path: 'out/sneaky.md' }] }), /outside/);
   assert.throws(() => gates.submit(root, id, 'final', ok), /can't start yet/);
 
-  const r = gates.submit(root, id, 'directions', ok);
+  const r = gates.submit(root, id, 'blueprint', ok);
   assert.equal(r.version, 1);
   assert.equal(loadProject(root, id).state, 'waiting');
   // What was submitted is a copy: changing the working file doesn't change the review.
-  writeFileSync(join(work, 'out', 'a.png'), 'changed');
+  writeFileSync(join(work, 'music', 'BLUEPRINT.md'), 'changed');
   const sub = gates.submissions(root, id)[0];
-  assert.equal(readFileSync(join(projectPaths(root, id).state, sub.items[0].file), 'utf8'), 'png');
-  assert.throws(() => gates.submit(root, id, 'directions', ok), /already waiting/);
+  assert.match(sub.items[0].text, /Hazy, 90 BPM/);
+  assert.throws(() => gates.submit(root, id, 'blueprint', ok), /already waiting/);
+});
+
+test('a midi step needs the MIDI, and a .mid item is a midi item', (t) => {
+  const root = tempStudio(t);
+  const p = createProject(root, { pipeline: 'midi-pack', title: 'Clips', answers: { genre: 'house', topic: 'sunrise' } });
+  startProject(root, p.id);
+  for (const step of ['genre']) gates.stepDone(root, p.id, step, checksFor(root, p.id, step));
+  const work = projectPaths(root, p.id).work;
+  mkdirSync(join(work, 'music'), { recursive: true });
+  writeFileSync(join(work, 'music', 'BLUEPRINT.md'), '# Clips\n\nPlan.\n');
+  gates.submit(root, p.id, 'blueprint', { note: 'Plan', items: [{ path: 'music/BLUEPRINT.md' }], error_checks: checksFor(root, p.id, 'blueprint') });
+  gates.respond(root, p.id, 'blueprint', 1, { verdict: 'approve' });
+  for (const step of ['score', 'sketch']) gates.stepDone(root, p.id, step, checksFor(root, p.id, step));
+  mkdirSync(join(work, 'out', 'music', 'midi'), { recursive: true });
+  writeFileSync(join(work, 'out', 'music', 'score.wav'), 'RIFF');
+  writeFileSync(join(work, 'out', 'music', 'midi', 'clips-all.mid'), writeMidi({ bpm: 120, tracks: [{ channel: 1, name: 'Bass', notes: [{ pitch: 40, start: 0, dur: 1, velocity: 0.8 }] }] }));
+  const sub = { note: 'Your MIDI', error_checks: checksFor(root, p.id, 'final') };
+  assert.throws(() => gates.submit(root, p.id, 'final', { ...sub, items: [{ path: 'out/music/score.wav' }] }), /midi step needs the MIDI/);
+  const r = gates.submit(root, p.id, 'final', { ...sub, items: [{ path: 'out/music/midi/clips-all.mid', label: 'Arrangement' }, { path: 'out/music/score.wav', label: 'Sketch' }] });
+  assert.equal(r.version, 1);
+  assert.deepEqual(gates.submissions(root, p.id).at(-1).items.map((x) => x.kind), ['midi', 'audio']);
 });
 
 test('only the reviewer approves; internal steps need their checks', async (t) => {
   const root = tempStudio(t);
-  const p = createProject(root, { pipeline: 'explainer', title: 'Bikes', answers: { topic: 'city bikes' } });
-  startProject(root, p.id);
-  assert.throws(() => gates.stepDone(root, p.id, 'brief', []), /only your approval/);
-  assert.throws(() => gates.stepDone(root, p.id, 'build', checksFor(root, p.id, 'build')), /can't finish yet/);
-  assert.throws(() => gates.status(root, p.id, 'made-up'), /no status line/);
-  assert.equal(gates.status(root, p.id, 'brief').text, 'Reading your brief');
+  const { id } = await songAtBlueprint(root);
+  assert.throws(() => gates.stepDone(root, id, 'blueprint', []), /only your approval/);
+  assert.throws(() => gates.stepDone(root, id, 'score', checksFor(root, id, 'score')), /can't finish yet/);
+  assert.throws(() => gates.status(root, id, 'made-up'), /no status line/);
+  assert.equal(gates.status(root, id, 'score').text, 'Writing the score');
 });
 
 test('every note is answered in the next version', async (t) => {
   const root = tempStudio(t);
-  const { id } = await stingProject(root);
-  const sub = { note: 'v', items: [{ path: 'out/a.png', label: 'A' }], error_checks: checksFor(root, id, 'directions'), questions: [{ id: 'pick', text: 'Which?', choices: ['A', 'B'], default: 'A' }, { id: 'name', text: 'Name on it?' }] };
-  gates.submit(root, id, 'directions', sub);
-  assert.throws(() => gates.respond(root, id, 'directions', 1, { verdict: 'changes', notes: [{ text: 'warmer', item: 0, x: 0.5, y: 0.2 }] }), /needs an answer/);
-  gates.respond(root, id, 'directions', 1, { verdict: 'changes', notes: [{ text: 'warmer', item: 0, x: 0.5, y: 0.2 }, { text: 'slower' }], answers: { name: 'Acme' } });
+  const { id } = await songAtBlueprint(root);
+  const sub = { note: 'v', items: [{ path: 'music/BLUEPRINT.md', label: 'Blueprint' }], error_checks: checksFor(root, id, 'blueprint'), questions: [{ id: 'pick', text: 'Which?', choices: ['A', 'B'], default: 'A' }, { id: 'name', text: 'Title?' }] };
+  gates.submit(root, id, 'blueprint', sub);
+  assert.throws(() => gates.respond(root, id, 'blueprint', 1, { verdict: 'changes', notes: [{ text: 'darker', item: 0, paragraph: 1 }] }), /needs an answer/);
+  gates.respond(root, id, 'blueprint', 1, { verdict: 'changes', notes: [{ text: 'darker', item: 0, paragraph: 1 }, { text: 'slower' }], answers: { name: 'Night drive' } });
   const p = loadProject(root, id);
   assert.equal(p.state, 'queued');
-  assert.ok(existsSync(join(projectPaths(root, id).work, 'feedback', 'directions-v1.json')));
+  assert.ok(existsSync(join(projectPaths(root, id).work, 'feedback', 'blueprint-v1.json')));
 
-  assert.throws(() => gates.submit(root, id, 'directions', sub), /note 1 .* has no answer/);
-  assert.throws(() => gates.submit(root, id, 'directions', { ...sub, pin_changes: [{ note: 1, change: 'warmed', status: 'done' }] }), /note 2/);
-  const r = gates.submit(root, id, 'directions', { ...sub, pin_changes: [{ note: 1, change: 'Warmed the light', status: 'done' }, { note: 2, change: 'Slowed to 4 s', status: 'partly' }] });
+  assert.throws(() => gates.submit(root, id, 'blueprint', sub), /note 1 .* has no answer/);
+  assert.throws(() => gates.submit(root, id, 'blueprint', { ...sub, pin_changes: [{ note: 1, change: 'darker', status: 'done' }] }), /note 2/);
+  const r = gates.submit(root, id, 'blueprint', { ...sub, pin_changes: [{ note: 1, change: 'Moved the chart to A minor', status: 'done' }, { note: 2, change: 'Down to 84 BPM', status: 'partly' }] });
   assert.equal(r.version, 2);
-  gates.respond(root, id, 'directions', 2, { verdict: 'approve', answers: { name: 'Acme' } });
-  assert.equal(loadProject(root, id).steps.directions.state, 'approved');
-  assert.throws(() => gates.submit(root, id, 'directions', sub), /already approved/);
+  gates.respond(root, id, 'blueprint', 2, { verdict: 'approve', answers: { name: 'Night drive' } });
+  assert.equal(loadProject(root, id).steps.blueprint.state, 'approved');
+  assert.throws(() => gates.submit(root, id, 'blueprint', sub), /already approved/);
 });
 
 test('questions pause the project until answered', async (t) => {
   const root = tempStudio(t);
-  const { id } = await stingProject(root);
-  gates.ask(root, id, 'directions', 'Should the logo spin?', { default: 'No' });
+  const { id } = await songAtBlueprint(root);
+  gates.ask(root, id, 'blueprint', 'Should the beat come in early?', { default: 'No' });
   assert.equal(loadProject(root, id).state, 'waiting');
   gates.answerQuestion(root, id, 'q1', null);
   const p = loadProject(root, id);
@@ -92,11 +105,11 @@ test('questions pause the project until answered', async (t) => {
 
 test('proposed checks join the checklist once approved', async (t) => {
   const root = tempStudio(t);
-  const { id } = await stingProject(root);
-  const before = gates.stepChecks(root, id, 'directions').length;
-  const { id: cid } = gates.proposeCheck(root, id, { title: 'No widow words', how: 'No single word alone on a line', work: 'stills' });
-  assert.equal(gates.stepChecks(root, id, 'directions').length, before);
+  const { id } = await songAtBlueprint(root);
+  const before = gates.stepChecks(root, id, 'score').length;
+  const { id: cid } = gates.proposeCheck(root, id, { title: 'No parallel fifths in the pad', how: 'The pad voicing never moves in parallel fifths', work: 'music' });
+  assert.equal(gates.stepChecks(root, id, 'score').length, before);
   gates.decideCheck(root, cid, true);
-  assert.equal(gates.stepChecks(root, id, 'directions').length, before + 1);
+  assert.equal(gates.stepChecks(root, id, 'score').length, before + 1);
   assert.throws(() => gates.proposeCheck(root, id, { title: 'x', how: 'y', work: 'colour' }), /isn't one of/);
 });

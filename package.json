@@ -1,20 +1,19 @@
 {
-  "name": "mortiflix",
+  "name": "mortiflix-music",
   "version": "0.1.0",
-  "description": "A motion design studio on your own machine: Claude makes the video step by step, you approve every stage.",
+  "description": "A music studio on your own machine: Claude writes the music as MIDI step by step, you approve every stage.",
   "license": "AGPL-3.0-only",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/GTKottman/mortiflix-oss.git"
+    "url": "git+https://github.com/GTKottman/mortiflix-music-oss.git"
   },
-  "homepage": "https://github.com/GTKottman/mortiflix-oss",
+  "homepage": "https://github.com/GTKottman/mortiflix-music-oss",
   "bugs": {
-    "url": "https://github.com/GTKottman/mortiflix-oss/issues"
+    "url": "https://github.com/GTKottman/mortiflix-music-oss/issues"
   },
   "type": "module",
   "bin": {
-    "mortiflix": "bin/mortiflix",
-    "mfx": "bin/mfx"
+    "mortiflix-music": "bin/mortiflix-music"
   },
   "files": [
     "bin",
@@ -22,7 +21,6 @@
     "web",
     "pipelines",
     "harness",
-    "vendor",
     "docs",
     "README.md",
     "LICENSE"
@@ -32,17 +30,18 @@
   },
   "scripts": {
     "test": "node --test test/",
-    "start": "node bin/mortiflix serve"
+    "start": "node bin/mortiflix-music serve"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0"
   },
   "keywords": [
-    "video",
-    "motion-design",
+    "music",
+    "midi",
+    "strudel",
+    "daw",
     "claude",
     "claude-code",
-    "remotion",
     "agent",
     "harness",
     "pipeline"

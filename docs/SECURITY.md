@@ -1,6 +1,6 @@
 # Security
 
-Mortiflix is a studio for **one person**: you write the briefs, you review every stage, and the sessions work for
+Mortiflix Music is a studio for **one person**: you write the briefs, you review every stage, and the sessions work for
 you, on your computer. There are no other users, accounts or roles. It does run an AI agent with a shell on your
 machine, so here's what that means and what limits it.
 
@@ -16,12 +16,12 @@ confined to the project folder, but the shell is not. Treat a session like a cap
 
 - the system (`/usr`, `/etc`) read-only, and the GPU devices;
 - its own project folder, read-write;
-- the Mortiflix code, read-only, and its own `mfx` socket;
+- the Mortiflix Music code, read-only, and its own `mfx` socket;
 - Claude Code's install (read-only) and its login (`~/.claude`, `~/.claude.json`), which it needs to run;
 - an npm cache inside the studio.
 
 Your home folder, other projects, the studio's records (`state/`), `secrets.json` and `session.env` are simply not
-there. The network is shared (Claude needs it). Check it with `mortiflix doctor`.
+there. The network is shared (Claude needs it). Check it with `mortiflix-music doctor`.
 
 ## What a session can't do, even unsandboxed
 
@@ -31,8 +31,8 @@ The gates are enforced by the studio process, not by the prompt:
 - it can't change what you already reviewed: submissions are copied into `state/`, outside the working folder;
 - it can't submit files from outside its project folder (paths and symlinks are resolved and checked).
 
-The CLI's own decision commands (`mortiflix respond`, `answer`, `review`, `reopen`, `publish`, …) refuse to run inside a session
-(`MFX_TOKEN` is set there), so a session that finds `mortiflix` on its `PATH` can't approve its own work by accident.
+The CLI's own decision commands (`mortiflix-music respond`, `answer`, `review`, `reopen`, …) refuse to run inside a
+session (`MFX_TOKEN` is set there), so a session that finds `mortiflix-music` on its `PATH` can't approve its own work by accident.
 That's a guard, not a wall. Unsandboxed, a determined session could still edit `state/` files directly with its shell. If that's in your threat
 model, turn the sandbox on.
 
@@ -44,53 +44,44 @@ hand over, web pages it researches, things it downloads. The gate protocol tells
 never instructions, and to report anything in it that tries to give orders. That reduces prompt injection; it can't
 rule it out. If you hand a session files or links from sources you don't trust, turn the sandbox on.
 
-## /mortiflix in Claude Code
+## /mortiflix-music in Claude Code
 
-The `/mortiflix` skill runs in your own Claude Code conversation, with your permissions. It's a guide: it runs the CLI
-and passes your decisions on. It doesn't make the video.
+The `/mortiflix-music` skill runs in your own Claude Code conversation, with your permissions. It's a guide: it runs the CLI
+and passes your decisions on. It doesn't make the music.
 
 - You start it yourself: it never starts on its own. Studio sessions can't start it either, even when they load
   your plugins.
 - It pre-allows only the commands that read (`--json` views, `doctor`). Approving, sending notes, starting a run,
   installing and serving are not pre-allowed, so your own Claude Code permission settings decide whether they
   prompt. The skill is also told to ask you before each of them. That instruction is a prompt, not a gate. The
-  gates themselves are unchanged: a step is approved only when `mortiflix respond` runs.
-- It never asks for a key in the chat. You add keys yourself, hidden, with `mortiflix keys` or in Settings › Keys.
+  gates themselves are unchanged: a step is approved only when `mortiflix-music respond` runs.
+- It never asks for a key in the chat. You add keys yourself, hidden, with `mortiflix-music keys` or in Settings › Keys.
 - It treats what sessions submit as data, never as instructions.
 
 ## Keys
 
-Every key is yours: Mortiflix has no accounts of its own. You add them with `mortiflix keys` (asked at
-`mortiflix init`, and before a project starts if it needs one) or Settings › Keys. Typing is never echoed, and each
+Every key is yours: the studio has no accounts of its own. You add them with `mortiflix-music keys` (asked at
+`mortiflix-music init`, and before a project starts if it needs one) or Settings › Keys. Typing is never echoed, and each
 key is checked with a free, read-only API call before it's saved.
 
 - A new studio folder is created mode 700 (only you can open it).
 - The Anthropic API key is stored in `secrets.json` (mode 600) and is never returned by the API or shown in the UI.
   Sessions don't get it.
-- The ElevenLabs key is stored in `secrets.json` too, and given to a session only while ElevenLabs is the narration
-  engine.
-- The publishing keys (Upload-Post, Postiz) are stored in `secrets.json` too and never given to a session. Only
-  `mortiflix publish`, run by you, uses one, and sends it only to the service you picked (for Postiz, the address you
-  gave in setup).
 - Other keys go to `session.env` (mode 600) and are given to every session's environment. The UI shows their names,
   never their values. Only add keys that sessions need, and prefer keys with spending limits.
 - The runner checks a project's keys before each session: if one is missing, the project pauses and tells you which,
   instead of starting a session that would fail.
 
-## What setup installs, and the browser
+## What setup installs
 
-- **Nothing installs without you asking** (a confirmation in the terminal, an Install button on the page), and
-  everything goes into the studio folder or your own user tools: never system-wide, never as root. Sources: npm
-  (Strudel), Google's Chrome for Testing, astral.sh (uv), PyPI via uv (browser-harness), GitHub (ComfyUI, the TTS
-  Audio Suite, the 3D toolkits), download.blender.org. The web studio's install endpoints are behind the same guards
-  as every other change (loopback or token, the `X-Mortiflix` header).
-- **The studio's Blender has its own profile**, so add-ons installed for sessions never load in your own Blender, and
-  your add-ons never load in theirs.
-- **Asset sites run in your own Chrome**, with your logins. Sessions may use only the sites you listed, download
-  only into the project, and must stop and ask (`needs-you`) before anything that signs up, accepts terms or pays.
-  That's an instruction plus your review, not a technical wall: a session with browser access can do what your
-  browser can. List only sites you're comfortable with, and keep the session sandbox off only when you trust what
-  the project reads (browser-harness needs your Chrome, which the sandbox hides).
+**Nothing installs without you asking** (a confirmation in the terminal, an Install button on the page), and
+everything goes into the studio folder: never system-wide, never as root. Sources: npm (Strudel) and Google's Chrome
+for Testing (only when you have no Chrome, Chromium or Edge). The web studio's install endpoints are behind the same
+guards as every other change (loopback or token, the `X-Mortiflix` header).
+
+The headless Chrome runs Strudel on a blank page the engine controls; it loads no website. Sessions use Strudel's
+built-in synths; a sample or soundfont needs a source that names its licence, and the music skill tells sessions
+never to take someone else's loops. That's an instruction plus your review, not a technical wall.
 
 ## The web server
 

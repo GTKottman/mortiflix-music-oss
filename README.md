@@ -1,64 +1,91 @@
-<p align="center"><img src="web/img/mark.png" width="96" alt="Mortiflix"></p>
+<p align="center"><img src="web/img/mark.png" width="96" alt="Mortiflix Music"></p>
 
-<h1 align="center">Mortiflix</h1>
+<h1 align="center">Mortiflix Music</h1>
 
-<p align="center"><b>A motion design studio on your own machine.</b><br>
-Claude makes the video step by step. You approve every stage.</p>
-
-<p align="center"><a href="https://youtu.be/53bRoQENmSA"><img src="docs/media/how-to-use-mortiflix.gif" width="720" alt="How to use Mortiflix: tap to watch the video"></a><br>
-<b>▶ <a href="https://youtu.be/53bRoQENmSA">Watch: How to use Mortiflix</a></b> (3:07). This video was made with Mortiflix.</p>
+<p align="center"><b>A music studio on your own machine.</b><br>
+Claude writes the music as MIDI, step by step. You approve every stage.</p>
 
 ---
 
-Most "AI video" tools are one prompt and a slot machine. Mortiflix works like a real motion design studio:
-a brief, a script, style frames, a transition board, an animatic, a final, and **you review each stage** before the next one starts.
-You pin a note on the exact spot of a frame or the exact moment of a video. The next version answers every note,
-one by one, and shows you what changed.
+Most "AI music" tools are one prompt and a slot machine, and what comes out is a finished audio file you can't
+change. Mortiflix Music works like a composer you brief: it researches the genre, plans the piece in words for you to
+approve, writes every part as notes on its own MIDI channel, checks them, and hands you **the MIDI**: every channel,
+the whole arrangement, a clip per section, and the steps to bring it into your DAW. If you want, it also gives every
+channel a sound and masters the track.
 
 It's built for **one person**: you write the briefs, you review every stage, and the studio runs on your machine.
-The work is done by Claude through **your own Claude Code login or your own Anthropic API key**. Mortiflix is
-the harness around it: the pipelines, the gates, the review room, and the memory that carries a project across
-sessions and days.
+The work is done by Claude through **your own Claude Code login or your own Anthropic API key**. Mortiflix Music is
+the harness around it: the pipelines, the gates, the music engine that checks every note, the review room, and the
+memory that carries a project across sessions and days.
 
 ```
- brief ──▶ script ──▶ style frames ──▶ animatic ──▶ build ──▶ final ──▶ delivered
-   ▲          ▲            ▲              ▲                     ▲
-   └── you ───┴──── you ───┴───── you ────┴──────── you ────────┘
-       approve, pin notes, answer questions (the session stops at every gate)
+ genre ──▶ blueprint ──▶ score ──▶ MIDI ──▶ sounds ──▶ final ──▶ delivered
+              ▲                                          ▲
+              └──────────────── you ─────────────────────┘
+       approve, note a bar on the piano roll, answer questions (the session stops at every gate)
 ```
 
 ## Why it's built this way
 
+- **Notes first, sounds second.** The score holds only music: pitches, rhythm, velocity and structure, one part per
+  MIDI channel. Its MIDI is captured the moment the score passes its check, and only then is a sound chosen for each
+  channel. A sound can never change a note, so the MIDI you take into your DAW is exactly what you heard.
+- **Every stage is checked by a machine.** The engine plays the score and refuses it until every note fits the chord
+  of the moment (the harmony lock), the energy rises and falls where the blueprint said it would, every part plays and
+  nothing runs past the end. In a loop kit, no note may ring over a loop point.
 - **Sessions end at gates.** A Claude session works until it has something for you to review, submits it, writes a
-  handoff and stops. When you respond, a fresh session picks up from the journal. Waiting on you costs nothing,
-  for hours or for days.
+  handoff and stops. When you respond, a fresh session picks up from the journal. Waiting on you costs nothing.
 - **The rules live in code, not in the prompt.** Only you can approve a step you review. A submission is refused if
-  it doesn't report every error check for its kind of work, or if it doesn't answer each note you left on the last
-  version. What you reviewed is copied out of the session's reach, so it can't change afterwards.
-- **It learns your studio.** When you point out a real mistake, the session proposes a new check ("text never
-  touches the frame edge"). Approve it once and every future video runs it. Your taste carries across projects in
+  it doesn't report every error check for its kind of work, or doesn't answer each note you left on the last version.
+  What you reviewed is copied out of the session's reach, so it can't change afterwards.
+- **It learns your studio.** When you point out a real mistake, the session proposes a new check ("the bass never
+  flams with the kick"). Approve it once and every future piece runs it. Your taste carries across projects in
   `TASTE.md`.
 - **Pipelines are folders.** A pipeline is a `pipeline.json` (steps, how each is reviewed, the error checks), a
-  `PIPELINE.md` (the craft), and skills. Anyone can write one: that's the point of open-sourcing it.
+  `PIPELINE.md` (the craft), and skills. Anyone can write one.
+
+## What it makes
+
+| Pipeline | You review | You get |
+|---|---|---|
+| `song` | blueprint → the finished song | a mastered instrumental (-14 LUFS), the stems, the music sheet and the MIDI. Or you finish it in your DAW and import your master |
+| `midi-pack` | blueprint → the MIDI | MIDI for your DAW, written from a researched genre (and around a `.mid` of yours, if you bring one), with a sketch render to hear it by |
+| `loop-kit` | kit plan → the loops | a family of loops in one genre, each checked to repeat cleanly, as MIDI clips to arrange |
+
+Every one of them delivers the **MIDI pack**:
+
+```
+midi/
+  night-drive-all.mid          the whole arrangement, one track per channel, tempo, meter and section markers
+  01-sub.mid  03-hook.mid …    each channel on its own
+  sections/
+    01-headlights/             a clip per section, from its own bar 1: every channel alone, and all together
+    02-the-overpass/
+  CUE-SHEET.md                 tempo, key, sections, each channel's range, the chords, and your DAW's import steps
+MUSIC-SHEET.md                 every decision and measurement, from the genre to the master
+```
+
+Name your DAW in setup (Ableton Live, FL Studio, Logic Pro, REAPER, Bitwig, Cubase, Studio One, GarageBand, Pro
+Tools) and the cue sheet says how to bring it in there. Drums are on channel 10 in General MIDI numbers, so they map
+straight onto a drum rack.
 
 ## Quick start
 
-> **Tested mostly on Linux so far.** A Windows version is coming in the next two weeks (by October 20, 2026): the
-> installer is ready, sessions are next ([docs/WINDOWS.md](docs/WINDOWS.md)). macOS should mostly work but hasn't
-> been tested yet.
+> **Tested on Linux.** macOS should mostly work; the Windows installer is here (`install.ps1`), but sessions on
+> Windows are still being tested in Mortiflix, which this studio shares its engine with.
 
-You need **Node 20+** and **ffmpeg**. For real videos you also need one of:
+You need **Node 20+** and **ffmpeg**. For real music you also need one of:
 - [Claude Code](https://claude.com/claude-code), logged in (your plan pays), or
 - an [Anthropic API key](https://console.anthropic.com/) (you pay per token).
 
 ```sh
-git clone https://github.com/GTKottman/mortiflix-oss.git && cd mortiflix-oss
+git clone https://github.com/GTKottman/mortiflix-music-oss.git && cd mortiflix-music-oss
 npm install
-npm link                 # puts `mortiflix` on your PATH (or use: node bin/mortiflix)
+npm link                       # puts `mortiflix-music` on your PATH (or use: node bin/mortiflix-music)
 
-mortiflix init           # makes the studio folder (~/Mortiflix) and picks a backend it finds
-mortiflix setup          # the walkthrough: Claude, narration, music, assets, 3D (asks before installing anything)
-mortiflix demo           # a full walk-through with placeholder work: free, no Claude needed
+mortiflix-music init           # makes the studio folder (~/MortiflixMusic) and picks a backend it finds
+mortiflix-music setup          # the walkthrough: Claude, the music engine (Strudel), your DAW
+mortiflix-music demo           # a full walk-through with placeholder work: free, no Claude needed
 ```
 
 Then either:
@@ -66,206 +93,113 @@ Then either:
 **A. In the terminal**
 
 ```sh
-mortiflix new explainer          # asks the brief's questions
-mortiflix run                    # sessions run until something waits on you
-mortiflix review                 # read the note, answer questions, pin notes, approve or ask for changes
-mortiflix run                    # ...and so on until it's delivered
+mortiflix-music new midi-pack        # asks the brief's questions
+mortiflix-music run                  # sessions run until something waits on you
+mortiflix-music review               # read the note, answer questions, leave notes, approve or ask for changes
+mortiflix-music midi <project>       # the MIDI pack as one zip
 ```
 
 **B. In the browser**
 
 ```sh
-mortiflix serve                  # http://127.0.0.1:4646
+mortiflix-music serve                # http://127.0.0.1:4747
 ```
 
-The web studio shows what's waiting on you, a live log of what Claude is doing, and the review room: click a frame
-to pin a note, pause a video to note a moment, comment on a paragraph of the script, answer the session's questions,
-and approve. Sessions start by themselves while `serve` runs. To use it from another device, run
-`mortiflix serve --host 0.0.0.0`: you then get a private link with an access token (put it behind HTTPS if it leaves
-your network).
+The web studio shows what's waiting on you, a live log of what Claude is doing, and the review room: MIDI shows as a
+**piano roll** (pick a part to bring it forward; click a bar to leave a note there), audio as a player you can note a
+moment on, a blueprint as paragraphs you can comment on. The project page has the MIDI panel: the arrangement as a
+piano roll, **Download MIDI**, and **Import your master** when you finish a song in your own DAW. Sessions start by
+themselves while `serve` runs. To use it from another device, run `mortiflix-music serve --host 0.0.0.0`: you then get
+a private link with an access token (put it behind HTTPS if it leaves your network).
 
 **C. In Claude Code**
 
 ```
-/plugin marketplace add GTKottman/mortiflix-oss
-/plugin install mortiflix@mortiflix
-/mortiflix
+/plugin marketplace add GTKottman/mortiflix-music-oss
+/plugin install mortiflix-music@mortiflix-music
+/mortiflix-music
 ```
 
-`/mortiflix` walks you through all of it in the conversation. It installs the CLI if you don't have it, then
-covers setup, the demo, a new video's brief, and running the studio. At each gate it shows you what the session
-sent, opens the frames and videos, and turns what you say into pinned notes. It reads them back to you before
-sending. Jump straight to a part with `/mortiflix demo`, `/mortiflix new explainer`, `/mortiflix review`,
-`/mortiflix status` or `/mortiflix setup`. If another plugin also has a `/mortiflix`, this one is
-`/mortiflix:mortiflix`.
+`/mortiflix-music` walks you through it in the conversation: the install, setup, the demo, a new piece's brief, running
+the studio, and every gate. It turns "bar 17 is too busy" into a note at that moment and reads your notes back before
+sending them. Your Claude Code conversation is the guide, not the studio: the music is still written by the studio's
+own sessions, behind the same gates, and the guide never decides a gate for you. Keys never go into the chat. From a
+clone, `claude --plugin-dir ./plugin` loads it without installing.
 
-Your Claude Code conversation is the guide, not the studio. The video is still made by the studio's own sessions,
-behind the same gates. The guide asks you at every gate and is told never to decide one for you. Keys
-never go into the chat: you add them with `mortiflix keys` in a terminal, or in Settings › Keys. The guide asks
-before it installs anything, opens a port or starts paid work. Only read commands are pre-allowed, so your Claude
-Code permission settings apply to everything else. From a clone, `claude --plugin-dir ./plugin` loads it
-without installing.
+## The music engine
+
+[Strudel](https://strudel.cc) (AGPL-3.0) is the engine: it plays the score so it can be checked, captured as MIDI and
+rendered. Sounds are Strudel's built-in synths shaped in code (nothing to download, no licence questions); a sample is
+used only with a source that names a licence allowing your use. Each stage is one command that refuses to pass until
+its stage is right:
+
+```sh
+node $M genre        # the genre profile: 5+ sources read, the elements that make it this genre
+node $M plan         # the blueprint: sections, chords, one channel per part, the story's intensity curve
+node $M check        # the score: harmony lock, the curve, clean loops; captures the MIDI when it passes
+node $M instruments  # a sound for every channel, from the notes it really plays
+node $M audition     # every sound across its part's range: nothing silent, nothing clipping
+node $M master       # render, stems, balance, -14 LUFS (or `own-master` for yours)
+```
+
+The whole method: [docs/MUSIC.md](docs/MUSIC.md).
 
 ## Backends
 
 | Backend | What runs | Who pays |
 |---|---|---|
 | `claude-code` | `claude -p` in the project folder, with your login | your Claude plan |
-| `anthropic-api` | Mortiflix's own agent loop on the Claude API: a persistent shell, a file editor that can *show* Claude the frames it renders, web search, prompt caching, compaction for long sessions | your API key, per token |
-| `demo` | a scripted stand-in that walks every gate with placeholder frames and a test-pattern video | nobody |
+| `anthropic-api` | the studio's own agent loop on the Claude API: a persistent shell, a file editor, web search, prompt caching, compaction for long sessions | your API key, per token |
+| `demo` | a scripted stand-in that walks every gate with a placeholder blueprint, a four-bar MIDI sketch and a test tone | nobody |
 
-Pick one with `mortiflix init --backend …`, `mortiflix config backend …`, or Settings in the web studio.
+Pick one with `mortiflix-music init --backend …`, `mortiflix-music config backend …`, or Settings in the web studio.
 Each project shows what its Claude work cost: on a Claude plan, what it **would have cost** at API prices (you didn't
-pay that); with an API key through Claude Code, about what you spent.
+pay that); with an API key, about what you spent.
 
 ## Your keys
 
-Mortiflix runs on your own accounts: there's nothing to sign up for. `mortiflix init` asks for your keys, and
-`mortiflix keys` changes them any time (Settings › Keys in the web studio does the same):
+The studio runs on your own accounts: there's nothing to sign up for. `mortiflix-music keys` sets them (Settings ›
+Keys in the web studio does the same):
 
 ```
 Anthropic API key   only for the anthropic-api backend (Claude Code uses your own login)
-ElevenLabs API key  only for ElevenLabs narration, sound effects and music
-Upload-Post API key only for `mortiflix publish` through Upload-Post (optional; sessions never get it)
-Postiz API key      only for `mortiflix publish` through your own Postiz (optional; sessions never get it)
 Other keys          anything a pipeline's tools read from the environment, e.g. GEMINI_API_KEY
 ```
 
-Typing is hidden, each key is checked with a free API call before it's saved, and they're written to the studio
-folder only (`secrets.json` and `session.env`, mode 600). If a project needs a key you haven't added, it asks
-**before it starts** (`mortiflix new`, or the web studio's Start button) instead of failing halfway through.
-For scripts: `echo "$KEY" | mortiflix keys set elevenlabs`.
-
-## What it can make today
-
-| Pipeline | Steps you review | Good for |
-|---|---|---|
-| `explainer` | brief → script → style frames → transitions → animatic → music → final | 30 s to 2 min explainers, narrated or not, with an original score |
-| `social-short` | brief → hook frames → transitions → final | 45 s to 3 min vertical shorts: hook first, works with sound off |
-| `logo-sting` | directions → final | a 3–8 s logo animation; the quickest real run |
-| `song` | blueprint → final | an instrumental song from a genre and a topic: researched genre, checked score, MIDI, an instrument per channel, a mastered track |
-
-They build in [Remotion](https://www.remotion.dev/) (React video) and check every render with ffmpeg (`qc.mjs`:
-format, black or frozen frames, loudness, a frame sheet Claude has to look at). Remotion has its own license: free for individuals and small teams, a company
-license above that. Check it for your case.
-
-## Narration
-
-Pick a voice in **Settings › Narration** (or `mortiflix voice`):
-
-- **ElevenLabs**: connect your key and choose from your voices, the default voices or the Voice Library, with
-  Eleven v4 by default and every option the API offers (models, stability and similarity, language, text
-  normalization, pronunciation dictionaries, audio format, data-residency servers), plus sound effects and music
-  beds. Settings shows your plan, credits, and whether you may use the audio commercially (the free plan doesn't).
-- **This computer**: Qwen3-TTS (open, Apache-2.0) through ComfyUI on your graphics card: free and private. Mortiflix
-  checks your GPU and offers it when it fits (4 GB for the 0.6B voice, 8 GB for the 1.7B voice with delivery
-  instructions).
-- **Your own voice**: you read the script yourself, one short line at a time, in the **recording booth**: in the web
-  studio (hold Space to record, listen back, keep the best take), in a terminal (`mortiflix record <project>`), or by
-  importing files you recorded elsewhere (`mortiflix record <project> --import <folder>`). The studio asks for you when
-  the script is ready and carries on once every line has a kept take.
-- **None**: on-screen text and music.
-
-Generated lines are checked by speech to text and retaken if words go missing; word timings drive the animation.
-Details: [docs/VOICE.md](docs/VOICE.md).
-
-## Transitions
-
-Before the animatic, every project gets a **transition board**: for each change from one style frame to the next,
-the object or idea on screen that carries it, why the cut happens there, the word it lands on, and real in-between
-frames rendered from the two style frames and the chosen transition. Transitions come from the
-[remotion-transitions](https://github.com/GTKottman/remotion-transitions) library (installed by setup), or are new
-ones inspired by it. The screen never goes blank: no dip to a flat colour, no flash to white. A check reads every
-10% of every transition and fails any frame that does.
-
-## Setup: music, assets and 3D
-
-`mortiflix setup` (or **Settings › Setup**) explains each part, why it's needed and what it installs, then asks.
-Everything goes into the studio folder, never system-wide. Full details: [docs/SETUP.md](docs/SETUP.md).
-
-- **Music.** One music engine writes songs (the `song` pipeline) and video scores, in stages you can follow:
-  the genre researched (songs), a blueprint, the score in [Strudel](https://strudel.cc) as notes only, a machine
-  check (harmony locked to the chart, the intensity curve as planned, every hit within a frame of the picture), the
-  **MIDI** captured, an **instrument chosen for every channel** and auditioned, then a measured master. Every decision
-  is written down in a music sheet. For videos, the recommended finish is yours: download the MIDI pack, make the
-  sound in your own DAW, import your master. [docs/MUSIC.md](docs/MUSIC.md)
-- **Assets.** If you have a website you use for assets, list it: sessions search it and download what fits in your
-  own Chrome, with your own login, through browser-use's [browser-harness](https://github.com/browser-use/browser-harness),
-  recording every asset's source and licence. Without one, sessions make every visual themselves.
-- **3D.** Blender with the studio's toolkits, in its own profile (your Blender setup is never touched): MoBlend
-  (MoGraph), Camera, Animate, Math, Circuits, Camera Flight for flying the camera yourself (`mortiflix blender`), and
-  **Nova FX**, Mortiflix's own particle engine (particles, fire, sparks, fireworks), which builds on Linux only for now.
-
-## Publishing (optional)
-
-Once you approve a final, the video is yours to download. If you'd rather post it straight from the studio, pick a
-service in setup (`mortiflix setup publish`, or Settings › Setup), add its key with `mortiflix keys`:
-
-- **[Upload-Post](https://upload-post.com)**: hosted, with paid plans. Connect your accounts there, under a profile.
-- **[Postiz](https://postiz.com)**: free and open source (AGPL-3.0, like Mortiflix), on your own server or this
-  computer ([Docker Compose](https://docs.postiz.com/self-host/installation/docker-compose)). Connect your accounts in
-  it. You register a developer app with each platform yourself, and TikTok keeps posts private until it has reviewed
-  yours. Mortiflix talks to it over its API (`http://localhost:4007/api` for the official Docker image, or
-  `https://api.postiz.com` for Postiz Cloud); none of its code is bundled.
-
-Then:
-
-```sh
-mortiflix publish <project>                                   # where the brief said (TikTok / Reels / Shorts), asks first
-mortiflix publish <project> --to linkedin,x --title "…"       # somewhere else, with your own caption
-mortiflix publish <project> --at 2026-10-20T18:00 --timezone Europe/Madrid   # scheduled
-mortiflix publish <project> --status                          # per platform, with the links once they're live
-```
-
-Only you publish: it's a command you run, never something a session can reach (`mfx` has no way to it), and only a
-delivered project's approved final goes out. It shows what goes where and asks before sending (`--yes` skips the
-question in scripts). Running it again never posts the same video twice (`--again` does, on purpose). With Postiz,
-the plan names each connected account it goes to. `--profile` is the Upload-Post profile your accounts are connected
-under; it's remembered after the first time.
-
-Publishing was started by [@mutonby](https://github.com/mutonby) ([#3](https://github.com/GTKottman/mortiflix-oss/pull/3)),
-who built the Upload-Post side; Postiz came after, as the free choice.
+Typing is hidden, the key is checked with a free API call before it's saved, and keys are written to the studio
+folder only (`secrets.json` and `session.env`, mode 600).
 
 ## Make your own pipeline
 
 ```sh
-cp -r pipelines/logo-sting ~/Mortiflix/pipelines/my-pipeline   # the studio's own pipelines override built-ins
-$EDITOR ~/Mortiflix/pipelines/my-pipeline/pipeline.json
-mortiflix pipelines                                             # validates it
-mortiflix new my-pipeline --backend demo                        # walk its gates for free
+cp -r pipelines/midi-pack ~/MortiflixMusic/pipelines/my-pipeline   # the studio's own pipelines override built-ins
+$EDITOR ~/MortiflixMusic/pipelines/my-pipeline/pipeline.json
+mortiflix-music pipelines                                         # validates it
+mortiflix-music new my-pipeline --backend demo                    # walk its gates for free
 ```
 
-Read **[docs/PIPELINES.md](docs/PIPELINES.md)**. This is where help is most wanted: music videos, product films,
-data stories, kinetic type, 3D in Blender, captions for existing footage. If you can describe how a good studio
-makes it, it can be a pipeline.
+Read **[docs/PIPELINES.md](docs/PIPELINES.md)**. Help is most wanted here: an EP, drum programming from a reference
+groove, harmonising a melody you bring, game-music loops with intensity layers, a string arrangement. If you can
+describe how a good composer makes it, it can be a pipeline. `mortiflix-music pipelines export <slug>` packs one with
+its skills to share.
 
 ## How it works
 
-- [OVERVIEW.html](OVERVIEW.html): the whole project on one page, with UML diagrams (download it and open it in a browser)
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): the runner, the bridge (`mfx`), the gates, the session brief, the backends
+- [docs/MUSIC.md](docs/MUSIC.md): the music engine, stage by stage, and the MIDI pack
 - [docs/PIPELINES.md](docs/PIPELINES.md): the pipeline format and how to write a good one
 - [harness/GATES.md](harness/GATES.md): the protocol every session follows
 - [docs/SECURITY.md](docs/SECURITY.md): what a session can and can't reach, and the web server's guards
-- [docs/COMPUTE.md](docs/COMPUTE.md): where the tokens, time and disk go, measured on a real project
-- [docs/VOICE.md](docs/VOICE.md): narration with ElevenLabs or on your own GPU, and every option
-- [docs/SETUP.md](docs/SETUP.md): every part of setup, what it installs and where
-- [docs/MUSIC.md](docs/MUSIC.md): how the music step writes, checks and renders a score
+- [docs/SETUP.md](docs/SETUP.md): what setup installs and where
 
 ## Where it came from
 
-Mortiflix began as a hosted motion design studio, where every video was made stage by stage behind the same kind of
-gates, with clients approving each one. This repository is that process, boiled down to one machine and opened up,
-so it can be improved by more people than one studio.
-
-Not here yet (from the hosted studio, contributions welcome): workflow
-preferences learned from your pins, redo rounds on a delivered video, share links, music in the social-short pipeline,
-and more pipelines (codebase explainers, 3D music videos, real estate films).
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md). Tests run in about a second (`npm test`) and never call the network.
+Mortiflix Music is a sister of [Mortiflix](https://github.com/GTKottman/mortiflix-oss), the open-source motion design
+studio: the same studio, gates and music engine, turned entirely toward music and MIDI. The music method comes from
+Mortiflix's song system: the genre researched first, the piece planned in words, notes before sounds, and a machine
+that checks each stage before the next one starts.
 
 ## License
 
-[AGPL-3.0](LICENSE). If you run a modified Mortiflix as a service for others, share your changes.
-The bundled fonts (Sora, Unbounded) are under the SIL Open Font License (`web/fonts/`).
+[AGPL-3.0](LICENSE), like Mortiflix and Strudel. One person's studio, open so it can get better than one person
+could make it.

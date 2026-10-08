@@ -1,5 +1,5 @@
 // The last stage of the music: a finished master. Either Strudel's render, brought to the delivery loudness here, or a
-// master the owner made from the MIDI pack in their own DAW and imported (`mortiflix music <project> --import <file>`).
+// master the owner made from the MIDI pack in their own DAW and imported (`mortiflix-music music <project> --import <file>`).
 // Both are measured the same way (ffmpeg's EBU R128 meter), and an owner's master is checked against the score it was
 // made from: its length, and whether it starts where bar 1 starts.
 import { spawnSync } from 'node:child_process';
@@ -62,7 +62,7 @@ export function checkOwnMaster(wavFile, expect) {
   if (starts !== null && expect?.first_note_sec !== undefined && expect.first_note_sec !== null) {
     const off = +(starts - expect.first_note_sec).toFixed(3);
     measured.offset_sec = off;
-    if (Math.abs(off) > 0.08) warnings.push(`the first sound arrives at ${starts.toFixed(2)} s, but the first note of the MIDI is at ${expect.first_note_sec.toFixed(2)} s (${off > 0 ? '+' : ''}${off} s). If you exported from bar 1, a slow attack can explain it; if not, export again starting exactly at bar 1 so the hits land on the picture`);
+    if (Math.abs(off) > 0.08) warnings.push(`the first sound arrives at ${starts.toFixed(2)} s, but the first note of the MIDI is at ${expect.first_note_sec.toFixed(2)} s (${off > 0 ? '+' : ''}${off} s). If you exported from bar 1, a slow attack can explain it; if not, export again starting exactly at bar 1 so it lines up with the MIDI`);
   }
   if (lu.true_peak !== null && lu.true_peak > -0.1) warnings.push(`the true peak is ${lu.true_peak} dBTP: it may clip; the studio's final mix brings it down`);
   return { errors, warnings, measured };

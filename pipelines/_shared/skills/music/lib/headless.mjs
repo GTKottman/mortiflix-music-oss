@@ -45,9 +45,9 @@ window.mfxReady = true;
 export class HeadlessStrudel {
   constructor({ strudel = process.env.MFX_STRUDEL, chrome = process.env.MFX_CHROME } = {}) {
     if (!strudel || !existsSync(join(strudel, 'node_modules', '@strudel', 'web', 'dist', 'index.mjs'))) {
-      throw new Error('Strudel isn\'t installed in this studio (MFX_STRUDEL). The owner runs `mortiflix setup music`; until then, say so with `mfx needs-you`.');
+      throw new Error('Strudel isn\'t installed in this studio (MFX_STRUDEL). The owner runs `mortiflix-music setup music`; until then, say so with `mfx needs-you`.');
     }
-    if (!chrome || !existsSync(chrome)) throw new Error('No Chrome to render in (MFX_CHROME). The owner runs `mortiflix setup music`.');
+    if (!chrome || !existsSync(chrome)) throw new Error('No Chrome to render in (MFX_CHROME). The owner runs `mortiflix-music setup music`.');
     this.dist = join(strudel, 'node_modules', '@strudel', 'web', 'dist');
     this.chromePath = chrome;
   }

@@ -4,8 +4,9 @@
 //
 //   node strudel.mjs genre                       music/genre.json → checked, music/GENRE.md            (songs)
 //   node strudel.mjs plan                        music/blueprint.json → checked, music/BLUEPRINT.md
-//   node strudel.mjs check [--video-sec S --fps F]  the score → harmony lock, story curve, hits; its MIDI:
-//                                                music/notes.json + out/music/midi/ (every channel, the arrangement) + midi.zip
+//   node strudel.mjs check                       the score → harmony lock, story curve (and, for a loop kit, clean loops);
+//                                                its MIDI: music/notes.json + out/music/midi/ (every channel, the arrangement,
+//                                                a clip per section, the cue sheet) + midi.zip
 //   node strudel.mjs instruments                 the sound of every channel (music/instruments.json), checked against
 //                                                the MIDI; with no file yet, lists the sounds and each channel's range
 //   node strudel.mjs audition                    every instrument plays its part's lowest, middle and highest note
@@ -16,9 +17,10 @@
 //   node strudel.mjs sheet                       rewrites music/MUSIC-SHEET.md from whatever exists
 //
 // Every command but sheet exits 1 when its stage isn't right yet, with the problems in plain words.
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { hapsToChannels, checkBlueprint, checkScore, intensity, intensityChart, beatsPerBar, timeOf } from './lib/score.mjs';
+import { hapsToChannels, checkBlueprint, checkScore, intensity, intensityChart, beatsPerBar, timeOf, sectionRanges, clipOf, checkLoops } from './lib/score.mjs';
+import { importSteps, DAW_NAMES } from './lib/daw.mjs';
 import { checkHarmony, noteName } from './lib/harmony.mjs';
 import { writeMidi } from './lib/midi.mjs';
 import { profileProblems, profileMarkdown, signatureProblems, fmtSec } from './lib/genre.mjs';
@@ -106,7 +108,7 @@ if (cmd === 'instruments') {
 
 if (cmd === 'own-master') {
   const rep = read(F.own);
-  if (!rep) die('No master from the owner yet. They make it from the MIDI pack and import it on the project page (Music › Import your master) or with `mortiflix music <project> --import <file>`.');
+  if (!rep) die('No master from the owner yet. They make it from the MIDI pack and import it on the project page (Music › Import your master) or with `mortiflix-music music <project> --import <file>`.');
   console.log(`The owner's master: ${rep.source} (${rep.measured.seconds} s, ${rep.measured.lufs} LUFS, true peak ${rep.measured.true_peak} dBTP), imported ${rep.imported_at}`);
   for (const w of rep.warnings || []) console.log(`! ${w}`);
   if (rep.errors?.length) fail(rep.errors, 'with the owner\'s master'); else console.log(`✔ Use ${rep.file} as the music (it starts at bar 1 of the score).`);
@@ -135,26 +137,27 @@ try {
       const score = checkScore(channels, bp, { video_sec: videoSec, fps });
       const harmony = checkHarmony(manifest, bp);
       const curve = intensity(manifest, bp);
-      const errors = [...score.errors, ...harmony.errors, ...curve.problems];
-      const report = { ok: errors.length === 0, errors, warnings: score.warnings, seconds: score.seconds, hits: score.hits, intensity: curve.sections,
+      const loops = bp.loops ? checkLoops(manifest, bp) : { errors: [], warnings: [] };
+      const errors = [...score.errors, ...harmony.errors, ...curve.problems, ...loops.errors];
+      const report = { ok: errors.length === 0, errors, warnings: [...score.warnings, ...loops.warnings], seconds: score.seconds, hits: score.hits, intensity: curve.sections,
         parts: manifest.tracks.map((t) => ({ channel: t.channel, name: t.name, notes: t.notes.length, velocity_range: t.notes.length ? [Math.min(...t.notes.map((n) => n.velocity)), Math.max(...t.notes.map((n) => n.velocity))] : null })) };
       write(F.check, report);
       console.log(`${bp.title || scorePath}: ${bp.bars} bars at ${bp.bpm} BPM (${bp.meter || '4/4'}) = ${score.seconds}s${bp.offset_sec ? `, starting ${bp.offset_sec}s into the video` : ''}`);
       console.log(`Parts: ${report.parts.map((p) => `${p.name} (${p.notes})`).join(', ')}`);
       console.log(`\nIntensity (asked vs measured, one block per bar):\n${intensityChart(curve)}`);
       if (score.hits.length) console.log(`\nHits:\n${score.hits.map((h) => `  ${h.ok ? '✔' : '✖'} ${String(h.t_sec).padStart(7)}s  bar ${h.bar} beat ${h.beat ?? 1} → ${h.music_sec}s (${h.off_sec >= 0 ? '+' : ''}${h.off_sec}s)  ${h.kind || 'direct'}: ${h.what}`).join('\n')}`);
-      for (const w of score.warnings) console.log(`\n! ${w}`);
+      for (const w of report.warnings) console.log(`\n! ${w}`);
       if (errors.length) fail(errors);
       else {
         // The score passed: its MIDI is the music from here on. Instruments are chosen from it; any DAW can play it.
         write(F.notes, manifest);
         const files = writeMidiPack(manifest, out || 'out/music/midi');
-        console.log(`\n✔ Check passed: harmony locked, the curve follows the story${bp.hits?.length ? ', hits on the picture' : ''}.`);
-        console.log(`✔ MIDI: ${F.notes} and ${files} (every channel, the whole arrangement, CUE-SHEET.md).`);
+        console.log(`\n✔ Check passed: harmony locked, the curve follows the story${bp.loops ? ', every loop repeats cleanly' : ''}${bp.hits?.length ? ', hits on the picture' : ''}.`);
+        console.log(`✔ MIDI: ${F.notes} and ${files} (every channel, the whole arrangement, a clip per section, CUE-SHEET.md).`);
         console.log(`  Where each channel plays:\n  ${registers(manifest).map(registerLine).join('\n  ')}`);
       }
     } else {
-      console.log(`✔ ${writeMidiPack(manifest, out || 'out/music/midi')}: every channel, the arrangement, CUE-SHEET.md (tempo, sections and hits are markers in every file)`);
+      console.log(`✔ ${writeMidiPack(manifest, out || 'out/music/midi')}: every channel, the arrangement, a clip per section, CUE-SHEET.md (tempo, sections and hits are markers in every file)`);
     }
   }
 
@@ -227,15 +230,34 @@ try {
 
 function writeMidiPack(manifest, dir) {
   mkdirSync(dir, { recursive: true });
+  // Clips from an earlier version of the blueprint (renamed or removed sections) don't belong in this pack.
+  rmSync(join(dir, 'sections'), { recursive: true, force: true });
   const tracks = manifest.tracks.filter((t) => t.notes.length);
   const markers = [...(bp.sections || []).map((s) => ({ beat: (s.start_bar - 1) * bpb, text: s.name })),
     ...(bp.hits || []).map((h) => ({ beat: (h.bar - 1) * bpb + ((h.beat ?? 1) - 1), text: `HIT ${h.what}` }))];
   writeFileSync(join(dir, `${slug(bp.title || 'music')}-all.mid`), writeMidi({ bpm: bp.bpm, meter: bp.meter || '4/4', tracks, markers }));
   for (const t of tracks) writeFileSync(join(dir, `${String(t.channel).padStart(2, '0')}-${slug(t.name)}.mid`), writeMidi({ bpm: bp.bpm, meter: bp.meter || '4/4', tracks: [t], markers }));
+  // A clip per section: its notes from the section's own bar 1, every channel on its own and all of them together.
+  const clips = [];
+  for (const r of sectionRanges(bp)) {
+    const sdir = join(dir, 'sections', `${String(r.n).padStart(2, '0')}-${slug(r.name)}`);
+    const parts = tracks.map((t) => clipOf(t, r)).filter((t) => t.notes.length);
+    if (!parts.length) continue;
+    mkdirSync(sdir, { recursive: true });
+    writeFileSync(join(sdir, `${slug(r.name)}-all.mid`), writeMidi({ bpm: bp.bpm, meter: bp.meter || '4/4', tracks: parts, markers: [{ beat: 0, text: r.name }] }));
+    for (const t of parts) writeFileSync(join(sdir, `${String(t.channel).padStart(2, '0')}-${slug(t.name)}.mid`), writeMidi({ bpm: bp.bpm, meter: bp.meter || '4/4', tracks: [t], markers: [{ beat: 0, text: r.name }] }));
+    clips.push({ ...r, folder: `sections/${String(r.n).padStart(2, '0')}-${slug(r.name)}`, parts: parts.length });
+  }
+  const daw = process.env.MFX_DAW && DAW_NAMES[process.env.MFX_DAW] ? process.env.MFX_DAW : null;
   const sheet = [`# ${bp.title || 'Music'}: cue sheet`, '',
     `${bp.bpm} BPM, ${bp.meter || '4/4'}, ${bp.scale || ''}, ${bp.bars} bars (${fmtSec(seconds)}).${bp.offset_sec !== undefined ? ` Bar 1 starts ${bp.offset_sec}s into the video.` : ''}`, '',
-    'To finish it in your own DAW: import the arrangement file (or one file per part), set the tempo above, put bar 1 at',
-    'the start, give every channel its sound, mix, and export from bar 1 to the end (a reverb tail after it is fine).', '',
+    '## Files', '',
+    `- \`${slug(bp.title || 'music')}-all.mid\`: the whole arrangement, one track per channel, with the tempo and section markers`,
+    '- `NN-part.mid`: each channel on its own',
+    ...(clips.length ? [`- \`sections/\`: a clip per ${bp.loops ? 'loop' : 'section'}, from its own bar 1 (${clips.map((c) => `${c.folder.replace('sections/', '')}: ${c.bars} bar${c.bars === 1 ? '' : 's'}`).join(', ')})`] : []), '',
+    `## Bringing it into ${daw ? DAW_NAMES[daw] : 'your DAW'}`, '',
+    ...importSteps(daw).map((x, i) => `${i + 1}. ${x}`), '',
+    'To finish it yourself: give every channel its sound, mix, and export from bar 1 to the end (a reverb tail after it is fine).', '',
     '## Sections', '', '| Bars | Starts at | Section | What it does | Intensity |', '|---|---|---|---|---|',
     ...(bp.sections || []).map((s) => `| ${s.start_bar}-${s.end_bar} | ${timeOf(bp, s.start_bar).toFixed(2)}s | ${s.name} | ${s.function} | ${s.intensity} |`),
     ...(bp.hits?.length ? ['', '## Hit points', '', '| Video time | Bar.beat | How | What |', '|---|---|---|---|', ...bp.hits.map((h) => `| ${h.t_sec}s | ${h.bar}.${h.beat ?? 1} | ${h.kind || 'direct'} | ${h.what} |`)] : []),

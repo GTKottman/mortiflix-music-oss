@@ -1,15 +1,15 @@
 # Contributing
 
-Thanks for looking. The most valuable contributions are **pipelines and skills**: how a good studio makes a kind of
-video, written so a session can follow it (see [docs/PIPELINES.md](docs/PIPELINES.md)). Code is welcome too.
+Thanks for looking. The most valuable contributions are **pipelines and skills**: how a good composer makes a kind of
+piece, written so a session can follow it (see [docs/PIPELINES.md](docs/PIPELINES.md)). Code is welcome too.
 
 ## Setup
 
 ```sh
 npm install
-npm test                       # ~1 s; no network, no API key, no Claude
-node bin/mortiflix --studio /tmp/mfx-dev demo
-node bin/mortiflix --studio /tmp/mfx-dev serve
+npm test                       # seconds; no network, no API key, no Claude
+node bin/mortiflix-music --studio /tmp/mfx-dev demo
+node bin/mortiflix-music --studio /tmp/mfx-dev serve
 ```
 
 There's no build step: Node ES modules on the server, plain ES modules in `web/`.
@@ -18,11 +18,12 @@ There's no build step: Node ES modules on the server, plain ES modules in `web/`
 
 - **Gates are code.** If a rule matters ("every note gets answered"), enforce it in `src/gates.mjs` and test it.
   Don't rely on the prompt alone.
-- **Tests are fast and offline.** Use the demo backend, a fake `fetch` for the API backend
+- **Tests are fast and offline.** Two opt-in tests run the real engine when `MFX_TEST_STRUDEL` points at an installed
+  Strudel (`<studio>/tools/strudel`); everything else uses the demo backend, a fake `fetch` for the API backend
   (`test/api-backend.test.mjs` shows how), and Unix sockets instead of TCP ports. A test that takes seconds is too slow.
 - **Run only what you touched** while working (`node --test test/gates.test.mjs`), everything before a PR.
 - **Write like the code around it.** Small modules, comments that say *why*, plain words in anything a person reads.
-- **Errors are sentences a session can act on.** "pin_changes: note 2 from directions v1 has no answer", not "invalid
+- **Errors are sentences a session can act on.** "pin_changes: note 2 from blueprint v1 has no answer", not "invalid
   submission".
 
 ## The web UI
@@ -45,5 +46,5 @@ put `bin/` on the session's `PATH` and pass the bridge's environment through, so
 ## Pull requests
 
 - One topic per PR; tests for behaviour changes.
-- Pipelines: include what you made with it, and only assets that are yours or clearly licensed.
+- Pipelines: include what you made with it, and only MIDI or audio that is yours or clearly licensed.
 - By contributing you agree your work is licensed under the AGPL-3.0, like the rest of the project.

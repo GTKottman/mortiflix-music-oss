@@ -1,19 +1,19 @@
 {
-  "name": "mortiflix",
+  "name": "mortiflix-music",
   "owner": {
     "name": "GTKottman"
   },
   "metadata": {
-    "description": "Mortiflix, the open-source motion design studio, from inside Claude Code",
+    "description": "Mortiflix Music, the open-source music and MIDI studio, from inside Claude Code",
     "version": "0.1.0"
   },
   "plugins": [
     {
-      "name": "mortiflix",
+      "name": "mortiflix-music",
       "source": "./plugin",
-      "description": "/mortiflix walks you through Mortiflix in Claude Code: install, setup, a brief, every review gate, delivery.",
+      "description": "/mortiflix-music walks you through Mortiflix Music in Claude Code: install, setup, a brief, every review gate, your MIDI.",
       "category": "productivity",
-      "tags": ["video", "motion-design", "remotion", "studio"]
+      "tags": ["music", "midi", "strudel", "daw", "studio"]
     }
   ]
 }

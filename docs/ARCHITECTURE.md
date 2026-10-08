@@ -1,7 +1,7 @@
 # Architecture
 
-Everything runs on one machine, in one Node process (`mortiflix serve` or `mortiflix run`), around one folder: the
-studio.
+Everything runs on one machine, in one Node process (`mortiflix-music serve` or `mortiflix-music run`), around one
+folder: the studio.
 
 ```
  you ── web studio / CLI ──▶  gates.mjs  ◀── bridge (Unix socket) ◀── mfx ◀── the session (Claude)
@@ -15,19 +15,20 @@ studio.
 ## The studio folder
 
 ```
-~/Mortiflix/                       ($MORTIFLIX_STUDIO or --studio to move it)
-  config.json        settings, no secrets
-  secrets.json       Anthropic and ElevenLabs keys, web token (mode 600; `mortiflix keys`)
-  session.env        other KEY=value lines handed to sessions, e.g. GEMINI_API_KEY (mode 600; `mortiflix keys`)
+~/MortiflixMusic/                  ($MORTIFLIX_MUSIC_STUDIO or --studio to move it)
+  config.json        settings (the backend, your DAW), no secrets
+  secrets.json       the Anthropic key, web token (mode 600; `mortiflix-music keys`)
+  session.env        other KEY=value lines handed to sessions, e.g. GEMINI_API_KEY (mode 600; `mortiflix-music keys`)
   checks.json        the studio's error checklist: proposed by sessions, approved by you
   TASTE.md           what you like, learned across projects (sessions add with `mfx taste`)
   pipelines/         your own pipelines (same slug overrides a built-in one)
   projects/<id>/     the working folder: the session runs here
   state/<id>/        the record: project.json, events.jsonl, the pinned pipeline, submissions, feedback, transcripts
+  tools/             what setup installed: Strudel, a headless Chrome if you had none
   run/               the runner lock, render logs, an npm cache for sandboxed sessions
 ```
 
-The split matters: **sessions write to `projects/<id>/`; only Mortiflix writes to `state/<id>/`.** A submission's
+The split matters: **sessions write to `projects/<id>/`; only the studio writes to `state/<id>/`.** A submission's
 files are copied into the record when submitted, so what you reviewed can't change afterwards.
 
 ## A project's life
@@ -66,23 +67,23 @@ files are copied into the record when submitted, so what you reviewed can't chan
 | Every note on the last version gets an entry in `pin_changes` | `submit()` |
 | Submitted files exist, are inside the working folder (symlinks resolved), and are copied | `submit()` |
 | A step can't start before the steps it runs after are finished | `stepView()` + `submit()`/`stepStart()` |
-| The review mode decides what must be submitted (frames need images, video needs a video, …) | `submit()` |
+| The review mode decides what must be submitted (a document needs the text, audio the audio, midi a `.mid`) | `submit()` |
 | Status lines come from the pipeline's whitelist | `status()` |
 
 Steps have stored states (`working`, `in_review`, `changes`, `approved`, `done`) and derived ones (`ready` when
 everything it runs after is finished, otherwise `blocked`). Steps without a dependency between them can run side by
-side: the explainer's script and style frames do.
+side.
 
 ## The bridge and `mfx`
 
 `bridge.mjs` is an HTTP server on a Unix socket in the OS temp dir, alive only during a session. `mfx` (`src/mfx.mjs`)
 posts JSON to it with the session's token. Commands map one to one onto `gates.mjs` (plus `render`, `render-wait`,
 `taste`, `feedback`, `files`). A refusal comes back as a plain sentence the session can act on ("pin_changes: note 2
-from directions v1 has no answer").
+from blueprint v1 has no answer").
 
 ## Renders (`renderq.mjs`)
 
-Heavy work (Remotion, anything that starts Chrome or the GPU) goes through `mfx render`, which queues it studio-wide
+Heavy work (the engine's `render`, `master` and `audition`, which render audio in Chrome) goes through `mfx render`, which queues it studio-wide
 and returns an id at once; `mfx render-wait <id>` waits up to a timeout. No tool call blocks for longer than a
 backend allows, and two renders never fight for memory. While a render waits or runs, you see "Waiting to render"
 or "Rendering: <label>".
@@ -99,20 +100,17 @@ returns `{ ok, error?, usage?, cost_usd? }`; `available(config, root)` says whet
   that returns images as image blocks), optional web search and fetch, adaptive thinking with a configurable effort,
   automatic prompt caching, server-side compaction, and refusal fallbacks (`fallbacks: "default"`; blocks of a
   declined attempt are dropped before they're sent back). Default model: `claude-opus-5-5`.
-- **demo**: no model; walks the gates with placeholder work through the real bridge.
+- **demo**: no model; walks the gates with placeholder work (a blueprint, a four-bar MIDI sketch, a test tone) through
+  the real bridge.
 
 Adding a backend is adding a module with those two functions to `BACKENDS` in `runner.mjs`.
 
 ## Setup (`src/setup.mjs`)
 
-The parts of setup (Claude, narration, music, assets, 3D), each tool's detection and installer (`strudel`, `chrome`,
-`browser-harness`, `blender`, `blender-addons`, `comfyui`), and the owner's choices in `config.json` (`music`,
-`assets.sites`, `tools.*` paths). `setupStatus` (async: it asks ComfyUI) feeds the walkthrough and the page;
+The parts of setup (Claude, the music engine, your DAW), each tool's detection and installer (`strudel`, `chrome`),
+and the owner's choices in `config.json` (`daw`, `tools.*` paths). `setupStatus` feeds the walkthrough and the page;
 `setupStatusSync` feeds the session brief's "This studio" section. `sessionToolsEnv` gives sessions `MFX_STRUDEL`,
-`MFX_CHROME`, `MFX_BLENDER` (+ `BLENDER_USER_RESOURCES`, `MFX3D`), `MFX_MUSIC` and `MFX_ASSETS`. Studio skills that
-depend on setup (`harness/skills/blender-3d`, `harness/skills/assets`, the toolkits' own skills, browser-harness's)
-are installed into each project by `torch.mjs`. A pipeline step with `"when": "music"` is marked `skipped` at start
-when the studio or the brief has no music; a skipped step counts as finished only once its own predecessors are.
+`MFX_CHROME`, `MFX_MUSIC` and `MFX_DAW`. The music is always on: a music studio has no "no music".
 
 ## Platforms (`src/platform.mjs`)
 
@@ -124,54 +122,25 @@ port's status is in [WINDOWS.md](WINDOWS.md).
 
 ## Keys (`src/keys.mjs`)
 
-One registry of the keys a studio can hold (Anthropic, ElevenLabs), what each is for, and when a project needs it:
-`anthropic` when it runs on the `anthropic-api` backend, `elevenlabs` when the studio narrates with ElevenLabs and the
-work makes sound. `verifyKey` proves a key with a free, read-only call (`GET /v1/models`, ElevenLabs'
-`/v1/user/subscription`) and tells a refused key (`ok: false`) apart from an unreachable API (`ok: null`). The CLI
-(`mortiflix keys`, `init`, `new`), the web server (`/api/keys`, and `409 needs_keys` from `/start`) and the runner (a
-project that lacks a key for its next steps pauses with `NEEDS_YOU` instead of starting a session) all ask it. Other
-keys for sessions go to `session.env` through `setSessionKey`; only their names are ever shown.
-
-The publishing keys (Upload-Post, Postiz) are the studio's, not a session's: `publish.mjs` reads the chosen service's
-key (`keyValue`) when you run `mortiflix publish`. `config.json` › `publish` holds the choice (`service`: `uploadpost`,
-`postiz` or `none`, the Upload-Post `profile`, the Postiz `url`). `publishPlan` takes a delivered project's approved
-video and checks everything; for Postiz, `postizChannels` looks up the connected channels so the plan names them. The
-CLI shows the plan, asks, and `publish` sends it: Upload-Post as one form with an `Idempotency-Key`; Postiz as an upload
-then one `POST /public/v1/posts` with a post per channel (scheduled times converted to UTC). Each post carries a key
-(video, service, platforms, time); the studio refuses one it already sent unless `--again`. It records the post in
-`project.json` (`published`) and the log (`PUBLISHED`); `publishStatus` reads it back per platform. Started by @mutonby
-(PR #3, Upload-Post).
-
-## Narration (`src/voice/`)
-
-`voice/index.mjs` holds the studio's choice (`config.json` › `voice`: `none`, `elevenlabs`, `qwen` or `own`) and hands a
-session `MFX_VOICE` (the settings) plus `ELEVENLABS_API_KEY` only when ElevenLabs is the engine.
-`voice/elevenlabs.mjs` talks to ElevenLabs for setup (account, models, voices, Voice Library, dictionaries, a test
-line) and builds every text-to-speech request so it carries only what the chosen model takes (Eleven v4: stability and
-similarity only). `voice/qwen.mjs` detects the GPU, reads the installed ComfyUI nodes (models, voices, runtime modes)
-and builds the speak and listen graphs. Sessions narrate with the voiceover skill's `vo.mjs`, which imports these
-modules (`MFX_HOME`), and make effects and music beds with `sound.mjs`. See [VOICE.md](VOICE.md).
-
-**The recording booth** (`src/booth.mjs`) is the `own` engine: the owner reads the session's `voice/lines.json`. Every
-take is kept under `voice/takes/` with its measurements; the kept take of a line is copied to `voice/clips/<line>.wav`
-with the same report shape `vo.mjs` writes, plus the `script` it was recorded for, so `vo.mjs speak` knows which lines
-are done (and which changed since) and `build` works unchanged. Three front ends share it: the web booth
-(`web/app.js` `boothView`, an AudioWorklet in `web/booth-worklet.js`, takes uploaded as WAV to
-`/api/projects/<id>/booth/…`), the terminal booth (`src/record.mjs`, ffmpeg from the system microphone) and
-`mortiflix record --import` for files recorded elsewhere.
+One registry of the keys a studio can hold (the Anthropic key), what each is for, and when a project needs it
+(`anthropic` when it runs on the `anthropic-api` backend). `verifyKey` proves a key with a free, read-only call
+(`GET /v1/models`) and tells a refused key (`ok: false`) apart from an unreachable API (`ok: null`). The CLI
+(`mortiflix-music keys`, `init`, `new`), the web server (`/api/keys`, and `409 needs_keys` from `/start`) and the
+runner (a project that lacks a key for its next steps pauses with `NEEDS_YOU` instead of starting a session) all ask
+it. Other keys for sessions go to `session.env` through `setSessionKey`; only their names are ever shown.
 
 ## Music (`pipelines/_shared/skills/music/`, `src/music.mjs`)
 
 The music engine is a skill: `strudel.mjs` runs one stage per command (genre, plan, check, instruments, audition,
-render, master, own-master, sheet) over the project's `music/` folder, on top of `lib/` (the score read as MIDI
-channels and the intensity curve, the harmony lock, MIDI files, the genre profile, instruments as a Strudel layer per
-channel, WAV measurement, ffmpeg mastering, zips) and a headless Chrome running Strudel (`lib/headless.mjs`, a fresh
+render, master, own-master, midi, sheet) over the project's `music/` folder, on top of `lib/` (the score read as MIDI
+channels and the intensity curve, section ranges, clips and the loop check, the harmony lock, MIDI files, the DAW
+import steps, the genre profile, instruments as a Strudel layer per channel, WAV measurement, ffmpeg mastering, zips) and a headless Chrome running Strudel (`lib/headless.mjs`, a fresh
 page per render). See [MUSIC.md](MUSIC.md).
 
-`src/music.mjs` is the owner's side of it: the MIDI pack as a zip, and importing a master made in the owner's own DAW
-(converted to 48 kHz, measured, checked against the score's length and its first note, written to
-`music/own-master/`). The web studio (the project's Music panel, `/api/projects/<id>/music…`) and
-`mortiflix music` both use it; an import that fits resumes a project that was waiting for it. Whether a brief
+`src/music.mjs` is the owner's side of it: the MIDI pack as a zip (with the section clips), the captured notes for the
+piano roll (`musicNotes`), and importing a master made in the owner's own DAW (converted to 48 kHz, measured, checked
+against the score's length and its first note, written to `music/own-master/`). The web studio (the project's MIDI
+panel, `/api/projects/<id>/music…`) and `mortiflix-music midi` / `music` use it; an import that fits resumes a project that was waiting for it. Whether a brief
 finishes its own music (`finishesOwnMaster`) goes into the session's `CLAUDE.md`.
 
 ## Sharing pipelines (`src/pipelines.mjs`, `src/zip.mjs`)
@@ -182,13 +151,15 @@ zip; `addPipeline` unpacks one into the studio's `pipelines/` after refusing uns
 ## The web studio (`src/web/server.mjs`, `web/`)
 
 A plain `node:http` server and a no-build vanilla JS app. JSON API under `/api`, live updates over server-sent events
-(`/api/events`: `change` and `activity`), submitted media under `/files/<id>/reviews/…` with Range support. See
+(`/api/events`: `change` and `activity`), submitted media under `/files/<id>/reviews/…` with Range support. MIDI items
+are read in the browser (a small Standard MIDI File reader in `web/app.js`) and drawn as a piano roll on a canvas;
+a click on it becomes a note at that moment (`time_sec`, from the file's tempo). See
 [SECURITY.md](SECURITY.md) for its guards.
 
 ## Claude Code (`plugin/`)
 
 The repository is also a Claude Code plugin marketplace (`.claude-plugin/marketplace.json`). It has one plugin,
-`plugin/`, with one skill: `/mortiflix`. The skill drives the same CLI the owner would type, using commands that
+`plugin/`, with one skill: `/mortiflix-music`. The skill drives the same CLI the owner would type, using commands that
 need no terminal:
 
 - **Reading.** `--json` on `pipelines`, `list` (the studio, whether a runner holds it, every project), `status`,
@@ -196,8 +167,9 @@ need no terminal:
   paragraphs), `keys` (sources only) and `setup status`.
 - **Deciding.** `respond <project> <step> --approve|--changes --note … --overall … --answer qid=value` and
   `answer <project> <qid> [answer]`. Notes use the terminal review's syntax (`parseNote`).
-- **Setup.** `setup install <tool>…`, `setup music strudel|none [--midi]`, `setup assets <url>…|--clear`. Choosing a
-  voice and typing keys stay with the owner, in their terminal or the web studio.
+- **Setup.** `setup install <tool>…`, `setup daw <id|none>`. Typing keys stays with the owner, in their terminal or
+  the web studio.
+- **The MIDI.** `midi <project> [--out file.zip]`, `music <project> [--import file]`.
 
 Two guards keep the guide and the studio apart:
 - The skill has `disable-model-invocation: true`. Studio sessions are Claude Code too, and they may load the
@@ -206,6 +178,6 @@ Two guards keep the guide and the studio apart:
   `checks approve|reject`) refuse to run when `MFX_TOKEN` is set, which means inside a session.
 
 The `claude-code` backend also drops the variables a Claude Code conversation sets for its own tools
-(`PARENT_SESSION_VARS`). A `mortiflix run` started from `/mortiflix` therefore gives each session its own Claude Code,
+(`PARENT_SESSION_VARS`). A `mortiflix-music run` started from `/mortiflix-music` therefore gives each session its own Claude Code,
 as if it had been started from a terminal.
 

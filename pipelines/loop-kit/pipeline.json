@@ -1,0 +1,53 @@
+{
+  "slug": "loop-kit",
+  "name": "Loop kit",
+  "description": "A family of MIDI loops in one genre, made to be arranged: the genre researched, a kit plan you approve, every loop written, checked to repeat cleanly and captured on its own channels. You get every loop as MIDI (each part alone and all together), a sketch of each, and a cue sheet with your DAW's import steps.",
+  "makes": "midi",
+  "shared_skills": ["music"],
+  "intake": [
+    { "id": "genre", "label": "Genre", "type": "text", "required": true, "help": "As specific as you like: \"UK garage\", \"boom bap with jazz chords\", \"dark trap\"." },
+    { "id": "feel", "label": "The feel", "type": "long", "required": true, "help": "What the kit is for and how it should feel: \"late-night, warm, for a beat tape\"." },
+    { "id": "loops", "label": "How many loops", "type": "choice", "choices": ["4", "6", "8", "12"], "default": "6" },
+    { "id": "loop_length", "label": "Loop length", "type": "choice", "choices": ["2 bars", "4 bars", "8 bars", "Mixed"], "default": "4 bars" },
+    { "id": "parts", "label": "Parts", "type": "text", "help": "e.g. \"drums, bass, keys, lead\". The studio picks the rest from the genre." },
+    { "id": "fixed", "label": "Anything fixed", "type": "text", "help": "A tempo, a key, a meter or a name for the kit." },
+    { "id": "references", "label": "References", "type": "long", "help": "Tracks or producers to study (never copied)." }
+  ],
+  "steps": [
+    { "key": "genre", "name": "Genre", "review": "internal", "work": ["research"],
+      "describe": "The genre researched from 5+ sources: its tempo, lineup, beat grids, harmony, and the elements that make it unforgettable." },
+    { "key": "plan", "name": "Kit plan", "review": "document", "work": ["plan"],
+      "describe": "The kit in words, before any note: tempo, key, the parts on their channels, and every loop with what it does and how it relates to the others." },
+    { "key": "score", "name": "Loops and MIDI", "review": "internal", "work": ["music", "midi"],
+      "describe": "Every loop written in Strudel, checked (harmony lock, clean loop points, the kit's curve) and captured: each loop as its own clip, every part alone and together." },
+    { "key": "sketch", "name": "Sketch", "review": "internal", "work": ["instruments", "audio"],
+      "describe": "Sketch sounds for every channel, auditioned, and a render of the whole kit with stems." },
+    { "key": "final", "name": "Your loops", "review": "midi", "work": ["midi", "audio"], "delivers": true,
+      "describe": "You look and listen: the kit as a piano roll, the sketch, the cue sheet, and every loop as MIDI to download." }
+  ],
+  "status_lines": {
+    "genre": "Researching the genre",
+    "plan": "Planning the kit",
+    "score": "Writing the loops",
+    "midi": "Capturing the MIDI",
+    "sketch": "Choosing sketch sounds",
+    "render": "Rendering the sketch",
+    "deliver": "Packaging your loops"
+  },
+  "checks": [
+    { "id": "genre-profile", "title": "The genre is researched, not guessed", "applies_to": ["research"],
+      "how": "node .claude/skills/music/strudel.mjs genre passes: every field of the profile, 5+ different sources actually read, 5+ unforgettable elements with at least one for the hook and one for the beat, each with a concrete how." },
+    { "id": "kit-plan-holds", "title": "The kit plan holds together", "applies_to": ["plan"],
+      "how": "node .claude/skills/music/strudel.mjs plan passes with \"loops\": true and \"length_fixed\": true: one section per loop, as many loops as the brief asked, each the asked length (1, 2, 4, 8 or 16 bars), every part on its own channel, the genre signature carried by named loops." },
+    { "id": "music-check", "title": "Every loop passes its check and repeats cleanly", "applies_to": ["music"],
+      "how": "node .claude/skills/music/strudel.mjs check ends with 0 problems: harmony locked to the chart, every role playing somewhere, no note ringing past its loop's end, no empty loop, the intensity curve following the plan; it wrote out/music/midi/sections/ with a folder per loop." },
+    { "id": "score-is-notes", "title": "The score holds only the music", "applies_to": ["music"],
+      "how": "music/score.strudel.js sets no sounds, effects or gain: notes, velocity and structure only, every part on its role's channel, drums as General MIDI numbers." },
+    { "id": "loops-differ", "title": "The loops are a family, not copies", "applies_to": ["music"],
+      "how": "Each loop changes something the plan names (a part enters or drops, the rhythm or the voicing moves, the hook is answered) while sharing the kit's tempo, key and sound world; no two loops have the same notes on every channel." },
+    { "id": "midi-pack-complete", "title": "The MIDI pack is complete", "applies_to": ["midi"],
+      "how": "out/music/midi/sections/ has a folder per loop with every part's clip and the loop's -all.mid; CUE-SHEET.md has the tempo, key, channels, loops and the import steps; out/music/midi.zip holds all of it." },
+    { "id": "sketch-heard", "title": "The sketch plays every part", "applies_to": ["audio"],
+      "how": "strudel.mjs instruments and audition pass, and strudel.mjs render --stems wrote out/music/score.wav with a stem per channel, none silent." }
+  ]
+}

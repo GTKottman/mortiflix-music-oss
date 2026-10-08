@@ -1,13 +1,14 @@
-// Backend: demo. A scripted stand-in for Claude that walks every gate with placeholder work (coloured style
-// frames, a sample script, a test-pattern video made with ffmpeg). It goes through the same `mfx` bridge and the
-// same gate rules as a real session, so you can try the whole review loop (and develop the UI) without an
-// account or any cost. Nothing it makes is meant to be good.
+// Backend: demo. A scripted stand-in for Claude that walks every gate with placeholder work (a sample blueprint, a
+// four-bar MIDI sketch, a test tone made with ffmpeg). It goes through the same `mfx` bridge and the same gate rules
+// as a real session, so you can try the whole review loop (and develop the UI) without an account or any cost.
+// Nothing it makes is meant to be good.
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { callStudio } from '../mfx.mjs';
 import { loadProject, projectPipeline } from '../projects.mjs';
 import { stepView } from '../gates.mjs';
+import { writeMidi } from '../../pipelines/_shared/skills/music/lib/midi.mjs';
 
 export const name = 'demo';
 
@@ -15,7 +16,15 @@ export function available() {
   return { ok: true, detail: 'placeholder work, no Claude needed' };
 }
 
-const PALETTES = [['#0f172a', '#f97316'], ['#1e1b4b', '#22d3ee'], ['#052e16', '#facc15'], ['#3b0764', '#f472b6']];
+// Four bars in A minor at 90 BPM: a pad, a bass and a beat, so the piano roll has something to show.
+function demoMidi(version) {
+  const chords = [[57, 60, 64], [53, 57, 60], [48, 52, 55], [55, 59, 62]];
+  const pad = chords.flatMap((c, bar) => c.map((pitch) => ({ pitch: pitch + (version % 2 ? 12 : 0), start: bar * 4, dur: 3.75, velocity: 0.6 })));
+  const bass = chords.flatMap((c, bar) => [0, 1.5, 2.5].map((b) => ({ pitch: c[0] - 12, start: bar * 4 + b, dur: 0.5, velocity: 0.8 })));
+  const drums = Array.from({ length: 16 }, (_, beat) => [{ pitch: beat % 2 ? 38 : 36, start: beat, dur: 0.25, velocity: 0.9 }, { pitch: 42, start: beat + 0.5, dur: 0.2, velocity: 0.5 }]).flat();
+  return writeMidi({ bpm: 90, meter: '4/4', markers: [{ beat: 0, text: 'Demo loop' }], tracks: [
+    { channel: 1, name: 'Bass', notes: bass }, { channel: 2, name: 'Pad', notes: pad }, { channel: 10, name: 'Drums', kind: 'drums', notes: drums }] });
+}
 
 export async function run({ root, projectId, workdir, env, onActivity, signal, config }) {
   const mfx = (cmd, args) => callStudio(cmd, args, env);
@@ -51,40 +60,34 @@ export async function run({ root, projectId, workdir, env, onActivity, signal, c
     const questions = [];
     if (step.review === 'questions') {
       questions.push({ id: 'pace', text: 'Should it feel calm or energetic?', choices: ['Calm', 'Energetic'], default: 'Energetic' });
-      questions.push({ id: 'ending', text: 'What should the last card say?', default: 'Your title and a link' });
+      questions.push({ id: 'ending', text: 'How should it end?', default: 'On the fourth chord, unresolved' });
     } else if (step.review === 'document') {
-      const file = join(dir, 'script.md');
-      writeFileSync(file, `# ${project.title}: ${step.name} v${version}\n\nOpen on a single shape that becomes the logo. This is placeholder copy from the demo studio.\n\nThe middle shows three ideas, one per beat, each on its own colour.\n\nClose on the title and a call to action.\n`);
-      items.push({ path: `out/${step.key}-v${version}/script.md`, label: `${step.name} v${version}` });
-    } else if (step.review === 'frames') {
-      for (let i = 0; i < 3; i++) {
-        const [bg, fg] = PALETTES[(i + version) % PALETTES.length];
-        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080"><rect width="1920" height="1080" fill="${bg}"/><circle cx="${560 + i * 400}" cy="540" r="${180 + i * 40}" fill="${fg}" opacity="0.9"/><text x="120" y="980" font-family="sans-serif" font-size="64" fill="#fff">SF0${i + 1} · ${escapeXml(project.title).slice(0, 40)} · v${version}</text></svg>`;
-        writeFileSync(join(dir, `sf0${i + 1}.svg`), svg);
-        items.push({ path: `out/${step.key}-v${version}/sf0${i + 1}.svg`, label: `SF0${i + 1} · ${['Open', 'Middle', 'End'][i]}` });
+      const file = join(dir, 'BLUEPRINT.md');
+      writeFileSync(file, `# ${project.title}: ${step.name} v${version}\n\nA hazy loop in A minor at 90 BPM. This is placeholder copy from the demo studio.\n\nFour chords under a slow pad, a bass that answers the kick, and a beat that only arrives in the second half.\n\nIt ends on the fourth chord, unresolved.\n`);
+      items.push({ path: `out/${step.key}-v${version}/BLUEPRINT.md`, label: `${step.name} v${version}` });
+    } else if (step.review === 'midi' || step.review === 'audio') {
+      // The MIDI (a piano roll in the review room), and for an audio step a placeholder tone to listen to.
+      writeFileSync(join(dir, 'demo-all.mid'), demoMidi(version));
+      items.push({ path: `out/${step.key}-v${version}/demo-all.mid`, label: `${step.name} v${version} · MIDI` });
+      if (step.review === 'audio') {
+        if (!hasFfmpeg) {
+          await mfx('needs-you', { text: 'The demo needs ffmpeg to make its placeholder audio. Install ffmpeg, then resume.' });
+          await mfx('handoff', { text: 'Stopped: ffmpeg is missing.' });
+          return { ok: true };
+        }
+        const job = await mfx('render', { label: `${step.name} v${version}`, argv: ['ffmpeg', '-y', '-loglevel', 'error', '-f', 'lavfi', '-i', `sine=frequency=220:duration=${3 + version}`, join(dir, 'preview.wav')], cwd: workdir });
+        let r = job;
+        while (!['done', 'failed'].includes(r.state)) r = await mfx('render-wait', { id: job.id, seconds: 30 });
+        if (r.state === 'failed') return { ok: false, error: `the placeholder render failed: ${r.output_tail}` };
+        items.unshift({ path: `out/${step.key}-v${version}/preview.wav`, label: `${step.name} v${version}` });
       }
-    } else if (step.review === 'video' || step.review === 'audio') {
-      if (!hasFfmpeg) {
-        await mfx('needs-you', { text: 'The demo needs ffmpeg to make its placeholder video. Install ffmpeg, then resume.' });
-        await mfx('handoff', { text: 'Stopped: ffmpeg is missing.' });
-        return { ok: true };
-      }
-      const file = step.review === 'video' ? 'preview.mp4' : 'preview.wav';
-      const args = step.review === 'video'
-        ? ['ffmpeg', '-y', '-loglevel', 'error', '-f', 'lavfi', '-i', `testsrc2=size=1280x720:rate=24:duration=${3 + version}`, '-f', 'lavfi', '-i', `sine=frequency=${330 + 110 * version}:duration=${3 + version}`, '-shortest', '-pix_fmt', 'yuv420p', '-c:v', 'libx264', '-c:a', 'aac', join(dir, file)]
-        : ['ffmpeg', '-y', '-loglevel', 'error', '-f', 'lavfi', '-i', `sine=frequency=440:duration=${3 + version}`, join(dir, file)];
-      const job = await mfx('render', { label: `${step.name} v${version}`, argv: args, cwd: workdir });
-      let r = job;
-      while (!['done', 'failed'].includes(r.state)) r = await mfx('render-wait', { id: job.id, seconds: 30 });
-      if (r.state === 'failed') return { ok: false, error: `the placeholder render failed: ${r.output_tail}` };
-      items.push({ path: `out/${step.key}-v${version}/${file}`, label: `${step.name} v${version}` });
     }
 
     const fb = step.last_feedback;
     const pin_changes = fb?.verdict === 'changes'
       ? Array.from({ length: fb.notes }, (_, i) => ({ note: i + 1, change: `Demo: pretended to fix note ${i + 1}.`, status: 'done' }))
       : [];
-    const submission = { note: `Demo ${step.name}, version ${version}. Placeholder work: try pinning a note, asking for changes, or approving.`, questions, items, error_checks: checks, pin_changes };
+    const submission = { note: `Demo ${step.name}, version ${version}. Placeholder work: try leaving a note, asking for changes, or approving.`, questions, items, error_checks: checks, pin_changes };
     writeFileSync(join(workdir, 'submission.json'), JSON.stringify(submission, null, 2));
     await mfx('submit', { step: step.key, submission });
     say(`Sent ${step.name} v${version} for review.`);
@@ -94,4 +97,3 @@ export async function run({ root, projectId, workdir, env, onActivity, signal, c
   return { ok: true, usage: { input_tokens: 0, output_tokens: 0 } };
 }
 
-const escapeXml = (s) => String(s).replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' }[c]));

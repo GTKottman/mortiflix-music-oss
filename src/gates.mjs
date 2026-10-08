@@ -16,6 +16,7 @@ const KINDS = {
   image: ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.avif'],
   video: ['.mp4', '.webm', '.mov', '.m4v'],
   audio: ['.wav', '.mp3', '.m4a', '.ogg', '.flac', '.aac'],
+  midi: ['.mid', '.midi'],
   pdf: ['.pdf'],
   text: ['.md', '.txt'],
 };
@@ -130,9 +131,8 @@ export function submit(root, id, stepKey, sub) {
   const need = {
     questions: () => questions.length || refuse('a questions step needs at least one question'),
     document: () => has('text') || has('pdf') || refuse('a document step needs the document in items (text, .md, .txt or .pdf)'),
-    frames: () => has('image') || has('video') || refuse('a frames step needs the frames (images) in items'),
-    video: () => has('video') || refuse('a video step needs the video in items'),
     audio: () => has('audio') || refuse('an audio step needs the audio in items'),
+    midi: () => has('midi') || refuse('a midi step needs the MIDI in items (.mid)'),
   };
   need[step.review]();
 
@@ -276,7 +276,7 @@ export function proposeCheck(root, id, { title, how, example, work, same_as }) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// What you do (web UI or `mortiflix review`)
+// What you do (web UI or `mortiflix-music review`)
 
 export function respond(root, id, stepKey, version, { verdict, overall = '', notes = [], answers = {} }) {
   const pp = projectPaths(root, id);
@@ -321,7 +321,7 @@ export function respond(root, id, stepKey, version, { verdict, overall = '', not
       notes: cleanNotes,
       answers: resolved,
       decided_at: now(),
-      how_to_read_annotations: 'Each note may point at an item (0-based index, item_label). x and y are fractions of the picture width and height from its top-left. time_sec is seconds into a video or audio item. paragraph is the 0-based paragraph of a text item. Answer every note in the next version\'s pin_changes.',
+      how_to_read_annotations: 'Each note may point at an item (0-based index, item_label). time_sec is seconds into an audio item, or into a MIDI item at its tempo. paragraph is the 0-based paragraph of a text item. Answer every note in the next version\'s pin_changes.',
     };
     writeJson(join(dir, 'feedback.json'), feedback);
     mkdirSync(join(pp.work, 'feedback'), { recursive: true });

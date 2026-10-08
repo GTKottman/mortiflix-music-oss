@@ -19,7 +19,7 @@ const USAGE = `mfx: talk to the Mortiflix studio from inside a session
   mfx taste "a lasting preference"      remembered for every future project
   mfx log EVENT "details"               add a line to the project log
   mfx needs-you "what you need"         pause the project until the owner helps
-  mfx propose-check --work stills,motion --title "..." --how "..." [--example "..."]
+  mfx propose-check --work music,midi --title "..." --how "..." [--example "..."]
   mfx propose-check --same-as <check-id>
   mfx files                             files handed over with the brief
 

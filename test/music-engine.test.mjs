@@ -13,7 +13,7 @@ import { readWav, mixBalance } from '../pipelines/_shared/skills/music/lib/wav.m
 import { zip, unzip } from '../src/zip.mjs';
 import { exportPipeline, addPipeline, listPipelines } from '../src/pipelines.mjs';
 import { createProject, startProject, projectPaths, loadProject } from '../src/projects.mjs';
-import { importMaster, midiPack, finishesOwnMaster, musicStatus } from '../src/music.mjs';
+import { importMaster, midiPack, finishesOwnMaster, musicStatus, musicNotes } from '../src/music.mjs';
 import * as setup from '../src/setup.mjs';
 
 const REPO = resolve(import.meta.dirname, '..');
@@ -128,25 +128,30 @@ test('sharing: a pipeline exports with its skills and adds back; unsafe paths an
   assert.ok(!existsSync(join(root, 'escape.txt')));
 });
 
-test('a music pipeline needs the studio\'s music on', (t) => {
+test('music is always on: an old "music none" setting never stops a song', (t) => {
   const root = tempStudio(t, { music: { engine: 'none' } });
   const { id } = createProject(root, { pipeline: 'song', title: 'S', answers: { genre: 'trip hop', topic: 'a harbour' } });
-  assert.throws(() => startProject(root, id), /music is off/);
+  startProject(root, id);
+  assert.equal(loadProject(root, id).state, 'queued');
 });
 
 test('your own master: the MIDI pack goes out, a master that fits comes in (and a short one is refused)', async (t) => {
   const root = tempStudio(t);
-  const { id } = createProject(root, { pipeline: 'explainer', title: 'E', answers: { topic: 'x', music: 'Original score: I finish it from the MIDI (recommended)' } });
+  const { id } = createProject(root, { pipeline: 'song', title: 'E', answers: { genre: 'house', topic: 'x', finish: 'Me, from the MIDI in my own DAW' } });
   assert.ok(finishesOwnMaster(loadProject(root, id)));
-  assert.ok(!finishesOwnMaster({ intake: { answers: { music: 'Original score, rendered by Strudel' } } }));
+  assert.ok(!finishesOwnMaster({ intake: { answers: { finish: 'The studio, in Strudel' } } }));
   const w = projectPaths(root, id).work;
   mkdirSync(join(w, 'music'), { recursive: true }); mkdirSync(join(w, 'out/music/midi'), { recursive: true });
   // 4 bars at 120 BPM = 8 s, the first note on beat 2 (0.5 s).
   writeFileSync(join(w, 'music/blueprint.json'), JSON.stringify({ title: 'Cue', bpm: 120, meter: '4/4', bars: 4 }));
   writeFileSync(join(w, 'music/notes.json'), JSON.stringify({ tracks: [{ channel: 1, notes: [{ pitch: 45, start: 1, dur: 4, velocity: 0.8 }] }] }));
   writeFileSync(join(w, 'out/music/midi/01-bass.mid'), 'MThd');
-  assert.deepEqual(unzip(midiPack(root, id)).map((f) => f.name), ['midi/01-bass.mid']);
+  mkdirSync(join(w, 'out/music/midi/sections/01-intro'), { recursive: true });
+  writeFileSync(join(w, 'out/music/midi/sections/01-intro/01-bass.mid'), 'MThd');
+  assert.deepEqual(unzip(midiPack(root, id)).map((f) => f.name), ['midi/01-bass.mid', 'midi/sections/01-intro/01-bass.mid']);
   assert.equal(musicStatus(root, id).finish, 'own');
+  assert.equal(musicStatus(root, id).daw, null);
+  assert.deepEqual(musicNotes(root, id).tracks[0].notes[0], { pitch: 45, start: 1, dur: 4, velocity: 0.8 });
 
   const d = scratch(t);
   ffmpeg('-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo:d=0.5', '-f', 'lavfi', '-i', 'sine=frequency=220:duration=9', '-filter_complex', '[0][1]concat=n=2:v=0:a=1', join(d, 'fits.flac'));

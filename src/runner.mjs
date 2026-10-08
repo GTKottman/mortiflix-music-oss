@@ -4,7 +4,6 @@ import { EventEmitter } from 'node:events';
 import { mkdirSync, rmSync, writeFileSync, readFileSync, existsSync, appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { REPO, paths, loadConfig, readSessionEnv } from './studio.mjs';
-import { sessionVoiceEnv } from './voice/index.mjs';
 import { sessionToolsEnv } from './setup.mjs';
 import { listProjects, loadProject, projectPaths, projectPipeline, update, event, readEvents, now } from './projects.mjs';
 import { settle, needsYou } from './gates.mjs';
@@ -31,7 +30,7 @@ export class Runner extends EventEmitter {
     this.renders = new RenderQueue({ logDir: join(paths(root).run, 'renders'), onChange: () => this.emit('change') });
   }
 
-  // Only one runner per studio (the web server and `mortiflix run` would otherwise start two sessions at once).
+  // Only one runner per studio (the web server and `mortiflix-music run` would otherwise start two sessions at once).
   acquire() {
     const lock = join(paths(this.root).run, 'runner.pid');
     mkdirSync(paths(this.root).run, { recursive: true });
@@ -133,9 +132,9 @@ export class Runner extends EventEmitter {
       prepareWorkdir(root, projectId);
       mkdirSync(join(paths(root).run, 'shared'), { recursive: true });
       writeTorch(root, projectId, { backend: config.backend, reason });
-      // Keys and settings for the session: session.env, the studio's voice (its key only if it narrates with it), and the
-      // tools setup installed (Strudel, Chrome, the studio's Blender) with the owner's music and asset choices.
-      const sessionEnv = { ...readSessionEnv(root), ...sessionVoiceEnv(root), ...sessionToolsEnv(root), MFX_HOME: REPO };
+      // Keys and settings for the session: session.env and the tools setup installed (Strudel, Chrome) with the owner's
+      // choices (their DAW).
+      const sessionEnv = { ...readSessionEnv(root), ...sessionToolsEnv(root), MFX_HOME: REPO };
       bridge = await openBridge({ root, projectId, sessionId, workdir: pp.work, renders: this.renders, sessionEnv });
       this.addActivity(projectId, { kind: 'info', text: `Session started (${config.backend}). ${reason}` });
       result = await backend.run({

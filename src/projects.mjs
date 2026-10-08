@@ -7,8 +7,7 @@ import { existsSync, mkdirSync, readdirSync, appendFileSync, readFileSync, write
 import { join, basename, extname } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { pipeline as streamPipeline } from 'node:stream/promises';
-import { paths, readJson, writeJson, withLock, UserError, loadConfig } from './studio.mjs';
-import { musicConfig } from './setup.mjs';
+import { paths, readJson, writeJson, withLock, UserError } from './studio.mjs';
 import { findPipeline, loadPipeline, snapshotPipeline } from './pipelines.mjs';
 
 export const STATES = ['draft', 'queued', 'waiting', 'paused', 'delivered', 'cancelled'];
@@ -32,7 +31,7 @@ export function projectPaths(root, id) {
 export function newId(title) {
   const d = new Date();
   const ymd = `${String(d.getFullYear()).slice(2)}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
-  const slug = String(title || 'video').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32) || 'video';
+  const slug = String(title || 'song').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32) || 'song';
   return `${ymd}-${slug}-${randomBytes(2).toString('hex')}`;
 }
 
@@ -104,13 +103,6 @@ export function startProject(root, id) {
       if (!q.required) continue;
       const ok = q.type === 'files' ? p.intake.files.some((f) => f.field === q.id) : Boolean(p.intake.answers[q.id]);
       if (!ok) throw new UserError(`"${q.label || q.id}" is required`);
-    }
-    // A pipeline that makes music needs the studio's music on.
-    if (pipeline.makes === 'music' && musicConfig(loadConfig(root)).engine === 'none') throw new UserError('music is off in this studio: turn it on (mortiflix setup music, or Settings › Setup › Music), then start');
-    // Steps that only run when wanted: music needs the studio's music on and a brief that doesn't say "no music".
-    const noMusic = musicConfig(loadConfig(root)).engine === 'none' || /^\s*(no|none|off)\b/i.test(String(p.intake.answers.music ?? ''));
-    for (const s of pipeline.steps) {
-      if (s.when === 'music' && noMusic) { p.steps ||= {}; p.steps[s.key] = { state: 'skipped' }; }
     }
     p.state = 'queued';
     p.queued_at = now();

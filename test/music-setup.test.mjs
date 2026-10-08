@@ -5,7 +5,8 @@ import { existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { tempStudio } from './helpers.mjs';
-import { hapsToChannels, checkBlueprint, checkScore, intensity, timeOf } from '../pipelines/_shared/skills/music/lib/score.mjs';
+import { hapsToChannels, checkBlueprint, checkScore, intensity, timeOf, sectionRanges, clipOf, checkLoops } from '../pipelines/_shared/skills/music/lib/score.mjs';
+import { importSteps, DAW_NAMES } from '../pipelines/_shared/skills/music/lib/daw.mjs';
 import { checkHarmony } from '../pipelines/_shared/skills/music/lib/harmony.mjs';
 import { writeMidi, readMidi } from '../pipelines/_shared/skills/music/lib/midi.mjs';
 import * as setup from '../src/setup.mjs';
@@ -82,48 +83,77 @@ test('music: the MIDI pack keeps each part on its role channel, with tempo, mete
   assert.ok(buf.includes(Buffer.from('HIT logo lands')));
 });
 
-test('setup: asset sites are web addresses without logins; music choices persist', (t) => {
-  const root = tempStudio(t);
-  assert.deepEqual(setup.saveAssetSites(root, ['stock.example.com/', { url: 'https://img.example.org/x', notes: 'photos' }, 'stock.example.com']).sites,
-    [{ url: 'https://stock.example.com', notes: '' }, { url: 'https://img.example.org/x', notes: 'photos' }]);
-  assert.throws(() => setup.saveAssetSites(root, ['https://me:pw@stock.example.com']), /leave logins out/);
-  assert.throws(() => setup.saveAssetSites(root, ['ftp://files.example.com']), /http and https/);
-  assert.deepEqual(setup.musicConfig({}), { engine: 'strudel', midi: false });
-  assert.deepEqual(setup.saveMusic(root, { midi: true }), { engine: 'strudel', midi: true });
-  assert.throws(() => setup.saveMusic(root, { engine: 'kazoo' }), /strudel or none/);
-  const env = setup.sessionToolsEnv(root);
-  assert.equal(JSON.parse(env.MFX_MUSIC).midi, true);
-  assert.equal(JSON.parse(env.MFX_ASSETS).sites.length, 2);
+test('music: a clip per section starts at its own bar 1 and stops at its end', () => {
+  const ch = hapsToChannels({ haps: cueHaps(), cps: 0.5, beatsPerCycle: 4, names: { 1: 'Bass', 2: 'Hook', 10: 'Drums' } });
+  const [low, lift] = sectionRanges(BP);
+  assert.deepEqual([low.start, low.end, low.bars, lift.start, lift.end], [0, 16, 4, 16, 32]);
+  const hook = ch.tracks.find((t) => t.channel === 2);
+  assert.equal(clipOf(hook, low).notes.length, 0);
+  const clip = clipOf(hook, lift);
+  assert.equal(clip.notes.length, 16);
+  assert.equal(clip.notes[0].start, 0);
+  assert.ok(clip.notes.every((n) => n.start + n.dur <= 16 + 1e-9));
+  // A held note is cut where its section ends.
+  const held = clipOf({ channel: 1, name: 'Pad', notes: [{ pitch: 57, start: 12, dur: 8, velocity: 0.5 }] }, low);
+  assert.deepEqual(held.notes.map((n) => [n.start, n.dur]), [[12, 4]]);
 });
 
-test('pipelines: "when" is checked, and a skipped music step never lets later work jump ahead', (t) => {
-  assert.match(validatePipeline({ slug: 'x', name: 'X', steps: [{ key: 'a', review: 'video', when: 'rain' }] }).join('\n'), /"when" must be one of music/);
+test('music: a loop kit refuses notes over the loop point and empty loops, and warns off the grid', () => {
+  const kit = { ...BP, loops: true, sections: [{ ...BP.sections[0], end_bar: 3 }, { ...BP.sections[1], start_bar: 4 }] };
+  const manifest = { tracks: [
+    { channel: 1, name: 'Bass', notes: [{ pitch: 33, start: 0, dur: 4, velocity: 0.8 }, { pitch: 33, start: 10, dur: 4, velocity: 0.8 }] },
+    { channel: 2, name: 'Hook', notes: [{ pitch: 76, start: 20, dur: 1, velocity: 0.8 }] },
+  ] };
+  const r = checkLoops(manifest, kit);
+  assert.match(r.errors.join('\n'), /Bass \(ch 1\): 1 note rings past the end of loop "Low glow" \(first at bar 3 beat 3\)/);
+  assert.match(r.warnings.join('\n'), /loop "Low glow" is 3 bars/);
+  assert.match(r.warnings.join('\n'), /loop "The lift" is 5 bars/);
+  const empty = checkLoops({ tracks: [{ channel: 1, name: 'Bass', notes: [{ pitch: 33, start: 0, dur: 1, velocity: 0.8 }] }] }, { ...BP, loops: true });
+  assert.match(empty.errors.join('\n'), /loop "The lift" \(bars 5-8\) has no notes at all/);
+  assert.deepEqual(checkLoops({ tracks: [{ channel: 1, name: 'Bass', notes: [{ pitch: 33, start: 0, dur: 2, velocity: 0.8 }, { pitch: 33, start: 16, dur: 15.9, velocity: 0.8 }] }] }, { ...BP, loops: true }), { errors: [], warnings: [] });
+});
+
+test('music: the cue sheet says how to bring the MIDI into the owner\'s DAW', () => {
+  for (const id of Object.keys(DAW_NAMES)) assert.ok(importSteps(id).length >= 3, id);
+  assert.match(importSteps('fl').join(' '), /File › Import › MIDI file/);
+  assert.match(importSteps(null).join(' '), /Set your project's tempo/);
+  assert.match(importSteps('nonsense').join(' '), /Set your project's tempo/);
+  assert.match(importSteps('ableton').join(' '), /Channel 10 is drums/);
+  // The studio's DAW list and the engine's agree.
+  assert.deepEqual(Object.keys(setup.DAWS).filter((d) => d !== 'other').sort(), Object.keys(DAW_NAMES).sort());
+});
+
+test('setup: the DAW is a named choice; the engine is always on and sessions get both', (t) => {
   const root = tempStudio(t);
-  const quiet = createProject(root, { pipeline: 'explainer', title: 'Quiet', answers: { topic: 'bikes', music: 'No music' } });
-  startProject(root, quiet.id);
-  const view = stepView(loadProject(root, quiet.id), projectPipeline(root, quiet.id));
-  const state = Object.fromEntries(view.map((s) => [s.key, s.state]));
-  assert.equal(state.music, 'skipped');
-  assert.equal(state.build, 'blocked');   // still waits for the animatic
-  const scored = createProject(root, { pipeline: 'explainer', title: 'Scored', answers: { topic: 'bikes' } });
-  startProject(root, scored.id);
-  assert.equal(stepView(loadProject(root, scored.id), projectPipeline(root, scored.id)).find((s) => s.key === 'music').state, 'blocked');
-  setup.saveMusic(root, { engine: 'none' });
-  const off = createProject(root, { pipeline: 'explainer', title: 'Studio says none', answers: { topic: 'bikes' } });
-  startProject(root, off.id);
-  assert.equal(stepView(loadProject(root, off.id), projectPipeline(root, off.id)).find((s) => s.key === 'music').state, 'skipped');
-  // The session brief says what the studio has, and no studio skills arrive without their setup.
-  prepareWorkdir(root, off.id);
-  writeTorch(root, off.id, { backend: 'demo', reason: 'test' });
-  const md = readFileSync(join(projectPaths(root, off.id).work, 'CLAUDE.md'), 'utf8');
-  assert.match(md, /\*\*Music:\*\* the owner chose no music/);
-  assert.match(md, /\*\*Asset sites:\*\* none/);
-  const skills = readdirSync(join(projectPaths(root, off.id).work, '.claude', 'skills'));
-  assert.ok(skills.includes('music') && !skills.includes('assets') && !skills.includes('blender-3d'));
+  assert.deepEqual(setup.dawConfig({}), { id: null, name: null });
+  assert.deepEqual(setup.saveDaw(root, 'FL'), { id: 'fl', name: 'FL Studio' });
+  assert.throws(() => setup.saveDaw(root, 'kazoo'), /which DAW\?/);
+  assert.equal(setup.sessionToolsEnv(root).MFX_DAW, 'fl');
+  assert.deepEqual(JSON.parse(setup.sessionToolsEnv(root).MFX_MUSIC), { engine: 'strudel', midi: true });
+  assert.deepEqual(setup.saveDaw(root, 'none'), { id: null, name: null });
+  assert.equal(setup.sessionToolsEnv(root).MFX_DAW, undefined);
+});
+
+test('pipelines: music review modes and work kinds, and the session brief says what the studio has', (t) => {
+  assert.match(validatePipeline({ slug: 'x', name: 'X', steps: [{ key: 'a', review: 'video' }] }).join('\n'), /review must be one of questions, document, audio, midi, internal/);
+  assert.match(validatePipeline({ slug: 'x', name: 'X', steps: [{ key: 'a', review: 'midi', work: ['motion'] }] }).join('\n'), /work "motion" must be one of/);
+  const root = tempStudio(t);
+  setup.saveDaw(root, 'ableton');
+  const p = createProject(root, { pipeline: 'loop-kit', title: 'Kit', answers: { genre: 'UK garage', feel: 'late night' } });
+  startProject(root, p.id);
+  assert.equal(stepView(loadProject(root, p.id), projectPipeline(root, p.id))[0].state, 'ready');
+  prepareWorkdir(root, p.id);
+  writeTorch(root, p.id, { backend: 'demo', reason: 'test' });
+  const md = readFileSync(join(projectPaths(root, p.id).work, 'CLAUDE.md'), 'utf8');
+  assert.match(md, /\*\*The music engine:\*\* Strudel isn't set up yet/);
+  assert.match(md, /\*\*The owner's DAW:\*\* Ableton Live/);
+  assert.match(md, /making this midi in the Mortiflix Music studio/);
+  const skills = readdirSync(join(projectPaths(root, p.id).work, '.claude', 'skills'));
+  assert.deepEqual(skills, ['music']);
 });
 
 // A real render, only where Strudel and Chrome are installed (MFX_TEST_STRUDEL=<a studio's tools/strudel>).
-test('music: strudel.mjs checks, renders and exports a real cue', { skip: !process.env.MFX_TEST_STRUDEL && 'set MFX_TEST_STRUDEL to run' }, (t) => {
+test('music: strudel.mjs checks, renders and exports a real piece, with its clips and a loop kit', { skip: !process.env.MFX_TEST_STRUDEL && 'set MFX_TEST_STRUDEL to run' }, (t) => {
   const chrome = setup.setupStatusSync(tempStudio(t)).chrome;
   if (!chrome.ok) return t.skip('no Chrome');
   const dir = mkdtempSync(join(tmpdir(), 'mfx-cue-'));
@@ -137,7 +167,7 @@ bass: cue(note("<a1 f1 c2 g1>").s("sawtooth").lpf(500).velocity(.8)).midichan(1)
 hook: cue(note("<[e5 e5 e5 e5] [a4 a4 a4 a4] [c5 c5 c5 c5] [d5 d5 d5 d5]>").s("square").velocity(".75 .8 .85 .9").gain(.2).mask(lift)).midichan(2)
 drums: cue(note("36 42 36 42 36 42 36 42").s("sine").decay(.1).sustain(0).velocity(.9).mask(lift)).midichan(10)
 `);
-  const env = { ...process.env, MFX_STRUDEL: process.env.MFX_TEST_STRUDEL, MFX_CHROME: chrome.path };
+  const env = { ...process.env, MFX_STRUDEL: process.env.MFX_TEST_STRUDEL, MFX_CHROME: chrome.path, MFX_DAW: 'reaper' };
   const tool = join(REPO, 'pipelines/_shared/skills/music/strudel.mjs');
   const run = (...args) => spawnSync('node', [tool, ...args], { cwd: dir, env, encoding: 'utf8', timeout: 120_000 });
   const check = run('check', '--video-sec', '16');
@@ -146,47 +176,18 @@ drums: cue(note("36 42 36 42 36 42 36 42").s("sine").decay(.1).sustain(0).veloci
   assert.equal(run('render').status, 0);
   assert.ok(existsSync(join(dir, 'out/music/score.wav')));
   assert.equal(run('midi').status, 0);
-  assert.ok(existsSync(join(dir, 'out/music/midi/CUE-SHEET.md')));
-});
-
-test('transition board: every cut is carried, chosen from the library (or inspired by it), in order', (t) => {
-  const lib = mkdtempSync(join(tmpdir(), 'mfx-lib-'));
-  const work = mkdtempSync(join(tmpdir(), 'mfx-board-'));
-  t.after(() => { rmSync(lib, { recursive: true, force: true }); rmSync(work, { recursive: true, force: true }); });
-  const entry = (id, family, params = []) => ({ id, name: id, family, subfamily: 'x', path: `transitions/${family}/x/${id}`, summary: id, uses: [],
-    facets: { structure: 'direct', origin: 'whole-frame', function: ['continuity'] }, duration: { default: 20, min: 10, max: 40 }, requires: [], params, media: {} });
-  writeFileSync(join(lib, 'catalog.json'), JSON.stringify({ mediaBase: 'x', transitions: [entry('crossfade', '02-blend'), entry('liquid-fill', '04-cover', [{ name: 'color' }])] }));
-  mkdirSync(join(work, 'transitions'));
-  // Real frames: the scenes (detailed test patterns on a dark background), an in-between that still shows them, a flood and a flash.
-  const ff = (src, out) => spawnSync('ffmpeg', ['-loglevel', 'error', '-y', '-f', 'lavfi', '-i', src, '-frames:v', '1', join(work, out)]);
-  for (const f of ['a.png', 'b.png', 'c.png', 'mid.png']) ff('testsrc2=s=320x180', f);
-  ff('color=c=0x3D1F8F:s=320x180', 'flood.png');
-  ff('color=c=white:s=320x180', 'flash.png');
-  const tool = join(REPO, 'pipelines/_shared/skills/transition-board/board.mjs');
-  const check = (cuts) => {
-    writeFileSync(join(work, 'transitions', 'board.json'), JSON.stringify({ cuts }));
-    return spawnSync('node', [tool, 'check'], { cwd: work, env: { ...process.env, MFX_TRANSITIONS: lib }, encoding: 'utf8' });
-  };
-  const good = [
-    { from: 'A', to: 'B', a: 'a.png', b: 'b.png', carrier: 'the price tag', why: 'the cost dissolves into the promise', transition: 'liquid-fill', params: { color: '#000' }, frames: 30, lands_on: '"Now"', strip: ['mid.png'] },
-    { from: 'B', to: 'C', a: 'b.png', b: 'c.png', carrier: 'the terminal window', why: 'the same idea, carried on to the next step', transition: 'crossfade', frames: 20, lands_on: '"Then"', strip: ['mid.png'] },
-  ];
-  const ok = check(good);
-  assert.equal(ok.status, 0, ok.stdout + ok.stderr);
-  const bad = check([{ ...good[0], carrier: '', frames: 90 }, { ...good[1], from: 'X', transition: 'warp-drive' }]);
-  assert.equal(bad.status, 1);
-  assert.match(bad.stdout, /name the carrier/);
-  assert.match(bad.stdout, /outside liquid-fill's range/);
-  assert.match(bad.stdout, /doesn't start where cut 1 ended/);
-  assert.match(bad.stdout, /"warp-drive" isn't in the library/);
-  // The screen never goes blank: a flood of a colour neither scene has, or a white flash, fails.
-  const flooded = check([{ ...good[0], strip: ['mid.png', 'flood.png'] }]);
-  assert.match(flooded.stdout, /flood\.png floods with one colour/);
-  assert.match(check([{ ...good[0], strip: ['flash.png'] }]).stdout, /blown out to white/);
-  assert.match(check([{ ...good[0], strip: undefined }]).stdout, /render "strip"/);
-  const invented = check([{ ...good[0], transition: { new: 'price-melt', inspired_by: ['liquid-fill'] } }]);
-  assert.match(invented.stdout, /needs its code in video\/src\/transitions\/price-melt/);
-  mkdirSync(join(work, 'video', 'src', 'transitions', 'price-melt'), { recursive: true });
-  writeFileSync(join(work, 'video', 'src', 'transitions', 'price-melt', 'index.tsx'), 'export default {}');
-  assert.equal(check([{ ...good[0], transition: { new: 'price-melt', inspired_by: ['liquid-fill'] } }]).status, 0);
+  const sheet = readFileSync(join(dir, 'out/music/midi/CUE-SHEET.md'), 'utf8');
+  assert.match(sheet, /## Bringing it into REAPER/);
+  assert.match(sheet, /sections\/`: a clip per section/);
+  const lift = join(dir, 'out/music/midi/sections/02-the-lift');
+  assert.deepEqual(readdirSync(lift).sort(), ['01-bass.mid', '02-hook.mid', '10-drums.mid', 'the-lift-all.mid']);
+  assert.equal(readMidi(readFileSync(join(lift, '02-hook.mid'))).tracks[1].notes[0].start, 0);
+  // The same piece as a loop kit: every note ends inside its loop, so it passes; then a bass half a bar late fails.
+  writeFileSync(join(dir, 'music', 'blueprint.json'), JSON.stringify({ ...BP, loops: true, length_fixed: true }));
+  assert.equal(run('check').status, 0);
+  const score = readFileSync(join(dir, 'music', 'score.strudel.js'), 'utf8');
+  writeFileSync(join(dir, 'music', 'score.strudel.js'), score.replace('bass: cue(note("<a1 f1 c2 g1>")', 'bass: cue(note("<a1 f1 c2 g1>").late(.5)'));
+  const over = run('check');
+  assert.equal(over.status, 1);
+  assert.match(over.stdout, /Bass \(ch 1\): 1 note rings past the end of loop "Low glow" \(first at bar 4 beat 3\)/);
 });

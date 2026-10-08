@@ -27,7 +27,7 @@ Use at least three of these per cue; hooks and leads always get one.
   `.lastOf(4, …)`.
 - **Variation per pass**: the second time a section comes round, change one element (a third above, an octave up,
   a busier rhythm, a counter-line entering).
-- **Fills**: drums get a pickup every 8 bars and a bigger one every 16, unless the picture asks for stillness.
+- **Fills**: drums get a pickup every 8 bars and a bigger one every 16, unless the story asks for stillness.
 - **Register journey**: the hook climbs across the cue (first statement low, the peak an octave up and doubled),
   then comes down for the ending.
 - **Swells** into section changes: a velocity or `gain` ramp across the last two bars.

@@ -2,8 +2,8 @@
 //
 //   <studio>/
 //     config.json          settings (backend, model, port...). No secrets.
-//     secrets.json         your Anthropic, ElevenLabs, Upload-Post and Postiz keys (mode 600), set with `mortiflix keys`. Never served, never logged.
-//     session.env          other keys handed to every session (e.g. GEMINI_API_KEY=...), mode 600, also set with `mortiflix keys`
+//     secrets.json         your Anthropic API key (mode 600), set with `mortiflix-music keys`. Never served, never logged.
+//     session.env          other keys handed to every session (e.g. GEMINI_API_KEY=...), mode 600, also set with `mortiflix-music keys`
 //     checks.json          the studio's error checklist (grows from your feedback)
 //     pipelines/<slug>/    your own pipelines (override the built-in ones with the same slug)
 //     projects/<id>/       the session's working folder (it runs here)
@@ -32,11 +32,11 @@ export const DEFAULT_CONFIG = {
   renderPrefix: [],                 // wraps every `mfx render` command, e.g. a machine-wide queue: ["render-queue", "-l", "{label}", "--"]
   maxTurns: 500,                    // anthropic-api: tool-use turns per session
   host: '127.0.0.1',
-  port: 4646,
+  port: 4747,
 };
 
 export function studioRoot(explicit) {
-  return resolve(explicit || process.env.MORTIFLIX_STUDIO || join(homedir(), 'Mortiflix'));
+  return resolve(explicit || process.env.MORTIFLIX_MUSIC_STUDIO || join(homedir(), 'MortiflixMusic'));
 }
 
 export function paths(root) {
@@ -55,7 +55,7 @@ export function paths(root) {
 
 export function ensureStudio(root) {
   const p = paths(root);
-  // A new studio is yours alone: it holds your keys and your clients' material.
+  // A new studio is yours alone: it holds your keys and your music.
   if (!existsSync(p.root)) mkdirSync(p.root, { recursive: true, mode: 0o700 });
   for (const d of [p.pipelines, p.projects, p.state, p.run]) mkdirSync(d, { recursive: true });
   if (!existsSync(p.config)) writeJson(p.config, { backend: DEFAULT_CONFIG.backend });

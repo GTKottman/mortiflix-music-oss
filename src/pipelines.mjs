@@ -6,7 +6,7 @@
 //   skills/<name>/SKILL.md   (optional) skills; they're installed into the project's .claude/skills
 //
 // See docs/PIPELINES.md for the full format. A project pins a snapshot of its pipeline when it's created, so editing
-// a pipeline never changes a video that's already in production.
+// a pipeline never changes a piece that's already in production.
 import { existsSync, readdirSync, readFileSync, statSync, cpSync, mkdirSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
@@ -14,10 +14,8 @@ import { createHash } from 'node:crypto';
 import { REPO, paths, readJson, UserError } from './studio.mjs';
 import { zip, unzip, dirEntries } from './zip.mjs';
 
-export const REVIEW_MODES = ['questions', 'document', 'frames', 'video', 'audio', 'internal'];
-export const WORK_KINDS = ['script', 'stills', 'motion', 'audio', 'music', 'research', 'plan', 'instruments'];
-// A step with "when" runs only if the studio and the brief want it (otherwise it's skipped when the project starts).
-export const STEP_CONDITIONS = ['music'];
+export const REVIEW_MODES = ['questions', 'document', 'audio', 'midi', 'internal'];
+export const WORK_KINDS = ['research', 'plan', 'music', 'midi', 'instruments', 'audio'];
 const KEY = /^[a-z0-9][a-z0-9_-]{0,47}$/;
 
 export function builtInDir() {
@@ -45,7 +43,7 @@ export function listPipelines(root) {
 
 export function findPipeline(root, slug) {
   const p = listPipelines(root).find((x) => x.slug === slug);
-  if (!p) throw new UserError(`no pipeline "${slug}" (see: mortiflix pipelines)`);
+  if (!p) throw new UserError(`no pipeline "${slug}" (see: mortiflix-music pipelines)`);
   if (p.error) throw new UserError(`pipeline "${slug}" is invalid: ${p.error}`);
   return p;
 }
@@ -72,7 +70,6 @@ export function validatePipeline(def, dir) {
     keys.add(s.key);
     need(REVIEW_MODES.includes(s.review), `step "${s.key}": review must be one of ${REVIEW_MODES.join(', ')}`);
     for (const w of s.work || []) need(WORK_KINDS.includes(w), `step "${s.key}": work "${w}" must be one of ${WORK_KINDS.join(', ')}`);
-    if (s.when !== undefined) need(STEP_CONDITIONS.includes(s.when), `step "${s.key}": "when" must be one of ${STEP_CONDITIONS.join(', ')}`);
   }
   for (const s of steps) for (const a of s.after || []) need(keys.has(a), `step "${s.key}" runs after unknown step "${a}"`);
   if (errors.length === 0 && hasCycle(steps)) errors.push('the steps wait on each other in a loop');
@@ -123,7 +120,6 @@ function normalize(def, dir) {
     work: s.work || [],
     delivers: Boolean(s.delivers),
     describe: s.describe || '',
-    ...(s.when ? { when: s.when } : {}),
   }));
   const last = steps[steps.length - 1];
   if (!steps.some((s) => s.delivers) && last.review !== 'internal') last.delivers = true;
@@ -131,7 +127,7 @@ function normalize(def, dir) {
     slug: def.slug,
     name: def.name,
     description: def.description || '',
-    makes: def.makes || 'video',
+    makes: def.makes || 'music',
     intake: (def.intake || []).map((q) => ({ type: 'text', ...q })),
     steps,
     status_lines: def.status_lines || {},
@@ -187,7 +183,7 @@ export function snapshotPipeline(pipeline, dest) {
 }
 
 // Sharing a pipeline: one self-contained zip (the folder plus the shared skills it uses, as its own skills/), the same
-// shape a project pins. `mortiflix pipelines export <slug>` writes it; `mortiflix pipelines add <zip|https url>` puts
+// shape a project pins. `mortiflix-music pipelines export <slug>` writes it; `mortiflix-music pipelines add <zip|https url>` puts
 // one into the studio's pipelines/ folder after checking every path and validating it.
 export function exportPipeline(root, slug) {
   const p = findPipeline(root, slug);

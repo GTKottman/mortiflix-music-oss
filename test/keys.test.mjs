@@ -8,45 +8,35 @@ import { request } from 'node:http';
 import { tempStudio } from './helpers.mjs';
 import { paths, readSessionEnv } from '../src/studio.mjs';
 import * as keys from '../src/keys.mjs';
-import { saveVoice, sessionVoiceEnv } from '../src/voice/index.mjs';
 import { findPipeline } from '../src/pipelines.mjs';
-import { createProject, addIntakeFile, startProject, loadProject } from '../src/projects.mjs';
+import { createProject, startProject, loadProject } from '../src/projects.mjs';
 import { Runner } from '../src/runner.mjs';
 import { startServer } from '../src/web/server.mjs';
 
 // Keys from the machine running the tests must not count as "set".
-for (const k of ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_PROFILE', 'ELEVENLABS_API_KEY']) delete process.env[k];
+for (const k of ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_PROFILE']) delete process.env[k];
 
 const mode = (f) => statSync(f).mode & 0o777;
 
-test('keys: which a project needs follows the backend and the narration engine', (t) => {
+test('keys: which a project needs follows the backend', (t) => {
   const root = tempStudio(t);
-  const explainer = findPipeline(root, 'explainer');
-  assert.deepEqual(keys.keysFor(root, { backend: 'demo', pipeline: explainer }), []);
-  assert.deepEqual(keys.keysFor(root, { backend: 'claude-code', pipeline: explainer }), []);
-  assert.deepEqual(keys.keysFor(root, { backend: 'anthropic-api', pipeline: explainer }), ['anthropic']);
-  saveVoice(root, { engine: 'elevenlabs' });
-  assert.deepEqual(keys.keysFor(root, { backend: 'claude-code', pipeline: explainer }), ['elevenlabs']);
-  // Only work that makes sound needs the narration key.
-  assert.deepEqual(keys.keysFor(root, { backend: 'claude-code', steps: explainer.steps.filter((s) => s.key === 'script') }), []);
-  saveVoice(root, { engine: 'qwen' });
-  assert.deepEqual(keys.keysFor(root, { backend: 'claude-code', pipeline: explainer }), []);
+  const song = findPipeline(root, 'song');
+  assert.deepEqual(keys.keysFor(root, { backend: 'demo', pipeline: song }), []);
+  assert.deepEqual(keys.keysFor(root, { backend: 'claude-code', pipeline: song }), []);
+  assert.deepEqual(keys.keysFor(root, { backend: 'anthropic-api', pipeline: song }), ['anthropic']);
 });
 
 test('keys: saved mode 600, reported by where they come from, never by value', (t) => {
   const root = tempStudio(t);
   assert.equal(mode(root), 0o700);
-  keys.saveKey(root, 'elevenlabs', '  xi-secret  ');
+  keys.saveKey(root, 'anthropic', '  sk-secret  ');
   assert.equal(mode(paths(root).secrets), 0o600);
-  assert.equal(keys.keySource(root, 'elevenlabs'), 'saved');
-  assert.equal(sessionVoiceEnv(root).ELEVENLABS_API_KEY, undefined); // narration is off: sessions don't get it
-  saveVoice(root, { engine: 'elevenlabs' });
-  assert.equal(sessionVoiceEnv(root).ELEVENLABS_API_KEY, 'xi-secret');
-  assert.ok(!JSON.stringify(keys.keyStatus(root)).includes('xi-secret'));
-  assert.throws(() => keys.saveKey(root, 'elevenlabs', 'two words'), /spaces/);
-  assert.throws(() => keys.saveKey(root, 'nope', 'x'), /unknown key/);
-  keys.saveKey(root, 'elevenlabs', null);
-  assert.equal(keys.keySource(root, 'elevenlabs'), null);
+  assert.equal(keys.keySource(root, 'anthropic'), 'saved');
+  assert.ok(!JSON.stringify(keys.keyStatus(root)).includes('sk-secret'));
+  assert.throws(() => keys.saveKey(root, 'anthropic', 'two words'), /spaces/);
+  assert.throws(() => keys.saveKey(root, 'elevenlabs', 'x'), /unknown key/);
+  keys.saveKey(root, 'anthropic', null);
+  assert.equal(keys.keySource(root, 'anthropic'), null);
 });
 
 test('keys: other keys go to session.env (mode 600), with names checked', (t) => {
@@ -59,7 +49,7 @@ test('keys: other keys go to session.env (mode 600), with names checked', (t) =>
   keys.setSessionKey(root, 'OTHER_KEY', '');
   assert.equal(readFileSync(paths(root).sessionEnv, 'utf8'), 'GEMINI_API_KEY=g-secret\n');
   assert.throws(() => keys.setSessionKey(root, 'lower', 'x'), /UPPER_CASE/);
-  assert.throws(() => keys.setSessionKey(root, 'ELEVENLABS_API_KEY', 'x'), /its own place/);
+  assert.throws(() => keys.setSessionKey(root, 'ANTHROPIC_API_KEY', 'x'), /its own place/);
   assert.throws(() => keys.setSessionKey(root, 'A_KEY', 'x\ny'), /one line/);
 });
 
@@ -69,19 +59,12 @@ test('keys: checked with a free call, and a refused key is told apart from an un
   assert.equal((await keys.verifyKey(root, 'anthropic', 'k', { fetch: reply(200, { data: [] }) })).ok, true);
   assert.equal((await keys.verifyKey(root, 'anthropic', 'k', { fetch: reply(401) })).ok, false);
   assert.equal((await keys.verifyKey(root, 'anthropic', 'k', { fetch: async () => { throw new Error('offline'); } })).ok, null);
-  const plan = await keys.verifyKey(root, 'elevenlabs', 'k', { fetch: reply(200, { tier: 'creator', character_count: 1000, character_limit: 100000 }) });
-  assert.equal(plan.ok, true);
-  assert.match(plan.detail, /creator plan · 99,000 credits left · commercial use/);
-  assert.equal((await keys.verifyKey(root, 'elevenlabs', 'k', { fetch: reply(401, { detail: { message: 'Invalid API key' } }) })).ok, false);
-  // ElevenLabs answers some bad keys with a 400 authentication error, not a 401: still refused, never saved.
-  assert.equal((await keys.verifyKey(root, 'elevenlabs', 'k', { fetch: reply(400, { detail: { type: 'authentication_error', status: 'invalid_api_key', message: 'API key is invalid.' } }) })).ok, false);
-  assert.equal((await keys.verifyKey(root, 'elevenlabs', 'k', { fetch: reply(400, { detail: { message: 'bad request' } }) })).ok, null);
+  assert.equal((await keys.verifyKey(root, 'anthropic', 'k', { fetch: reply(529) })).ok, null);
 });
 
 test('the runner asks for a missing key instead of starting a session that would fail', async (t) => {
   const root = tempStudio(t);
-  const p = createProject(root, { pipeline: 'logo-sting', title: 'Keyless', backend: 'anthropic-api' });
-  await addIntakeFile(root, p.id, { field: 'logo', name: 'logo.svg', buffer: Buffer.from('<svg/>') });
+  const p = createProject(root, { pipeline: 'song', title: 'Keyless', backend: 'anthropic-api', answers: { genre: 'house', topic: 'keys' } });
   startProject(root, p.id);
   const runner = new Runner(root);
   runner.acquire();
@@ -89,7 +72,7 @@ test('the runner asks for a missing key instead of starting a session that would
   await runner.loop();
   const after = loadProject(root, p.id);
   assert.equal(after.state, 'paused');
-  assert.match(after.needs_you.text, /Anthropic API key.*mortiflix keys/);
+  assert.match(after.needs_you.text, /Anthropic API key.*mortiflix-music keys/);
   assert.equal(after.usage.sessions, 0);
 });
 
@@ -106,28 +89,27 @@ function call(socketPath, method, path, body) {
 }
 
 test('web: a project that needs a key says which before it starts; keys are set but never shown', async (t) => {
-  const root = tempStudio(t, { backend: 'claude-code' });
-  saveVoice(root, { engine: 'elevenlabs' });
+  const root = tempStudio(t, { backend: 'anthropic-api' });
   const socketPath = join(tmpdir(), `mfx-keys-${randomBytes(4).toString('hex')}.sock`);
   const srv = await startServer(root, { socketPath, quiet: true, runner: false });
   t.after(() => srv.close());
   const s = (...a) => call(socketPath, ...a);
 
-  const { json: created } = await s('POST', '/api/projects', { pipeline: 'explainer', title: 'Needs a voice', answers: { topic: 'bikes' } });
+  const { json: created } = await s('POST', '/api/projects', { pipeline: 'song', title: 'Needs a key', answers: { genre: 'house', topic: 'bikes' } });
   const refused = await s('POST', `/api/projects/${created.id}/start`);
   assert.equal(refused.status, 409);
-  assert.deepEqual(refused.json.needs_keys, ['elevenlabs']);
+  assert.deepEqual(refused.json.needs_keys, ['anthropic']);
   assert.equal(loadProject(root, created.id).state, 'draft');
 
   const other = await s('PUT', '/api/keys/GEMINI_API_KEY', { value: 'g-secret' });
   assert.deepEqual(other.json.other, ['GEMINI_API_KEY']);
   assert.ok(!other.text.includes('g-secret'));
-  assert.equal((await s('PUT', '/api/keys/elevenlabs', { value: '' })).status, 400);
+  assert.equal((await s('PUT', '/api/keys/anthropic', { value: '' })).status, 400);
 
-  keys.saveKey(root, 'elevenlabs', 'xi-secret'); // as a successful PUT would (that one checks with ElevenLabs first)
+  keys.saveKey(root, 'anthropic', 'sk-secret'); // as a successful PUT would (that one checks with the Claude API first)
   const listed = await s('GET', '/api/keys');
-  assert.equal(listed.json.keys.find((k) => k.id === 'elevenlabs').source, 'saved');
-  assert.ok(!listed.text.includes('xi-secret'));
+  assert.equal(listed.json.keys.find((k) => k.id === 'anthropic').source, 'saved');
+  assert.ok(!listed.text.includes('sk-secret'));
   assert.equal((await s('POST', `/api/projects/${created.id}/start`)).status, 200);
   assert.equal((await s('DELETE', '/api/keys/GEMINI_API_KEY')).json.other.length, 0);
 });

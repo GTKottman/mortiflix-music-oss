@@ -14,12 +14,9 @@ import { listPipelines } from '../pipelines.mjs';
 import { createProject, addIntakeFile, startProject, listProjects, loadProject, projectPaths, projectPipeline, readEvents, readJournal } from '../projects.mjs';
 import * as gates from '../gates.mjs';
 import { Runner, BACKENDS } from '../runner.mjs';
-import * as voice from '../voice/index.mjs';
 import * as keys from '../keys.mjs';
 import * as setup from '../setup.mjs';
-import * as booth from '../booth.mjs';
 import * as music from '../music.mjs';
-import * as pub from '../publish.mjs';
 import { costText } from '../usage.mjs';
 
 const MIME = {
@@ -27,13 +24,13 @@ const MIME = {
   '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp',
   '.gif': 'image/gif', '.svg': 'image/svg+xml', '.avif': 'image/avif', '.woff2': 'font/woff2', '.mp4': 'video/mp4', '.webm': 'video/webm',
   '.mov': 'video/quicktime', '.m4v': 'video/mp4', '.wav': 'audio/wav', '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.ogg': 'audio/ogg',
-  '.flac': 'audio/flac', '.aac': 'audio/aac', '.pdf': 'application/pdf', '.md': 'text/plain; charset=utf-8', '.txt': 'text/plain; charset=utf-8',
+  '.flac': 'audio/flac', '.aac': 'audio/aac', '.mid': 'audio/midi', '.midi': 'audio/midi', '.pdf': 'application/pdf', '.md': 'text/plain; charset=utf-8', '.txt': 'text/plain; charset=utf-8',
 };
 const APP_CSP = "default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self'; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'";
 const MEDIA_CSP = "sandbox; default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'unsafe-inline'";
 const LOOPBACK = ['127.0.0.1', '::1', 'localhost'];
 
-export async function startServer(root, { port = 4646, host = '127.0.0.1', runner: withRunner = true, socketPath = null, quiet = false } = {}) {
+export async function startServer(root, { port = 4747, host = '127.0.0.1', runner: withRunner = true, socketPath = null, quiet = false } = {}) {
   const loopback = LOOPBACK.includes(host);
   let token = null;
   if (!loopback && !socketPath) {
@@ -69,7 +66,7 @@ export async function startServer(root, { port = 4646, host = '127.0.0.1', runne
         res.writeHead(302, { 'set-cookie': `mfx_token=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=2592000`, location: url.pathname });
         return res.end();
       }
-      if (!cookie || !same(cookie, token)) return send(res, 401, { error: 'open the link printed by `mortiflix serve` (it carries the access token)' });
+      if (!cookie || !same(cookie, token)) return send(res, 401, { error: 'open the link printed by `mortiflix-music serve` (it carries the access token)' });
     }
 
     if (req.method !== 'GET' && req.method !== 'HEAD' && req.headers['x-mortiflix'] !== '1') return send(res, 403, { error: 'missing X-Mortiflix header' });
@@ -110,17 +107,9 @@ export async function startServer(root, { port = 4646, host = '127.0.0.1', runne
       if ('api_key' in body) writeSecret(root, 'anthropic_api_key', body.api_key ? String(body.api_key).trim() : null);
       return after(studioInfo(root, runner));
     }
-    if (p.startsWith('/voice')) return voiceApi(root, req, res, url, p, method, after);
     // Setup: what each part is for, where it stands, and installing a tool (one at a time, log kept for the page).
     if (p === '/setup' && method === 'GET') return send(res, 200, await setupInfo(root, installs));
-    if (p === '/setup/music' && method === 'PUT') { setup.saveMusic(root, await json(req)); return after(await setupInfo(root, installs)); }
-    if (p === '/setup/assets' && method === 'PUT') { setup.saveAssetSites(root, (await json(req)).sites); return after(await setupInfo(root, installs)); }
-    if (p === '/setup/publish' && method === 'PUT') { const b = await json(req); pub.savePublish(root, { service: b.service, url: b.url, profile: b.profile }); return after(await setupInfo(root, installs)); }
-    if (p === '/setup/recordings' && method === 'PUT') { setup.browserHarnessRecordings(Boolean((await json(req)).enable)); return after(await setupInfo(root, installs)); }
-    if (p === '/setup/blender' && method === 'POST') {
-      if (!loopback) throw new BadRequest('Blender opens on the studio\'s own screen: use mortiflix blender there');
-      return send(res, 200, { path: setup.openBlender(root) });
-    }
+    if (p === '/setup/daw' && method === 'PUT') { setup.saveDaw(root, (await json(req)).daw ?? null); return after(await setupInfo(root, installs)); }
     if ((m = p.match(/^\/setup\/install\/([a-z-]+)$/)) && method === 'POST') {
       const tool = m[1];
       if (!setup.TOOLS.includes(tool)) throw new BadRequest(`unknown tool (${setup.TOOLS.join(', ')})`);
@@ -142,7 +131,6 @@ export async function startServer(root, { port = 4646, host = '127.0.0.1', runne
       if (id && value) {
         check = await keys.verifyKey(root, id, value);
         if (check.ok === false) throw new BadRequest(check.detail);
-        if (check.tier) voice.saveVoice(root, { elevenlabs: { tier: check.tier } });
       }
       if (id) keys.saveKey(root, id, value || null); else keys.setSessionKey(root, m[1], value || null);
       return after({ ...keysInfo(root), check });
@@ -189,40 +177,7 @@ export async function startServer(root, { port = 4646, host = '127.0.0.1', runne
       const { answer } = await json(req);
       return after(gates.answerQuestion(root, id, m[1], answer ?? null));
     }
-    if (sub.startsWith('/booth')) return boothApi(req, res, id, sub, method, after);
     if (sub.startsWith('/music')) return musicApi(req, res, id, sub, method, after, url);
-    return send(res, 404, { error: 'not found' });
-  }
-
-  // The recording booth (src/booth.mjs): the script, takes as raw WAV bodies, keeping a take, and "done", which
-  // resumes the project when it was waiting for the recording.
-  async function boothApi(req, res, id, sub, method, after) {
-    let m;
-    if (sub === '/booth' && method === 'GET') {
-      const p = loadProject(root, id);
-      return send(res, 200, { project: { id, title: p.title, state: p.state, needs_you: p.needs_you }, engine: voice.voiceConfig(root).engine, ...booth.boothStatus(root, id), advice: booth.FLAG_ADVICE });
-    }
-    if ((m = sub.match(/^\/booth\/lines\/([A-Za-z0-9-]{1,40})\/takes$/)) && method === 'POST') {
-      const take = booth.addTake(root, id, m[1], await rawBody(req, booth.MAX_TAKE_BYTES));
-      changed();
-      return send(res, 200, { take });
-    }
-    if ((m = sub.match(/^\/booth\/lines\/([A-Za-z0-9-]{1,40})\/takes\/(\d+)\/keep$/)) && method === 'POST') {
-      return after({ take: booth.keepTake(root, id, m[1], Number(m[2])) });
-    }
-    if ((m = sub.match(/^\/booth\/lines\/([A-Za-z0-9-]{1,40})\/takes\/(\d+)\/audio$/)) && method === 'GET') {
-      const file = booth.takeFile(root, id, m[1], Number(m[2]));
-      res.writeHead(200, { 'content-type': 'audio/wav', 'content-length': statSync(file).size, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
-      return createReadStream(file).pipe(res);
-    }
-    if (sub === '/booth/done' && method === 'POST') {
-      const st = booth.boothStatus(root, id);
-      if (!st.lines) throw new BadRequest('there is no script to record yet');
-      if (st.missing.length) return send(res, 409, { error: `${st.missing.length} line(s) still need a kept take: ${st.missing.join(', ')}`, missing: st.missing });
-      const p = loadProject(root, id);
-      if (p.state === 'paused') gates.resume(root, id);
-      return after({ resumed: p.state === 'paused' });
-    }
     return send(res, 404, { error: 'not found' });
   }
 
@@ -230,10 +185,11 @@ export async function startServer(root, { port = 4646, host = '127.0.0.1', runne
   // master (raw audio body; a paused project resumes when it was waiting for it), and playing the imported master.
   async function musicApi(req, res, id, sub, method, after, url) {
     if (sub === '/music' && method === 'GET') return send(res, 200, music.musicStatus(root, id));
+    if (sub === '/music/notes' && method === 'GET') return send(res, 200, music.musicNotes(root, id));
     if (sub === '/music/midi.zip' && method === 'GET') {
       const zip = music.midiPack(root, id);
       const p = loadProject(root, id);
-      const nice = `${p.title.replace(/[^\w .-]+/g, '').trim() || 'mortiflix'} - MIDI.zip`;
+      const nice = `${p.title.replace(/[^\w .-]+/g, '').trim() || 'mortiflix-music'} - MIDI.zip`;
       res.writeHead(200, { 'content-type': 'application/zip', 'content-length': zip.length, 'content-disposition': `attachment; filename="${nice}"`, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
       return res.end(zip);
     }
@@ -253,7 +209,7 @@ export async function startServer(root, { port = 4646, host = '127.0.0.1', runne
     return send(res, 404, { error: 'not found' });
   }
 
-  // Files from a project's record (what was submitted, the deliverables). Range requests for video and audio.
+  // Files from a project's record (what was submitted, the deliverables). Range requests for audio.
   function media(req, res, id, rel, download) {
     // Only the submitted files: checked on the resolved path, so encoded ../ can't climb out of reviews/.
     const base = realpathSync(join(projectPaths(root, id).state, 'reviews'));
@@ -266,7 +222,7 @@ export async function startServer(root, { port = 4646, host = '127.0.0.1', runne
     const headers = { 'content-type': type, 'accept-ranges': 'bytes', 'x-content-type-options': 'nosniff', 'content-security-policy': MEDIA_CSP, 'cache-control': 'private, max-age=3600' };
     if (download) {
       const p = loadProject(root, id);
-      const nice = `${p.title.replace(/[^\w .-]+/g, '').trim() || 'mortiflix'} - ${basename(real).replace(/^\d+-/, '')}`;
+      const nice = `${p.title.replace(/[^\w .-]+/g, '').trim() || 'mortiflix-music'} - ${basename(real).replace(/^\d+-/, '')}`;
       headers['content-disposition'] = `attachment; filename="${nice.replace(/"/g, '')}"`;
     }
     const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
@@ -312,7 +268,7 @@ export async function startServer(root, { port = 4646, host = '127.0.0.1', runne
   }
   const where = socketPath || `http://${host.includes(':') ? `[${host}]` : host}:${server.address().port}/`;
   if (!quiet) {
-    console.log(`Mortiflix studio: ${token ? `${where}?token=${token}` : where}`);
+    console.log(`Mortiflix Music studio: ${token ? `${where}?token=${token}` : where}`);
     if (token) console.log('(not on localhost: the link carries an access token; keep it private)');
   }
   const close = async () => {
@@ -328,75 +284,6 @@ export async function startServer(root, { port = 4646, host = '127.0.0.1', runne
 }
 
 class BadRequest extends Error {}
-
-// Narration setup: the engine, ElevenLabs (account, models, voices, Voice Library, dictionaries, a test line) and
-// local Qwen3-TTS through ComfyUI. Calls to ElevenLabs happen only when the page asks.
-async function voiceApi(root, req, res, url, p, method, after) {
-  const q = (k) => url.searchParams.get(k) || undefined;
-  const client = () => {
-    const key = voice.elevenKey(root);
-    if (!key) throw new BadRequest('connect an ElevenLabs API key first');
-    return new voice.eleven.ElevenLabs({ key, server: voice.voiceConfig(root).elevenlabs.server });
-  };
-  const wrap = async (fn) => {
-    try { return await fn(); } catch (e) {
-      if (e instanceof BadRequest || e instanceof UserError) throw e;
-      throw new BadRequest(e.status === 401 ? 'ElevenLabs refused the key (401): check it, or make a new one at elevenlabs.io › Developers › API keys' : e.message);
-    }
-  };
-  if (p === '/voice' && method === 'GET') return send(res, 200, voice.voiceOverview(root));
-  if (p === '/voice' && method === 'PUT') {
-    const body = await json(req);
-    if ('elevenlabs_key' in body) voice.setElevenKey(root, body.elevenlabs_key);
-    try { voice.saveVoice(root, body); } catch (e) { throw new BadRequest(e.message); }
-    return after(voice.voiceOverview(root));
-  }
-  if (p === '/voice/elevenlabs/account' && method === 'GET') {
-    const account = await wrap(() => client().account());
-    voice.saveVoice(root, { elevenlabs: { tier: account.tier } });
-    return send(res, 200, account);
-  }
-  if (p === '/voice/elevenlabs/models' && method === 'GET') return send(res, 200, await wrap(() => client().models()));
-  if (p === '/voice/elevenlabs/voices' && method === 'GET') return send(res, 200, await wrap(() => client().voices({ search: q('search'), page_token: q('page') })));
-  if (p === '/voice/elevenlabs/library' && method === 'GET') {
-    return send(res, 200, await wrap(() => client().library({ search: q('search'), gender: q('gender'), age: q('age'), accent: q('accent'), language: q('language'), use_cases: q('use_case') ? [q('use_case')] : undefined, page: Number(q('page') || 0) })));
-  }
-  if (p === '/voice/elevenlabs/library/add' && method === 'POST') {
-    const { owner, voice_id: vid, name } = await json(req);
-    return after(await wrap(() => client().addFromLibrary(owner, vid, String(name || 'Mortiflix voice').slice(0, 100))));
-  }
-  if (p === '/voice/elevenlabs/dictionaries' && method === 'GET') return send(res, 200, await wrap(() => client().dictionaries()));
-  if (p === '/voice/elevenlabs/preview' && method === 'GET') {
-    const target = q('url');
-    if (!voice.eleven.previewAllowed(target)) throw new BadRequest('not an ElevenLabs preview');
-    const r = await fetch(target);
-    if (!r.ok) throw new BadRequest(`preview ${r.status}`);
-    res.writeHead(200, { 'content-type': r.headers.get('content-type') || 'audio/mpeg', 'cache-control': 'private, max-age=86400', 'x-content-type-options': 'nosniff' });
-    return res.end(Buffer.from(await r.arrayBuffer()));
-  }
-  if (p === '/voice/qwen/status' && method === 'GET') {
-    const cfg = voice.voiceConfig(root).qwen;
-    return send(res, 200, await new voice.qwen.ComfyUI({ url: q('url') || cfg.url }).status());
-  }
-  if (p === '/voice/sample' && method === 'POST') {
-    const { engine, text } = await json(req);
-    const line = String(text || '').trim().slice(0, 300) || 'This is how your narration will sound.';
-    const cfg = voice.voiceConfig(root);
-    if (engine === 'elevenlabs') {
-      if (!cfg.elevenlabs.voice_id) throw new BadRequest('choose a voice first');
-      const out = await wrap(() => client().sample(cfg.elevenlabs, line));
-      res.writeHead(200, { 'content-type': 'audio/mpeg', 'x-characters': String(out.characters), 'cache-control': 'no-store' });
-      return res.end(out.audio);
-    }
-    if (engine === 'qwen') {
-      const out = await wrap(() => new voice.qwen.ComfyUI({ url: cfg.qwen.url }).sample(cfg.qwen, line));
-      res.writeHead(200, { 'content-type': out.format === 'wav' ? 'audio/wav' : out.format === 'mp3' ? 'audio/mpeg' : 'audio/flac', 'cache-control': 'no-store' });
-      return res.end(out.audio);
-    }
-    throw new BadRequest('engine must be elevenlabs or qwen');
-  }
-  return send(res, 404, { error: 'not found' });
-}
 
 function send(res, code, body) {
   res.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
@@ -432,8 +319,7 @@ function json(req, limit = 2_000_000) {
 async function setupInfo(root, installs) {
   const status = await setup.setupStatus(root);
   const jobs = Object.fromEntries([...installs].map(([k, j]) => [k, { state: j.state, log: j.log.slice(-60), error: j.error || null, problems: j.result?.problems || null }]));
-  return { parts: setup.PARTS, status, tools: setup.TOOL_INFO, addons: setup.ADDONS.map(({ id, name, about, owner }) => ({ id, name, about, owner: Boolean(owner) })),
-    recordings: setup.browserHarnessRecordings() || null, jobs };
+  return { parts: setup.PARTS, status, tools: setup.TOOL_INFO, daws: setup.DAWS, jobs };
 }
 
 function keysInfo(root) {

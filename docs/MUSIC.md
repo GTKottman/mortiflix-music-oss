@@ -1,46 +1,66 @@
-# Music
+# The music engine
 
-Mortiflix has one music engine. It writes a song (the `song` pipeline) and a video's original score (the music step of
-`explainer`) the same way: Strudel writes the notes, the engine checks them and turns them into MIDI, an instrument is
-chosen for every MIDI channel, and the piece is rendered and mastered, or **finished by you in your own DAW from the
-MIDI**. Every stage leaves a file you can read, and the engine writes down every decision and every measurement in
-`music/MUSIC-SHEET.md`.
+Every piece Mortiflix Music makes goes through one engine: Strudel writes the notes, the engine checks them and turns
+them into MIDI, a sound is chosen for every MIDI channel, and the piece is rendered and mastered, or **finished by
+you in your own DAW from the MIDI**. Every stage leaves a file you can read, and the engine writes down every
+decision and every measurement in `music/MUSIC-SHEET.md`.
 
-The method comes from Mortiflix's song system (Mini Music): the genre researched first, the song planned in words,
-notes before sounds, and a machine that checks each stage before the next one starts.
+The method: the genre researched first, the piece planned in words, notes before sounds, and a machine that checks
+each stage before the next one starts.
 
 ## The stages
 
 ```mermaid
 flowchart LR
-  G["Genre<br/><small>songs only</small><br/>music/genre.json"] --> B["Blueprint<br/>music/blueprint.json"]
+  G["Genre<br/>music/genre.json"] --> B["Blueprint<br/>music/blueprint.json"]
   B --> S["Score<br/>music/score.strudel.js<br/><small>notes only</small>"]
   S --> C{"check"}
   C -- problems --> S
   C -- passes --> M["MIDI<br/>music/notes.json<br/>out/music/midi/"]
-  M --> I["Instruments<br/>music/instruments.json<br/><small>a sound per channel</small>"]
+  M --> I["Sounds<br/>music/instruments.json<br/><small>one per channel</small>"]
   I --> A{"audition"}
   A -- silent or clipping --> I
-  A -- passes --> R["Strudel render + master<br/>out/music/master.wav"]
+  A -- passes --> R["Render + master<br/>out/music/master.wav"]
   M -. MIDI pack .-> D["Your DAW<br/><small>your sounds, your mix</small>"]
   D -. import .-> O["Your master<br/>music/own-master/master.wav"]
 ```
 
 | Stage | Who writes it | What the engine checks | What it leaves |
 |---|---|---|---|
-| **Genre** (songs) | the session, from 5+ sources it read | every field, a hook and a beat element, concrete "how"s | `music/genre.json`, `GENRE.md` |
+| **Genre** | the session, from 5+ sources it read | every field, a hook and a beat element, concrete "how"s | `music/genre.json`, `GENRE.md` |
 | **Blueprint** | the session | sections contiguous with a function and an intensity (0–10), the chord chart, one MIDI channel per part, the genre signature, the length | `music/blueprint.json`, `BLUEPRINT.md` |
-| **Score** | the session, in Strudel | every note against the chord of the moment (the harmony lock), each section's measured busyness against its asked intensity, hit points within a frame of the picture, nothing past the end, every part playing | `music/check.json` |
-| **MIDI** | captured from the score | (it's captured only once the score passes) | `music/notes.json`, `out/music/midi/` (one file per channel, the arrangement, `CUE-SHEET.md`), `midi.zip` |
-| **Instruments** | the session, from each channel's real range | every channel covered, two parts in one register never share a timbre, at most one lo-fi sound, low end and top covered, every drum number has a sound | `music/instruments.json` |
-| **Audition** | the engine | each instrument plays its part's lowest, middle and highest note: none silent, none clipping | `out/music/audition/*.wav` |
+| **Score** | the session, in Strudel | every note against the chord of the moment (the harmony lock), each section's measured busyness against its asked intensity, nothing past the end, every part playing; in a loop kit, no note over a loop point | `music/check.json` |
+| **MIDI** | captured from the score | (it's captured only once the score passes) | `music/notes.json`, `out/music/midi/`, `midi.zip` |
+| **Sounds** | the session, from each channel's real range | every channel covered, two parts in one register never share a timbre, at most one lo-fi sound, low end and top covered, every drum number has a sound | `music/instruments.json` |
+| **Audition** | the engine | each sound plays its part's lowest, middle and highest note: none silent, none clipping | `out/music/audition/*.wav` |
 | **Master** | the engine | no stem silent or clipping alone; the balance (low end, mud, stereo width); -14 LUFS, true peak ≤ -1 dBTP | `out/music/master.wav`, `.mp3`, `stems/` |
 | **Your master** | you, in your DAW | its length against the score; whether it starts at bar 1 (its first sound against the MIDI's first note) | `music/own-master/` |
+
+## The MIDI pack
+
+```
+out/music/midi/
+  <title>-all.mid        the whole arrangement: one track per channel, tempo, meter, section names as markers
+  NN-<part>.mid          each channel on its own
+  sections/
+    NN-<section>/        a clip per section, its notes moved to start at the section's own bar 1:
+      <section>-all.mid    every channel together
+      NN-<part>.mid        each channel alone
+  CUE-SHEET.md           tempo, key, length, the sections, each channel's role and range, the chord chart,
+                         and the steps to bring it into your DAW
+out/music/midi.zip       all of it, as one file
+```
+
+The clips are what makes the pack useful in a DAW: drop the chorus's drums onto a track, loop the breakdown's pad,
+rebuild the arrangement your way. Drums are on channel 10 as General MIDI numbers (36 kick, 38 snare, 42 closed hat,
+46 open hat, 49 crash), so they land on any drum rack.
+
+Get it from the project page (**MIDI › Download MIDI**) or `mortiflix-music midi <project> [--out pack.zip]`.
 
 ## Notes first, sounds second
 
 The score holds only music: pitches, rhythm, velocity and structure, each part on its own MIDI channel. It never says
-what anything sounds like. That's what makes the MIDI clean and the whole thing transparent:
+what anything sounds like:
 
 ```js
 // music/score.strudel.js: one cycle is one bar
@@ -62,47 +82,26 @@ drums: cue(note("[36 ~ ~ 36 38 ~ 36 ~], [42*8]").mask("<0!4 1!4>")).midichan(10)
                "42": { "sound": "white", "set": ".hpf(7000).decay(.03).sustain(0)", "gain": 0.25 } } } ] }
 ```
 
-When the engine renders, it adds the instruments as one layer on top of the score: it splits the score by channel,
-gives each its sound, level, pan and its own effects bus, and stacks them again. A sound can never change a note, so the
+When the engine renders, it adds the sounds as one layer on top of the score: it splits the score by channel, gives
+each its sound, level, pan and its own effects bus, and stacks them again. A sound can never change a note, so the
 MIDI you take into a DAW is exactly what Strudel played.
 
 Sounds are Strudel's built-in synths (sine, triangle, square, sawtooth, supersaw, pulse, and noise), shaped with
 filters, envelopes, FM and effects: nothing to download and no licence questions. A sample or soundfont is used only
 with a `source` that names its licence, and only when that licence allows your use.
 
-## Videos: finish it yourself from the MIDI (recommended)
+## The pipelines
 
-For a video, the studio writes the score to the approved animatic: the dramatic reading, a spotting map from the real
-timing of every word and cut, a tempo chosen so the hits land on bar lines, a blueprint whose intensity follows the
-picture, the score, and the check (hits within a frame). It chooses stand-in instruments so you can review the music
-against the picture.
-
-Then, by default, **you finish it**: the project page's **Music** panel has the MIDI pack (every channel on its own
-track, tempo, sections and hit points as markers, the cue sheet). Give every channel its sound in your DAW, mix,
-export from bar 1 to the end, and **Import your master**. The studio checks it fits the score (length, and that it
-starts with bar 1 so the hits stay on the picture), resumes, and mixes your master under the narration. From a
-terminal:
-
-```sh
-mortiflix music <project>                     # where the music stands
-mortiflix music <project> --midi pack.zip     # the MIDI pack
-mortiflix music <project> --import master.wav # your master (wav, aiff, flac, mp3, m4a, ogg)
-```
-
-Prefer to let Strudel finish it? Choose "Original score, rendered by Strudel" in the brief; "No music" skips the step.
-
-## Songs
-
-The `song` pipeline makes an instrumental song from a genre and a topic. You review twice:
-
-1. **The blueprint**, in words, before any note: which of the genre's unforgettable elements carry the hook and the
-   beat, the hook itself, tempo, key, the chords, one MIDI channel per part, and the story section by section with its
-   intensity.
-2. **The finished song**: the master, the music sheet (every channel with its range, instrument and why; the story
-   measured against the plan; the master's numbers), the MIDI and the stems.
-
-Between them the score, the MIDI, the instruments and the master are made and checked in the studio. You can also
-choose to finish a song yourself from its MIDI, the same way as a video.
+- **`song`**: two reviews, the blueprint and the finished song (the master, the arrangement as a piano roll, the music
+  sheet, the stems, the MIDI). The brief's "Who finishes it" can hand the final sound to you: the song is then
+  reviewed with sketch sounds, and once it's approved the project waits for your master (**MIDI › Import your
+  master**, or `mortiflix-music music <project> --import master.wav`). The studio checks it fits the score.
+- **`midi-pack`**: two reviews, the blueprint and the MIDI. Sketch sounds make it audible, but the MIDI is the
+  deliverable. Bring a `.mid` of yours (a progression, a riff, a beat) and the piece is built around it, note for
+  note.
+- **`loop-kit`**: two reviews, the kit plan and the loops. The blueprint sets `"loops": true`: every section is a loop,
+  and the check refuses a note that rings past its loop's end or a loop with nothing in it, and warns on lengths that
+  aren't 1, 2, 4, 8 or 16 bars. The clips in `sections/` are the kit.
 
 ## The music sheet
 
@@ -123,25 +122,20 @@ choose to finish a song yourself from its MIDI, the same way as a video.
 The engine works on any folder with a `music/` directory, no studio needed:
 
 ```sh
-export MFX_STRUDEL=~/Mortiflix/tools/strudel MFX_CHROME=$(command -v google-chrome-stable)
+export MFX_STRUDEL=~/MortiflixMusic/tools/strudel MFX_CHROME=$(command -v google-chrome-stable) MFX_DAW=ableton
 M=pipelines/_shared/skills/music/strudel.mjs
-node $M genre          # songs: check music/genre.json
+node $M genre          # check music/genre.json
 node $M plan           # check music/blueprint.json, write BLUEPRINT.md
-node $M check          # the score: harmony, curve, hits (--video-sec, --fps); captures the MIDI when it passes
+node $M check          # the score: harmony, curve, clean loops; captures the MIDI and its clips when it passes
 node $M instruments    # each channel's range and the sounds; checks music/instruments.json
-node $M audition       # every instrument across its part's range
-node $M master         # render, stems, balance, -14 LUFS master (songs)
-node $M render --stems # a render without mastering (a video's stand-in)
+node $M audition       # every sound across its part's range
+node $M render --stems # a render with the sounds, without mastering (a sketch)
+node $M master         # render, stems, balance, -14 LUFS master
 node $M own-master     # an imported master: there, and does it fit?
+node $M midi           # out/music/midi/ again
 node $M sheet          # rewrite music/MUSIC-SHEET.md
 ```
 
 Each command exits 1 with the problems in plain words until its stage is right. The method, stage by stage, is in
-`pipelines/_shared/skills/music/SKILL.md`; the craft guides (genre research, picture scoring, melody, the harmony lock,
-voicing) are in its `craft/` folder.
-
-## Setup
-
-`mortiflix setup music` installs Strudel (`@strudel/web` from npm, AGPL-3.0) and finds a Chrome to render in. With
-music off, the music step is skipped in every video and the song pipeline won't start. The **MIDI pack** setting
-delivers the MIDI and stems with every final, even when Strudel finishes the music.
+`pipelines/_shared/skills/music/SKILL.md`; the craft guides (genre research, melody, the harmony lock, voicing) are in
+its `craft/` folder.

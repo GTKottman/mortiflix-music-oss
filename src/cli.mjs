@@ -1,4 +1,4 @@
-// mortiflix: the command line. Everything the web UI does, in a terminal.
+// mortiflix-music: the command line. Everything the web UI does, in a terminal.
 import { createInterface } from 'node:readline';
 import { existsSync, createReadStream, statSync, writeFileSync, readFileSync } from 'node:fs';
 import { join, basename, resolve } from 'node:path';
@@ -8,87 +8,61 @@ import { listPipelines, findPipeline, exportPipeline, addPipeline } from './pipe
 import { createProject, addIntakeFile, startProject, listProjects, loadProject, projectPaths, projectPipeline, readEvents } from './projects.mjs';
 import * as gates from './gates.mjs';
 import { Runner, BACKENDS } from './runner.mjs';
-import * as voice from './voice/index.mjs';
 import * as keys from './keys.mjs';
 import * as setup from './setup.mjs';
 import { costText } from './usage.mjs';
-import * as booth from './booth.mjs';
-import * as rec from './record.mjs';
 import * as music from './music.mjs';
 import * as plat from './platform.mjs';
-import * as pub from './publish.mjs';
 
 const C = process.stdout.isTTY && !process.env.NO_COLOR
   ? { b: (s) => `\x1b[1m${s}\x1b[0m`, dim: (s) => `\x1b[2m${s}\x1b[0m`, acc: (s) => `\x1b[38;5;208m${s}\x1b[0m`, red: (s) => `\x1b[31m${s}\x1b[0m`, green: (s) => `\x1b[32m${s}\x1b[0m` }
   : { b: (s) => s, dim: (s) => s, acc: (s) => s, red: (s) => s, green: (s) => s };
 
-export const HELP = `${C.b('mortiflix')}: a motion design studio on your machine. Claude makes the video, you approve every stage.
+export const HELP = `${C.b('mortiflix-music')}: a music studio on your machine. Claude writes the music as MIDI, you approve every stage.
 
   ${C.b('Getting started')}
-  mortiflix init [--backend claude-code|anthropic-api|demo]   set up the studio (~/Mortiflix, or $MORTIFLIX_STUDIO)
-  mortiflix setup                                              the walkthrough: Claude, transitions, narration, music, assets, 3D
-  mortiflix setup <claude|transitions|narration|music|assets|3d>  one part (mortiflix setup status: where things stand)
-  mortiflix keys                                               add or change your keys (Anthropic, ElevenLabs, others)
-  mortiflix doctor                                             check the tools a pipeline needs
-  mortiflix demo                                               a full walk-through with placeholder work (free)
+  mortiflix-music init [--backend claude-code|anthropic-api|demo]   set up the studio (~/MortiflixMusic, or $MORTIFLIX_MUSIC_STUDIO)
+  mortiflix-music setup                                         the walkthrough: Claude, the music engine, your DAW
+  mortiflix-music setup <claude|music|daw>                      one part (mortiflix-music setup status: where things stand)
+  mortiflix-music keys                                          add or change your keys (Anthropic, others)
+  mortiflix-music doctor                                        check the tools the studio needs
+  mortiflix-music demo                                          a full walk-through with placeholder work (free)
 
-  ${C.b('Making videos')}
-  mortiflix pipelines                                          what the studio can make
-  mortiflix pipelines export <slug> [--out file.zip]           one shareable zip: the pipeline and every skill it uses
-  mortiflix pipelines add <file.zip | https://…> [--replace]   add someone's pipeline to your studio
-  mortiflix new <pipeline> [--title "…"] [--set key=value]… [--file key=path]… [--backend demo]
-  mortiflix run [--watch]                                      run sessions until everything waits on you
-  mortiflix list                                               your projects
-  mortiflix status <project>                                   steps, versions, the log
-  mortiflix review [<project>]                                 review what's waiting (approve, notes, answers)
-  mortiflix respond <project> <step> --approve|--changes [--note "…"]… [--overall "…"] [--answer id=value]…
-  mortiflix answer <project> <question-id> [answer]            answer a question the session asked
-  mortiflix reopen <project> <step> "what to change"           send an approved step back (you changed your mind)
-  mortiflix pause|resume|cancel <project>
+  ${C.b('Making music')}
+  mortiflix-music pipelines                                     what the studio can make
+  mortiflix-music pipelines export <slug> [--out file.zip]      one shareable zip: the pipeline and every skill it uses
+  mortiflix-music pipelines add <file.zip | https://…> [--replace]  add someone's pipeline to your studio
+  mortiflix-music new <pipeline> [--title "…"] [--set key=value]… [--file key=path]… [--backend demo]
+  mortiflix-music run [--watch]                                 run sessions until everything waits on you
+  mortiflix-music list                                          your projects
+  mortiflix-music status <project>                              steps, versions, the log
+  mortiflix-music review [<project>]                            review what's waiting (approve, notes, answers)
+  mortiflix-music respond <project> <step> --approve|--changes [--note "…"]… [--overall "…"] [--answer id=value]…
+  mortiflix-music answer <project> <question-id> [answer]       answer a question the session asked
+  mortiflix-music reopen <project> <step> "what to change"      send an approved step back (you changed your mind)
+  mortiflix-music pause|resume|cancel <project>
 
-  ${C.b('Publishing')}
-  mortiflix publish <project> [--to tiktok,instagram,youtube] [--profile <name>] [--title "…"] [--description "…"]
-                    [--at 2026-10-20T18:00 [--timezone Europe/Madrid]] [--yes] [--again]
-                                                               post a delivered video through Upload-Post or your own
-                                                               Postiz, whichever setup picked (asks first)
-  mortiflix publish <project> --status                         how it went, per platform, with the links
+  ${C.b('MIDI and your DAW')}
+  mortiflix-music midi <project> [--out pack.zip]               save the MIDI pack: every channel, the arrangement, a clip
+                                                                per section, the cue sheet and your DAW's import steps
+  mortiflix-music music [<project>]                             where its music stands: the MIDI, your master, the music sheet
+  mortiflix-music music <project> --import <file>               your own master, finished from the MIDI in your DAW (from bar 1)
 
   ${C.b('The web studio')}
-  mortiflix serve [--port 4646] [--host 127.0.0.1]             the studio in your browser, with the runner
-
-  ${C.b('Narration')}
-  mortiflix voice                                              what narrates your videos, and what this machine can run
-  mortiflix voice elevenlabs                                   set up ElevenLabs (key, voice, model)
-  mortiflix voice local                                        set up Qwen3-TTS on your GPU through ComfyUI
-  mortiflix voice own                                          narrate in your own voice, recorded in the booth
-  mortiflix voice none                                         no narration (on-screen text and music)
-  mortiflix voice test ["a line to speak"]                     hear the current voice
-  mortiflix record [<project>] [--device <mic>]                the recording booth in this terminal: read each line, keep the best take
-  mortiflix record <project> --import <folder>                 use files you recorded elsewhere, named after the lines (b01-1.wav…)
-  mortiflix record --list-devices                              the microphones ffmpeg can record from
-
-  ${C.b('Music')}
-  mortiflix music [<project>]                                  where its music stands: the MIDI pack, your master, the music sheet
-  mortiflix music <project> --midi <file.zip>                  save the MIDI pack (every channel, the arrangement, the cue sheet)
-  mortiflix music <project> --import <file>                    your own master, made from the MIDI pack in your DAW (exported from bar 1)
-
-  ${C.b('3D')}
-  mortiflix blender [file.blend]                               open the studio's Blender, with its toolkits and Camera Flight
+  mortiflix-music serve [--port 4747] [--host 127.0.0.1]        the studio in your browser, with the runner
 
   ${C.b('Settings')}
-  mortiflix config [key [value]]                               show or change settings
-  mortiflix keys set <anthropic|elevenlabs|uploadpost|postiz|NAME>  set one key (typed hidden, or piped on stdin)
-  mortiflix keys remove <anthropic|elevenlabs|uploadpost|postiz|NAME>
-  mortiflix checks [approve|reject <id>]                       the error checklist sessions proposed
+  mortiflix-music config [key [value]]                          show or change settings
+  mortiflix-music keys set <anthropic|NAME>                     set one key (typed hidden, or piped on stdin)
+  mortiflix-music keys remove <anthropic|NAME>
+  mortiflix-music checks [approve|reject <id>]                  the error checklist sessions proposed
 
   --studio <dir> works with every command. --json prints what pipelines, list, status, review, keys and
-  setup status show as JSON, for scripts and for Claude Code (/mortiflix).
+  setup status show as JSON, for scripts and for Claude Code (/mortiflix-music).
 
   ${C.b('Without a terminal')} (scripts, Claude Code)
-  mortiflix setup install <${setup.TOOLS.join('|')}>
-  mortiflix setup music <strudel|none> [--midi|--no-midi]
-  mortiflix setup assets <url>… | --clear
-  mortiflix setup publish <uploadpost|postiz|none> [--url <your Postiz>] [--profile <Upload-Post profile>]`;
+  mortiflix-music setup install <${setup.TOOLS.join('|')}>
+  mortiflix-music setup daw <${Object.keys(setup.DAWS).join('|')}|none>`;
 
 const LISTS = ['set', 'file', 'note', 'answer'];
 
@@ -116,7 +90,6 @@ export async function run(argv = process.argv.slice(2)) {
       case 'init': return init(root, a);
       case 'keys': return a.json ? (needStudio(root), json({ keys: keys.keyStatus(root), session_keys: keys.sessionKeyNames(root) })) : keysCmd(root, rest);
       case 'setup': return setupCmd(root, rest, a);
-      case 'blender': needStudio(root); return console.log(`Opening ${setup.openBlender(root, rest)} with the studio's profile (Camera Flight: 3D Viewport › N › Flight).`);
       case 'doctor': return doctor(root);
       case 'demo': return demo(root);
       case 'pipelines': return a.json ? json(pipelinesView(root)) : pipelines(root, rest, a);
@@ -131,21 +104,19 @@ export async function run(argv = process.argv.slice(2)) {
       case 'reopen': {
         ownerOnly();
         const [proj, step, ...words] = rest;
-        if (!step || !words.length) throw new Error('mortiflix reopen <project> <step> "what to change"');
+        if (!step || !words.length) throw new Error('mortiflix-music reopen <project> <step> "what to change"');
         gates.reopen(root, pick(root, proj), step, { overall: words.join(' ') });
-        return console.log(`${C.acc('↺')} ${step} goes back for changes. ${C.b('mortiflix run')} makes the next version.`);
+        return console.log(`${C.acc('↺')} ${step} goes back for changes. ${C.b('mortiflix-music run')} makes the next version.`);
       }
-      case 'resume': ownerOnly(); gates.resume(root, pick(root, rest[0])); return console.log('Resumed: it will run on the next `mortiflix run` (or right away under `serve`).');
+      case 'resume': ownerOnly(); gates.resume(root, pick(root, rest[0])); return console.log('Resumed: it will run on the next `mortiflix-music run` (or right away under `serve`).');
       case 'cancel': ownerOnly(); gates.cancel(root, pick(root, rest[0])); return console.log('Cancelled.');
-      case 'publish': ownerOnly(); return publishCmd(root, rest[0], a);
       case 'serve': return serve(root, a);
       case 'config': return config(root, rest);
       case 'checks': return checks(root, rest);
-      case 'voice': return voiceCmd(root, rest);
-      case 'record': return recordCmd(root, rest, a);
       case 'music': return musicCmd(root, rest, a);
+      case 'midi': return midiCmd(root, rest, a);
       case undefined: case 'help': return console.log(HELP);
-      default: throw new Error(`unknown command "${cmd}" (mortiflix help)`);
+      default: throw new Error(`unknown command "${cmd}" (mortiflix-music help)`);
     }
   };
   try {
@@ -177,7 +148,7 @@ function prompter() {
 }
 
 function needStudio(root) {
-  if (!existsSync(paths(root).config)) throw new Error(`no studio at ${root}: run \`mortiflix init\` first`);
+  if (!existsSync(paths(root).config)) throw new Error(`no studio at ${root}: run \`mortiflix-music init\` first`);
 }
 
 const json = (v) => console.log(JSON.stringify(v, null, 2));
@@ -186,7 +157,7 @@ const json = (v) => console.log(JSON.stringify(v, null, 2));
 // so a session that finds the CLI on its PATH can't review its own work by accident. A guard, not a wall: the
 // sandbox is the wall (docs/SECURITY.md).
 function ownerOnly() {
-  if (process.env.MFX_TOKEN) throw new Error('only the owner does that: a Mortiflix session can\'t review, answer or reopen its own work (submit with mfx instead)');
+  if (process.env.MFX_TOKEN) throw new Error('only the owner does that: a Mortiflix Music session can\'t review, answer or reopen its own work (submit with mfx instead)');
 }
 
 // A text item's paragraphs, numbered the way the web studio numbers them (notes point at them by index).
@@ -200,7 +171,7 @@ function pick(root, given) {
     const live = all.filter((p) => !['delivered', 'cancelled'].includes(p.state));
     if (live.length === 1) return live[0].id;
     if (!live.length && all.length === 1) return all[0].id;
-    throw new Error('which project? (mortiflix list)');
+    throw new Error('which project? (mortiflix-music list)');
   }
   const hits = all.filter((p) => p.id === given || p.id.startsWith(given) || p.id.includes(given));
   if (hits.length === 1) return hits[0].id;
@@ -222,32 +193,32 @@ async function init(root, a) {
   saveConfig(root, { backend });
   console.log(`${C.green('✔')} Studio ready at ${C.b(root)}`);
   console.log(`  Backend: ${C.b(backend)} ${C.dim(BACKENDS[backend].available(loadConfig(root), root).detail)}`);
-  if (backend === 'demo') console.log(C.dim('  (No Claude Code login or API key found: the demo backend makes placeholder work. Install Claude Code, or add an API key with `mortiflix keys`.)'));
+  if (backend === 'demo') console.log(C.dim('  (No Claude Code login or API key found: the demo backend makes placeholder work. Install Claude Code, or add an API key with `mortiflix-music keys`.)'));
   if (process.stdin.isTTY && !a.yes) {
-    console.log(`\n  Next, the setup walkthrough: what Mortiflix uses (Claude, transitions, narration, music, assets, 3D), why, and what it would`);
+    console.log(`\n  Next, the setup walkthrough: what Mortiflix Music uses (Claude, the music engine, your DAW), why, and what it would`);
     console.log('  install. Nothing installs without asking, and you can skip any part.');
     if (await confirm('  Set it up now?', true)) await setupWalk(root);
-    else console.log(`  Any time: ${C.b('mortiflix setup')}`);
-  } else console.log(`\n  Next: ${C.b('mortiflix setup')} walks through Claude, transitions, narration, music, assets and 3D.`);
-  console.log(`\n  Then: ${C.b('mortiflix demo')} for a free walk-through, or ${C.b('mortiflix serve')} to open the studio in your browser.`);
+    else console.log(`  Any time: ${C.b('mortiflix-music setup')}`);
+  } else console.log(`\n  Next: ${C.b('mortiflix-music setup')} walks through Claude, the music engine and your DAW.`);
+  console.log(`\n  Then: ${C.b('mortiflix-music demo')} for a free walk-through, or ${C.b('mortiflix-music serve')} to open the studio in your browser.`);
 }
 
 // What to install a missing tool with on Windows (doctor's hint).
-const WINGET = process.platform === 'win32' ? { ffmpeg: 'Gyan.FFmpeg', ffprobe: 'Gyan.FFmpeg', npx: 'OpenJS.NodeJS.LTS', git: 'Git.Git' } : {};
+const WINGET = process.platform === 'win32' ? { ffmpeg: 'Gyan.FFmpeg', ffprobe: 'Gyan.FFmpeg', npm: 'OpenJS.NodeJS.LTS' } : {};
 
 function doctor(root) {
   const config = existsSync(paths(root).config) ? loadConfig(root) : null;
   const row = (ok, name, detail) => console.log(`${ok ? C.green('✔') : C.red('✖')} ${name.padEnd(14)} ${C.dim(detail)}`);
   row(Number(process.versions.node.split('.')[0]) >= 20, 'node', process.version);
-  row(Boolean(config), 'studio', config ? root : `none at ${root} (mortiflix init)`);
+  row(Boolean(config), 'studio', config ? root : `none at ${root} (mortiflix-music init)`);
   for (const [name, b] of Object.entries(BACKENDS)) {
     if (!b.available) continue;
     const r = b.available(config || loadConfig(root), root);
     row(r.ok, name, `${r.detail}${config?.backend === name ? '  ← in use' : ''}`);
   }
-  for (const [bin, why] of [['ffmpeg', 'renders, checks, the demo'], ['ffprobe', 'the final pass'], ['npx', 'Remotion'], ['git', 'installs the 3D toolkits and local narration']]) {
+  for (const [bin, why] of [['ffmpeg', 'masters, measures loudness, imports your own master, the demo'], ['ffprobe', 'reads the masters you import'], ['npm', 'installs Strudel']]) {
     const found = plat.which(bin);
-    row(Boolean(found) || bin === 'git', bin, found ? why : `${why}: not found${WINGET[bin] ? ` (winget install ${WINGET[bin]})` : ''}`);
+    row(Boolean(found), bin, found ? why : `${why}: not found${WINGET[bin] ? ` (winget install ${WINGET[bin]})` : ''}`);
   }
   if (process.platform === 'win32') {
     const bash = plat.findGitBash();
@@ -255,25 +226,26 @@ function doctor(root) {
   }
   if (process.platform === 'linux') row(spawnSync('bwrap', ['--version']).status === 0, 'bwrap', `optional session sandbox (${config?.sandbox ? 'on' : 'off'})`);
   for (const k of keys.keyStatus(root)) {
-    row(Boolean(k.source) || !k.in_use, k.id, k.source ? `${k.name}: ${k.source}${k.in_use ? '  ← in use' : ''}` : k.in_use ? `${k.name} missing: mortiflix keys` : `${k.name}: not set (optional)`);
+    row(Boolean(k.source) || !k.in_use, k.id, k.source ? `${k.name}: ${k.source}${k.in_use ? '  ← in use' : ''}` : k.in_use ? `${k.name} missing: mortiflix-music keys` : `${k.name}: not set (optional)`);
   }
   const tools = setup.setupStatusSync(root);
-  for (const id of ['strudel', 'chrome', 'browser-harness', 'blender', 'blender-addons']) row(tools[id].ok || !['strudel', 'chrome'].includes(id) || tools.music.engine === 'none', id, tools[id].ok ? tools[id].detail : `${tools[id].detail} (mortiflix setup)`);
+  for (const id of ['strudel', 'chrome']) row(tools[id].ok, id, tools[id].ok ? tools[id].detail : `${tools[id].detail} (mortiflix-music setup music)`);
+  row(true, 'daw', tools.daw.id ? `${tools.daw.name}: MIDI packs come with its import steps` : 'not named (optional: mortiflix-music setup daw)');
   const extra = keys.sessionKeyNames(root);
-  row(true, 'session.env', extra.length ? `other keys for sessions: ${extra.join(', ')}` : 'no other keys (optional: mortiflix keys)');
+  row(true, 'session.env', extra.length ? `other keys for sessions: ${extra.join(', ')}` : 'no other keys (optional: mortiflix-music keys)');
 }
 
 async function pipelines(root, [sub, arg] = [], a = {}) {
   if (sub === 'export') {
-    if (!arg) throw new Error('mortiflix pipelines export <slug> [--out file.zip]');
+    if (!arg) throw new Error('mortiflix-music pipelines export <slug> [--out file.zip]');
     const x = exportPipeline(existsSync(paths(root).config) ? root : null, arg);
     const file = typeof a.out === 'string' ? a.out : `${x.slug}.mortiflix-pipeline.zip`;
     writeFileSync(file, x.zip);
-    return console.log(`${C.green('✔')} ${file}: ${x.name}, with every skill it uses (${(x.zip.length / 1024).toFixed(0)} KB, version ${x.hash}). Share it; anyone adds it with ${C.b('mortiflix pipelines add <file>')}.`);
+    return console.log(`${C.green('✔')} ${file}: ${x.name}, with every skill it uses (${(x.zip.length / 1024).toFixed(0)} KB, version ${x.hash}). Share it; anyone adds it with ${C.b('mortiflix-music pipelines add <file>')}.`);
   }
   if (sub === 'add') {
     needStudio(root);
-    if (!arg) throw new Error('mortiflix pipelines add <file.zip | https://…> [--replace]');
+    if (!arg) throw new Error('mortiflix-music pipelines add <file.zip | https://…> [--replace]');
     let buf;
     if (/^https:\/\//.test(arg)) {
       const res = await fetch(arg, { redirect: 'follow' });
@@ -286,7 +258,7 @@ async function pipelines(root, [sub, arg] = [], a = {}) {
     if (r.scripts.length) console.log(`  ${C.acc('!')} It brings scripts its sessions will run (${r.scripts.join(', ')}). Read them before you start a project with it: ${paths(root).pipelines}/${r.slug}`);
     return;
   }
-  if (sub) throw new Error('mortiflix pipelines [export <slug> | add <file|url>]');
+  if (sub) throw new Error('mortiflix-music pipelines [export <slug> | add <file|url>]');
   for (const p of listPipelines(existsSync(paths(root).config) ? root : null)) {
     if (p.error) { console.log(`${C.red('✖')} ${p.slug}: ${p.error}`); continue; }
     console.log(`${C.b(p.slug.padEnd(14))} ${p.name} ${C.dim(`(${p.source})`)}`);
@@ -297,7 +269,7 @@ async function pipelines(root, [sub, arg] = [], a = {}) {
 
 async function newProject(root, slug, a) {
   needStudio(root);
-  if (!slug) throw new Error('mortiflix new <pipeline> (see: mortiflix pipelines)');
+  if (!slug) throw new Error('mortiflix-music new <pipeline> (see: mortiflix-music pipelines)');
   const pipeline = findPipeline(root, slug);
   const answers = {};
   for (const kv of a.set) { const [k, ...v] = String(kv).split('='); answers[k] = v.join('='); }
@@ -344,7 +316,7 @@ async function newProject(root, slug, a) {
   }
   startProject(root, p.id);
   console.log(`\n${C.green('✔')} ${C.b(p.title)} is queued as ${C.b(p.id)}`);
-  console.log(`  ${C.b('mortiflix run')} starts it (or it starts by itself under ${C.b('mortiflix serve')}).`);
+  console.log(`  ${C.b('mortiflix-music run')} starts it (or it starts by itself under ${C.b('mortiflix-music serve')}).`);
   return p.id;
 }
 
@@ -368,7 +340,7 @@ async function runLoop(root, a) {
   const waiting = listProjects(root).filter((p) => p.state === 'waiting' || p.state === 'paused');
   if (waiting.length) {
     console.log(`\n${C.acc('●')} Your turn:`);
-    for (const p of waiting) console.log(`  ${C.b(p.id)}  ${p.state === 'paused' ? C.red(`needs you: ${p.needs_you?.text}`) : 'ready to review'}  → mortiflix review ${p.id}`);
+    for (const p of waiting) console.log(`  ${C.b(p.id)}  ${p.state === 'paused' ? C.red(`needs you: ${p.needs_you?.text}`) : 'ready to review'}  → mortiflix-music review ${p.id}`);
   } else console.log(C.dim('\nNothing left to run.'));
 }
 
@@ -378,7 +350,7 @@ async function list(root, a = {}) {
   needStudio(root);
   const all = listProjects(root);
   if (a.json) return json(await studioView(root, all));
-  if (!all.length) return console.log(`No projects yet: ${C.b('mortiflix new <pipeline>')} or ${C.b('mortiflix demo')}.`);
+  if (!all.length) return console.log(`No projects yet: ${C.b('mortiflix-music new <pipeline>')} or ${C.b('mortiflix-music demo')}.`);
   for (const p of all) {
     const label = STATE_LABEL[p.state];
     const tag = p.state === 'waiting' || p.state === 'paused' ? C.acc(label) : C.dim(label);
@@ -400,39 +372,6 @@ function status(root, id) {
   if (costText(usage)) console.log(C.dim(costText(usage)));
   console.log(C.dim('\nLog:'));
   for (const e of readEvents(root, id, { limit: 12 })) console.log(C.dim(`  ${e.t.slice(5, 16).replace('T', ' ')} ${e.event}${e.step ? ` ${e.step}${e.version ? ` v${e.version}` : ''}` : ''} ${e.details ? `· ${e.details.slice(0, 80)}` : ''}`));
-}
-
-// Publishing: shows exactly what goes where, asks, then sends. Never runs on its own.
-async function publishCmd(root, given, a) {
-  const id = pick(root, given);
-  const opt = (k) => (typeof a[k] === 'string' ? a[k] : undefined);
-  if (a.status) {
-    const st = await pub.publishStatus(root, id);
-    console.log(`${C.b(st.status)}${st.message ? C.dim(` · ${st.message}`) : ''}  ${C.dim(st.ref)}`);
-    for (const r of st.results) {
-      const icon = { completed: C.green('✔'), failed: C.red('✖') }[r.state] || C.acc('●');
-      console.log(`  ${icon} ${String(r.platform || '?').padEnd(10)} ${r.url || C.dim(r.message || r.state)}`);
-    }
-    if (!st.results.length) console.log(C.dim(st.scheduled_for ? `  Scheduled for ${st.scheduled_for}.` : '  Nothing back from the platforms yet.'));
-    return;
-  }
-  let plan = pub.publishPlan(root, id, { to: opt('to'), profile: opt('profile'), title: opt('title'), description: opt('description'), at: opt('at'), timezone: opt('timezone'), again: Boolean(a.again) });
-  // Postiz posts to the channels connected in it: look them up first, so the plan names every account.
-  if (plan.service === 'postiz') plan = await pub.postizChannels(root, plan);
-  console.log(`\n${C.b(plan.project)}  ${C.dim(`${(plan.size / 1024 ** 2).toFixed(1)} MB`)}`);
-  console.log(`  Via     ${pub.SERVICES[plan.service].name}${plan.service === 'postiz' ? C.dim(` at ${pub.publishConfig(loadConfig(root)).postiz.url}`) : ''}`);
-  console.log(`  To      ${plan.platforms.join(', ')}${plan.from_brief ? C.dim(' (from the brief; --to changes it)') : ''}`);
-  if (plan.channels) for (const c of plan.channels) console.log(`          ${C.dim(`${c.platform}:`)} ${c.name}`);
-  if (plan.profile) console.log(`  Profile ${plan.profile}`);
-  console.log(`  Title   ${plan.title}`);
-  if (plan.description) console.log(`  Text    ${plan.description.slice(0, 200)}`);
-  console.log(`  When    ${plan.at ? `${plan.at} ${plan.timezone || 'UTC'}` : 'now'}\n`);
-  if (!a.yes && !process.stdin.isTTY) throw new Error('nothing sent: add --yes to post without being asked');
-  if (!a.yes && !(await confirm(`Post it${plan.at ? ' at that time' : ' now'}?`))) return console.log('Nothing sent.');
-  const sent = await pub.publish(root, plan);
-  console.log(`${C.green('✔')} ${plan.at ? 'Scheduled' : 'Sent'}. ${C.b(`mortiflix publish ${id} --status`)} shows how it went.`);
-  if (plan.service === 'postiz') console.log(C.dim(`  ${sent.posts.length} post${sent.posts.length === 1 ? '' : 's'} · also in your Postiz calendar`));
-  else console.log(C.dim(`  ${sent.job_id ? `job ${sent.job_id}` : `request ${sent.request_id}`} · also at https://app.upload-post.com`));
 }
 
 // Review in the terminal: what was sent, then answers, notes and a decision.
@@ -495,7 +434,7 @@ async function review(root, given) {
         }
         const overall = (await rl.question('Overall comment (optional): ')).trim();
         gates.respond(root, id, s.key, sub.version, { verdict: 'changes', notes, overall, answers });
-        console.log(C.acc(`↺ Changes sent. ${C.b('mortiflix run')} makes the next version.`));
+        console.log(C.acc(`↺ Changes sent. ${C.b('mortiflix-music run')} makes the next version.`));
       }
     }
   } finally {
@@ -528,7 +467,7 @@ async function studioView(root, all = listProjects(root)) {
   };
 }
 
-// Every pipeline with its steps and the brief's questions (what `mortiflix new` asks).
+// Every pipeline with its steps and the brief's questions (what `mortiflix-music new` asks).
 function pipelinesView(root) {
   return listPipelines(existsSync(paths(root).config) ? root : null).map((p) => (p.error ? { slug: p.slug, source: p.source, error: p.error } : {
     slug: p.slug, name: p.name, description: p.description, source: p.source,
@@ -578,10 +517,10 @@ function reviewJson(root, given) {
   return json(ids.map((id) => reviewView(root, id)));
 }
 
-// `mortiflix respond <project> <step> --approve | --changes --note "1@0.5,0.3: …" --overall "…" --answer q1=…`
+// `mortiflix-music respond <project> <step> --approve | --changes --note "1@0.5,0.3: …" --overall "…" --answer q1=…`
 function respondCmd(root, [given, stepKey], a) {
   const id = pick(root, given);
-  if (!stepKey || Boolean(a.approve) === Boolean(a.changes)) throw new Error('mortiflix respond <project> <step> --approve | --changes [--note "…"]… [--overall "…"] [--answer id=value]…');
+  if (!stepKey || Boolean(a.approve) === Boolean(a.changes)) throw new Error('mortiflix-music respond <project> <step> --approve | --changes [--note "…"]… [--overall "…"] [--answer id=value]…');
   const view = gates.stepView(loadProject(root, id), projectPipeline(root, id)).find((s) => s.key === stepKey);
   const version = a.version !== undefined ? Number(a.version) : view?.version ?? 0;
   const answers = {};
@@ -589,11 +528,11 @@ function respondCmd(root, [given, stepKey], a) {
   const notes = a.note.map((n) => parseNote(String(n)));
   const r = gates.respond(root, id, stepKey, version, { verdict: a.approve ? 'approve' : 'changes', notes, overall: typeof a.overall === 'string' ? a.overall : '', answers });
   if (r.verdict === 'approve') console.log(C.green(`✔ ${view.name} v${version} approved.${r.project_state === 'delivered' ? ' Delivered.' : ''}`));
-  else console.log(C.acc(`↺ Changes sent for ${view.name} v${version} (${notes.length} note${notes.length === 1 ? '' : 's'}). ${C.b('mortiflix run')} makes the next version.`));
+  else console.log(C.acc(`↺ Changes sent for ${view.name} v${version} (${notes.length} note${notes.length === 1 ? '' : 's'}). ${C.b('mortiflix-music run')} makes the next version.`));
 }
 
 function answerCmd(root, [given, qid, ...words]) {
-  if (!qid) throw new Error('mortiflix answer <project> <question-id> [answer] (no answer takes the default)');
+  if (!qid) throw new Error('mortiflix-music answer <project> <question-id> [answer] (no answer takes the default)');
   const id = pick(root, given);
   gates.answerQuestion(root, id, qid, words.join(' ') || null);
   const q = loadProject(root, id).questions.find((x) => x.id === qid);
@@ -619,7 +558,7 @@ async function serve(root, a) {
 
 async function config(root, [key, value]) {
   needStudio(root);
-  if (key === 'api-key') return keysCmd(root, ['set', 'anthropic']); // older spelling of `mortiflix keys set anthropic`
+  if (key === 'api-key') return keysCmd(root, ['set', 'anthropic']); // older spelling of `mortiflix-music keys set anthropic`
   const cur = loadConfig(root);
   if (!key) {
     for (const [k, v] of Object.entries(cur)) console.log(`${k.padEnd(18)} ${JSON.stringify(v)}`);
@@ -690,7 +629,6 @@ async function askKey(root, id, { required = false } = {}) {
     const r = await keys.verifyKey(root, id, v);
     if (r.ok === false) { console.log(C.red(`✖ ${r.detail}. Try again.`)); continue; }
     keys.saveKey(root, id, v);
-    if (r.tier) voice.saveVoice(root, { elevenlabs: { tier: r.tier } });
     console.log(r.ok ? `${C.green('✔')} ${r.detail}. Saved.` : `${C.acc('●')} Saved, but ${r.detail}.`);
     return 'saved';
   }
@@ -708,14 +646,12 @@ async function keysWalk(root) {
   }
   console.log();
   showKeys(root);
-  const v = voice.voiceConfig(root);
-  if (keys.keySource(root, 'elevenlabs') && v.engine !== 'elevenlabs') console.log(`\n  To narrate with it: ${C.b('mortiflix voice elevenlabs')} (pick a voice and model).`);
 }
 
 async function keysCmd(root, [sub, name]) {
   needStudio(root);
   if (sub === 'set' || sub === 'remove') {
-    if (!name) throw new Error(`mortiflix keys ${sub} <${Object.keys(keys.KEYS).join('|')}|NAME>`);
+    if (!name) throw new Error(`mortiflix-music keys ${sub} <${Object.keys(keys.KEYS).join('|')}|NAME>`);
     const id = keys.KEYS[name.toLowerCase()] ? name.toLowerCase() : null;
     if (sub === 'remove') {
       if (id) keys.saveKey(root, id, null); else keys.setSessionKey(root, name, null);
@@ -728,10 +664,9 @@ async function keysCmd(root, [sub, name]) {
     const r = await keys.verifyKey(root, id, value);
     if (r.ok === false) throw new Error(r.detail);
     keys.saveKey(root, id, value);
-    if (r.tier) voice.saveVoice(root, { elevenlabs: { tier: r.tier } });
     return console.log(`${C.green('✔')} ${keys.KEYS[id].name} saved${r.ok ? ` (${r.detail})` : `, but ${r.detail}`}.`);
   }
-  if (sub) throw new Error('mortiflix keys [set|remove <name>]');
+  if (sub) throw new Error('mortiflix-music keys [set|remove <name>]');
   if (!process.stdin.isTTY) return showKeys(root);
   return keysWalk(root);
 }
@@ -783,143 +718,44 @@ async function setupPart(root, id, st) {
     }
     return;
   }
-  if (id === 'transitions') {
-    if (st.transitions.ok) {
-      console.log(`  ${mark(true)} ${st.transitions.detail} (${st.transitions.path})`);
-      if (await confirm('  Update the library to its latest version?', false)) await offerInstall(root, 'transitions', { ask: false });
-    } else await offerInstall(root, 'transitions', { ask: false });
-    return;
-  }
-  if (id === 'narration') {
-    const v = voice.voiceConfig(root);
-    const local = st.gpu;
-    console.log(`  Now: ${C.b({ none: 'no narration', elevenlabs: 'ElevenLabs', qwen: 'Qwen3-TTS on this computer', own: 'your own voice' }[v.engine])}`);
-    console.log(`  1. ElevenLabs: their voices, paid per character. Needs an API key.`);
-    console.log(`  2. This computer: Qwen3-TTS through ComfyUI, free and private. ${local.fits ? C.green(local.reason) : C.red(local.reason)}`);
-    console.log('  3. No narration: on-screen text, music and sound.');
-    console.log('  4. Your own voice: you read the script line by line in the recording booth (web studio or terminal), or import files.');
-    const pick = (await prompterOnce(`  Which? ${C.dim(`[Enter keeps ${v.engine}]`)} `)).trim();
-    if (pick === '1') { await voiceCmd(root, ['elevenlabs']); }
-    else if (pick === '2') {
-      if (!local.fits) return console.log(C.red('  This machine can\'t run it: pick ElevenLabs or none.'));
-      if (!st.comfyui.ok) {
-        if (st.comfyui.installed) { console.log('  The studio\'s ComfyUI is installed but not running: starting it.'); setup.startComfy(root); }
-        else if (!(await offerInstall(root, 'comfyui'))) return;
-      }
-      await voiceCmd(root, ['local']);
-    } else if (pick === '3') { voice.saveVoice(root, { engine: 'none' }); console.log('  Narration off.'); }
-    else if (pick === '4') await voiceCmd(root, ['own']);
-    return;
-  }
   if (id === 'music') {
-    const m = setup.musicConfig(loadConfig(root));
-    if (!(await confirm('  Score your videos with original music (Strudel)?', m.engine !== 'none'))) { setup.saveMusic(root, { engine: 'none' }); return console.log('  No music: music steps are skipped.'); }
     if (!st.strudel.ok) await offerInstall(root, 'strudel', { ask: false });
     else console.log(`  ${mark(true)} Strudel ${st.strudel.version}`);
     if (!st.chrome.ok) await offerInstall(root, 'chrome');
-    else { console.log(`  ${mark(true)} Renders in ${st.chrome.path}`); await setup.installTool(root, 'chrome'); }
-    console.log(C.dim('  The score is always rendered by Strudel and used in the video. A MIDI pack adds every part as MIDI, the stems'));
-    console.log(C.dim('  and a cue sheet (tempo, sections, hit points), for remaking the music in your own DAW.'));
-    const midi = await confirm('  Also deliver a MIDI pack with each video?', m.midi);
-    setup.saveMusic(root, { engine: 'strudel', midi });
-    return console.log(`  ${C.green('✔')} Music: Strudel${midi ? ' + MIDI pack' : ''}.`);
-  }
-  if (id === 'assets') {
-    const cur = setup.assetsConfig(loadConfig(root)).sites;
-    if (cur.length) console.log(`  Your sites now: ${cur.map((x) => x.url).join(', ')}`);
-    console.log('  If you have a website you use for assets, list it here, one per line (Enter when done).');
-    console.log(C.dim('  Without one, you won\'t get stock assets: sessions make every visual themselves.'));
-    const sites = [];
-    for (;;) {
-      const v = (await prompterOnce(`  Site ${sites.length + 1}${cur.length && !sites.length ? C.dim(' (Enter keeps your list, - clears it)') : ''}: `)).trim();
-      if (!v) break;
-      if (v === '-') { sites.length = 0; setup.saveAssetSites(root, []); console.log('  Cleared.'); break; }
-      sites.push(v);
-    }
-    if (sites.length) {
-      try { setup.saveAssetSites(root, sites); } catch (e) { return console.log(C.red(`  ✖ ${e.message}`)); }
-    }
-    const now = setup.assetsConfig(loadConfig(root)).sites;
-    if (!now.length) return console.log('  No asset sites.');
-    if (!st['browser-harness'].ok) { if (!(await offerInstall(root, 'browser-harness'))) return; }
-    else console.log(`  ${mark(true)} browser-harness ${st['browser-harness'].detail}`);
-    const rec = setup.browserHarnessRecordings();
-    if (rec && /default/.test(rec)) {
-      console.log(C.dim('  browser-harness can save screenshots and action traces of what sessions do in the browser, on this machine'));
-      console.log(C.dim('  only (they may include what\'s on those pages), so you can see what happened later.'));
-      setup.browserHarnessRecordings(await confirm('  Keep local browser recordings?', false));
-    }
-    console.log(`  ${C.green('✔')} Sessions will use ${now.map((x) => x.url).join(', ')} in your own Chrome.`);
-    console.log(C.dim('  Sign in to them in Chrome. The first time, Chrome may ask to allow remote debugging: chrome://inspect/#remote-debugging'));
+    else { console.log(`  ${mark(true)} Runs in ${st.chrome.path}`); await setup.installTool(root, 'chrome'); }
     return;
   }
-  if (id === 'publish') {
-    const cur = pub.publishConfig(loadConfig(root));
-    console.log(`  Now: ${C.b(cur.service === 'none' ? 'not set up' : cur.service === 'postiz' ? `your own Postiz at ${cur.postiz.url}` : `Upload-Post${cur.profile ? ` (profile ${cur.profile})` : ''}`)}`);
-    console.log('  1. Upload-Post: a hosted service with paid plans. You connect your accounts on upload-post.com. Needs its API key.');
-    console.log('  2. Postiz: free and open source (AGPL-3.0). You run it yourself (Docker) and connect your accounts in it.');
-    console.log(C.dim('     Install: https://docs.postiz.com/self-host/installation/docker-compose. Each platform needs a developer app you register;'));
-    console.log(C.dim('     TikTok keeps posts private until it has reviewed yours.'));
-    console.log('  3. Don\'t publish from the studio: you download finals and post them yourself.');
-    const choice = (await prompterOnce(`  Which? ${C.dim(`[Enter keeps ${cur.service}]`)} `)).trim();
-    if (choice === '3') { pub.savePublish(root, { service: 'none' }); return console.log('  Publishing off.'); }
-    if (choice === '1' || (!choice && cur.service === 'uploadpost')) {
-      pub.savePublish(root, { service: 'uploadpost' });
-      await askKey(root, 'uploadpost');
-      const profile = (await prompterOnce(`  Upload-Post profile your accounts are connected under${cur.profile ? C.dim(` (Enter keeps ${cur.profile})`) : ''}: `)).trim();
-      if (profile) pub.savePublish(root, { profile });
-      return console.log(`  ${C.green('✔')} Publishing through Upload-Post. Post a delivered video with ${C.b('mortiflix publish <project>')}.`);
-    }
-    if (choice === '2' || (!choice && cur.service === 'postiz')) {
-      const url = (await prompterOnce(`  Your Postiz API address ${C.dim(`(Enter keeps ${cur.postiz.url}; Postiz Cloud is https://api.postiz.com)`)}: `)).trim();
-      pub.savePublish(root, { service: 'postiz', url: url || undefined });
-      await askKey(root, 'postiz');
-      return console.log(`  ${C.green('✔')} Publishing through your Postiz. Post a delivered video with ${C.b('mortiflix publish <project>')}.`);
-    }
-    return undefined;
-  }
-  if (id === '3d') {
-    if (!(await confirm('  Set up 3D (Blender and the toolkits)?', st.blender.ok))) return console.log(C.dim('  Skipped: 2D only.'));
-    if (!st.blender.ok) { if (!(await offerInstall(root, 'blender'))) return; }
-    else { console.log(`  ${mark(true)} ${st.blender.detail} (${st.blender.path})`); await setup.installTool(root, 'blender'); }
-    console.log(C.dim('  The toolkits go into the studio\'s own Blender profile: your personal Blender setup is never changed.'));
-    for (const t of setup.ADDONS) console.log(C.dim(`    ${t.name}: ${t.about}`));
-    console.log(C.dim('  Nova FX, Mortiflix\'s own particle engine, builds on Linux only for now (it compiles its core with gcc).'));
-    if (st['blender-addons'].ok && !(await confirm('  They\'re installed. Update them?', false))) return;
-    await offerInstall(root, 'blender-addons', { ask: !st['blender-addons'].ok });
-    console.log(`  Open it yourself with ${C.b('mortiflix blender')} (Camera Flight is in the 3D Viewport › N › Flight).`);
+  if (id === 'daw') {
+    const ids = Object.keys(setup.DAWS);
+    ids.forEach((d, i) => console.log(`  ${String(i + 1).padStart(2)}. ${setup.DAWS[d]}`));
+    console.log('   0. None: general steps for any DAW');
+    const v = (await prompterOnce(`  Which DAW do you finish music in? ${C.dim(`[Enter keeps ${st.daw.name || 'none'}]`)} `)).trim();
+    if (!v) return undefined;
+    const d = setup.saveDaw(root, v === '0' ? null : ids[Number(v) - 1] || v);
+    return console.log(`  ${C.green('✔')} ${d.id ? `${d.name}: every MIDI pack comes with its import steps.` : 'No DAW named: the import steps are general.'}`);
   }
 }
 
 async function showSetup(root) {
   const st = await setup.setupStatus(root);
-  const v = voice.voiceConfig(root);
   const config = loadConfig(root);
   const row = (ok, name, detail) => console.log(`  ${ok === null ? C.dim('·') : ok ? C.green('✔') : C.red('✖')} ${name.padEnd(12)} ${detail}`);
   console.log(C.b('Your studio'));
   row(BACKENDS[config.backend].available(config, root).ok, 'Claude', `${config.backend}: ${BACKENDS[config.backend].available(config, root).detail}`);
-  row(v.engine === 'none' ? null : v.engine === 'elevenlabs' ? Boolean(voice.elevenKey(root)) && Boolean(v.elevenlabs.voice_id) : st.comfyui.ok, 'Narration',
-    v.engine === 'none' ? 'none' : v.engine === 'elevenlabs' ? `ElevenLabs: ${v.elevenlabs.voice_name || 'no voice chosen'} on ${v.elevenlabs.model_id}${voice.elevenKey(root) ? '' : ', key missing'}` : `this computer: ${st.comfyui.detail}`);
-  row(st.transitions.ok, 'Transitions', st.transitions.ok ? `remotion-transitions: ${st.transitions.detail}` : 'library not installed (mortiflix setup transitions)');
-  row(st.music.engine === 'none' ? null : st.strudel.ok && st.chrome.ok, 'Music', st.music.engine === 'none' ? 'none' : `Strudel: ${st.strudel.detail}; Chrome: ${st.chrome.ok ? 'found' : 'missing'}${st.music.midi ? '; MIDI pack on' : ''}`);
-  row(st.assets.sites.length ? st['browser-harness'].ok : null, 'Assets', st.assets.sites.length ? `${st.assets.sites.map((x) => x.url).join(', ')} (browser-harness ${st['browser-harness'].ok ? st['browser-harness'].detail : 'missing'})` : 'no sites: sessions make every visual themselves');
-  const pubCfg = st.publish;
-  row(pubCfg.service === 'none' ? null : Boolean(pubCfg.key), 'Publishing', pubCfg.service === 'none' ? 'off: you post finals yourself'
-    : `${pub.SERVICES[pubCfg.service].name}${pubCfg.service === 'postiz' ? ` at ${pubCfg.postiz.url}` : pubCfg.profile ? `, profile ${pubCfg.profile}` : ''}${pubCfg.key ? '' : ', key missing'}`);
-  row(st.blender.ok ? st['blender-addons'].ok : null, '3D', st.blender.ok ? `${st.blender.detail}; ${st['blender-addons'].detail}` : 'not set up');
+  row(st.strudel.ok && st.chrome.ok, 'Music engine', `Strudel: ${st.strudel.detail}; Chrome: ${st.chrome.ok ? 'found' : 'missing'}`);
+  row(st.daw.id ? true : null, 'Your DAW', st.daw.name || 'not named: general import steps');
 }
 
 async function setupView(root) {
   const config = loadConfig(root);
   const backend = BACKENDS[config.backend].available(config, root);
-  const { presets, output_formats, servers, ...narration } = voice.voiceOverview(root);
   return {
     backend: { name: config.backend, ...backend },
     backends: Object.fromEntries(Object.entries(BACKENDS).map(([name, b]) => [name, b.available(config, root)])),
-    narration,
     tools: await setup.setupStatus(root),
     parts: setup.PARTS,
     tool_info: setup.TOOL_INFO,
+    daws: setup.DAWS,
   };
 }
 
@@ -931,7 +767,7 @@ async function setupWalk(root, only = null) {
     if (!only && !(await confirm(`  Set up ${part.title.toLowerCase()} now?`, true))) { console.log(C.dim('  Skipped.')); continue; }
     // One part failing (a service down, a refused key) never ends the whole walkthrough.
     try { await setupPart(root, part.id, await setup.setupStatus(root)); }
-    catch (e) { console.log(C.red(`  ✖ ${part.title}: ${e.message}`)); console.log(C.dim(`  Try this part again with: mortiflix setup ${part.id}`)); }
+    catch (e) { console.log(C.red(`  ✖ ${part.title}: ${e.message}`)); console.log(C.dim(`  Try this part again with: mortiflix-music setup ${part.id}`)); }
   }
   console.log();
   await showSetup(root);
@@ -940,27 +776,18 @@ async function setupWalk(root, only = null) {
 async function setupCmd(root, [part, ...args], a) {
   needStudio(root);
   if (part === 'install') {
-    if (!args.length) throw new Error(`mortiflix setup install <${setup.TOOLS.join('|')}>…`);
+    if (!args.length) throw new Error(`mortiflix-music setup install <${setup.TOOLS.join('|')}>…`);
     for (const id of args) if (!setup.TOOLS.includes(id)) throw new Error(`unknown tool "${id}" (${setup.TOOLS.join(', ')})`);
     for (const id of args) await offerInstall(root, id, { ask: false });
     return undefined;
   }
-  if (part === 'music' && args.length) {
-    const m = setup.saveMusic(root, { engine: args[0], midi: a.midi ? true : a['no-midi'] ? false : undefined });
-    return console.log(`${C.green('✔')} Music: ${m.engine === 'none' ? 'none (music steps are skipped)' : `Strudel${m.midi ? ' + MIDI pack' : ''}`}.`);
-  }
-  if (part === 'assets' && (args.length || a.clear)) {
-    setup.saveAssetSites(root, a.clear ? [] : args);
-    const now = setup.assetsConfig(loadConfig(root)).sites;
-    return console.log(now.length ? `${C.green('✔')} Asset sites: ${now.map((x) => x.url).join(', ')}` : 'No asset sites.');
-  }
-  if (part === 'publish' && args.length) {
-    const c = pub.savePublish(root, { service: args[0], url: typeof a.url === 'string' ? a.url : undefined, profile: typeof a.profile === 'string' ? a.profile : undefined });
-    return console.log(c.service === 'none' ? 'Publishing off.' : `${C.green('✔')} Publishing through ${pub.SERVICES[c.service].name}${c.service === 'postiz' ? ` at ${c.postiz.url}` : ''}. Its key: mortiflix keys set ${c.service}`);
+  if (part === 'daw' && args.length) {
+    const d = setup.saveDaw(root, args[0]);
+    return console.log(`${C.green('✔')} ${d.id ? `Your DAW: ${d.name}. Every MIDI pack comes with its import steps.` : 'No DAW named: the import steps are general.'}`);
   }
   if (part === 'status' && a.json) return json(await setupView(root));
   if (part === 'status' || !process.stdin.isTTY) return showSetup(root);
-  if (part && !PART_IDS.includes(part)) throw new Error(`mortiflix setup [${PART_IDS.join('|')}|status]`);
+  if (part && !PART_IDS.includes(part)) throw new Error(`mortiflix-music setup [${PART_IDS.join('|')}|status]`);
   return setupWalk(root, part || null);
 }
 
@@ -986,50 +813,18 @@ function checks(root, [action, id]) {
   if (!all.active.length) console.log(C.dim('  none yet'));
 }
 
-// The narration offer: ElevenLabs always; the local voice when this machine's graphics card can run it.
-function voiceOffer() {
-  const rec = voice.qwen.recommend(voice.qwen.detectGpus());
-  const eleven = `${C.b('mortiflix voice elevenlabs')} for ElevenLabs voices (a key from elevenlabs.io)`;
-  return rec.fits ? `${eleven}, or ${C.b('mortiflix voice local')}: ${rec.reason} Free and private, through ComfyUI.` : `${eleven}.`;
-}
-
-// The recording booth (src/booth.mjs) from a terminal, or importing takes recorded elsewhere.
-async function recordCmd(root, rest, a) {
-  if (a['list-devices']) {
-    const args = rec.listDevicesArgs();
-    if (!args) return console.log('Linux: `pactl list short sources` (PipeWire/PulseAudio) or `arecord -l` (ALSA). Pass one with --device pulse:<name> or --device alsa:hw:1.');
-    spawnSync('ffmpeg', args, { stdio: 'inherit' });
-    return;
-  }
+// The MIDI pack, to a file: every channel, the arrangement, a clip per section, the cue sheet and the DAW's import steps.
+async function midiCmd(root, rest, a) {
   const id = pick(root, rest[0]);
-  if (typeof a.import === 'string') {
-    const r = booth.importFolder(root, id, a.import);
-    for (const t of r.imported) console.log(`  ${C.green('✔')} ${t.line}  ${t.file}  ${(t.duration_ms / 1000).toFixed(1)} s${t.flags.length ? C.red(`  · ${booth.FLAG_ADVICE[t.flags[0]]}`) : ''}`);
-    if (r.missing.length) console.log(`  ${C.red(`${r.missing.length} line(s) had no file`)}: ${r.missing.join(', ')}`);
-    return recordDone(root, id);
-  }
-  await rec.terminalBooth(root, id, { device: typeof a.device === 'string' ? a.device : null });
-  return recordDone(root, id);
-}
-
-async function recordDone(root, id) {
-  const st = booth.boothStatus(root, id);
-  if (st.missing.length) return console.log(`\n${st.kept} of ${st.lines.length} lines kept. Carry on any time: ${C.b(`mortiflix record ${id}`)}`);
-  console.log(`\n${C.green('✔')} Every line has a kept take.`);
-  const p = loadProject(root, id);
-  if (p.state === 'paused' && process.stdin.isTTY && !/^n/i.test((await prompterOnce('Give it to the studio now? [Y/n] ')).trim())) {
-    gates.resume(root, id);
-    console.log('Resumed: the studio builds the narration from your takes.');
-  }
+  const file = typeof a.out === 'string' ? a.out : `${id}-midi.zip`;
+  writeFileSync(file, music.midiPack(root, id));
+  console.log(`${C.green('✔')} ${file}: every channel, the whole arrangement, a clip per section, the cue sheet (tempo and sections are markers)`);
 }
 
 // Music the owner finishes in their own DAW (src/music.mjs): the MIDI pack out, the master in.
 async function musicCmd(root, rest, a) {
   const id = pick(root, rest[0]);
-  if (typeof a.midi === 'string') {
-    writeFileSync(a.midi, music.midiPack(root, id));
-    return console.log(`${C.green('✔')} ${a.midi}: every channel, the whole arrangement, the cue sheet (tempo, sections and hits are markers)`);
-  }
+  if (typeof a.midi === 'string') return midiCmd(root, [id], { out: a.midi });
   if (typeof a.import === 'string') {
     const r = await music.importMaster(root, id, { file: a.import });
     for (const w of r.warnings) console.log(`  ${C.acc('!')} ${w}`);
@@ -1044,113 +839,16 @@ async function musicCmd(root, rest, a) {
   const e = st.expect;
   console.log(`${C.b(e.title || id)}: ${e.bars} bars at ${e.bpm} BPM (${e.meter}) = ${e.seconds} s${e.first_note_sec ? `, first note at ${e.first_note_sec} s` : ''}`);
   console.log(`Finishing: ${st.finish === 'own' ? 'you, from the MIDI pack in your own DAW' : 'Strudel renders it (instruments chosen by the studio)'}`);
-  console.log(st.midi.length ? `MIDI pack: ${st.midi.length} files. Save it with ${C.b(`mortiflix music ${id} --midi pack.zip`)}` : 'MIDI pack: not yet (it comes with a score that passes its check)');
+  console.log(st.midi.length ? `MIDI pack: ${st.midi.length} files. Save it with ${C.b(`mortiflix-music midi ${id}`)}` : 'MIDI pack: not yet (it comes with a score that passes its check)');
   if (st.own) console.log(`Your master: ${st.own.source}, ${st.own.measured.seconds} s, imported ${st.own.imported_at}${st.own.warnings.length ? C.acc(` · ${st.own.warnings.length} warning(s)`) : ''}`);
-  else if (st.finish === 'own') console.log(`Your master: not yet. Export from bar 1 and run ${C.b(`mortiflix music ${id} --import <file>`)}`);
+  else if (st.finish === 'own') console.log(`Your master: not yet. Export from bar 1 and run ${C.b(`mortiflix-music music ${id} --import <file>`)}`);
 }
 
-async function voiceCmd(root, [sub, ...words]) {
-  needStudio(root);
-  const v = voice.voiceConfig(root);
-  if (!sub) {
-    const o = voice.voiceOverview(root);
-    console.log(`Narration: ${C.b({ none: 'none', elevenlabs: 'ElevenLabs', qwen: 'Qwen3-TTS on this computer', own: 'your own voice (the recording booth)' }[o.engine])}`);
-    if (o.engine === 'elevenlabs') console.log(`  voice ${o.elevenlabs.voice_name || C.red('not chosen')} · model ${o.elevenlabs.model_id} · key ${o.elevenlabs_key || C.red('missing')}`);
-    if (o.engine === 'qwen') console.log(`  ${o.qwen.voice} · ${o.qwen.model} · ${o.qwen.language} · ComfyUI ${o.qwen.url}`);
-    console.log(`\nThis machine: ${o.gpus.length ? o.gpus.map((g) => `${g.name} (${g.vram_gb} GB)`).join(', ') : 'no NVIDIA GPU found'}`);
-    console.log(`  ${o.local.reason}`);
-    console.log(`\nOptions: ${voiceOffer()}`);
-    return;
-  }
-  if (sub === 'none') { voice.saveVoice(root, { engine: 'none' }); return console.log('Narration off: videos use on-screen text, music and sound.'); }
-  if (sub === 'own') {
-    voice.saveVoice(root, { engine: 'own' });
-    console.log(`${C.green('✔')} Narration: your own voice. When a video reaches its narration, the studio writes the script as short lines and asks you to record them:`);
-    console.log(`  in the web studio (the project's ${C.b('Record narration')} button), in a terminal (${C.b('mortiflix record <project>')}),`);
-    console.log(`  or from files you recorded elsewhere (${C.b('mortiflix record <project> --import <folder>')}).`);
-    return;
-  }
-  if (sub === 'test') return voiceTest(root, words.join(' '));
-  const rl = prompter();
-  try {
-    if (sub === 'elevenlabs') {
-      if (!voice.elevenKey(root)) {
-        rl.close();
-        if (!(await askKey(root, 'elevenlabs', { required: true }))) throw new Error('no key given');
-        return voiceCmd(root, ['elevenlabs']);
-      }
-      const el = new voice.eleven.ElevenLabs({ key: voice.elevenKey(root), server: v.elevenlabs.server });
-      const a = await el.account();
-      voice.saveVoice(root, { engine: 'elevenlabs', elevenlabs: { tier: a.tier } });
-      console.log(`${C.green('✔')} ${a.tier} plan · ${a.characters_left.toLocaleString()} credits left${a.commercial_use ? ' · commercial use' : C.red(' · free plan: non-commercial, credit ElevenLabs')}`);
-      const search = (await rl.question(`Find a voice (e.g. "warm narrator", blank for all)${v.elevenlabs.voice_name ? C.dim(` [keep ${v.elevenlabs.voice_name}]`) : ''}: `)).trim();
-      if (search || !v.elevenlabs.voice_id) {
-        let { voices: list } = await el.voices({ search, page_size: 15 });
-        let fromLibrary = false;
-        if (!list.length) { list = (await el.library({ search, page_size: 15 })).voices; fromLibrary = true; }
-        if (!list.length) throw new Error('no voices match');
-        list.forEach((x, i) => console.log(`  ${String(i + 1).padStart(2)}. ${C.b(x.name)} ${C.dim(Object.values(x.labels || {}).filter(Boolean).join(' · '))}${fromLibrary ? C.dim(' (Voice Library)') : ''}`));
-        const pick = list[Number((await rl.question('Number: ')).trim()) - 1];
-        if (!pick) throw new Error('no voice picked');
-        const id = fromLibrary ? (await el.addFromLibrary(pick.owner, pick.id, pick.name)).id : pick.id;
-        voice.saveVoice(root, { elevenlabs: { voice_id: id, voice_name: pick.name } });
-      }
-      const models = await el.models();
-      console.log(`Model: ${models.map((m, i) => `${i + 1}. ${m.id}${m.recommended ? C.dim(' (recommended)') : ''}`).join('  ')}`);
-      const m = models[Number((await rl.question(`Number ${C.dim(`[${v.elevenlabs.model_id}]`)}: `)).trim()) - 1];
-      if (m) voice.saveVoice(root, { elevenlabs: { model_id: m.id } });
-      const now = voice.voiceConfig(root).elevenlabs;
-      console.log(`${C.green('✔')} ElevenLabs: ${now.voice_name} on ${now.model_id}. Every other option (stability, format, dictionaries, sound effects, music) is in the web studio's Settings.`);
-      console.log(`  Hear it: ${C.b('mortiflix voice test')}`);
-      return;
-    }
-    if (sub === 'local') {
-      const rec = voice.qwen.recommend(voice.qwen.detectGpus());
-      console.log(rec.fits ? `${C.green('✔')} ${rec.reason}` : C.red(rec.reason));
-      const url = (await rl.question(`ComfyUI address ${C.dim(`[${v.qwen.url}]`)}: `)).trim() || v.qwen.url;
-      const st = await new voice.qwen.ComfyUI({ url }).status();
-      if (!st.ok) {
-        console.log(C.red(st.reason));
-        console.log('  1. Install ComfyUI: https://www.comfy.org/download (it listens on http://127.0.0.1:8188)');
-        console.log('  2. In ComfyUI Manager install "TTS Audio Suite" (github.com/diodiogod/TTS-Audio-Suite), restart ComfyUI');
-        console.log(`  3. Run ${C.b('mortiflix voice local')} again. The Qwen3-TTS models (Apache-2.0) download on first use, about 4 GB.`);
-        voice.saveVoice(root, { qwen: { url } });
-        return;
-      }
-      console.log(`${C.green('✔')} ComfyUI ${st.comfyui || ''} with the TTS Audio Suite · ${st.gpu} · ${st.vram_free_gb} GB free`);
-      st.voices.forEach((name, i) => { const p = voice.qwen.PRESETS.find((x) => x.id === name); console.log(`  ${i + 1}. ${C.b(name)} ${C.dim(p ? `${p.language}: ${p.about}` : '')}`); });
-      const name = st.voices[Number((await rl.question(`Voice ${C.dim(`[${v.qwen.voice}]`)}: `)).trim()) - 1] || v.qwen.voice;
-      voice.saveVoice(root, { engine: 'qwen', qwen: { url, voice: name, model: rec.model || v.qwen.model } });
-      console.log(`${C.green('✔')} Local narration: ${name} on Qwen3-TTS ${rec.model || v.qwen.model}. Hear it: ${C.b('mortiflix voice test')}`);
-      return;
-    }
-    throw new Error('mortiflix voice [elevenlabs|local|none|test]');
-  } finally {
-    rl.close();
-  }
-}
-
-async function voiceTest(root, text) {
-  const v = voice.voiceConfig(root);
-  const line = text || 'Every city has a heartbeat. Ours runs on bikes.';
-  let out;
-  if (v.engine === 'elevenlabs') out = { ...(await new voice.eleven.ElevenLabs({ key: voice.elevenKey(root), server: v.elevenlabs.server }).sample(v.elevenlabs, line)), format: 'mp3' };
-  else if (v.engine === 'qwen') out = await new voice.qwen.ComfyUI({ url: v.qwen.url }).sample(v.qwen, line);
-  else throw new Error('no narration engine set up (mortiflix voice elevenlabs | local)');
-  const file = join(paths(root).run, `voice-test.${out.format}`);
-  writeFileSync(file, out.audio);
-  console.log(`${C.green('✔')} ${file}`);
-  if (spawnSync('ffplay', ['-version']).status === 0) spawnSync('ffplay', ['-nodisp', '-autoexit', '-loglevel', 'error', file], { stdio: 'inherit' });
-}
-
-// The walk-through: a logo sting made by the demo backend, so the whole loop can be tried for free.
 async function demo(root) {
   if (!existsSync(paths(root).config)) await init(root, { yes: true });
-  const logo = join(paths(root).run, 'demo-logo.svg');
-  writeFileSync(logo, '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><circle cx="100" cy="100" r="80" fill="#f97316"/><text x="100" y="118" text-anchor="middle" font-size="56" font-family="sans-serif" fill="#fff">M</text></svg>');
-  const id = await newProject(root, 'logo-sting', { _: [], set: ['mood=calm and premium'], file: [`logo=${logo}`], title: 'Demo sting', backend: 'demo', yes: true });
+  const id = await newProject(root, 'song', { _: [], set: ['genre=trip hop', 'topic=A night drive through a city that never sleeps', 'mood=hazy'], file: [], title: 'Demo song', backend: 'demo', yes: true });
   console.log(`\nThis project uses the ${C.b('demo')} backend (placeholder work, no Claude). Running it now…`);
   await runLoop(root, {});
-  console.log(`\nNext: ${C.b(`mortiflix review ${id}`)} in the terminal, or ${C.b('mortiflix serve')} to review in the browser.`);
+  console.log(`\nNext: ${C.b(`mortiflix-music review ${id}`)} in the terminal, or ${C.b('mortiflix-music serve')} to review in the browser.`);
 }
 

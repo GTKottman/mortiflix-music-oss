@@ -1,4 +1,4 @@
-// One heavy render at a time, studio-wide. Remotion (and anything else that drives Chrome or the GPU) is bound by
+// One heavy render at a time, studio-wide. Strudel renders (and anything else that drives Chrome) are bound by
 // memory: two at once is how a long render gets killed. Sessions queue with `mfx render` and poll with
 // `mfx render-wait`, so no tool call ever blocks longer than its timeout.
 import { spawn } from 'node:child_process';

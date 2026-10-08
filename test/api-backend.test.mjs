@@ -4,8 +4,8 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, mkdirSync, symlinkSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { tempStudio } from './helpers.mjs';
-import { createProject, startProject, addIntakeFile, loadProject } from '../src/projects.mjs';
+import { tempStudio, songAtBlueprint } from './helpers.mjs';
+import { loadProject } from '../src/projects.mjs';
 import { submissions, stepChecks } from '../src/gates.mjs';
 import { Runner } from '../src/runner.mjs';
 import { saveConfig, loadConfig } from '../src/studio.mjs';
@@ -43,18 +43,16 @@ function fakeApi(turns, seen) {
 
 test('the API loop runs bash and the editor, submits through mfx, and ends at the gate', async (t) => {
   const root = tempStudio(t);
-  const p = createProject(root, { pipeline: 'logo-sting', title: 'API sting' });
-  await addIntakeFile(root, p.id, { field: 'logo', name: 'logo.svg', buffer: Buffer.from('<svg/>') });
-  startProject(root, p.id);
-  const checks = stepChecks(root, p.id, 'directions').map((c) => ({ id: c.id, result: 'pass' }));
-  const submission = { note: 'Three directions.', items: [{ path: 'out/a.png', label: 'A · Draws itself' }], error_checks: checks, questions: [{ id: 'pick', text: 'Which one?', choices: ['A'], default: 'A' }] };
+  const p = { id: (await songAtBlueprint(root, { title: 'API song' })).id };
+  const checks = stepChecks(root, p.id, 'blueprint').map((c) => ({ id: c.id, result: 'pass' }));
+  const submission = { note: 'The plan.', items: [{ path: 'out/plan.md', label: 'Blueprint · Night drive' }], error_checks: checks, questions: [{ id: 'pick', text: 'Which tempo?', choices: ['90'], default: '90' }] };
   const seen = [];
   const turns = [
     { blocks: [{ type: 'text', text: 'Reading the brief.' }, { type: 'tool_use', id: 'tu1', name: 'str_replace_based_edit_tool', input: { command: 'view', path: 'CLAUDE.md' } }], stop: 'tool_use' },
-    { blocks: [{ type: 'tool_use', id: 'tu2', name: 'bash', input: { command: 'mkdir -p out && printf png > out/a.png && cd out && pwd' } }], stop: 'tool_use' },
+    { blocks: [{ type: 'tool_use', id: 'tu2', name: 'bash', input: { command: 'mkdir -p out && printf "# Plan\\n" > out/plan.md && cd out && pwd' } }], stop: 'tool_use' },
     { blocks: [{ type: 'tool_use', id: 'tu3', name: 'str_replace_based_edit_tool', input: { command: 'create', path: 'submission.json', file_text: JSON.stringify(submission) } }], stop: 'tool_use' },
     // The shell is persistent: we're still in out/ from the last command.
-    { blocks: [{ type: 'tool_use', id: 'tu4', name: 'bash', input: { command: 'cd .. && mfx submit directions submission.json && mfx handoff "Sent three directions."' } }], stop: 'tool_use' },
+    { blocks: [{ type: 'tool_use', id: 'tu4', name: 'bash', input: { command: 'cd .. && mfx submit blueprint submission.json && mfx handoff "Sent the blueprint."' } }], stop: 'tool_use' },
     { blocks: [{ type: 'text', text: 'Submitted; stopping at the gate.' }], stop: 'end_turn' },
   ];
   saveConfig(root, { backend: 'anthropic-api', webTools: false });
@@ -71,7 +69,7 @@ test('the API loop runs bash and the editor, submits through mfx, and ends at th
 
   const project = loadProject(root, p.id);
   assert.equal(project.state, 'waiting', JSON.stringify(activity));
-  assert.equal(submissions(root, p.id)[0].items[0].label, 'A · Draws itself');
+  assert.equal(submissions(root, p.id)[0].items[0].label, 'Blueprint · Night drive');
   assert.equal(seen.length, 5);
   // Request shape: adaptive thinking, effort, caching, compaction, fallbacks, the bash + editor tools.
   const req = seen[0];
@@ -82,7 +80,7 @@ test('the API loop runs bash and the editor, submits through mfx, and ends at th
   assert.equal(req.context_management.edits[0].type, 'compact_20260112');
   assert.equal(req.fallbacks, 'default');
   assert.deepEqual(req.tools.map((x) => x.type), ['bash_20250124', 'text_editor_20250728']);
-  assert.match(req.messages[0].content, /# Mortiflix project: API sting/);
+  assert.match(req.messages[0].content, /# Mortiflix Music project: API song/);
   // Tool results came back to the model, and the cd persisted across commands.
   const results = seen[2].messages.at(-1).content;
   assert.match(results[0].content, /\/out$/);

@@ -1,9 +1,9 @@
-// Music the owner finishes themselves. The studio writes the score in Strudel and hands over its MIDI (every channel,
-// the arrangement, the cue sheet); the owner gives every channel its sound in their own DAW, mixes, exports from bar 1,
-// and imports the master here. For videos this is the recommended way: Strudel's render is the stand-in until it arrives.
+// The MIDI the studio hands over, and music the owner finishes themselves. The studio writes the score in Strudel and
+// hands over its MIDI (every channel, the arrangement, a clip per section, the cue sheet); the owner gives every channel
+// its sound in their own DAW, mixes, exports from bar 1, and imports the master here when the brief says they finish it.
 //
-// Two ways in, both through this module: the web studio (the project's Music panel) and
-// `mortiflix music <project> --import <file>`.
+// Two ways in, both through this module: the web studio (the project's MIDI panel) and
+// `mortiflix-music music <project> --import <file>`.
 //
 //   projects/<id>/music/blueprint.json       the plan (tempo, meter, bars): what the master must fit
 //   projects/<id>/music/notes.json           the score's MIDI, captured by the music engine (the first note's time)
@@ -13,7 +13,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, copyFileSync, readdirSync } from 'node:fs';
 import { join, extname, basename } from 'node:path';
 import { tmpdir } from 'node:os';
-import { REPO, UserError, writeJson } from './studio.mjs';
+import { REPO, UserError, writeJson, loadConfig } from './studio.mjs';
+import { dawConfig } from './setup.mjs';
 import { projectPaths, loadProject, event, now } from './projects.mjs';
 import { zip, dirEntries } from './zip.mjs';
 
@@ -51,7 +52,16 @@ export function musicStatus(root, id) {
   const p = loadProject(root, id); const mp = musicPaths(root, id);
   const midi = existsSync(mp.midi) ? readdirSync(mp.midi).filter((f) => /\.(mid|md)$/.test(f)).sort() : [];
   return { finish: finishesOwnMaster(p) ? 'own' : 'strudel', expect: expectation(root, id), midi, sheet: existsSync(mp.sheet),
-    own: readJ(mp.report), state: p.state, needs_you: p.needs_you || null };
+    own: readJ(mp.report), state: p.state, needs_you: p.needs_you || null, daw: dawConfig(loadConfig(root)).name };
+}
+
+// The captured score for the piano roll: every channel's notes (in beats), the tempo and meter, and the blueprint's
+// sections as markers.
+export function musicNotes(root, id) {
+  const mp = musicPaths(root, id);
+  const notes = readJ(mp.notes);
+  if (!notes) throw new UserError('there are no notes yet: the studio captures them once the score passes its check');
+  return { ...notes, sections: readJ(mp.blueprint)?.sections || [] };
 }
 
 // The MIDI pack as one zip: every channel, the arrangement, the cue sheet, and the music sheet.

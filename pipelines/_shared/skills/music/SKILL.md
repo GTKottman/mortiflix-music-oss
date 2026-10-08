@@ -1,31 +1,31 @@
 ---
 name: music
-description: The music engine, for a song or a video's score. Strudel writes the notes, every part on its own MIDI channel; the engine checks them (harmony lock, the story's intensity curve, hits on the picture), captures them as MIDI, then an instrument is chosen for every channel from its real notes and auditioned, and the piece is rendered and mastered, or finished by the owner in their own DAW from the MIDI pack. Use for any music step, a song, or a change to music.
+description: The music engine. Strudel writes the notes, every part on its own MIDI channel; the engine checks them (harmony lock, the story's intensity curve, clean loops for a loop kit), captures them as MIDI (every channel, the arrangement, a clip per section, the cue sheet with the owner's DAW steps), then an instrument is chosen for every channel from its real notes and auditioned, and the piece is rendered and mastered, or finished by the owner in their own DAW from the MIDI pack. Use for any music step, a song, a MIDI pack, a loop kit, or a change to music.
 ---
 
 # Music
 
-One engine makes all of Mortiflix's music, a song or a video's score. It works in stages; each stage writes a file,
+One engine makes all of Mortiflix Music's music: a song, a MIDI pack or a loop kit. It works in stages; each stage writes a file,
 the engine checks it, and nothing moves on until the check passes. **The notes and the sounds are separate**: the
 score is only music (notes on channels), its MIDI is captured, and only then is an instrument chosen for every channel.
 So the same MIDI can be played by Strudel or taken into any DAW.
 
 ```
 genre ─▶ blueprint ─▶ score ─▶ MIDI ─▶ instruments ─▶ audition ─▶ master
-(songs)    the plan    notes    every     a sound per     each sound     Strudel's render, mastered
+           the plan    notes    every     a sound per     each sound     Strudel's render, mastered
                        only     channel   channel, from   across its     ─ or ─
                                           its real notes  range          the owner's own, from the MIDI pack
 ```
 
 | Stage | You write | The engine (`node $M <command>`) | It writes |
 |---|---|---|---|
-| Genre (songs) | `music/genre.json` | `genre`: every field, 5+ sources, hook and beat elements | `music/GENRE.md` |
+| Genre | `music/genre.json` | `genre`: every field, 5+ sources, hook and beat elements | `music/GENRE.md` |
 | Blueprint | `music/blueprint.json` | `plan`: sections, chart, roles/channels, genre signature, length | `music/BLUEPRINT.md` |
-| Score | `music/score.strudel.js` | `check`: harmony lock, intensity curve, hits, nothing past the end | `music/check.json` |
-| MIDI | (nothing: it's captured) | `check`, once it passes | `music/notes.json`, `out/music/midi/` |
+| Score | `music/score.strudel.js` | `check`: harmony lock, intensity curve, nothing past the end, clean loops (loop kits) | `music/check.json` |
+| MIDI | (nothing: it's captured) | `check`, once it passes | `music/notes.json`, `out/music/midi/` (+ `sections/`, `CUE-SHEET.md`) |
 | Instruments | `music/instruments.json` | `instruments`: every channel, register clashes, palette rules | `music/instruments-check.json` |
 | Audition | (nothing) | `audition`: lowest, middle, highest note of every part | `out/music/audition/*.wav` |
-| Master | (nothing) | `master` (songs) or `render` (a video's stand-in) | `out/music/master.wav`, `.mp3`, `stems/` |
+| Master | (nothing) | `master` (the studio's finish) or `render` (a sketch to listen to) | `out/music/master.wav`, `.mp3`, `stems/` |
 | Owner's master | (the owner imports it) | `own-master`: is it there, does it fit | `music/own-master/` |
 
 After every command the engine rewrites **`music/MUSIC-SHEET.md`**: every channel with its range, instrument, level,
@@ -36,23 +36,27 @@ session) sees exactly how the music was made. `node $M sheet` rewrites it on dem
 M=.claude/skills/music/strudel.mjs
 ```
 
-Read `craft/genre-research.md` before a genre, `craft/picture-scoring.md` before a video's first blueprint,
-`craft/melody-craft.md` before writing the motif, `craft/harmony-lock.md` before the score, and
+`render`, `master` and `audition` render audio, so they go through the studio's render queue:
+`mfx render --label "master" -- node $M master`, then `mfx render-wait <id>` until it's done (`.mortiflix/GATES.md`).
+The other commands run directly.
+
+Read `craft/genre-research.md` before a genre, `craft/melody-craft.md` before writing the motif, `craft/harmony-lock.md` before the score, and
 `craft/rich-voicing.md` once the lock passes.
 
 ## 0. What the owner set up
 
-`$MFX_MUSIC` is `{"engine": "strudel" | "none", "midi": true | false}`. Strudel is at `$MFX_STRUDEL`, and renders in
-the Chrome at `$MFX_CHROME`. If either is missing: `mfx needs-you "Music isn't set up: run mortiflix setup music,
+Strudel is at `$MFX_STRUDEL`, and runs in the Chrome at `$MFX_CHROME`. `$MFX_DAW` names the owner's DAW (`ableton`,
+`fl`, `logic`, `reaper`, `bitwig`, `cubase`, `studioone`, `garageband`, `protools`), when they named one: the cue sheet's
+import steps are written for it. If either is missing: `mfx needs-you "Music isn't set up: run mortiflix-music setup music,
 then resume."` Never improvise music any other way, and never use another engine.
 
-**Who finishes the music** comes from the brief (the `music` or `finish` answer):
-- **"…I'll finish it from the MIDI"** (recommended for videos): the studio writes and checks the score, chooses
-  stand-in instruments so it can be reviewed against the picture, and hands over the MIDI pack; the owner makes the
-  final sound in their own DAW and imports the master (section 9).
-- **"…rendered by Strudel"**: the studio finishes it: instruments, audition, render, mix.
+**Who finishes the music** comes from the pipeline and the brief (the `finish` answer):
+- **The owner, from the MIDI**: the studio writes and checks the score, chooses sketch instruments so it can be
+  heard, and hands over the MIDI pack; the owner makes the final sound in their own DAW (and, in a song, imports the
+  master: section 9).
+- **The studio, in Strudel**: instruments, audition, render, master.
 
-## 1. The genre (songs)
+## 1. The genre
 
 Research the genre into `music/genre.json` (the format and the method: `craft/genre-research.md`), then
 `node $M genre` until it passes. A song is written **from** its genre: its tempo range, lineup, beat grids, harmony,
@@ -60,83 +64,50 @@ hook traits and, above all, its unforgettable elements.
 
 ## 2. Read the drama
 
-Write in `music/SPOTTING.md` (videos) or at the top of the blueprint (songs):
+Write it at the top of the blueprint:
 
-- **The dramatic reading** in one sentence, as a transformation: `confusion -> recognition -> confidence`. For a song,
-  it's the topic translated into audible behaviour: what the listener feels change from the first bar to the last.
-- **What the music must not do**: compete with the voice, hit every cut, explain what the picture already says
-  (videos); copy a reference, pile up unrelated ideas, stay at one level (songs).
+- **The dramatic reading** in one sentence, as a transformation: `confusion -> recognition -> confidence`: the topic
+  translated into audible behaviour, what the listener feels change from the first bar to the last.
+- **What the music must not do**: copy a reference, pile up unrelated ideas, stay at one level.
 
-## 3. Spot the picture (videos)
-
-Build the spotting map from the **real timing**: `voice/timing.json` (every line and word), the animatic's cut and
-beat list (`video/src/timing.ts` or its plan), and its length (ffprobe). One row per event that changes meaning:
-
-```
-time    | event                         | significance            | response
-0.00    | black, first word             | establish               | pad alone, low register
-8.40    | "...for the first time."      | the problem lands       | aftermath: drop out for a bar
-31.20   | logo resolves                 | structural: the turn    | direct hit, tonic arrival
-```
-
-Classify each as structural, dramatic, physical or optional, and choose for each: **direct hit**, **anticipation**
-(change just before), **aftermath** (let the image land, then react) or **no hit**. Hit the few that change meaning,
-not every cut.
-
-### Map the tempo
-
-Choose the BPM (and `offset_sec`, where bar 1 starts in the video) so the structural hits fall on bar lines or strong
-beats: `seconds per bar = beats_per_bar × 60 / BPM`. Test tempos, don't force awkward bars:
-
-```js
-// candidate tempos, scored by how far each hit lands from its nearest beat
-for (let bpm = 70; bpm <= 140; bpm += 0.5) { const beat = 60 / bpm; const err = hits.map((t) => Math.abs(((t - off) / beat) - Math.round((t - off) / beat)) * beat); /* keep the smallest max(err) */ }
-```
-
-A minor event may sit between beats. If one tempo can't serve the structural hits, move `offset_sec`, or use a
-pickup, a held bar or a section of a different length inside the music, never a tempo that drifts.
-
-## 4. The blueprint: `music/blueprint.json`
+## 3. The blueprint: `music/blueprint.json`
 
 ```json
 {
-  "title": "a real title", "bpm": 96, "meter": "4/4", "bars": 48, "scale": "D:dorian", "offset_sec": 0.6,
+  "title": "a real title", "bpm": 96, "meter": "4/4", "bars": 48, "scale": "D:dorian",
   "dramatic_reading": "confusion -> recognition -> confidence",
-  "style": "songs: one dense line of descriptors, under 1000 characters: genre, instruments and their roles, groove, mood",
+  "style": "one dense line of descriptors, under 1000 characters: genre, instruments and their roles, groove, mood",
   "genre_signature": [ { "id": "dusty-breakbeat", "carries": "beat", "how": "half-time break, ghosted snares", "where": "from bar 9" } ],
   "motif": { "rhythm": "...", "contour": "...", "length_bars": 2, "role": "Glass hook", "returns": ["bar 17, an octave up", "bar 41, augmented"] },
   "sections": [
-    { "name": "The quote that comes back", "start_bar": 1, "end_bar": 8, "function": "establish: pad and sub only, the motif withheld", "intensity": 2, "picture": "the $5,400 price counts up" }
+    { "name": "Headlights on wet glass", "start_bar": 1, "end_bar": 8, "function": "establish: pad and sub only, the motif withheld", "intensity": 2 }
   ],
-  "hits": [ { "t_sec": 31.2, "bar": 13, "beat": 1, "kind": "direct", "what": "logo resolves" } ],
   "chart": [ { "bars": [1, 8], "chords": ["Dm9", "Cmaj7", ["Gm7", "A7sus4"], "Dm9"] } ],
   "roles": [ { "channel": 1, "harmony": "bass", "name": "Sub", "job": "roots, the floor", "instrument_idea": "sine, low-passed" } ],
-  "ending": "how it ends and why (a held chord under the end card, or a question left unresolved)"
+  "ending": "how it ends and why (a held chord that fades, or a question left unresolved)"
 }
 ```
 
-Videos use `offset_sec`, `hits` and `picture`; songs use `style` and `genre_signature` (and leave the others out).
+A loop kit adds `"loops": true` and `"length_fixed": true`: every section is then one loop (see section 6).
 
 Decide in this order: the motif and hook (melody craft) → tempo, meter and scale → the chart → the roles → the story.
 
 - **Sections** cover bars 1..bars, contiguous. Names are specific and story-bearing, never "Intro/Verse/Chorus/A/B"
   (a returning idea is "Return of …"). Each `function` says what happens: establish, develop, destabilise,
   withhold, release, reinterpret, resolve, and what rises or is held back.
-- **`intensity` (0-10) is the energy curve**, section by section (a video's follows the picture): the check measures
+- **`intensity` (0-10) is the energy curve**, section by section: the check measures
   each section (parts playing, notes per beat, velocity, range) and fails if the order disagrees. Builds really build;
   breakdowns really thin out. Don't raise everything at once: contrast makes intensity legible.
-- **Under speech**, keep the speech-critical register (roughly 300 Hz–3 kHz) clear: simpler lines, sustained
-  material, rests. The music opens up in the gaps between lines and after the last word.
 - **The chart** is built from the scale's own chords; borrowed colours where they serve the story. Vary the harmony
   across sections, and slow the harmonic rhythm to suspend time, speed it up to drive.
 - **Roles**: 3 to 10, each on **its own MIDI channel** 1–16 (drums on 10), with a vivid name, a job in the story, and
   an `instrument_idea` (the instruments stage chooses the real sound).
-- **Songs**: the `genre_signature` names which of the genre's unforgettable elements carry the hook and the beat; the
+- **The `genre_signature`** names which of the genre's unforgettable elements carry the hook and the beat; the
   length comes from the genre's `length` unless the brief fixed it (then `"length_fixed": true`).
 
-`node $M plan` checks it and writes `music/BLUEPRINT.md`, the readable version (it's what the owner reviews for a song).
+`node $M plan` checks it and writes `music/BLUEPRINT.md`, the readable version (it's what the owner reviews).
 
-## 5. The score: `music/score.strudel.js`, notes only
+## 4. The score: `music/score.strudel.js`, notes only
 
 ```js
 setcpm(96 / 4)                                      // BPM / beats per bar: one cycle is one bar
@@ -159,20 +130,42 @@ drums: cue(note("[36 ~ ~ 36 38 ~ 36 ~], [42*8]").velocity("<.8 .95>").mask(lift)
 - **Sections** are masks or `<…>` sequences with one value per bar, aligned to the blueprint's bars. Name each mask
   after its section.
 
-## 6. Check it, and capture the MIDI
+## 5. Check it, and capture the MIDI
 
 ```
-node $M check [--video-sec <animatic length> --fps <fps>]
+node $M check
 ```
 
-It reports the harmony lock, every hit's distance from its frame, parts that play past the end, roles that never
-play, and **the intensity curve**: a sparkline per section, asked vs measured. Iterate until **0 problems**. Then read
-the curve against the story: does it rise where it should, does it hold back under the busiest narration?
+It reports the harmony lock, parts that play past the end, roles that never play, and **the intensity curve**: a
+sparkline per section, asked vs measured. Iterate until **0 problems**. Then read the curve against the story: does it
+rise where it should, does it thin out where it should?
 
 When it passes, the score's notes become **the MIDI**: `music/notes.json` (every channel's notes in beats, with
-velocity) and `out/music/midi/` (one `.mid` per channel, the whole arrangement in one file, tempo, meter, section names
-and hit points as markers, and `CUE-SHEET.md`). From here on the MIDI is the music: the instruments are chosen from it,
-and the owner can take it into any DAW. The check also prints where each channel plays (lowest, middle, highest note).
+velocity) and `out/music/midi/`:
+
+- `<title>-all.mid`: the whole arrangement, one track per channel, tempo, meter and section names as markers;
+- `NN-<part>.mid`: each channel on its own;
+- `sections/NN-<section>/`: a clip per section, its notes moved to start at the section's own bar 1 (every channel
+  alone, and all of them together), to drop into a DAW or loop;
+- `CUE-SHEET.md`: tempo, key, sections, channels with their ranges, the chord chart, and the steps to bring it into
+  the owner's DAW (`$MFX_DAW`);
+- `out/music/midi.zip`: all of it as one file.
+
+From here on the MIDI is the music: the instruments are chosen from it, and the owner can take it into any DAW. The
+check also prints where each channel plays (lowest, middle, highest note).
+
+## 6. Loop kits
+
+With `"loops": true` every section is a loop the owner will repeat in their DAW, and the check adds what that needs:
+
+- **No note rings past its loop's end.** A tail that crosses the loop point is cut in a DAW, or doubles on the next
+  pass: end held notes before the boundary.
+- **Every loop plays.** An empty loop fails.
+- **Lengths that sit on the grid.** 1, 2, 4, 8 or 16 bars; anything else is a warning.
+
+Each loop is still part of a story (its `intensity`, its `function`): a kit is a family of variations, e.g. the groove
+bare, then with the hook, then the hook answered, then a breakdown, so the owner can arrange them into a track. The
+clips in `sections/` are the kit.
 
 ## 7. Instruments: a sound for every channel
 
@@ -218,60 +211,40 @@ mix. Fix and audition again until it passes.
 
 ## 8. Render and master
 
-- **A song**: `node $M master` renders the score with its instruments (`out/music/mix.wav`), renders every channel's
+- **The studio's finish**: `node $M master` renders the score with its instruments (`out/music/mix.wav`), renders every channel's
   stem (`out/music/stems/`), checks no part is silent or clipping alone, measures the mix's balance (low end, mud,
   width), and masters to -14 LUFS with the true peak at or below -1 dBTP: `out/music/master.wav` and `.mp3`. Act on
   its balance notes (they come from measurements: a muddy mix, a thin low end, a narrow image) by changing
   `instruments.json` (levels, pans, filters), then master again.
-- **A video's stand-in**: `node $M render [--stems]` writes `out/music/score.wav` with the instruments, for the
-  review against the picture.
+- **A sketch** (when the owner finishes it from the MIDI): `node $M render [--stems]` writes `out/music/score.wav` with
+  the instruments, so the owner can hear the notes before they take them into their DAW.
 
 You can't hear the render. Look at it: `ffmpeg -i out/music/master.wav -lavfi showspectrumpic=s=1600x400
 music/spectrum.png` (each section's density and register should be visible where the blueprint put them). Say in the
 note that these are measurements, not listening.
 
-### Mixing a video's music under the voice
-
-The music starts at `offset_sec`. Duck it under the speech and finish at the delivery loudness:
-
-```
-ffmpeg -i voice/voice.wav -i <the music> -filter_complex \
- "[0:a]asplit=2[v1][v2];[1:a]adelay=600|600,volume=-4dB[m];[m][v1]sidechaincompress=threshold=0.03:ratio=8:attack=20:release=450[duck];\
-  [v2][duck]amix=inputs=2:normalize=0[mix];[mix]loudnorm=I=-14:TP=-1.5:LRA=11" -ar 48000 audio/mix.wav
-```
-
-(`adelay` is `offset_sec` in milliseconds; `<the music>` is the owner's master when there is one, otherwise
-`out/music/score.wav`.) Music sits about 18 dB under the voice while it speaks and comes up in the gaps. Sound effects
-go on top, sparingly: when an effect already lands an impact, the music prepares or answers it instead of doubling it.
-
-## 9. The owner's own master (recommended for videos)
+## 9. The owner's own master
 
 When the brief says the owner finishes the music from the MIDI:
 
-1. The music step goes to review as usual, with the stand-in render (sections 7–8), so the owner judges the notes and
-   the timing against the picture.
+1. The song goes to review as usual, with the sketch render (sections 7–8), so the owner judges the notes.
 2. Once it's approved, `node $M own-master`. If there is no master yet: `mfx needs-you "The score is approved. On the
-   project page, Music › Download MIDI: give each channel its sound in your DAW, mix, export from bar 1 to the end,
-   then Import your master (or: mortiflix music <project> --import <file>)."` Importing resumes the project.
+   project page, MIDI › Download MIDI: give each channel its sound in your DAW, mix, export from bar 1 to the end,
+   then Import your master (or: mortiflix-music music <project> --import <file>)."` Importing resumes the project.
 3. When it's there, `own-master` reports how it fits: its length against the score, and whether its first sound
-   arrives with the MIDI's first note (a master that starts late puts every hit late). Pass its warnings on in the next
-   note. Use `music/own-master/master.wav` as the music from then on; never re-render over it.
+   arrives with the MIDI's first note. Pass its warnings on in the next note. Use `music/own-master/master.wav` as the music from then on; never re-render over it.
 
 ## 10. Submitting
 
-- **A video's music step**: the animatic with the music mixed in (video: the owner judges the music against the
-  picture), the music alone, and `music/MUSIC-SHEET.md`. The note: the dramatic reading, the hits and how each is
-  played, the intensity sparklines from the check, and (when the owner finishes it) that the MIDI pack is ready on the
-  project page.
-- **A song**: the steps are in the song pipeline's `PIPELINE.md`.
+What each step sends is in its pipeline's `PIPELINE.md`. A `.mid` item shows as a piano roll in the review room; an
+audio item as a player.
 
-At most one question, with a default. Notes on music come back as times: the bar is
-`floor((t - offset_sec) / seconds_per_bar) + 1`. Change the blueprint first when the note is about the story, then
+At most one question, with a default. Notes on music come back as times (on a piano roll too): the bar is
+`floor(t / seconds_per_bar) + 1`. Change the blueprint first when the note is about the story, then
 the score; run the check again (it recaptures the MIDI), then the instruments.
 
 ## 11. The MIDI pack
 
-The MIDI is always written (section 6). When `$MFX_MUSIC` has `"midi": true`, or the owner finishes the music
-themselves, the final delivery also carries `out/music/midi/` and the stems (`render --stems`) so the owner can remake
-or extend the music in their own DAW. The owner downloads it from the project page (Music › Download MIDI) or with
-`mortiflix music <project> --midi pack.zip`.
+The MIDI is always written (section 5) and always delivered: `out/music/midi.zip` goes with every final, with the
+stems when the studio rendered them. The owner downloads it from the project page (MIDI › Download MIDI) or with
+`mortiflix-music midi <project>`.

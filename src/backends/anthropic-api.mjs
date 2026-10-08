@@ -1,5 +1,5 @@
 // Backend: the Claude API with your own Anthropic API key. Mortiflix runs the agent loop itself: a persistent bash
-// shell in the project folder, a file editor confined to that folder (which can also *show* Claude the frames it
+// shell in the project folder, a file editor confined to that folder (which can also *show* Claude the images it
 // rendered, for visual QC), and optionally web search + fetch. Long sessions stay inside the context window with
 // server-side compaction; the stable prefix is prompt-cached.
 import Anthropic from '@anthropic-ai/sdk';
@@ -12,8 +12,9 @@ import { REPO, readSecret, isInside } from '../studio.mjs';
 export const name = 'anthropic-api';
 export const DEFAULT_MODEL = 'claude-opus-5-5';
 
-const SYSTEM = `You are a production session in Mortiflix, a motion design studio that runs on one machine. You make
-videos step by step through a pipeline for the studio's owner, one person who approves every reviewed step.
+const SYSTEM = `You are a production session in Mortiflix Music, a music studio that runs on one machine. You make
+music (songs, MIDI for the owner's DAW, loop kits) step by step through a pipeline for the studio's owner, one person
+who approves every reviewed step.
 
 There is no human in this conversation. Nobody will answer if you ask here: the owner only sees what you send
 with \`mfx\` (submissions, questions, status lines). So work on your own, keep going through setbacks, and stop only
@@ -21,7 +22,7 @@ at a gate, exactly as the project's CLAUDE.md and .mortiflix/GATES.md describe.
 
 Your tools: \`bash\` runs in a persistent shell in the project folder (each command may take up to 10 minutes; heavy
 renders go through \`mfx render\` + \`mfx render-wait\`), and the file editor reads and writes files in the project folder.
-Viewing an image file with the editor shows you the picture: use it to check frames you render.
+Viewing an image file with the editor shows you the picture: use it to check a spectrum you render.
 
 End your turn only after \`mfx handoff\`.`;
 

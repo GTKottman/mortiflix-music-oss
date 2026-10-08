@@ -172,3 +172,37 @@ export function intensityChart(report) {
     return `${s.name.slice(0, 28).padEnd(28)} bars ${String(s.bars[0]).padStart(3)}-${String(s.bars[1]).padEnd(3)} asked ${String(s.asked).padStart(2)}  measured ${String(s.measured).padStart(5)}  ${spark}`;
   }).join('\n');
 }
+
+// Each section as a range of beats: [start, end), with its number and name.
+export function sectionRanges(bp) {
+  const bpb = beatsPerBar(bp.meter || '4/4');
+  return (bp.sections || []).map((s, i) => ({ n: i + 1, name: s.name, start: (s.start_bar - 1) * bpb, end: s.end_bar * bpb, bars: s.end_bar - s.start_bar + 1 }));
+}
+
+// A section's notes, moved to start at beat 0 and cut at its end: a clip to drop into a DAW.
+export function clipOf(track, range) {
+  const notes = track.notes.filter((n) => n.start >= range.start - 1e-9 && n.start < range.end - 1e-9)
+    .map((n) => ({ ...n, start: +(n.start - range.start).toFixed(6), dur: +Math.min(n.dur, range.end - n.start).toFixed(6) }));
+  return { ...track, notes };
+}
+
+// A loop kit (blueprint "loops": true): every section is a loop that has to repeat cleanly. A note that rings past its
+// loop's end would be cut (or would bleed into the next pass), so it's a problem; a loop whose length isn't 1, 2, 4, 8
+// or 16 bars still loops, but sits awkwardly in a DAW's grid.
+export function checkLoops(manifest, bp) {
+  const errors = []; const warnings = [];
+  const bpb = beatsPerBar(bp.meter || '4/4');
+  for (const r of sectionRanges(bp)) {
+    if (![1, 2, 4, 8, 16].includes(r.bars)) warnings.push(`loop "${r.name}" is ${r.bars} bars: 1, 2, 4, 8 or 16 bars sit cleanly on a DAW's grid`);
+    for (const t of manifest.tracks) {
+      const over = t.notes.filter((n) => n.start >= r.start - 1e-9 && n.start < r.end - 1e-9 && n.start + n.dur > r.end + 1e-6);
+      if (over.length) {
+        const n = over[0]; const bar = Math.floor(n.start / bpb) + 1; const beat = +((n.start % bpb) + 1).toFixed(2);
+        errors.push(`${t.name} (ch ${t.channel}): ${over.length} note${over.length === 1 ? ' rings' : 's ring'} past the end of loop "${r.name}" (first at bar ${bar} beat ${beat}): shorten ${over.length === 1 ? 'it' : 'them'} so the loop repeats cleanly`);
+      }
+    }
+    const silent = manifest.tracks.every((t) => !t.notes.some((n) => n.start >= r.start - 1e-9 && n.start < r.end - 1e-9));
+    if (silent) errors.push(`loop "${r.name}" (bars ${r.start / bpb + 1}-${r.end / bpb}) has no notes at all`);
+  }
+  return { errors, warnings };
+}
