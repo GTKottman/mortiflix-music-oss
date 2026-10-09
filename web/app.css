@@ -506,11 +506,10 @@ details.activity[open] > summary h2::after { content: "▾"; }
 .layers li.new { color: var(--accent); font-weight: 500; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .lanes { margin-top: 12px; }
-.lane-roll .lane-body { position: relative; cursor: pointer; }
+.lane-roll .lane-body { position: relative; cursor: pointer; padding-top: 18px; }
 .lane-roll .lane-over { position: absolute; left: 96px; right: 0; top: 0; bottom: 0; pointer-events: none; }
 .lane-sections { position: relative; height: 18px; font-size: 11px; color: var(--faint); }
 .lane-sections span { position: absolute; top: 0; padding-left: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 18%; }
-.lane-roll .lane-body > .lane:first-of-type { margin-top: 18px; }
 .lane { display: grid; grid-template-columns: 96px 1fr; align-items: center; height: 24px; }
 .lane-name { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 8px; }
 .lane.fresh .lane-name { color: var(--accent); }
