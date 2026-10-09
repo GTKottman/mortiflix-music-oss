@@ -441,6 +441,8 @@ async function projectView(id) {
       h('a', { class: 'btn primary', href: `#/p/${id}/review/${s.key}` }, 'Review'));
   } else if (openQs.length) {
     stateBlock = h('div', { class: 'turn-line' }, h('div', null, h('div', { class: 'what' }, openQs.length === 1 ? 'A question for you' : `${openQs.length} questions for you`), h('div', { class: 'why' }, 'Answer below; the studio carries on as soon as you do.')));
+  } else if (p.state === 'queued' && p.session?.running) {
+    stateBlock = buildingCard(id, p, d, ms, currentStep);
   } else if (p.state === 'queued') {
     stateBlock = h('div', { class: 'state-line' }, p.session?.running ? h('span', { class: 'pulse' }) : icon('ready'),
       p.session?.running ? `Claude is working on ${currentStep?.name || 'it'}` : 'Waiting for its turn',
@@ -526,6 +528,112 @@ async function projectView(id) {
   for (const det of document.querySelectorAll('details[data-key]')) if (open.has(det.dataset.key)) det.open = true;
   log.scrollTop = log.scrollHeight;
   current.refresh = () => projectView(id);
+}
+
+// ---------- watching it being built ----------
+
+// While Claude works: what it's doing now, in plain words; where that is among the steps; and the song so far, a layer
+// at a time as the score is written (strudel.mjs draft), playable. A new layer reloads the player where it was.
+function buildingCard(id, p, d, ms, step) {
+  const doneStates = ['approved', 'done', 'skipped'];
+  const strip = h('ol', { class: 'step-strip', 'aria-label': 'Steps' }, d.steps.map((s) => {
+    const where = doneStates.includes(s.state) ? 'done' : s.key === step?.key ? 'now' : 'next';
+    return h('li', { class: where, 'aria-current': where === 'now' ? 'step' : null }, s.name);
+  }));
+  const since = p.session?.started_at ? `Started ${ago(p.session.started_at)}` : '';
+  const card = h('section', { class: 'building' },
+    h('div', { class: 'now-line', 'aria-live': 'polite' }, h('span', { class: 'pulse', 'aria-hidden': 'true' }),
+      h('div', null, h('div', { class: 'what' }, p.status?.text || `Claude is working on ${step?.name || 'it'}`),
+        since ? h('div', { class: 'why' }, since) : null)),
+    strip);
+  const dr = ms?.draft;
+  // A draft from an earlier version stays out of the way once that version's MIDI is captured and checked.
+  if (!dr || (dr.check?.ok && !(step && ['score'].includes(step.key)))) return card;
+  const label = `${p.title} · so far`;
+  const pid = `${id}/draft`;
+  const lanes = h('div', { class: 'lanes' }, h('div', { class: 'empty' }, 'Loading the notes…'));
+  const newest = dr.layers.at(-1);
+  add(card, h('div', { class: 'so-far' },
+    h('div', { class: 'so-far-head' },
+      playToggle(pid, label, async () => player.load({ id: pid, title: label, href: `#/p/${id}`, piece: await draftFor(id, dr.at) })),
+      h('div', null, h('div', { class: 'title' }, 'The song so far'),
+        h('div', { class: 'meta' }, `${dr.parts} part${dr.parts === 1 ? '' : 's'}, ${dr.notes.toLocaleString()} notes`,
+          dr.check ? (dr.check.ok ? ' · checked: it passes' : ` · checking: ${dr.check.problems} problem${dr.check.problems === 1 ? '' : 's'} left to fix`) : ' · a draft, not checked yet'))),
+    dr.layers.length ? h('ol', { class: 'layers', 'aria-label': 'Layers, in the order they were written' },
+      dr.layers.map((l) => h('li', { class: l === newest ? 'new' : null }, l.name, l === newest ? h('span', { class: 'sr' }, ' (newest)') : null))) : null,
+    lanes));
+  draftFor(id, dr.at).then((piece) => {
+    fill(lanes, laneRoll(piece, pid, new Set(newest?.parts || []), () => player.load({ id: pid, title: label, href: `#/p/${id}`, piece })));
+    followDraft(pid, label, id, piece, dr.at);
+  }).catch((e) => fill(lanes, h('div', { class: 'empty' }, e.message)));
+  return card;
+}
+
+const draftCache = new Map();
+function draftFor(id, at) {
+  const k = `${id}@${at}`;
+  if (!draftCache.has(k)) { draftCache.set(k, api(`/api/projects/${id}/music/draft`)); if (draftCache.size > 20) draftCache.delete(draftCache.keys().next().value); }
+  return draftCache.get(k);
+}
+
+// The draft playing on the player bar picks up each new layer: same place in the song, still playing.
+const followed = new Map();
+function followDraft(pid, title, id, piece, at) {
+  const was = followed.get(pid); followed.set(pid, at);
+  const s = player.state();
+  if (!was || was === at || s.id !== pid) return;
+  player.load({ id: pid, title, href: `#/p/${id}`, piece }, { force: true });
+  player.seek(Math.min(s.time, player.state().duration));
+  if (s.playing) player.play();
+}
+
+// The arrangement as it fills in: a lane per part (its notes drawn within its own range), the sections along the
+// top, the newest layer's parts in the accent colour, and the playhead. Click a lane to play from there.
+function laneRoll(piece, pid, fresh, load) {
+  const bpb = piece.beats_per_bar || piece.beatsPerBar || 4;
+  const tracks = (piece.tracks || []).filter((t) => t.notes?.length);
+  const end = Math.max(1, (piece.bars || 0) * bpb, ...tracks.flatMap((t) => t.notes.map((n) => n.start + n.dur)));
+  const pct = (beat) => `${Math.min(100, (beat / end) * 100)}%`;
+  const wrap = h('div', { class: 'lane-roll' });
+  if (!tracks.length) { add(wrap, h('div', { class: 'empty' }, 'No notes yet.')); return wrap; }
+  const head = h('div', { class: 'playhead', hidden: true });
+  const sections = h('div', { class: 'lane-sections', 'aria-hidden': 'true' },
+    (piece.sections || []).map((x) => h('span', { style: { left: pct((x.start_bar - 1) * bpb) }, title: x.name }, x.name)));
+  const canvases = [];
+  const rows = tracks.map((t) => {
+    const canvas = h('canvas', { 'aria-hidden': 'true' });
+    canvases.push([canvas, t]);
+    return h('div', { class: `lane${fresh.has(t.channel) ? ' fresh' : ''}` },
+      h('span', { class: 'lane-name', title: t.name }, t.name || `ch ${t.channel}`), h('div', { class: 'lane-notes' }, canvas));
+  });
+  const body = h('div', { class: 'lane-body' }, h('div', { class: 'lane-over' }, sections, head), rows);
+  add(wrap, body);
+  const draw = () => {
+    const css = getComputedStyle(document.documentElement);
+    const ink = css.getPropertyValue('--muted').trim(); const accent = css.getPropertyValue('--accent').trim();
+    const lines = css.getPropertyValue('--line').trim();
+    for (const [canvas, t] of canvases) {
+      const w = canvas.clientWidth || 300; const ht = canvas.clientHeight || 22; const dpr = window.devicePixelRatio || 1;
+      canvas.width = w * dpr; canvas.height = ht * dpr;
+      const g = canvas.getContext('2d'); g.scale(dpr, dpr);
+      g.fillStyle = lines;
+      for (const x of piece.sections || []) g.fillRect(Math.round(((x.start_bar - 1) * bpb / end) * w), 0, 1, ht);
+      const lo = Math.min(...t.notes.map((n) => n.pitch)); const hi = Math.max(...t.notes.map((n) => n.pitch));
+      const row = ht / Math.max(4, hi - lo + 1);
+      g.fillStyle = fresh.has(t.channel) ? accent : ink;
+      for (const n of t.notes) g.fillRect((n.start / end) * w, ht - (n.pitch - lo + 1) * row, Math.max(1, (n.dur / end) * w - 0.5), Math.max(1.5, row));
+    }
+  };
+  requestAnimationFrame(draw);
+  body.addEventListener('click', (e) => {
+    const r = body.querySelector('.lane-notes')?.getBoundingClientRect();
+    if (!r || e.clientX < r.left) return;
+    load();
+    player.seek(((e.clientX - r.left) / r.width) * player.state().duration);
+    player.play();
+  });
+  watch({ id: pid, el: wrap, update: (s) => playheadAt(head, s, pid) });
+  return wrap;
 }
 
 // ---------- what a step made ----------

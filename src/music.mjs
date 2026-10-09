@@ -25,7 +25,7 @@ export const AUDIO_EXT = ['.wav', '.aif', '.aiff', '.flac', '.mp3', '.m4a', '.og
 export function musicPaths(root, id) {
   const w = projectPaths(root, id).work;
   return { blueprint: join(w, 'music', 'blueprint.json'), notes: join(w, 'music', 'notes.json'), midi: join(w, 'out', 'music', 'midi'),
-    sheet: join(w, 'music', 'MUSIC-SHEET.md'), own: join(w, 'music', 'own-master'), master: join(w, 'music', 'own-master', 'master.wav'),
+    draft: join(w, 'music', 'draft.json'), sheet: join(w, 'music', 'MUSIC-SHEET.md'), own: join(w, 'music', 'own-master'), master: join(w, 'music', 'own-master', 'master.wav'),
     report: join(w, 'music', 'own-master', 'report.json') };
 }
 
@@ -55,7 +55,23 @@ export function musicStatus(root, id) {
   // pack or a loop kit ends at the MIDI.
   const audio = (() => { try { return projectPipeline(root, id).steps.some((s) => s.review === 'audio'); } catch { return false; } })();
   return { finish: finishesOwnMaster(p) ? 'own' : 'strudel', expect: expectation(root, id), midi, sheet: existsSync(mp.sheet),
-    masters: audio || finishesOwnMaster(p), own: readJ(mp.report), sketch: ['out/music/score.mp3', 'out/music/score.wav'].find((f) => existsSync(join(projectPaths(root, id).work, f))) || null, state: p.state, needs_you: p.needs_you || null, daw: dawConfig(loadConfig(root)).name };
+    masters: audio || finishesOwnMaster(p), draft: draftSummary(mp), own: readJ(mp.report), sketch: ['out/music/score.mp3', 'out/music/score.wav'].find((f) => existsSync(join(projectPaths(root, id).work, f))) || null, state: p.state, needs_you: p.needs_you || null, daw: dawConfig(loadConfig(root)).name };
+}
+
+// The score as it's being written (strudel.mjs draft): which layers are in and what the last check said; the notes
+// themselves come from musicDraft.
+function draftSummary(mp) {
+  const d = readJ(mp.draft);
+  if (!d?.tracks) return null;
+  return { at: d.at, layer: d.layer, layers: (d.layers || []).map((l) => ({ name: l.name, at: l.at, parts: l.parts })), check: d.check || null,
+    parts: d.tracks.filter((t) => t.notes.length).length, notes: d.tracks.reduce((n, t) => n + t.notes.length, 0) };
+}
+
+// The draft's notes for the piano roll and the player, in the same shape as musicNotes.
+export function musicDraft(root, id) {
+  const d = readJ(musicPaths(root, id).draft);
+  if (!d?.tracks) throw new UserError('nothing drafted yet: the score shows here a layer at a time as the studio writes it');
+  return d;
 }
 
 // The captured score for the piano roll: every channel's notes (in beats), the tempo and meter, and the blueprint's

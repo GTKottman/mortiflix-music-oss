@@ -135,7 +135,7 @@ export class Runner extends EventEmitter {
       // Keys and settings for the session: session.env and the tools setup installed (Strudel, Chrome) with the owner's
       // choices (their DAW).
       const sessionEnv = { ...readSessionEnv(root), ...sessionToolsEnv(root), MFX_HOME: REPO };
-      bridge = await openBridge({ root, projectId, sessionId, workdir: pp.work, renders: this.renders, sessionEnv });
+      bridge = await openBridge({ root, projectId, sessionId, workdir: pp.work, renders: this.renders, sessionEnv, onChange: () => this.emit('change') });
       this.addActivity(projectId, { kind: 'info', text: `Session started (${config.backend}). ${reason}` });
       result = await backend.run({
         root,

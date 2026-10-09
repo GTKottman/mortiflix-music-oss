@@ -170,6 +170,25 @@ drums: cue(note("[36 ~ ~ 36 38 ~ 36 ~], [42*8]").velocity("<.8 .95>").mask(lift)
 - **Sections** are masks or `<…>` sequences with one value per bar, aligned to the blueprint's bars. Name each mask
   after its section.
 
+### Write it a layer at a time: the owner is watching
+
+The owner watches the score being written on the project page, and hears it grow. So write the score in layers,
+never in one go, and draft each layer as soon as it's in:
+
+```
+node $M draft --layer "the beat"          # after the drums
+node $M draft --layer "the bass"          # after the bass, and so on
+```
+
+- **The order:** the groove first (drums, then the bass), then the harmony (chords, pads), then the hook, then the
+  rest (counter-lines, answers, ear candy, risers). A loop kit: one loop at a time, in kit order.
+- **A layer is one part or a few parts** that belong together, written across the whole piece: name it the way the
+  owner would say it ("the beat", "the bass", "the chords", "the hook", "the answer line", "the risers").
+- **The draft only evaluates the score** (no checks): it writes `music/draft.json` and puts it on the owner's page,
+  where the status line names the layer. An evaluation error fails it: fix the layer, then draft again.
+- Plan before the first layer as much as you need, then put the layers down one after another. The full `check` comes
+  after the last layer; while you fix what it finds, the page shows how many problems are left.
+
 ## 5. Check it, and capture the MIDI
 
 ```

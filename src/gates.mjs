@@ -220,12 +220,16 @@ export function ask(root, id, stepKey, text, { default: def = null, choices = nu
   });
 }
 
-export function status(root, id, key, mode = 'working') {
+// What the owner sees while a session works: the pipeline's line for `key`, plus what exactly, in a few words
+// ("Writing the score: the bass, bars 1-48").
+export function status(root, id, key, mode = 'working', detail = null) {
   const pipeline = projectPipeline(root, id);
-  const text = pipeline.status_lines[key];
-  if (!text) refuse(`no status line "${key}" (this pipeline's: ${Object.keys(pipeline.status_lines).join(', ') || 'none'})`);
+  const line = pipeline.status_lines[key];
+  if (!line) refuse(`no status line "${key}" (this pipeline's: ${Object.keys(pipeline.status_lines).join(', ') || 'none'})`);
   if (!['working', 'rendering'].includes(mode)) refuse('mode must be working or rendering');
-  return update(root, id, (p) => { p.status = { key, text, mode, at: now() }; return p.status; });
+  const what = String(detail ?? '').replace(/\s+/g, ' ').trim();
+  if (what.length > 100) refuse('keep --detail to a few words (100 characters at most)');
+  return update(root, id, (p) => { p.status = { key, text: what ? `${line}: ${what}` : line, detail: what || null, mode, at: now() }; return p.status; });
 }
 
 export function handoff(root, id, text) {
@@ -234,6 +238,22 @@ export function handoff(root, id, text) {
   appendFileSync(join(pp.work, 'JOURNAL.md'), `\n## ${now().slice(0, 16).replace('T', ' ')}\n\n${String(text).trim()}\n`);
   event(root, id, { event: 'HANDOFF', details: String(text).slice(0, 600) });
   return { ok: true };
+}
+
+// A layer of the score is on the page (strudel.mjs draft wrote music/draft.json): the status line names it and the
+// project log keeps it, so the owner watches the song grow part by part.
+export function draftLayer(root, id, layer) {
+  const name = String(layer ?? '').replace(/\s+/g, ' ').trim();
+  if (!name) refuse('name the layer: strudel.mjs draft --layer "the bass"');
+  const file = join(projectPaths(root, id).work, 'music', 'draft.json');
+  let draft = null; try { draft = readJson(file); } catch { /* none yet */ }
+  if (!draft?.tracks) refuse('no music/draft.json: run strudel.mjs draft --layer "…" (it writes the draft, then tells the studio)');
+  const lines = projectPipeline(root, id).status_lines;
+  const key = lines.score ? 'score' : loadProject(root, id).status?.key;
+  if (key && lines[key]) status(root, id, key, 'working', name.slice(0, 100));
+  const notes = draft.tracks.reduce((n, t) => n + t.notes.length, 0);
+  event(root, id, { event: 'DRAFT', details: `${name}: ${draft.tracks.filter((t) => t.notes.length).length} parts, ${notes} notes, ${draft.bars} bars` });
+  return { ok: true, layers: draft.layers?.length || 1 };
 }
 
 export function log(root, id, name, details) {

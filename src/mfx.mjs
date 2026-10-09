@@ -6,7 +6,8 @@ import { resolve } from 'node:path';
 
 const USAGE = `mfx: talk to the Mortiflix Music studio from inside a session
 
-  mfx status <key> [--rendering]        what the owner sees while you work     (mfx status --list)
+  mfx status <key> [--detail "…"] [--rendering]   what the owner sees while you work (mfx status --list);
+                                        detail = what exactly, in a few words ("the bass, bars 1-48")
   mfx step start <step>                 mark a step as being worked on
   mfx step done <step> --checks <file> --note "…"   finish an internal step (file = its error_checks list;
                                         note = what it made and decided, in plain words for the owner)
@@ -75,7 +76,7 @@ export async function main(argv, env = process.env, cwd = process.cwd()) {
   switch (cmd) {
     case 'status':
       if (f.list) return call('status', { list: true });
-      return call('status', { key: need(f._[0], '<key>'), mode: f.rendering ? 'rendering' : 'working' });
+      return call('status', { key: need(f._[0], '<key>'), mode: f.rendering ? 'rendering' : 'working', detail: typeof f.detail === 'string' ? f.detail : null });
     case 'step': {
       const [sub, step] = f._;
       if (sub === 'start') return call('step-start', { step: need(step, '<step>') });

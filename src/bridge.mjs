@@ -11,13 +11,15 @@ import { projectPipeline, loadProject, update, now } from './projects.mjs';
 import { appendTaste } from './torch.mjs';
 import { isInside, loadConfig } from './studio.mjs';
 
-export async function openBridge({ root, projectId, sessionId, workdir, renders, sessionEnv }) {
+export async function openBridge({ root, projectId, sessionId, workdir, renders, sessionEnv, onChange = () => {} }) {
   const token = randomBytes(24).toString('hex');
   const socket = join(tmpdir(), `mfx-${randomBytes(6).toString('hex')}.sock`);
   const work = realpathSync(workdir);
 
   const commands = {
-    'status': ({ key, mode, list }) => (list ? projectPipeline(root, projectId).status_lines : gates.status(root, projectId, key, mode)),
+    'status': ({ key, mode, list, detail }) => (list ? projectPipeline(root, projectId).status_lines : gates.status(root, projectId, key, mode, detail)),
+    // strudel.mjs draft wrote music/draft.json (the score so far): the owner's page shows the new layer.
+    'draft': ({ layer }) => gates.draftLayer(root, projectId, layer),
     'step-start': ({ step }) => gates.stepStart(root, projectId, step),
     // Every internal step tells the owner what it made, in plain words: the project page shows it beside the work.
     'step-done': ({ step, checks, note }) => {
@@ -63,6 +65,8 @@ export async function openBridge({ root, projectId, sessionId, workdir, renders,
       try {
         const args = body ? JSON.parse(body) : {};
         reply(200, { ok: true, result: await fn(args) });
+        // Whatever a command changed (a status line, a step, a draft) reaches the owner's page now, not at the next event.
+        onChange();
       } catch (e) {
         reply(e instanceof gates.GateError ? 422 : 500, { error: e.message });
       }

@@ -81,6 +81,14 @@ function demoMusic(workdir, title, piece) {
   writeFileSync(join(midi, 'CUE-SHEET.md'), `# ${title}: cue sheet\n\nPlaceholder from the demo backend: 90 BPM, 4/4, A minor, 4 bars. Drums are on channel 10 (General MIDI).\n`);
 }
 
+// music/draft.json as strudel.mjs draft writes it: the parts written so far, the layers in order, the last check.
+function writeDraft(workdir, piece, tracks, layers, check) {
+  mkdirSync(join(workdir, 'music'), { recursive: true });
+  const at = new Date().toISOString();
+  writeFileSync(join(workdir, 'music', 'draft.json'), JSON.stringify({ ...piece, tracks, beats_per_bar: 4, bars: 4,
+    sections: [{ name: 'Demo loop', start_bar: 1, end_bar: 4 }], at, layer: layers.at(-1)?.name || null, layers, check: check ? { ...check, at } : null }, null, 2));
+}
+
 export async function run({ root, projectId, workdir, env, onActivity, signal, config }) {
   const mfx = (cmd, args) => callStudio(cmd, args, env);
   const pause = (ms = config.demoDelayMs ?? 400) => new Promise((ok) => setTimeout(ok, ms));
@@ -109,7 +117,21 @@ export async function run({ root, projectId, workdir, env, onActivity, signal, c
         mkdirSync(join(workdir, 'music'), { recursive: true });
         writeFileSync(join(workdir, 'music', 'GENRE.md'), `# ${project.intake.answers.genre || 'The genre'} (demo)\n\nPlaceholder research from the demo backend: no sources were read.\n\n## The beat\nA slow, steady backbeat.\n\n## The usual band\n- **Bass**: roots under each chord\n- **Pad**: holds the chords\n- **Drums**: the beat\n`);
       }
-      if (work.includes('music') || work.includes('midi')) demoMusic(workdir, project.title, demoPiece(1));
+      if (work.includes('music') || work.includes('midi')) {
+        // The score a layer at a time, as a real session writes it, so the project page shows it growing.
+        const piece = demoPiece(1);
+        const order = [...piece.tracks].sort((a, b) => (b.channel === 10) - (a.channel === 10) || a.channel - b.channel);
+        const layers = [];
+        for (let i = 0; i < order.length; i++) {
+          const name = `the ${order[i].name.toLowerCase()}`;
+          layers.push({ name, at: new Date().toISOString(), parts: [order[i].channel] });
+          writeDraft(workdir, piece, order.slice(0, i + 1), layers, null);
+          await mfx('draft', { layer: name });
+          await pause();
+        }
+        demoMusic(workdir, project.title, piece);
+        writeDraft(workdir, piece, order, layers, { ok: true, problems: 0 });
+      }
       const notes = { research: 'Demo: a placeholder genre page (no research was done).', music: 'Demo: the same 4-bar placeholder loop as always (bass, pad, drums in A minor).',
         instruments: 'Demo: no instruments were chosen.', audio: 'Demo: no audio was made.', plan: 'Demo: a placeholder plan.' };
       await mfx('step-done', { step: step.key, checks, note: work.map((x) => notes[x]).filter(Boolean).join(' ') || `Demo: ${step.name}, placeholder work.` });

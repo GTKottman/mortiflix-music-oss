@@ -160,6 +160,14 @@
       "how": "node .claude/skills/music/strudel.mjs check ends with 0 problems (harmony locked to the chart, every role playing, nothing past the end, the intensity curve following the sections) and wrote music/notes.json and out/music/midi/; every planned technique is heard in the notes, and the flow's shape measures as it should."
     },
     {
+      "id": "score-in-layers",
+      "title": "The owner watched it being written, layer by layer",
+      "applies_to": [
+        "music"
+      ],
+      "how": "music/draft.json lists the layers in the order they were written (strudel.mjs draft --layer after each: the groove, then the harmony, then the hook, then the rest; a loop kit one loop at a time), at least 3 of them, so the owner watched the score grow on the project page; one draft of the whole score doesn't count."
+    },
+    {
       "id": "score-is-notes",
       "title": "The score holds only the music",
       "applies_to": [

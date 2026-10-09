@@ -5,6 +5,8 @@
 //   node strudel.mjs genre                       music/genre.json → checked, music/GENRE.md            (songs)
 //   node strudel.mjs techniques                  the technique list (how each is heard); with a captured score, what it plays
 //   node strudel.mjs plan                        music/blueprint.json → checked against the flow (flow/flow.json), music/BLUEPRINT.md
+//   node strudel.mjs draft --layer "the bass"    the score so far → music/draft.json, which the owner watches grow on the
+//                                                project page (write the score a layer at a time; no checks, eval only)
 //   node strudel.mjs check                       the score → harmony lock, story curve, the planned techniques heard, the
 //                                                flow's shape (and, for a loop kit, clean loops);
 //                                                its MIDI: music/notes.json + out/music/midi/ (every channel, the arrangement,
@@ -43,7 +45,7 @@ const cmd = args.shift();
 const opt = (name, dflt) => { const i = args.indexOf(`--${name}`); if (i < 0) return dflt; const v = args[i + 1]; args.splice(i, v === undefined || v.startsWith('--') ? 1 : 2); return v === undefined || v.startsWith('--') ? true : v; };
 const F = {
   genre: 'music/genre.json', blueprint: opt('blueprint', 'music/blueprint.json'), instruments: 'music/instruments.json',
-  notes: 'music/notes.json', check: 'music/check.json', audition: 'music/audition.json', master: 'music/master.json',
+  notes: 'music/notes.json', draft: 'music/draft.json', check: 'music/check.json', audition: 'music/audition.json', master: 'music/master.json',
   own: 'music/own-master/report.json', sheet: 'music/MUSIC-SHEET.md', recent: 'music/recent.json', flow: opt('flow', 'flow/flow.json'), edits: 'music/edits.json',
 };
 const out = opt('out', null);
@@ -51,14 +53,16 @@ const videoSec = Number(opt('video-sec', 0)) || null;
 const fps = Number(opt('fps', 30));
 const stems = Boolean(opt('stems', false));
 const tailBars = Number(opt('tail-bars', 1));
+const layer = opt('layer', null);
 const scorePath = args[0] || 'music/score.strudel.js';
-const COMMANDS = ['genre', 'techniques', 'plan', 'check', 'capture', 'instruments', 'audition', 'render', 'master', 'own-master', 'midi', 'sheet'];
+const COMMANDS = ['genre', 'techniques', 'plan', 'draft', 'check', 'capture', 'instruments', 'audition', 'render', 'master', 'own-master', 'midi', 'sheet'];
 
 const die = (msg) => { console.error(`✖ ${msg}`); process.exit(1); };
 const read = (f) => { try { return JSON.parse(readFileSync(f, 'utf8')); } catch (e) { if (!existsSync(f)) return null; die(`${f}: ${e.message}`); } };
 const write = (f, v) => { mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, typeof v === 'string' ? v : JSON.stringify(v, null, 2) + '\n'); };
 const slug = (s) => String(s).replace(/[^\w-]+/g, '-').replace(/^-|-$/g, '').toLowerCase();
 const fail = (problems, what) => { console.log(`\n✖ ${problems.length} problem${problems.length === 1 ? '' : 's'}${what ? ` ${what}` : ''}:\n  ${problems.join('\n  ')}`); process.exitCode = 1; };
+if (cmd === 'draft' && (typeof layer !== 'string' || !layer.trim())) die('name the layer you just wrote: strudel.mjs draft --layer "the bass"');
 if (!COMMANDS.includes(cmd)) die(`usage: strudel.mjs ${COMMANDS.join('|')} (see SKILL.md)`);
 
 // ---- stages that need no Strudel ----
@@ -206,14 +210,21 @@ async function renderSongs(src, cycles, songs, { chunk = Number(process.env.MFX_
 }
 
 try {
-  if (cmd === 'check' || cmd === 'capture' || cmd === 'midi') {
+  if (cmd === 'check' || cmd === 'capture' || cmd === 'midi' || cmd === 'draft') {
     // A bar past the end catches parts that keep looping after the ending.
     const { cps, haps } = await strudel.haps(code, bp.bars + 1);
     const channels = hapsToChannels({ haps, cps, beatsPerCycle: bpb, names });
     const endBeat = bp.bars * bpb;
     const manifest = { title: bp.title || null, bpm: channels.bpm, meter: bp.meter || '4/4', beats_per_bar: bpb, bars: bp.bars,
       tracks: channels.tracks.map((t) => ({ ...t, notes: t.notes.filter((n) => n.start < endBeat) })) };
-    if (cmd === 'check' || cmd === 'capture') {
+    if (cmd === 'draft') {
+      const d = writeDraft(manifest, { layer: layer.trim() });
+      const playing = manifest.tracks.filter((t) => t.notes.length);
+      console.log(`✔ Draft ${d.layers.length} (${layer.trim()}): ${playing.map((t) => `${t.name} (${t.notes.length})`).join(', ') || 'no notes yet'} → ${F.draft}`);
+      const missing = (bp.roles || []).filter((r) => !playing.some((t) => t.channel === r.channel));
+      if (missing.length) console.log(`  Still to come: ${missing.map((r) => `${r.name || r.harmony} (ch ${r.channel})`).join(', ')}`);
+      console.log(`  ${await tellStudio('draft', { layer: layer.trim() })}`);
+    } else if (cmd === 'check' || cmd === 'capture') {
       const score = checkScore(channels, bp, { video_sec: videoSec, fps });
       const harmony = checkHarmony(manifest, bp);
       const curve = intensity(manifest, bp);
@@ -226,6 +237,7 @@ try {
         flow: flow ? flow.slug : null, techniques: tech.results.map(({ name, kind, found, evidence, parts, where }) => ({ name, kind, found, evidence, parts, where })), technique_notes: tech.notes,
         parts: manifest.tracks.map((t) => ({ channel: t.channel, name: t.name, notes: t.notes.length, velocity_range: t.notes.length ? [Math.min(...t.notes.map((n) => n.velocity)), Math.max(...t.notes.map((n) => n.velocity))] : null })) };
       write(F.check, report);
+      writeDraft(manifest, { check: { ok: errors.length === 0, problems: errors.length } });
       console.log(`${bp.title || scorePath}: ${bp.bars} bars at ${bp.bpm} BPM (${bp.meter || '4/4'}) = ${score.seconds}s${bp.offset_sec ? `, starting ${bp.offset_sec}s into the video` : ''}`);
       console.log(`Parts: ${report.parts.map((p) => `${p.name} (${p.notes})`).join(', ')}`);
       console.log(`\nIntensity (asked vs measured, one block per bar):\n${intensityChart(curve)}`);
@@ -389,6 +401,36 @@ function blueprintMarkdown(b, genre) {
 }
 
 // music/MUSIC-SHEET.md: one page with every decision and every measurement so far, rewritten after each stage.
+// The score so far, for the owner to watch grow: the notes as music/notes.json has them, plus the layers written so
+// far. A draft older than the last captured MIDI belongs to an earlier version, so a new version starts a new list.
+function writeDraft(manifest, { layer = null, check = null } = {}) {
+  const at = new Date().toISOString();
+  let prev = read(F.draft);
+  const captured = read(F.check);
+  if (prev && layer && existsSync(F.notes) && captured?.ok && prev.check?.ok) prev = null;
+  const layers = (prev?.layers || []).filter((l) => l.name !== layer);
+  if (layer) layers.push({ name: layer, at, parts: manifest.tracks.filter((t) => t.notes.length).map((t) => t.channel) });
+  const d = { ...manifest, sections: bp.sections || [], at, layer: layer || prev?.layer || null, layers, check: check ? { ...check, at } : null };
+  write(F.draft, d);
+  return d;
+}
+
+// Tells the studio (inside a session) that a draft is on disk, so the owner's page shows it at once.
+async function tellStudio(command, body) {
+  const { MFX_SOCKET: socketPath, MFX_TOKEN: token } = process.env;
+  if (!socketPath || !token) return '(not in a studio session: the draft is on disk only)';
+  const { request } = await import('node:http');
+  const data = JSON.stringify(body);
+  return new Promise((ok) => {
+    const req = request({ socketPath, path: `/${command}`, method: 'POST', headers: { 'x-mfx-token': token, 'content-type': 'application/json', 'content-length': Buffer.byteLength(data) } }, (res) => {
+      let text = ''; res.setEncoding('utf8'); res.on('data', (c) => { text += c; });
+      res.on('end', () => { try { const r = JSON.parse(text); ok(r.ok ? 'The owner sees it on the project page now.' : `(the studio said: ${r.error})`); } catch { ok(`(the studio said: ${text.slice(0, 200)})`); } });
+    });
+    req.on('error', (e) => ok(`(couldn't reach the studio: ${e.code || e.message}; the draft is on disk)`));
+    req.end(data);
+  });
+}
+
 function writeSheet() {
   const b = read(F.blueprint); if (!b) return;
   const genre = read(F.genre); const notes = read(F.notes); const check = read(F.check); const ins = read(F.instruments);

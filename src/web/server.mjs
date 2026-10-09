@@ -210,6 +210,7 @@ export async function startServer(root, { port = 4747, host = '127.0.0.1', runne
   async function musicApi(req, res, id, sub, method, after, url) {
     if (sub === '/music' && method === 'GET') return send(res, 200, music.musicStatus(root, id));
     if (sub === '/music/notes' && method === 'GET') return send(res, 200, music.musicNotes(root, id));
+    if (sub === '/music/draft' && method === 'GET') return send(res, 200, music.musicDraft(root, id));
     // Quick edits (src/edits.mjs): mark bars, say what to change, keep or undo.
     if (sub === '/music/edits' && method === 'GET') return send(res, 200, edits.editState(root, id));
     if (sub === '/music/edits' && method === 'POST') {

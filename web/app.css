@@ -484,3 +484,39 @@ details.activity[open] > summary h2::after { content: "▾"; }
   .toast { font-size: 13px; }
   .log, pre.code, pre.journal { font-size: 11.5px; }
 }
+
+/* Watching it being built: what Claude is doing now, the steps, and the song so far, a lane per part. */
+.building { border-left: 3px solid var(--accent); padding: 14px 0 16px 16px; margin: 4px 0 22px; }
+.building .now-line { display: flex; align-items: center; gap: 10px; }
+.building .now-line .what { color: var(--ink); font-size: 17px; font-weight: 500; }
+.building .now-line .why { color: var(--muted); font-size: 13px; }
+.step-strip { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--faint); }
+.step-strip li.done { color: var(--muted); }
+.step-strip li.done::before { content: "✓ "; }
+.step-strip li.now { color: var(--ink); font-weight: 500; }
+.step-strip li.now::before { content: "● "; color: var(--accent); }
+.so-far { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.so-far-head { display: flex; align-items: center; gap: 12px; }
+.so-far-head .title { color: var(--ink); font-weight: 500; }
+.so-far-head .meta { color: var(--muted); font-size: 13px; }
+.layers { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 6px; counter-reset: layer; font-size: 13px; color: var(--muted); }
+.layers li { counter-increment: layer; }
+.layers li::before { content: counter(layer) ". "; color: var(--faint); }
+.layers li + li::before { content: "→ " counter(layer) ". "; }
+.layers li.new { color: var(--accent); font-weight: 500; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.lanes { margin-top: 12px; }
+.lane-roll .lane-body { position: relative; cursor: pointer; }
+.lane-roll .lane-over { position: absolute; left: 96px; right: 0; top: 0; bottom: 0; pointer-events: none; }
+.lane-sections { position: relative; height: 18px; font-size: 11px; color: var(--faint); }
+.lane-sections span { position: absolute; top: 0; padding-left: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 18%; }
+.lane-roll .lane-body > .lane:first-of-type { margin-top: 18px; }
+.lane { display: grid; grid-template-columns: 96px 1fr; align-items: center; height: 24px; }
+.lane-name { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 8px; }
+.lane.fresh .lane-name { color: var(--accent); }
+.lane-notes canvas { display: block; width: 100%; height: 20px; }
+@media (max-width: 640px) {
+  .lane { grid-template-columns: 72px 1fr; }
+  .lane-roll .lane-over { left: 72px; }
+  .lane-sections span { max-width: 30%; }
+}
