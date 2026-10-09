@@ -220,8 +220,8 @@ function musicPanel(id, ms) {
         h('div', { class: 'what' }, waiting ? 'Finish it in your DAW' : own ? 'Your master is the music' : 'The MIDI is ready'),
         h('div', { class: 'why' }, waiting ? 'Every channel is its own MIDI file, with a clip per section and the tempo and sections as markers. Give each channel its sound, mix, export from bar 1, then import it here. ' : '', facts)),
       h('div', { class: 'actions' },
-        h('a', { class: waiting ? 'btn' : 'btn primary', href: `/api/projects/${id}/music/midi.zip` }, 'Download MIDI'),
-        h('button', { class: waiting ? 'btn primary' : 'btn', onclick: () => input.click() }, own ? 'Replace master' : 'Import your master'), input)),
+        h('a', { class: 'btn', href: `/api/projects/${id}/music/midi.zip` }, 'Download MIDI'),
+        ms.masters || own ? [h('button', { class: waiting ? 'btn primary' : 'btn', onclick: () => input.click() }, own ? 'Replace master' : 'Import your master'), input] : null)),
     roll,
     own ? h('audio', { src: `/api/projects/${id}/music/master?v=${encodeURIComponent(own.imported_at)}`, controls: true, preload: 'none', style: { width: '100%', marginTop: '8px' } }) : null,
     own?.warnings?.length ? h('ul', { class: 'meta' }, own.warnings.map((w) => h('li', null, w))) : null);
@@ -634,7 +634,7 @@ async function settingsView() {
   const backendRows = Object.entries(studio.backends).map(([name, b]) => h('li', { class: 'row', style: { cursor: 'pointer' }, onclick: () => { c.backend = name; draw(); } },
     h('input', { type: 'radio', name: 'backend', checked: c.backend === name, 'aria-label': BACKEND_NAMES[name] }),
     h('div', { class: 'main' }, h('span', { class: 'title' }, { 'claude-code': 'Your Claude Code', 'anthropic-api': 'Claude API with your key', demo: 'Demo' }[name] || name),
-      h('div', { class: 'meta' }, { 'claude-code': 'Runs `claude -p` with your own login or plan.', 'anthropic-api': 'Mortiflix runs the agent loop on the API; you pay per token.', demo: 'Placeholder work, no Claude: for trying the studio.' }[name])),
+      h('div', { class: 'meta' }, { 'claude-code': 'Runs `claude -p` with your own login or plan.', 'anthropic-api': 'Mortiflix Music runs the agent loop on the API; you pay per token.', demo: 'Placeholder work, no Claude: for trying the studio.' }[name])),
     h('div', { class: 'end' }, h('span', { class: `chip ${b.ok ? 'ok' : 'bad'}` }, b.ok ? 'ready' : 'not set up'))));
 
   const body = h('div');
@@ -780,7 +780,7 @@ async function keysSection() {
       try { draw(await api(`/api/keys/${encodeURIComponent(name.trim().toUpperCase())}`, { method: 'PUT', body: { value } })); } catch (e) { toast(e.message, true); }
     };
     fill(wrap, h('h2', null, 'Keys'),
-      h('p', { class: 'meta' }, 'Mortiflix runs on your own accounts. Keys stay in the studio folder (secrets.json and session.env, readable by you alone) and are never shown again.'),
+      h('p', { class: 'meta' }, 'Mortiflix Music runs on your own accounts. Keys stay in the studio folder (secrets.json and session.env, readable by you alone) and are never shown again.'),
       keys.map((k) => keyRow(k, draw)),
       h('div', { class: 'field' }, h('label', null, 'Other keys', h('div', { class: 'opt' }, 'handed to every session')),
         h('div', null,
@@ -850,8 +850,13 @@ function pianoRoll(piece, { marks = [], onPick = null } = {}) {
   const all = tracks.flatMap((t) => t.notes);
   const endBeat = Math.max(...all.map((n) => n.start + n.dur), (piece.bars || 0) * bpb);
   const bars = Math.ceil(endBeat / bpb);
-  let lo = Math.min(...all.map((n) => n.pitch)); let hi = Math.max(...all.map((n) => n.pitch));
-  lo -= 2; hi += 2;
+  // Pitched parts share the pitch rows; drums (channel 10, General MIDI) get a lane of their own underneath, one row per
+  // drum sound, so a kick never sits on the bass's rows.
+  const isDrums = (t) => t.drums || t.kind === 'drums' || t.channel === 10;
+  const pitched = tracks.filter((t) => !isDrums(t)).flatMap((t) => t.notes);
+  const kit = [...new Set(tracks.filter(isDrums).flatMap((t) => t.notes.map((n) => n.pitch)))].sort((a, b) => a - b);
+  const lo = pitched.length ? Math.min(...pitched.map((n) => n.pitch)) - 2 : 0;
+  const hi = pitched.length ? Math.max(...pitched.map((n) => n.pitch)) + 2 : -1;
   let focus = null;
   const canvas = h('canvas', { class: 'roll', role: 'img', 'aria-label': `Piano roll: ${tracks.length} parts, ${bars} bars at ${bpm} BPM` });
   const readout = h('span', { class: 'meta' }, `${bars} bars · ${bpm} BPM · ${bpb}/4`);
@@ -859,22 +864,29 @@ function pianoRoll(piece, { marks = [], onPick = null } = {}) {
   const draw = () => {
     const css = getComputedStyle(document.documentElement);
     const color = (v) => css.getPropertyValue(v).trim();
-    const w = canvas.clientWidth || 800; const ht = Math.max(160, Math.min(360, (hi - lo) * 6));
+    const rows = hi - lo + 1;
+    const w = canvas.clientWidth || 800;
+    const top = rows > 0 ? Math.max(120, Math.min(300, rows * 6)) : 0;
+    const lane = kit.length ? Math.max(40, Math.min(120, kit.length * 9)) : 0;
+    const gap = top && lane ? 8 : 0; const ht = top + gap + lane;
     const dpr = window.devicePixelRatio || 1;
     canvas.width = w * dpr; canvas.height = ht * dpr; canvas.style.height = `${ht}px`;
     const g = canvas.getContext('2d'); g.scale(dpr, dpr);
-    const x = (beat) => (beat / (bars * bpb)) * w; const y = (pitch) => ht - ((pitch - lo + 1) / (hi - lo + 1)) * ht;
-    const row = ht / (hi - lo + 1);
+    const x = (beat) => (beat / (bars * bpb)) * w;
+    const row = top / Math.max(1, rows); const drumRow = lane / Math.max(1, kit.length);
+    const y = (t, pitch) => (isDrums(t) ? top + gap + kit.indexOf(pitch) * drumRow : top - (pitch - lo + 1) * row);
+    const tall = (t) => Math.max(2, (isDrums(t) ? drumRow : row) - 1);
     g.clearRect(0, 0, w, ht);
     g.strokeStyle = color('--line'); g.lineWidth = 1;
     for (let bar = 0; bar <= bars; bar += 1) { g.beginPath(); g.moveTo(Math.round(x(bar * bpb)) + 0.5, 0); g.lineTo(Math.round(x(bar * bpb)) + 0.5, ht); g.stroke(); }
+    if (gap) { g.beginPath(); g.moveTo(0, top + gap / 2 + 0.5); g.lineTo(w, top + gap / 2 + 0.5); g.stroke(); }
     g.fillStyle = color('--muted'); g.font = `11px ${color('--text') || 'sans-serif'}`;
     for (const m of markers) { const mx = x(m.beat); g.fillRect(mx, 0, 1, ht); g.fillText(m.text, mx + 4, 12); }
     for (const t of tracks) {
       const on = focus === null || focus === t;
-      g.fillStyle = on && focus ? color('--ink') : color('--faint');
-      g.globalAlpha = on ? 1 : 0.35;
-      for (const n of t.notes) g.fillRect(x(n.start), y(n.pitch), Math.max(1.5, x(n.dur) - 1), Math.max(2, row - 1));
+      g.fillStyle = focus === t ? color('--ink') : color('--body');
+      g.globalAlpha = on ? (focus ? 1 : 0.75) : 0.18;
+      for (const n of t.notes) g.fillRect(x(n.start), y(t, n.pitch), Math.max(1.5, x(n.dur) - 1), tall(t));
     }
     g.globalAlpha = 1; g.fillStyle = color('--pin');
     for (const sec of marks) g.fillRect(x((sec * bpm) / 60), 0, 2, ht);

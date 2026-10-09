@@ -17,13 +17,29 @@ export function available() {
 }
 
 // Four bars in A minor at 90 BPM: a pad, a bass and a beat, so the piano roll has something to show.
-function demoMidi(version) {
+function demoPiece(version) {
   const chords = [[57, 60, 64], [53, 57, 60], [48, 52, 55], [55, 59, 62]];
   const pad = chords.flatMap((c, bar) => c.map((pitch) => ({ pitch: pitch + (version % 2 ? 12 : 0), start: bar * 4, dur: 3.75, velocity: 0.6 })));
   const bass = chords.flatMap((c, bar) => [0, 1.5, 2.5].map((b) => ({ pitch: c[0] - 12, start: bar * 4 + b, dur: 0.5, velocity: 0.8 })));
   const drums = Array.from({ length: 16 }, (_, beat) => [{ pitch: beat % 2 ? 38 : 36, start: beat, dur: 0.25, velocity: 0.9 }, { pitch: 42, start: beat + 0.5, dur: 0.2, velocity: 0.5 }]).flat();
-  return writeMidi({ bpm: 90, meter: '4/4', markers: [{ beat: 0, text: 'Demo loop' }], tracks: [
-    { channel: 1, name: 'Bass', notes: bass }, { channel: 2, name: 'Pad', notes: pad }, { channel: 10, name: 'Drums', kind: 'drums', notes: drums }] });
+  return { bpm: 90, meter: '4/4', tracks: [
+    { channel: 1, name: 'Bass', notes: bass }, { channel: 2, name: 'Pad', notes: pad }, { channel: 10, name: 'Drums', kind: 'drums', notes: drums }] };
+}
+
+const demoMidi = (piece) => writeMidi({ ...piece, markers: [{ beat: 0, text: 'Demo loop' }] });
+
+// Where the music engine leaves a passed score (music/notes.json, the blueprint, out/music/midi/), so the project
+// page's MIDI panel and Download MIDI work in the demo too.
+function demoMusic(workdir, title, piece) {
+  mkdirSync(join(workdir, 'music'), { recursive: true });
+  const midi = join(workdir, 'out', 'music', 'midi');
+  mkdirSync(midi, { recursive: true });
+  writeFileSync(join(workdir, 'music', 'blueprint.json'), JSON.stringify({ title, bpm: piece.bpm, meter: piece.meter, scale: 'A minor', bars: 4,
+    sections: [{ name: 'Demo loop', start_bar: 1, end_bar: 4, function: 'placeholder', intensity: 0.5 }] }, null, 2));
+  writeFileSync(join(workdir, 'music', 'notes.json'), JSON.stringify(piece, null, 2));
+  writeFileSync(join(midi, 'demo-all.mid'), demoMidi(piece));
+  for (const t of piece.tracks) writeFileSync(join(midi, `${String(t.channel).padStart(2, '0')}-${t.name.toLowerCase()}.mid`), writeMidi({ ...piece, tracks: [t] }));
+  writeFileSync(join(midi, 'CUE-SHEET.md'), `# ${title}: cue sheet\n\nPlaceholder from the demo backend: 90 BPM, 4/4, A minor, 4 bars. Drums are on channel 10 (General MIDI).\n`);
 }
 
 export async function run({ root, projectId, workdir, env, onActivity, signal, config }) {
@@ -67,7 +83,9 @@ export async function run({ root, projectId, workdir, env, onActivity, signal, c
       items.push({ path: `out/${step.key}-v${version}/BLUEPRINT.md`, label: `${step.name} v${version}` });
     } else if (step.review === 'midi' || step.review === 'audio') {
       // The MIDI (a piano roll in the review room), and for an audio step a placeholder tone to listen to.
-      writeFileSync(join(dir, 'demo-all.mid'), demoMidi(version));
+      const piece = demoPiece(version);
+      writeFileSync(join(dir, 'demo-all.mid'), demoMidi(piece));
+      demoMusic(workdir, project.title, piece);
       items.push({ path: `out/${step.key}-v${version}/demo-all.mid`, label: `${step.name} v${version} · MIDI` });
       if (step.review === 'audio') {
         if (!hasFfmpeg) {

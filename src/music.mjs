@@ -15,7 +15,7 @@ import { join, extname, basename } from 'node:path';
 import { tmpdir } from 'node:os';
 import { REPO, UserError, writeJson, loadConfig } from './studio.mjs';
 import { dawConfig } from './setup.mjs';
-import { projectPaths, loadProject, event, now } from './projects.mjs';
+import { projectPaths, loadProject, projectPipeline, event, now } from './projects.mjs';
 import { zip, dirEntries } from './zip.mjs';
 
 const engine = (name) => import(join(REPO, 'pipelines', '_shared', 'skills', 'music', 'lib', name));
@@ -51,8 +51,11 @@ export function expectation(root, id) {
 export function musicStatus(root, id) {
   const p = loadProject(root, id); const mp = musicPaths(root, id);
   const midi = existsSync(mp.midi) ? readdirSync(mp.midi).filter((f) => /\.(mid|md)$/.test(f)).sort() : [];
+  // A master can be imported where the pipeline makes audio (or the brief chose to finish in the owner's DAW); a MIDI
+  // pack or a loop kit ends at the MIDI.
+  const audio = (() => { try { return projectPipeline(root, id).steps.some((s) => s.review === 'audio'); } catch { return false; } })();
   return { finish: finishesOwnMaster(p) ? 'own' : 'strudel', expect: expectation(root, id), midi, sheet: existsSync(mp.sheet),
-    own: readJ(mp.report), state: p.state, needs_you: p.needs_you || null, daw: dawConfig(loadConfig(root)).name };
+    masters: audio || finishesOwnMaster(p), own: readJ(mp.report), state: p.state, needs_you: p.needs_you || null, daw: dawConfig(loadConfig(root)).name };
 }
 
 // The captured score for the piano roll: every channel's notes (in beats), the tempo and meter, and the blueprint's

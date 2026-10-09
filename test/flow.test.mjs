@@ -7,6 +7,7 @@ import { createProject, startProject, addIntakeFile, loadProject, projectPaths, 
 import { respond, submissions, stepView } from '../src/gates.mjs';
 import { Runner } from '../src/runner.mjs';
 import { projectPipeline } from '../src/projects.mjs';
+import { musicStatus, musicNotes } from '../src/music.mjs';
 
 const latest = (root, id, step) => submissions(root, id).filter((s) => s.step === step).at(-1);
 
@@ -46,6 +47,11 @@ test('demo backend: brief to delivered, through the real bridge, with a round of
   await runner.loop();
   const final = latest(root, p.id, 'final');
   assert.equal(final.items[0].kind, 'midi');
+  // The demo leaves the music where the engine would, so the project page's MIDI panel works in the demo too.
+  const ms = musicStatus(root, p.id);
+  assert.ok(ms.midi.includes('demo-all.mid') && ms.midi.includes('CUE-SHEET.md'));
+  assert.equal(ms.masters, false, 'a MIDI pack ends at the MIDI: no master to import');
+  assert.equal(musicNotes(root, p.id).tracks.length, 3);
 
   respond(root, p.id, 'final', 1, { verdict: 'approve' });
   project = loadProject(root, p.id);

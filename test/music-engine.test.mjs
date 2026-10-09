@@ -151,6 +151,7 @@ test('your own master: the MIDI pack goes out, a master that fits comes in (and 
   assert.deepEqual(unzip(midiPack(root, id)).map((f) => f.name), ['midi/01-bass.mid', 'midi/sections/01-intro/01-bass.mid']);
   assert.equal(musicStatus(root, id).finish, 'own');
   assert.equal(musicStatus(root, id).daw, null);
+  assert.equal(musicStatus(root, id).masters, true);
   assert.deepEqual(musicNotes(root, id).tracks[0].notes[0], { pitch: 45, start: 1, dur: 4, velocity: 0.8 });
 
   const d = scratch(t);

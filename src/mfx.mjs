@@ -4,7 +4,7 @@ import { request } from 'node:http';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const USAGE = `mfx: talk to the Mortiflix studio from inside a session
+const USAGE = `mfx: talk to the Mortiflix Music studio from inside a session
 
   mfx status <key> [--rendering]        what the owner sees while you work     (mfx status --list)
   mfx step start <step>                 mark a step as being worked on
@@ -43,7 +43,7 @@ function flags(argv) {
 export function callStudio(command, args, env = process.env) {
   const socketPath = env.MFX_SOCKET;
   const token = env.MFX_TOKEN;
-  if (!socketPath || !token) return Promise.reject(new Error('mfx only works inside a Mortiflix session (MFX_SOCKET is not set).'));
+  if (!socketPath || !token) return Promise.reject(new Error('mfx only works inside a Mortiflix Music session (MFX_SOCKET is not set).'));
   const body = JSON.stringify(args);
   return new Promise((ok, fail) => {
     const req = request({ socketPath, path: `/${command}`, method: 'POST', headers: { 'x-mfx-token': token, 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) } }, (res) => {

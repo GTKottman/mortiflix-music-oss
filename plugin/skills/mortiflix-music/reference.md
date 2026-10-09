@@ -93,7 +93,7 @@ Quoting: put each note in single quotes. Write an apostrophe inside one as `'\''
 
 ## Errors and what they mean
 
-- `another Mortiflix runner (pid N) is already running this studio`: `serve` or another `run` is already running
+- `another Mortiflix Music runner (pid N) is already running this studio`: `serve` or another `run` is already running
   sessions. Leave it alone, because sessions start by themselves.
 - `only the owner does that: …`: the command ran inside a studio session (`MFX_TOKEN` is set). It never applies
   in the owner's own Claude Code.

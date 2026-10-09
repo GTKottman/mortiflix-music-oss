@@ -36,7 +36,7 @@ export class Runner extends EventEmitter {
     mkdirSync(paths(this.root).run, { recursive: true });
     if (existsSync(lock)) {
       const pid = Number(readFileSync(lock, 'utf8'));
-      if (pid && pid !== process.pid && alive(pid)) throw new Error(`another Mortiflix runner (pid ${pid}) is already running this studio`);
+      if (pid && pid !== process.pid && alive(pid)) throw new Error(`another Mortiflix Music runner (pid ${pid}) is already running this studio`);
     }
     writeFileSync(lock, String(process.pid));
     this.lockFile = lock;
