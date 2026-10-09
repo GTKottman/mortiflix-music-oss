@@ -129,7 +129,7 @@ export function writeTorch(root, id, { backend, reason }) {
   // What the owner changed by hand, here and across pieces (src/edits.mjs, src/context.mjs).
   const differences = differencesBrief(root, project);
   const own = listEdits(root, project.id).filter((e) => e.status !== 'undone');
-  const ownText = own.length ? [`The owner changed these bars themselves in the studio (\`music/edits.json\`). The music engine keeps them in the score (the \`owner_ch…\` block and the \`/*mfx-keep*/\` masks): leave them, and change those bars only if the owner asks.`,
+  const ownText = own.length ? [`The owner changed these bars themselves in the studio (\`music/edits.json\`). The music engine keeps them in the score (the \`owner_ch…\` and \`owner_notes_ch…\` blocks and the \`/*mfx-keep*/\` masks): leave them, and change those bars only if the owner asks.`,
     ...own.map((e) => `- bars ${e.from}-${e.to}, ${e.part || `channel ${e.channel}`}: "${e.ask}" → ${(e.facts || []).join('; ')} (${e.status})`)].join('\n') : null;
 
   let studioText = studioSection(root);

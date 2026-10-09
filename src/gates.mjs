@@ -299,6 +299,8 @@ export function respond(root, id, stepKey, version, { verdict, overall = '', not
     if (n.time_sec !== undefined && n.time_sec !== null && n.time_sec !== '' && Number(n.time_sec) >= 0) out.time_sec = round(Number(n.time_sec), 2);
     if (Number.isInteger(n.paragraph) && n.paragraph >= 0) out.paragraph = n.paragraph;
     if (Array.isArray(n.bars) && n.bars.length === 2 && n.bars.every((b) => Number.isInteger(b) && b >= 1) && n.bars[1] >= n.bars[0]) out.bars = [n.bars[0], n.bars[1]];
+    if (typeof n.part === 'string' && n.part.trim()) out.part = n.part.trim().slice(0, 80);
+    if (Number.isInteger(n.channel) && n.channel >= 1 && n.channel <= 16) out.channel = n.channel;
     return out;
   });
   if (verdict === 'changes' && !cleanNotes.length && !String(overall).trim()) refuse('say what to change (a note or an overall comment)');
@@ -322,7 +324,7 @@ export function respond(root, id, stepKey, version, { verdict, overall = '', not
       notes: cleanNotes,
       answers: resolved,
       decided_at: now(),
-      how_to_read_annotations: 'Each note may point at an item (0-based index, item_label). time_sec is seconds into an audio item, or into a MIDI item at its tempo. bars ([first, last], 1-based) are the bars of a MIDI item the note marks. paragraph is the 0-based paragraph of a text item. Answer every note in the next version\'s pin_changes.',
+      how_to_read_annotations: 'Each note may point at an item (0-based index, item_label). time_sec is seconds into an audio item, or into a MIDI item at its tempo. bars ([first, last], 1-based) are the bars of a MIDI item the note marks. part and channel name the instrument the note is about (without bars: that part across the whole piece). paragraph is the 0-based paragraph of a text item. Answer every note in the next version\'s pin_changes.',
     };
     writeJson(join(dir, 'feedback.json'), feedback);
     mkdirSync(join(pp.work, 'feedback'), { recursive: true });

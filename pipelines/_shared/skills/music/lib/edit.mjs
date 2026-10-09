@@ -9,7 +9,14 @@
 //   blocksOf(code)                         the labelled blocks (label, channel, where the expression is)
 //   locate(code, haps, { from, to, ... })  what plays in bars from..to: per channel, its notes and the code behind them
 //   renderEdits(code, edits, totalBars)    the score with the edits applied (idempotent; undone edits drop out)
+//   handEdit(notes, bars, beatsPerBar)     the bars of a hand edit (notes drawn in the studio's editor) as an edit
 //   verifyEdit(before, after, edit)        nothing outside the edit moved, and something inside it did
+//   verifyNotes(before, after, cells, …)   a hand edit came out exactly as drawn, and nothing else moved
+//
+// Two kinds of edit: Claude's ({ bars: { 9: { notes, velocity } } }, mini-notation a bar) and the owner's hand edits,
+// which also carry the exact notes ({ notes: [{ pitch, start, dur, velocity }], beats_per_bar }, times in beats from
+// the top of the piece). Exact notes play from a block of their own on a fine grid (GRID steps a beat), so a chord
+// held over the bar line stays held. Their `bars` say the same per bar, cut at the bar line, for an older engine.
 //   describeDifference(a, b, ...)          what changed, in measured words ("closed hat 8 → 16 hits a bar")
 
 export const REGION_START = '// ---- your edits (made in the studio from music/edits.json; they stay unless the owner changes them) ----';
@@ -117,7 +124,11 @@ export function renderEdits(code, edits, totalBars) {
   const layers = new Map();
   for (const e of active) {
     if (!layers.has(e.channel)) layers.set(e.channel, new Map());
-    for (const [bar, v] of Object.entries(e.bars)) layers.get(e.channel).set(Number(bar), v);
+    const bpb = e.beats_per_bar || 4;
+    for (const [bar, v] of Object.entries(e.bars)) {
+      const b = Number(bar);
+      layers.get(e.channel).set(b, Array.isArray(e.notes) ? { ...v, bpb, exact: e.notes.filter((x) => barOf(x.start, bpb) === b) } : v);
+    }
   }
   const blocks = blocksOf(base);
   const missing = [];
@@ -132,13 +143,75 @@ export function renderEdits(code, edits, totalBars) {
   for (const { b, mask } of wraps.sort((x, y) => y.b.exprStart - x.b.exprStart)) {
     base = `${base.slice(0, b.exprStart)}(${b.expr}\n).mask(${KEEP}"${mask}")${base.slice(b.exprEnd)}`;
   }
-  const lines = [...layers.entries()].sort((a, b) => a[0] - b[0]).map(([ch, bars]) => {
-    const slot = (bar, key, rest) => { const v = bars.get(bar); return v ? `[${String(v[key] ?? rest).trim() || rest}]` : rest; };
-    const notes = perBar(Array.from({ length: n }, (_, i) => slot(i + 1, 'notes', '~')));
-    const vel = perBar(Array.from({ length: n }, (_, i) => slot(i + 1, 'velocity', bars.has(i + 1) ? '.8' : '0')));
-    return `owner_ch${ch}: note("${notes}").velocity("${vel}").filterWhen((t) => t < ${n}).midichan(${ch})`;
+  const lines = [...layers.entries()].sort((a, b) => a[0] - b[0]).flatMap(([ch, bars]) => {
+    const out = [];
+    const said = (bar) => { const v = bars.get(bar); return v && !v.exact ? v : null; };
+    if ([...bars.values()].some((v) => !v.exact)) {
+      const slot = (bar, key, rest) => { const v = said(bar); return v ? `[${String(v[key] ?? rest).trim() || rest}]` : rest; };
+      const notes = perBar(Array.from({ length: n }, (_, i) => slot(i + 1, 'notes', '~')));
+      const vel = perBar(Array.from({ length: n }, (_, i) => slot(i + 1, 'velocity', said(i + 1) ? '.8' : '0')));
+      out.push(`owner_ch${ch}: note("${notes}").velocity("${vel}").filterWhen((t) => t < ${n}).midichan(${ch})`);
+    }
+    const exact = [...bars.values()].filter((v) => v.exact);
+    if (exact.length) out.push(exactLine(ch, exact.flatMap((v) => v.exact), exact[0].bpb, n));
+    return out;
   });
   return { code: `${base.replace(/\s*$/, '')}\n\n${REGION_START}\n${lines.join('\n')}\n${REGION_END}\n`, missing };
+}
+
+// ---------- hand edits: exact notes ----------
+
+export const GRID = 24; // steps a beat: 16ths are 6, 32nds 3, eighth-note triplets 8
+const barOf = (start, bpb) => Math.floor(Math.round(start * GRID) / (bpb * GRID)) + 1;
+const r2 = (x) => Math.round(x * 100) / 100;
+
+// Notes on the grid: { p: pitch, s: start step, d: length in steps, v: velocity }.
+const onGrid = (notes, offset = 0) => notes.map((x) => ({ p: Math.round(x.pitch), s: Math.round(x.start * GRID) - offset, d: Math.max(1, Math.round(x.dur * GRID)), v: r2(x.velocity ?? 0.8) }));
+
+// Notes packed into voices that never overlap (a chord is a voice a note), each as a weighted sequence over `total`
+// steps: "~@12 60@6 ~@78".
+function voicesOf(notes, total) {
+  const voices = [];
+  for (const x of [...notes].sort((a, b) => a.s - b.s || a.p - b.p)) {
+    if (x.s < 0 || x.s >= total) continue;
+    const y = { ...x, d: Math.min(x.d, total - x.s) };
+    const v = voices.find((w) => w.at(-1).s + w.at(-1).d <= y.s);
+    if (v) v.push(y); else voices.push([y]);
+  }
+  return voices;
+}
+function seq(voice, total, value) {
+  const parts = []; let t = 0;
+  for (const x of voice) { if (x.s > t) parts.push(`~@${x.s - t}`); parts.push(`${value(x)}@${x.d}`); t = x.s + x.d; }
+  if (total > t) parts.push(`~@${total - t}`);
+  return parts.join(' ');
+}
+
+// A channel's exact notes as one block over the whole piece (n bars), so a note can run over the bar line.
+function exactLine(ch, notes, bpb, n) {
+  const total = n * bpb * GRID;
+  const voices = voicesOf(onGrid(notes), total);
+  const body = voices.length ? voices.map((v) => `note("${seq(v, total, (x) => x.p)}").velocity("${seq(v, total, (x) => x.v)}")`).join(',\n  ') : 'note("~")';
+  return `owner_notes_ch${ch}: stack(\n  ${body}\n).slow(${n}).filterWhen((t) => t < ${n}).midichan(${ch})`;
+}
+
+// A hand edit's bars, for edits.json: the exact notes, and the same per bar as mini-notation (cut at the bar line)
+// for an engine from before hand edits. `notes` are { pitch, start, dur, velocity } (beats from the top), each
+// starting in one of `bars`.
+export function handEdit(notes, bars, bpb = 4) {
+  const steps = bpb * GRID;
+  const out = {};
+  for (const bar of [...bars].sort((a, b) => a - b)) {
+    const inBar = notes.filter((x) => barOf(x.start, bpb) === bar);
+    const g = onGrid(inBar, (bar - 1) * steps);
+    const voices = voicesOf(g, steps);
+    if (!voices.length) { out[bar] = { notes: '~', velocity: '0' }; continue; }
+    const onsets = [...new Map(g.sort((a, b) => a.s - b.s || b.v - a.v).map((x) => [x.s, x.v])).entries()];
+    const vel = onsets.map(([s, v], i) => `${v}@${(onsets[i + 1]?.[0] ?? steps) - s}`);
+    if (onsets[0][0] > 0) vel.unshift(`~@${onsets[0][0]}`);
+    out[bar] = { notes: voices.map((v) => `[${seq(v, steps, (x) => x.p)}]`).join(', '), velocity: vel.join(' ') };
+  }
+  return { bars: out, notes: notes.map((x) => ({ pitch: Math.round(x.pitch), start: Math.round(x.start * GRID) / GRID, dur: Math.max(1, Math.round(x.dur * GRID)) / GRID, velocity: r2(x.velocity ?? 0.8) })), beats_per_bar: bpb };
 }
 
 // The score without any edit output: the owner's region removed and every mask wrap undone.
@@ -176,6 +249,23 @@ export function verifyEdit(beforeHaps, afterHaps, { channel, bars }) {
   if (changed) problems.push(`${changed} note${changed === 1 ? '' : 's'} outside the edited bars moved`);
   if (same) problems.push('the edited bars came out exactly as they were');
   return { ok: !problems.length, problems, outside_changed: changed, before, after };
+}
+
+// A hand edit is exact: in its cells (channel → bars) the notes are the ones drawn (to the grid), and outside them
+// every note is where it was. `wanted` are { channel, pitch, start, dur, velocity } in beats.
+export function verifyNotes(beforeHaps, afterHaps, cells, wanted, bpb = 4) {
+  const inside = (h) => cells.get(chanOf(h))?.has(Math.floor(h.begin + 1e-9) + 1);
+  const count = (ids) => { const m = new Map(); for (const k of ids) m.set(k, (m.get(k) || 0) + 1); return m; };
+  const diff = (a, b) => { let n = 0; for (const k of new Set([...a.keys(), ...b.keys()])) n += Math.abs((a.get(k) || 0) - (b.get(k) || 0)); return n; };
+  const moved = diff(count(beforeHaps.filter((h) => !inside(h)).map(hapId)), count(afterHaps.filter((h) => !inside(h)).map(hapId)));
+  const id = (begin, end, ch, pitch, vel) => `${r4(begin)}|${r4(end)}|${ch}|${pitch}|${r2(vel)}`;
+  const got = count(afterHaps.filter(inside).map((h) => id(h.begin, h.end, chanOf(h), Number(h.value?.note), Number(h.value?.velocity ?? 0.8))));
+  const want = count(wanted.map((x) => { const s = Math.round(x.start * GRID); const d = Math.max(1, Math.round(x.dur * GRID)); return id(s / GRID / bpb, (s + d) / GRID / bpb, x.channel, Math.round(x.pitch), r2(x.velocity ?? 0.8)); }));
+  const off = diff(got, want);
+  const problems = [];
+  if (moved) problems.push(`${moved} note${moved === 1 ? '' : 's'} outside the edited bars moved`);
+  if (off) problems.push(`${off} note${off === 1 ? '' : 's'} in the edited bars didn't come out as drawn`);
+  return { ok: !problems.length, problems };
 }
 
 // ---------- describing what changed ----------

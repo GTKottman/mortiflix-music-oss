@@ -6,6 +6,9 @@
 //   player.loadAudio({ id, title, href, url })
 //   player.play() · pause() · toggle() · seek(seconds) · close()
 //   player.on((state) => …)                    called on every change and every frame while playing; returns an unsubscribe
+//   player.levels()                            how loud each channel sounds right now (0-1): what lights up
+//   player.solo(ch | null) · mute(ch, on) · mix()   hear one part alone, or leave parts out
+//   player.preview(track, pitch, velocity)     one note on a part's instrument, now (the editor's click)
 //
 // It's a sketch of the music, not its sound: the instruments are picked from each part's name (bass, pad, keys, lead,
 // pluck, drums), so the shape, the harmony and the groove come through. The real sounds come in your DAW.
@@ -26,6 +29,10 @@ let cursor = 0;           // the next event to schedule
 let timer = null;
 let frame = null;
 const voices = new Set(); // sounding nodes, so pause and seek can silence them
+const lit = new Map();    // channel → { on, off, vel } in audio-clock time: the last note each part played
+let soloCh = null;
+let tagging = null;       // the channel the voices being made belong to
+const muted = new Set();
 
 function emit() { const s = state(); for (const fn of listeners) fn(s); }
 
@@ -34,7 +41,7 @@ export function on(fn) { listeners.add(fn); fn(state()); return () => listeners.
 export function state() {
   if (!src) return { id: null, playing: false, time: 0, duration: 0 };
   const time = now();
-  return { id: src.id, title: src.title, href: src.href, kind: src.kind, playing, time, duration: src.duration, section: sectionAt(time), markers: src.markers || [] };
+  return { id: src.id, title: src.title, href: src.href, kind: src.kind, playing, time, duration: src.duration, section: sectionAt(time), markers: src.markers || [], solo: soloCh, muted: [...muted] };
 }
 
 function now() {
@@ -56,6 +63,7 @@ function sectionAt(sec) {
 // `force` reloads the same piece (its notes changed: an edit in the review room).
 export function load({ id, title, href = null, piece }, { force = false } = {}) {
   if (src?.id === id && !force) return;
+  if (src?.id !== id) { soloCh = null; muted.clear(); }
   close(false);
   const bpm = piece.bpm || 120;
   const bpb = piece.beatsPerBar || piece.beats_per_bar || 4;
@@ -63,7 +71,7 @@ export function load({ id, title, href = null, piece }, { force = false } = {}) 
   const events = [];
   for (const t of piece.tracks || []) {
     const inst = instrumentFor(t);
-    for (const n of t.notes || []) events.push({ at: n.start * spb, dur: Math.max(0.03, n.dur * spb), pitch: n.pitch, vel: n.velocity ?? 0.8, inst });
+    for (const n of t.notes || []) events.push({ at: n.start * spb, dur: Math.max(0.03, n.dur * spb), pitch: n.pitch, vel: n.velocity ?? 0.8, inst, ch: t.channel ?? null });
   }
   events.sort((a, b) => a.at - b.at);
   const lastBeat = Math.max(0, ...(piece.tracks || []).flatMap((t) => (t.notes || []).map((n) => n.start + n.dur)), (piece.bars || 0) * bpb);
@@ -146,8 +154,12 @@ function schedule() {
   const ev = src.events;
   while (cursor < ev.length && startedAt + ev[cursor].at < until) {
     const e = ev[cursor++];
+    if (!audible(e.ch)) continue;
     const when = Math.max(ctx.currentTime, startedAt + e.at);
-    if (voices.size < 96) e.inst(when, e.pitch, e.dur, e.vel);
+    const l = lit.get(e.ch);
+    if (!l || when >= l.on) lit.set(e.ch, { on: when, off: Math.max(when + e.dur, l && l.off > when ? l.off : 0), vel: e.vel });
+    else l.off = Math.max(l.off, when + e.dur);
+    if (voices.size < 96) { tagging = e.ch; e.inst(when, e.pitch, e.dur, e.vel); tagging = null; }
   }
   if (ctx.currentTime - startedAt >= src.duration) { offset = src.duration; clearInterval(timer); timer = null; playing = false; stopFrames(); emit(); }
 }
@@ -159,12 +171,56 @@ function startFrames() {
 }
 function stopFrames() { if (frame) cancelAnimationFrame(frame); frame = null; }
 
-function silence() {
+function silence(only = null) {
   const t = ctx.currentTime;
+  if (!only) lit.clear();
   for (const v of voices) {
+    if (only && !only(v)) continue;
     try { v.gain.gain.cancelScheduledValues(t); v.gain.gain.setTargetAtTime(0, t, 0.01); v.nodes.forEach((n) => n.stop(t + 0.06)); } catch { /* already stopped */ }
+    voices.delete(v);
   }
-  voices.clear();
+}
+
+// ---------- what's sounding, and which parts you hear ----------
+
+const audible = (ch) => !muted.has(ch) && (soloCh === null || soloCh === ch);
+
+// Each channel's light: full at a note's start, settling while it holds, gone soon after it ends.
+export function levels() {
+  const out = {};
+  if (!ctx || !playing || src?.kind !== 'midi') return out;
+  const t = ctx.currentTime;
+  for (const [ch, l] of lit) {
+    if (t < l.on) continue;
+    const since = t - l.on;
+    const v = t <= l.off ? 0.45 + 0.55 * Math.exp(-since / 0.18) : Math.max(0, 0.45 * (1 - (t - l.off) / 0.15));
+    if (v > 0.01) out[ch] = Math.min(1, v * (0.6 + 0.4 * l.vel));
+  }
+  return out;
+}
+
+export function solo(ch) {
+  soloCh = soloCh === ch ? null : ch;
+  if (ctx && playing) silence((v) => !audible(v.ch));
+  emit();
+}
+
+export function mute(ch, on) {
+  if (on) muted.add(ch); else muted.delete(ch);
+  if (ctx && playing) silence((v) => !audible(v.ch));
+  emit();
+}
+
+export const mix = () => ({ solo: soloCh, muted: [...muted] });
+
+// One note now, on a part's instrument: what the editor plays when you put a note down or click a key.
+export async function preview(track, pitch, vel = 0.8, beats = 0.5) {
+  ensureContext();
+  if (ctx.state === 'suspended') await ctx.resume();
+  const spb = 60 / (src?.bpm || 120);
+  tagging = track.channel ?? null;
+  instrumentFor(track)(ctx.currentTime + 0.01, pitch, Math.min(1.2, beats * spb), vel);
+  tagging = null;
 }
 
 // ---------- the sound ----------
@@ -203,7 +259,7 @@ function voice(when, { oscs, filter = null, a = 0.005, d = 0.1, s = 0.7, r = 0.1
   for (const o of oscs) { o.connect(head); o.start(when); o.stop(end + r * 2 + 0.05); }
   g.connect(out);
   if (send) { const sg = ctx.createGain(); sg.gain.value = send; g.connect(sg).connect(verb); }
-  const v = { gain: g, nodes: oscs };
+  const v = { gain: g, nodes: oscs, ch: tagging };
   voices.add(v);
   oscs[0].onended = () => voices.delete(v);
   return v;
@@ -243,7 +299,7 @@ function drum(when, p, vel) {
     const g = ctx.createGain(); g.gain.setValueAtTime(peak * vel, when); g.gain.exponentialRampToValueAtTime(0.0008, when + decay);
     (filterNode ? node.connect(filterNode) : node).connect(g).connect(out);
     node.start(when); node.stop(when + decay + 0.02);
-    const v = { gain: g, nodes: [node] }; voices.add(v); node.onended = () => voices.delete(v);
+    const v = { gain: g, nodes: [node], ch: tagging }; voices.add(v); node.onended = () => voices.delete(v);
   };
   const noiseSrc = () => { const n = ctx.createBufferSource(); n.buffer = noise; return n; };
   const filt = (type, freq, q = 0.8) => { const f = ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q; return f; };

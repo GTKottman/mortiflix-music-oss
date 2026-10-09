@@ -200,7 +200,9 @@ check also prints where each channel plays (lowest, middle, highest note).
 The owner can change bars themselves in the review room ("bar 9: a different drum beat"). The studio splices their
 bars in: every block on that channel gets a per-bar mask (`(…\n).mask(/*mfx-keep*/"<1!8 0 1!31>")`) and the
 new bars play from a block at the end of the score, between `// ---- your edits` and `// ---- end of your edits ----`
-(`owner_ch10: note("<~!8 [...] ~!31>")…`). The edits themselves are in `music/edits.json`.
+(`owner_ch10: note("<~!8 [...] ~!31>")…`). Notes the owner drew by hand play exactly as drawn from an
+`owner_notes_chN: stack(note("~@768 36@6 …")…).slow(n)` block (a fine grid, 24 steps a beat). The edits themselves are
+in `music/edits.json`.
 
 - **Leave them.** Write and change the score as usual. `check` puts every edit that isn't undone back into the score
   before it evaluates, so a rewrite can't lose one, but don't fight them either: never write over those bars on that

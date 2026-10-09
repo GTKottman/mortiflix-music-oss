@@ -2,6 +2,8 @@
 // Everything the studio or a session wrote is inserted as text, never as HTML.
 
 import * as player from './player.js';
+import { h, fill, add } from './dom.js';
+import { instrumentStrip, noteEditor, colorsFor } from './seq.js';
 
 const $app = document.getElementById('app');
 const $status = document.getElementById('top-status');
@@ -11,24 +13,6 @@ let current = { name: null, refresh: null };
 let leaveView = null; // a view that holds something open releases it here
 
 // ---------- helpers ----------
-
-function h(tag, attrs, ...kids) {
-  const el = document.createElement(tag);
-  for (const [k, v] of Object.entries(attrs || {})) {
-    if (v === null || v === undefined || v === false) continue;
-    if (k === 'class') el.className = v;
-    else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
-    else if (k === 'style') Object.assign(el.style, v);
-    else if (k === 'value') el.value = v;
-    else if (k === 'checked') el.checked = Boolean(v);
-    else el.setAttribute(k, v === true ? '' : v);
-  }
-  for (const kid of kids.flat(Infinity)) {
-    if (kid === null || kid === undefined || kid === false) continue;
-    el.append(kid instanceof Node ? kid : document.createTextNode(String(kid)));
-  }
-  return el;
-}
 
 async function api(path, { method = 'GET', body, raw } = {}) {
   const opts = { method, headers: {} };
@@ -87,6 +71,7 @@ async function render() {
   const [re, view, nav] = hit || routes[0];
   for (const a of document.querySelectorAll('[data-nav]')) a.classList.toggle('on', a.dataset.nav === nav);
   if (leaveView) { try { leaveView(); } catch { /* already closed */ } leaveView = null; }
+  unsavedNotes = 0;
   current = { name: view.name, refresh: null, args: path.match(re)?.slice(1) || [] };
   // The review room is wider; the header widens with it so both keep one left edge.
   document.body.classList.toggle('wide', view === reviewView);
@@ -95,16 +80,6 @@ async function render() {
   } catch (e) {
     fill($app, h('div', { class: 'empty' }, h('div', { class: 'big' }, 'Something went wrong'), e.message));
   }
-}
-
-// replaceChildren() would print null as "null": skipped sections are dropped here.
-function fill(el, ...kids) {
-  el.replaceChildren(...kids.flat(Infinity).filter((k) => k !== null && k !== undefined && k !== false));
-}
-
-// append() would print null as "null" too.
-function add(el, ...kids) {
-  el.append(...kids.flat(Infinity).filter((k) => k !== null && k !== undefined && k !== false));
 }
 
 function mount(...kids) {
@@ -354,8 +329,7 @@ function musicPanel(id, ms, title) {
     } catch (err) { toast(err.data?.errors?.join(' · ') || err.message, true); }
   } });
   const facts = own ? `${own.source}: ${clock(own.measured.seconds)}, ${own.measured.lufs} LUFS, true peak ${own.measured.true_peak} dBTP` : e ? `${e.bars} bars at ${e.bpm} BPM (${e.meter}), ${clock(e.seconds)}${ms.daw ? ` · import steps for ${ms.daw}` : ''}` : '';
-  const roll = h('div', { class: 'roll-wrap' });
-  api(`/api/projects/${id}/music/notes`).then((n) => fill(roll, pianoRoll(n, { play: { id, title, href: `#/p/${id}` } }))).catch(() => roll.remove());
+  const roll = packBench(id, title);
   return h('section', null, h('h2', null, 'MIDI'),
     h('div', { class: waiting ? 'turn-line' : 'state-line' },
       h('div', null,
@@ -368,6 +342,38 @@ function musicPanel(id, ms, title) {
     own ? h('div', { class: 'row with-play' }, audioButton({ id: `${id}/master`, title: `${title} · your master`, href: `#/p/${id}`, url: `/api/projects/${id}/music/master?v=${encodeURIComponent(own.imported_at)}` }),
       h('div', { class: 'main' }, h('span', { class: 'title' }, 'Your master')), h('div', { class: 'end' }, clock(own.measured.seconds))) : null,
     own?.warnings?.length ? h('ul', { class: 'meta' }, own.warnings.map((w) => h('li', null, w))) : null);
+}
+
+// The piece's MIDI on the project page: the instruments, the whole piece and its notes, which can be changed by hand
+// while the piece waits for you (src/edits.mjs, step 'pack'). The page redraws on every studio change, so the bench is
+// kept and handed back while its notes are the same: a redraw never drops changes you haven't put in yet.
+const benches = new Map(); // project id → { el, stale }
+const packStates = new Map(); // project id → the note editor's copy
+function packBench(id, title) {
+  const kept = benches.get(id);
+  if (kept && !kept.stale) return kept.el;
+  const el = h('div', { class: 'roll-wrap' }, h('div', { class: 'meta' }, 'Reading the notes…'));
+  const entry = { el, stale: false };
+  benches.set(id, entry);
+  const play = { id, title, href: `#/p/${id}` };
+  Promise.all([api(`/api/projects/${id}/music/notes`), api(`/api/projects/${id}/music/edits`).catch(() => null)]).then(([piece, info]) => {
+    const est = packStates.get(id) || {};
+    packStates.set(id, est);
+    const can = Boolean(info?.can && info.mode === 'pack');
+    const wb = midiWorkbench({ id, piece, play, info, step: 'pack', version: 0, handEditable: can, est,
+      after: async (what, bar) => {
+        entry.stale = true;
+        if (what !== 'keep') {
+          packStates.delete(id);
+          const fresh = await api(`/api/projects/${id}/music/notes`).catch(() => null);
+          if (fresh) { player.load({ ...play, piece: fresh }, { force: true }); player.seek(Math.max(0, ((bar - 2) * (fresh.beats_per_bar || 4) * 60) / (fresh.bpm || 120))); player.play(); }
+        }
+        const next = packBench(id, title);
+        el.replaceWith(next);
+      } });
+    fill(el, can ? null : h('p', { class: 'meta' }, info?.mode === 'review' ? 'Change the notes in the review room while it waits for you.' : 'The notes can be changed here while the piece waits for you (not while a session is writing it).'), wb.el);
+  }).catch(() => el.remove());
+  return el;
 }
 
 // ---------- a project ----------
@@ -498,7 +504,16 @@ function stepMade(id, key) {
         h('ul', { class: 'facts files' }, pc.files.map((f) => h('li', null, h('a', { href: madeUrl(f, true) }, f.replace('out/music/midi/', ''))))));
       else if (pc.kind === 'notes') {
         body = h('div', { class: 'roll-wrap' });
-        api(`/api/projects/${id}/music/notes`).then((n) => fill(body, pianoRoll(n, { play: { id, title: m.step.name, href: `#/p/${id}` } }))).catch(() => body.remove());
+        Promise.all([api(`/api/projects/${id}/music/notes`), api(`/api/projects/${id}/music/edits`).catch(() => ({ roles: [] }))]).then(([n, info]) => {
+          // The instruments light up as they play, in the same colours as their notes.
+          const play = { id, title: m.step.name, href: `#/p/${id}` };
+          const tracks = n.tracks.filter((t) => t.notes?.length);
+          const colors = colorsFor(tracks);
+          let roll = null;
+          const strip = instrumentStrip({ tracks, roles: info.roles || [], colors, pid: id, bpb: n.beats_per_bar || 4, load: () => { if (player.state().id !== id) player.load({ ...play, piece: n }); }, onFocus: (ch) => roll.setFocus(ch) });
+          roll = pianoRoll(n, { play, colors, legend: false });
+          fill(body, strip, roll);
+        }).catch(() => body.remove());
       }
       // The first piece is open; long ones (the research, the code) can be opened when wanted.
       return h('details', { class: 'piece', open: i === 0 && pc.kind !== 'code' ? true : null }, h('summary', null, pc.title), body);
@@ -653,8 +668,9 @@ async function reviewView(id, stepKey, versionParam) {
   let pinMode = false;
   let rollMeta = null; // the MIDI's tempo and meter, once it's read
   let focusCh = null;  // the part picked on the roll: it stays picked when the roll redraws
+  const editorStates = new Map(); // MIDI file → the note editor's copy, so a redraw keeps changes not yet in the song
   // Quick edits (src/edits.mjs): whether this version can be changed right here, and the edits made on it.
-  let editInfo = editable && media.some((m) => m.kind === 'midi') ? await api(`/api/projects/${id}/music/edits`).catch(() => null) : null;
+  let editInfo = media.some((m) => m.kind === 'midi') ? await api(`/api/projects/${id}/music/edits`).catch(() => null) : null;
   const canEdit = () => Boolean(editInfo?.can && editInfo.step === stepKey && editInfo.version === sub.version);
   // A note's edit follows the studio's record of it (kept or undone elsewhere, or in another tab).
   for (const n of draft.notes) delete n._busy;
@@ -706,21 +722,29 @@ async function reviewView(id, stepKey, versionParam) {
         const list = editable ? draft.notes : sub.feedback?.notes || [];
         const noteEdits = new Set(list.map((n) => n.edit?.id).filter(Boolean));
         const bands = [
-          ...(editInfo?.edits || []).filter((e) => e.step === stepKey && e.version === sub.version && e.status !== 'undone' && !noteEdits.has(e.id)).map((e) => ({ from: e.from, to: e.to, label: 'edited', kind: 'edited' })),
+          ...(editInfo?.edits || []).filter((e) => e.kind !== 'notes' && e.step === stepKey && e.version === sub.version && e.status !== 'undone' && !noteEdits.has(e.id)).map((e) => ({ from: e.from, to: e.to, label: 'edited', kind: 'edited' })),
           ...list.map((n, k) => ({ n, k })).filter(({ n }) => n.item === sel && (n.bars || n.time_sec !== undefined)).map(({ n, k }) => {
             const [from, to] = n.bars || [barOf(n.time_sec), barOf(n.time_sec)];
             return { from, to, label: String(editable ? k + 1 : n.n), kind: n.edit && n.edit.status !== 'undone' ? 'edited' : 'note', index: editable ? k : undefined };
           }),
         ];
         const playInfo = { id: pid, title: `${d.project.title} · ${media.length > 1 ? it.label : `${step.name} v${sub.version}`}`, href: location.hash };
-        fill(stage, pianoRoll(midi, { bands, play: playInfo, focusChannel: focusCh, onFocus: (ch) => { focusCh = ch; },
-          onMark: editable ? ({ from, to, sec, channel, part }) => addNote({ item: sel, bars: [from, to], time_sec: sec, channel, part }) : null,
-          onMoveBand: editable ? (k, from, to) => { const n = draft.notes[k]; if (n.edit && n.edit.status !== 'undone') return toast('That note already changed those bars: undo it first'); n.bars = [from, to]; n.time_sec = Math.round((((from - 1) * bpb * 60) / midi.bpm) * 100) / 100; save(); drawNotes(); drawStage(); } : null }));
+        // The arrangement can be changed by hand; a section's clip starts at its own bar 1, so it's only read.
+        const whole = !/(^|\/)sections\//.test(it.source || it.file);
+        const est = editorStates.get(it.file) || {};
+        editorStates.set(it.file, est);
+        const wb = midiWorkbench({ id, piece: midi, play: playInfo, info: editInfo, step: stepKey, version: sub.version, handEditable: canEdit() && whole, est, focus: focusCh, onFocus: (ch) => { focusCh = ch; }, bands,
+          onNote: editable ? ({ part, channel, text, bars }) => addNote({ item: sel, part, channel, text, ...(bars ? { bars, time_sec: Math.round((((bars[0] - 1) * bpb * 60) / midi.bpm) * 100) / 100 } : {}) }) : null,
+          onMark: editable ? ({ from, to, sec }) => addNote({ item: sel, bars: [from, to], time_sec: sec, channel: focusCh, part: midi.tracks.find((t) => t.channel === focusCh)?.name || null }) : null,
+          onMoveBand: editable ? (k, from, to) => { const n = draft.notes[k]; if (n.edit && n.edit.status !== 'undone') return toast('That note already changed those bars: undo it first'); n.bars = [from, to]; n.time_sec = Math.round((((from - 1) * bpb * 60) / midi.bpm) * 100) / 100; save(); drawNotes(); drawStage(); } : null,
+          after: async (what, bar) => { editInfo = await api(`/api/projects/${id}/music/edits`).catch(() => editInfo); if (what !== 'keep') editorStates.clear(); drawStage({ playFrom: what === 'keep' ? null : bar }); } });
+        fill(stage, wb.el);
         // After an edit: hear the new bars at once, from a bar before them.
         if (playFrom) {
           player.load({ ...playInfo, piece: midi }, { force: true });
           player.seek(Math.max(0, ((playFrom - 2) * bpb * 60) / midi.bpm));
           player.play();
+          wb.editor.goTo(playFrom);
         }
       }).catch((e) => fill(stage, h('div', { class: 'err' }, `Couldn't read this MIDI file: ${e.message}`)));
       if (editable) tools.append(h('button', { class: 'btn', onclick: () => {
@@ -729,7 +753,7 @@ async function reviewView(id, stepKey, versionParam) {
         const bar = Math.floor((s.time * rollMeta.bpm) / 60 / rollMeta.bpb) + 1;
         addNote({ item: sel, bars: [bar, bar], time_sec: Math.round((((bar - 1) * rollMeta.bpb * 60) / rollMeta.bpm) * 100) / 100 });
       } }, 'Mark the playhead\'s bar'),
-        h('span', { class: 'meta' }, canEdit() ? 'or drag across bars. Pick a part first to change only that part.' : 'or drag across bars to mark them.'));
+        h('span', { class: 'meta' }, canEdit() ? 'or drag across bars on the whole piece. Pick an instrument first to ask Claude to change only that part.' : 'or drag across bars on the whole piece to mark them.'));
     } else if (it.kind === 'audio') {
       const audio = h('audio', { src: url, controls: true, style: { width: '100%' } });
       stage = h('div', { style: { padding: '12px 0' } }, audio);
@@ -848,7 +872,8 @@ async function reviewView(id, stepKey, versionParam) {
   const decide = async (verdict) => {
     err.textContent = '';
     // A note whose bars were already changed here goes to the session as done (so it isn't changed again).
-    const notes = draft.notes.map((n) => ({ item: n.item ?? null, x: n.x, y: n.y, time_sec: n.time_sec, paragraph: n.paragraph, bars: n.bars,
+    if (unsavedNotes && !confirmInline(null)) { err.textContent = `Your note changes in ${unsavedNotes} bar${unsavedNotes === 1 ? '' : 's'} aren't in the song yet: "Put it in the song" first, or click again to send without them.`; return; }
+    const notes = draft.notes.map((n) => ({ item: n.item ?? null, x: n.x, y: n.y, time_sec: n.time_sec, paragraph: n.paragraph, bars: n.bars, part: n.part || undefined, channel: n.channel ?? undefined,
       text: n.edit && n.edit.status !== 'undone' && (n.text || '').trim() ? `Changed in the studio already (my edit: keep it): ${n.text.trim()}` : (n.text || '').trim() }));
     if (notes.some((n) => !n.text)) { err.textContent = 'Every note needs some words (or remove it).'; return; }
     if (verdict === 'changes' && !notes.length && !draft.overall.trim()) { err.textContent = 'Say what to change: leave a note or write an overall comment.'; return; }
@@ -1247,6 +1272,81 @@ async function keysSection() {
   return wrap;
 }
 
+// The MIDI to hear, see and change, for someone still learning: the instruments (each lights up while it plays), the
+// whole piece (click to go there), and its notes to change by hand, with the changes made so far. Shared by the review
+// room and the project page. `info` is GET /music/edits; `step`/`version` say which edits belong here ('pack' 0: the
+// piece itself, while it waits for you). `after(what, bar)` redraws once an edit is in, kept or undone.
+function midiWorkbench({ id, piece, play, info, step, version, handEditable, est, focus = null, onFocus = () => {}, bands = [], onMark = null, onMoveBand = null, onNote = null, after }) {
+  const bpb = piece.beatsPerBar || piece.beats_per_bar || 4;
+  const bpm = piece.bpm || 120;
+  const tracks = (piece.tracks || []).filter((t) => t.notes?.length);
+  const colors = colorsFor(tracks);
+  const mine = (info?.edits || []).filter((e) => e.step === step && e.version === version && e.status !== 'undone');
+  // Bars changed by hand, shaded on the whole piece like the bars Claude changed.
+  bands = [...bands];
+  for (const e of mine.filter((x) => x.kind === 'notes')) for (const [a, b] of barRuns(e.cells || [e.from])) bands.push({ from: a, to: b, label: 'by hand', kind: 'edited' });
+  if (step === 'pack') for (const e of mine.filter((x) => x.kind !== 'notes')) bands.push({ from: e.from, to: e.to, label: 'edited', kind: 'edited' });
+  let roll = null; let strip = null; let editor = null;
+  const setFocus = (ch, from) => { focus = ch; onFocus(ch); if (from !== 'strip') strip?.setFocus(ch); roll?.setFocus?.(ch); if (from !== 'editor') editor?.setFocus(ch); };
+  const loadIt = () => { if (player.state().id !== play.id) player.load({ ...play, piece: editor ? editor.piece() : piece }); };
+  const pickedBars = () => { const sel = est.notes?.filter((n) => est.selected?.has(n.id)) || []; if (!sel.length) return null; const b = sel.map((n) => Math.floor(n.start / bpb) + 1); return [Math.min(...b), Math.max(...b)]; };
+  const sections = piece.markers ? piece.markers.map((m) => ({ name: m.text, start_bar: Math.round(m.beat / bpb) + 1 })) : piece.sections || [];
+  strip = instrumentStrip({ tracks, roles: info?.roles || [], colors, pid: play.id, bpb, load: loadIt, focus, onFocus: (ch) => setFocus(ch, 'strip'), onNote, selectionBars: pickedBars });
+  editor = noteEditor({ piece: { ...piece, tracks }, colors, st: est, pid: play.id, play, editable: handEditable, focus, onFocus: (ch) => setFocus(ch, 'editor'), toast, sections,
+    onChange: (n) => { unsavedNotes = n; roll?.setPiece?.(editor.piece()); },
+    onSave: async ({ cells, notes, firstBar }) => {
+      const r = await api(`/api/projects/${id}/music/notes-edit`, { method: 'POST', body: { cells, notes } });
+      for (const k of Object.keys(est)) delete est[k];
+      unsavedNotes = 0;
+      toast(`In the ${step === 'pack' ? 'MIDI' : 'song'} (${r.seconds} s): ${r.edits.map((e) => `${e.part}: ${(e.facts || []).join(', ')}`).join(' · ')}`);
+      await after('save', firstBar);
+    } });
+  roll = pianoRoll(piece, { bands, play, focusChannel: focus, colors, legend: false, current: () => editor.piece(), onPick: (bar) => editor.goTo(bar), onMark, onMoveBand });
+  editor.addEventListener('view', (e) => roll.setView?.(e.detail.from, e.detail.to));
+  if (est.notes) roll.setPiece?.(editor.piece());
+
+  // The changes made by hand: what they did, measured, with Keep and Undo (a change across several instruments is one).
+  let busy = false;
+  const act = async (e, what) => {
+    if (busy) return; busy = true;
+    try {
+      await api(`/api/projects/${id}/music/edits/${e.id}/${what}`, { method: 'POST' });
+      if (what === 'undo') { for (const k of Object.keys(est)) delete est[k]; unsavedNotes = 0; toast('Undone: those bars are back as they were'); } else toast('Kept: the studio remembers this one');
+      await after(what, e.from);
+    } catch (err) { toast(err.message, true); } finally { busy = false; }
+  };
+  const hand = mine.filter((e) => e.kind === 'notes' || step === 'pack');
+  const batches = [...new Set(hand.map((e) => e.batch || e.id))].map((b) => hand.filter((e) => (e.batch || e.id) === b));
+  const list = handEditable && batches.length ? h('section', { class: 'hand-edits' }, h('h2', null, 'Your changes', h('span', { class: 'count' }, batches.length)),
+    h('ul', { class: 'rows' }, batches.map((es) => h('li', null,
+      h('div', { class: 'main' }, es.map((e) => h('div', null, h('b', null, e.part || `channel ${e.channel}`), ` · ${runsText(e.cells || barsFrom(e.from, e.to))}${e.kind === 'notes' ? '' : `, "${e.ask}"`}: `, h('span', { class: 'facts' }, (e.facts || []).join(' · ')))),
+        es[0].warnings?.length ? h('div', { class: 'warn' }, `The check would flag: ${es[0].warnings.join(' · ')}`) : null),
+      h('div', { class: 'end actions' },
+        es.every((e) => e.status === 'kept') ? h('span', { class: 'chip ok' }, 'kept') : h('button', { class: 'btn', onclick: () => act(es[0], 'keep') }, 'Keep'),
+        h('button', { class: 'btn link', onclick: () => act(es[0], 'undo') }, 'Undo'))))),
+    h('p', { class: 'meta' }, step === 'pack' ? 'They\'re in the score and the MIDI pack now. Kept changes teach the studio what you like.' : 'Sending your review keeps any you haven\'t undone. Kept changes teach the studio what you like.')) : null;
+
+  const el = h('div', { class: 'workbench' },
+    h('h2', { class: 'stage-h' }, 'The instruments'), strip,
+    h('h2', { class: 'stage-h' }, 'The whole piece'), roll,
+    h('h2', { class: 'stage-h' }, handEditable ? 'The notes: change them here' : 'The notes'), editor,
+    list);
+  return { el, editor, roll, strip };
+}
+const barsFrom = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
+
+// Bars as runs: [3, 4, 5, 9] → [[3, 5], [9, 9]], and in words: "bars 3-5, 9".
+function barRuns(bars) {
+  const out = [];
+  for (const b of [...bars].sort((x, y) => x - y)) { const last = out.at(-1); if (last && b === last[1] + 1) last[1] = b; else out.push([b, b]); }
+  return out;
+}
+const runsText = (bars) => `bar${bars.length === 1 ? '' : 's'} ${barRuns(bars).map(([a, b]) => (a === b ? a : `${a}-${b}`)).join(', ')}`;
+
+// Note changes in the editor that aren't in the song yet: leaving the page asks first.
+let unsavedNotes = 0;
+window.addEventListener('beforeunload', (e) => { if (unsavedNotes) { e.preventDefault(); e.returnValue = ''; } });
+
 // ---------- MIDI: a small reader and a piano roll ----------
 
 // A Standard MIDI File → { bpm, beatsPerBar, tracks: [{ name, channel, drums, notes: [{ pitch, start, dur, velocity }] }],
@@ -1294,23 +1394,30 @@ function readMidi(b) {
 // ({ from, to, label, kind: 'note' }) and bars you changed ({ kind: 'edited' }). With `onMark({ from, to, sec, channel })`
 // a press-and-drag marks bars (snapped; the part you've picked comes along), and with `onMoveBand(index, from, to)` a
 // note's band can be dragged elsewhere. With `play` ({ id, title, href }) it gets a play button and a playhead, and
-// (when it doesn't mark) a click plays from there.
-function pianoRoll(piece, { bands = [], onMark = null, onMoveBand = null, play = null, focusChannel = null, onFocus = null } = {}) {
+// (when it doesn't mark) a click plays from there. With `colors` (channel → colour) each part is drawn in its colour,
+// `legend: false` leaves the part chips out (the page has its own), and `onPick(bar)` hears a click that didn't drag.
+// `current()` is the piece to play (an editor's copy, with changes not yet in the song). The box it returns can be
+// told: setFocus(channel), setView(from, to) (the bars an editor shows), setPiece(piece) (redraw with other notes).
+function pianoRoll(piece, { bands = [], onMark = null, onMoveBand = null, play = null, focusChannel = null, onFocus = null, colors = null, legend = true, onPick = null, current = null } = {}) {
   const bpb = piece.beatsPerBar || piece.beats_per_bar || 4;
   const bpm = piece.bpm || 120;
-  const tracks = (piece.tracks || []).filter((t) => t.notes?.length);
+  let tracks = (piece.tracks || []).filter((t) => t.notes?.length);
   if (!tracks.length) return h('div', { class: 'meta' }, 'No notes yet.');
   const markers = piece.markers || (piece.sections || []).map((x) => ({ beat: (x.start_bar - 1) * bpb, text: x.name }));
-  const all = tracks.flatMap((t) => t.notes);
+  let all = tracks.flatMap((t) => t.notes);
   const endBeat = Math.max(...all.map((n) => n.start + n.dur), (piece.bars || 0) * bpb);
   const bars = Math.ceil(endBeat / bpb);
   // Pitched parts share the pitch rows; drums (channel 10, General MIDI) get a lane of their own underneath, one row per
   // drum sound, so a kick never sits on the bass's rows.
   const isDrums = (t) => t.drums || t.kind === 'drums' || t.channel === 10;
-  const pitched = tracks.filter((t) => !isDrums(t)).flatMap((t) => t.notes);
-  const kit = [...new Set(tracks.filter(isDrums).flatMap((t) => t.notes.map((n) => n.pitch)))].sort((a, b) => a - b);
-  const lo = pitched.length ? Math.min(...pitched.map((n) => n.pitch)) - 2 : 0;
-  const hi = pitched.length ? Math.max(...pitched.map((n) => n.pitch)) + 2 : -1;
+  let kit; let lo; let hi;
+  const measure = () => {
+    const pitched = tracks.filter((t) => !isDrums(t)).flatMap((t) => t.notes);
+    kit = [...new Set(tracks.filter(isDrums).flatMap((t) => t.notes.map((n) => n.pitch)))].sort((a, b) => a - b);
+    lo = pitched.length ? Math.min(...pitched.map((n) => n.pitch)) - 2 : 0;
+    hi = pitched.length ? Math.max(...pitched.map((n) => n.pitch)) + 2 : -1;
+  };
+  measure();
   let focus = focusChannel === null ? null : tracks.find((t) => t.channel === focusChannel) || null;
   const canvas = h('canvas', { class: 'roll', role: 'img', 'aria-label': `Piano roll: ${tracks.length} parts, ${bars} bars at ${bpm} BPM` });
   const readout = h('span', { class: 'meta' }, `${bars} bars · ${bpm} BPM · ${bpb}/4`);
@@ -1338,7 +1445,7 @@ function pianoRoll(piece, { bands = [], onMark = null, onMoveBand = null, play =
     for (const m of markers) { const mx = x(m.beat); g.fillRect(mx, 0, 1, ht); g.fillText(m.text, mx + 4, 12); }
     for (const t of tracks) {
       const on = focus === null || focus === t;
-      g.fillStyle = focus === t ? color('--ink') : color('--body');
+      g.fillStyle = colors?.get(t.channel) || (focus === t ? color('--ink') : color('--body'));
       g.globalAlpha = on ? (focus ? 1 : 0.75) : 0.18;
       for (const n of t.notes) g.fillRect(x(n.start), y(t, n.pitch), Math.max(1.5, x(n.dur) - 1), tall(t));
     }
@@ -1347,7 +1454,7 @@ function pianoRoll(piece, { bands = [], onMark = null, onMoveBand = null, play =
   const secAt = (e) => { const r = canvas.getBoundingClientRect(); return Math.max(0, ((e.clientX - r.left) / r.width) * bars * bpb) * 60 / bpm; };
   const barAt = (e) => { const r = canvas.getBoundingClientRect(); return Math.min(bars, Math.max(1, Math.floor(((e.clientX - r.left) / r.width) * bars) + 1)); };
   const barSec = (bar) => Math.round((((bar - 1) * bpb * 60) / bpm) * 100) / 100;
-  const loadMe = () => { if (player.state().id !== play.id) player.load({ ...play, piece }); };
+  const loadMe = () => { if (player.state().id !== play.id) player.load({ ...play, piece: current ? current() : piece }); };
   // The bands: shaded bars with their number on top; a note's band can be picked up and moved.
   const bandLayer = h('div', { class: 'bands' });
   const stage = h('div', { class: 'roll-stage' }, canvas, bandLayer);
@@ -1368,9 +1475,9 @@ function pianoRoll(piece, { bands = [], onMark = null, onMoveBand = null, play =
       const moving = e.target.closest('.band[data-index]');
       const bar = barAt(e);
       drag = moving ? { move: Number(moving.dataset.index), el: moving, grab: bar, from: bands.find((b) => b.index === Number(moving.dataset.index)).from, to: bands.find((b) => b.index === Number(moving.dataset.index)).to }
-        : { start: bar, from: bar, to: bar };
+        : { start: bar, from: bar, to: bar, x0: e.clientX, dragged: !onPick };
       e.currentTarget.setPointerCapture(e.pointerId);
-      if (!moving) { ghost.hidden = false; place(ghost, bar, bar); }
+      if (!moving && !onPick) { ghost.hidden = false; place(ghost, bar, bar); }
       e.preventDefault();
     });
     stage.addEventListener('pointermove', (e) => {
@@ -1379,14 +1486,22 @@ function pianoRoll(piece, { bands = [], onMark = null, onMoveBand = null, play =
       if (drag.move !== undefined) {
         const len = drag.to - drag.from; const from = Math.min(bars - len, Math.max(1, drag.from + bar - drag.grab));
         drag.nf = from; drag.nt = from + len; place(drag.el, from, from + len);
-      } else { drag.from = Math.min(drag.start, bar); drag.to = Math.max(drag.start, bar); place(ghost, drag.from, drag.to); }
+      } else {
+        if (!drag.dragged && Math.abs(e.clientX - drag.x0) < 5) return;
+        drag.dragged = true; ghost.hidden = false;
+        drag.from = Math.min(drag.start, bar); drag.to = Math.max(drag.start, bar); place(ghost, drag.from, drag.to);
+      }
     });
     stage.addEventListener('pointerup', () => {
       const d = drag; drag = null; ghost.hidden = true;
       if (!d) return;
       if (d.move !== undefined) { if (d.nf !== undefined && d.nf !== d.from) onMoveBand(d.move, d.nf, d.nt); return; }
+      if (!d.dragged) { onPick(d.start); return; }
       onMark({ from: d.from, to: d.to, sec: barSec(d.from), channel: focus?.channel ?? null, part: focus ? focus.name : null });
     });
+  } else if (onPick) {
+    canvas.style.cursor = 'pointer';
+    canvas.addEventListener('click', (e) => onPick(barAt(e)));
   } else if (play) {
     canvas.style.cursor = 'pointer';
     canvas.title = 'Click to play from here';
@@ -1396,10 +1511,10 @@ function pianoRoll(piece, { bands = [], onMark = null, onMoveBand = null, play =
     const r = canvas.getBoundingClientRect();
     readout.textContent = at(((e.clientX - r.left) / r.width) * bars * bpb);
   });
-  const legend = h('div', { class: 'choices roll-parts', role: 'radiogroup', 'aria-label': 'Parts' },
+  const legendEl = !legend ? null : h('div', { class: 'choices roll-parts', role: 'radiogroup', 'aria-label': 'Parts' },
     tracks.map((t) => h('button', { type: 'button', class: `choice${focus === t ? ' on' : ''}`, role: 'radio', 'aria-checked': String(focus === t), onclick: (e) => {
       focus = focus === t ? null : t;
-      for (const b of legend.children) { b.classList.remove('on'); b.setAttribute('aria-checked', 'false'); }
+      for (const b of legendEl.children) { b.classList.remove('on'); b.setAttribute('aria-checked', 'false'); }
       if (focus) { e.currentTarget.classList.add('on'); e.currentTarget.setAttribute('aria-checked', 'true'); }
       onFocus?.(focus?.channel ?? null);
       draw();
@@ -1414,7 +1529,13 @@ function pianoRoll(piece, { bands = [], onMark = null, onMoveBand = null, play =
       if (s.id === play.id && s.playing) readout.textContent = at((s.time * bpm) / 60);
     } });
   }
-  const box = h('div', { class: 'roll-box' }, h('div', { class: 'roll-head' }, playBtn, legend), stage, h('div', { class: 'roll-foot' }, readout, h('span', { class: 'meta' }, `${tracks.length} parts · ${all.length} notes`)));
+  const view = h('div', { class: 'band view', hidden: true });
+  bandLayer.prepend(view);
+  const count = h('span', { class: 'meta' }, `${tracks.length} parts · ${all.length} notes`);
+  const box = h('div', { class: 'roll-box' }, h('div', { class: 'roll-head' }, playBtn, legendEl, legend || !onPick ? null : h('span', { class: 'meta' }, onMark ? 'Click to go there in the notes below; drag across bars to leave a note on them.' : 'Click to go there in the notes below.')), stage, h('div', { class: 'roll-foot' }, readout, count));
+  box.setFocus = (ch) => { focus = ch === null ? null : tracks.find((t) => t.channel === ch) || null; draw(); };
+  box.setView = (from, to) => { view.hidden = false; place(view, from, to); };
+  box.setPiece = (p) => { tracks = (p.tracks || []).filter((t) => t.notes?.length); all = tracks.flatMap((t) => t.notes); if (focus) focus = tracks.find((t) => t.channel === focus.channel) || null; measure(); count.textContent = `${tracks.length} parts · ${all.length} notes`; draw(); };
   requestAnimationFrame(draw);
   new ResizeObserver(() => draw()).observe(canvas);
   return box;

@@ -143,7 +143,21 @@ and it checks that. The roll redraws and plays from just before the change withi
 chords, the bars around it, what the other parts play, the genre's beat, and the edits you've kept before. What you keep is
 saved as a measured difference (`taste.json`) and shapes the next edits and the next pieces you make; what you undo
 counts against that change. Quick edits use Sonnet through your own Claude Code or API key (`config quickModel` to change
-it). The **Flows** page shows every flow by shape or by feel, with how each has gone for you. The project page has the MIDI panel: the arrangement as a
+it).
+
+**Made for learning, with your hands on the notes.** Above every piece's MIDI sits a row of its **instruments**, each in
+its own colour with a line saying what it is ("The low notes: the bass line", "A tune: the melody you could hum").
+While it plays, each one **lights up** as it sounds, so you can tell what you're hearing and which part to change. Click
+one to read what it does in the piece, **hear it alone** or **mute it**, and (in a review) tell the studio about it with
+one click ("Too loud", "Plays too much", "Wrong sound for it"…). Below, the **notes of the whole piece** in the
+instruments' colours, following the music as it plays: pick an instrument, click to add a note, drag to move it, drag
+its end to make it longer, double-click to remove it; pick several and make them softer or louder, move them an octave,
+repeat them, or **give them to another instrument**. Your changes play straight away; **Put it in the song** writes them
+into the score exactly (checked note for note, nothing else moves), with Keep and Undo. You can change the notes in a
+MIDI review, and on the project page whenever the piece waits for you (paused for your master, or delivered), never
+while a session is writing it. A "How to read and change this" note under the grid explains it all in plain words.
+
+The **Flows** page shows every flow by shape or by feel, with how each has gone for you. The project page has the MIDI panel: the arrangement as a
 piano roll, **Download MIDI**, and **Import your master** when you finish a song in your own DAW. Sessions start by
 themselves while `serve` runs. To use it from your phone or another computer at home, run `mortiflix-music serve --network`
 (or `mortiflix-music config network true` once): it prints the addresses to open, no token, and anything on your network

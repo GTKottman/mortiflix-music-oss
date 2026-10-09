@@ -218,6 +218,13 @@ export async function startServer(root, { port = 4747, host = '127.0.0.1', runne
       changed();
       return send(res, 200, r);
     }
+    // Hand edits: the notes the owner drew in the editor, exactly.
+    if (sub === '/music/notes-edit' && method === 'POST') {
+      const b = await json(req);
+      const r = await edits.makeNotesEdit(root, id, { cells: b.cells, notes: b.notes });
+      changed();
+      return send(res, 200, r);
+    }
     let em;
     if ((em = sub.match(/^\/music\/edits\/([a-f0-9]{6,20})\/(keep|undo)$/)) && method === 'POST') {
       const r = em[2] === 'keep' ? await edits.keepEdit(root, id, em[1]) : await edits.undoEdit(root, id, em[1]);

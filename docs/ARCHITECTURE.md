@@ -187,6 +187,18 @@ capture` then re-captures `notes.json` and the MIDI pack, and the version under 
 `music/edits.json`, and the engine re-applies them whenever the score is checked. Kept and undone edits become measured
 differences in `taste.json`, which feed later edits and every session's CLAUDE.md.
 
+Hand edits (`web/seq.js`, `src/edits.mjs` `makeNotesEdit`, `lib/edit.mjs` `handEdit`/`verifyNotes`): the review room
+and the project page share one MIDI workbench: an instrument strip lit by `player.levels()` (each channel's last note,
+in audio-clock time), a whole-piece roll, and a note editor working on a copy of the notes. The editor knows what
+changed per channel and bar (a cell) and sends only those cells and every note now starting in them. The studio writes
+them as an exact block of their own (`owner_notes_chN`: one voice per overlapping note on a grid of 24 steps a beat,
+`.slow(n)` over the whole piece, so a held chord stays held over the bar line) behind the same per-bar masks, and
+`verifyNotes()` checks every drawn note came out as drawn and nothing else moved. Each edit also carries the same bars
+as mini-notation (cut at the bar line) for an engine from before hand edits; while hand edits are active, the studio
+captures with its own engine. One change across several parts is one batch: kept and undone together. Edits change the
+MIDI under review, or, when the piece is paused for the owner or delivered (no session at work), the score and its MIDI
+pack directly (step `pack`).
+
 `web/player.js` plays a piece in the browser: the captured notes (or a MIDI file, or an audio file such as your master)
 through a small Web Audio synth and drum kit, with instruments picked from each part's name and General MIDI drums
 on channel 10. Nothing is loaded from elsewhere, so it works offline and under the app's CSP. One piece plays at a

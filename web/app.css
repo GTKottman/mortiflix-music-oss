@@ -350,3 +350,60 @@ pre.code { white-space: pre-wrap; word-break: break-word; font-size: 12.5px; col
 .md li { margin: 2px 0; }
 .md code { font-size: 12.5px; background: var(--raise); padding: 0 4px; border-radius: 4px; }
 @media (max-width: 640px) { .made-row { padding-left: 0; } .facts.files { columns: 1; } }
+
+/* ---------- the instruments and the note editor ---------- */
+/* Each instrument keeps one colour, on its card and on its notes, so what lights up at the top is what you see below.
+   Quiet by default: a hairline card with a small swatch; colour fills it only while it sounds. */
+.stage-h { margin: 18px 0 8px; }
+.stage-h:first-child { margin-top: 4px; }
+.parts { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.part { position: relative; overflow: hidden; text-align: left; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px 10px; background: transparent; cursor: pointer; display: grid; gap: 2px; min-width: 0; color: var(--body); }
+.part:hover { border-color: var(--muted); }
+.part.on { border-color: var(--c); box-shadow: inset 0 0 0 1px var(--c); }
+.part.quiet { opacity: 0.45; }
+.part-top { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.swatch { width: 10px; height: 10px; border-radius: 3px; background: var(--c); flex: 0 0 auto; }
+.part-name { color: var(--ink); font-weight: 500; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.part-kind { font-size: 12px; color: var(--muted); line-height: 1.35; }
+.part-meter { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--c); transform: scaleX(0); transform-origin: left; }
+.part-panel { margin-top: 10px; padding: 10px 0 2px; border-top: 1px solid var(--line); font-size: 14px; }
+.part-panel p { margin: 4px 0; }
+.pp-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+.pp-head h3 { font-size: 16px; }
+.pp-head .swatch { align-self: center; }
+.pp-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+.btn.on { border-color: var(--ink); color: var(--ink); background: var(--raise); }
+.pp-say { margin-top: 10px; display: grid; gap: 6px; }
+.pp-say .choice { font-size: 13px; padding: 3px 11px; }
+
+.band.view { background: transparent; box-shadow: inset 0 0 0 1px var(--link); pointer-events: none; }
+.seq-box { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 10px 0; }
+.seq-nav { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.seq-nav .btn { padding: 4px 10px; }
+.seq-where { font-variant-numeric: tabular-nums; color: var(--ink); font-size: 14px; min-width: 9.5em; text-align: center; }
+.seq-pick { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.seq-pick select { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; }
+.seq-nav .choice { padding: 3px 11px; font-size: 13px; }
+.seq-stage { position: relative; }
+.seq { display: block; width: 100%; height: 300px; outline: none; user-select: none; -webkit-user-select: none; }
+.seq:focus-visible { box-shadow: 0 0 0 2px var(--link); }
+.seq-sel { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-height: 34px; padding-top: 8px; font-size: 14px; }
+.seq-what { color: var(--ink); }
+.seq-acts { display: inline-flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.seq-acts .btn { padding: 3px 10px; font-size: 13px; }
+.seq-pending { display: grid; gap: 6px; padding-top: 6px; font-size: 14px; }
+.seq-pending:empty { display: none; }
+.seq-pending b { color: var(--pin); font-weight: 600; }
+.seq-help { margin-top: 8px; font-size: 13px; }
+.seq-help summary { color: var(--muted); cursor: pointer; }
+.seq-help ul { margin: 6px 0 0; padding-left: 18px; }
+.seq-help li { margin: 3px 0; }
+.hand-edits { margin-top: 14px; }
+.hand-edits .rows li { display: flex; gap: 12px; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.hand-edits .facts { padding: 0; margin: 0; color: var(--ink); }
+.hand-edits .actions { display: flex; gap: 8px; align-items: center; flex: 0 0 auto; }
+.hand-edits .warn { color: var(--warn); font-size: 13px; }
+@media (max-width: 640px) {
+  .parts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .seq-where { min-width: 0; }
+}
