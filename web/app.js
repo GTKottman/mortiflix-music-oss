@@ -901,6 +901,9 @@ async function newView(slug) {
   mount(
     h('a', { class: 'crumb', href: '#/new' }, '← Everything we make'),
     h('div', { class: 'head' }, h('div', null, h('h1', null, p.name), h('div', { class: 'sub' }, p.description))),
+    // The demo makes no music: say so before anyone writes a brief for it.
+    studio?.config.backend === 'demo' ? h('div', { class: 'needs' }, h('div', { class: 'what' }, 'This studio runs the demo: no Claude, no real music.'),
+      h('div', { class: 'meta' }, 'Every piece comes out as the same 4-bar placeholder with 3 parts, to try the review room for free. ', h('a', { href: '#/settings' }, 'Choose Claude in Settings'), ' to make real music.')) : null,
     h('section', null,
       field('Title', h('input', { type: 'text', placeholder: p.name, oninput: (e) => { title = e.target.value; } })),
       cat ? field('Flow', flowPicker(p.flows, cat, (v) => { flow = v; }), { optional: true }) : null,
