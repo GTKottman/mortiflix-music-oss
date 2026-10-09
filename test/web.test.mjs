@@ -118,6 +118,9 @@ test('web: the MIDI panel hands over the MIDI pack and its notes and takes the o
   assert.equal((await s('GET', `/api/projects/${id}/music`)).json.expect, null);
   assert.equal((await s('GET', `/api/projects/${id}/music/midi.zip`)).status, 400);
   assert.equal((await s('GET', `/api/projects/${id}/music/notes`)).status, 400);
+  const listed = async () => (await s('GET', '/api/projects')).json.find((x) => x.id === id);
+  assert.deepEqual((await listed()).music, { notes: false, master: false, bpm: null, bars: null, seconds: null });
+  assert.equal((await listed()).genre, 'house');
 
   const w = projectPaths(root, id).work;
   mkdirSync(join(w, 'music'), { recursive: true }); mkdirSync(join(w, 'out/music/midi'), { recursive: true });
@@ -128,6 +131,8 @@ test('web: the MIDI panel hands over the MIDI pack and its notes and takes the o
   saveDaw(root, 'logic');
   const st = (await s('GET', `/api/projects/${id}/music`)).json;
   assert.equal(st.finish, 'own'); assert.deepEqual(st.midi, ['01-bass.mid']); assert.equal(st.expect.seconds, 4); assert.equal(st.daw, 'Logic Pro');
+  // The library plays it and shows its tempo and length.
+  assert.deepEqual((await listed()).music, { notes: true, master: false, bpm: 120, bars: 2, seconds: 4 });
   const notes = (await s('GET', `/api/projects/${id}/music/notes`)).json;
   assert.equal(notes.tracks[0].name, 'Bass');
   assert.deepEqual(notes.sections.map((x) => x.name), ['Only']);
@@ -141,6 +146,7 @@ test('web: the MIDI panel hands over the MIDI pack and its notes and takes the o
   const ok = await s('POST', `/api/projects/${id}/music/master?name=take.wav`, { raw: wav });
   assert.equal(ok.status, 200, JSON.stringify(ok.json)); assert.equal(ok.json.resumed, true);
   assert.ok(existsSync(join(w, 'music/own-master/master.wav')));
+  assert.equal((await listed()).music.master, true); // the library plays your master instead of the sketch
   const audio = await s('GET', `/api/projects/${id}/music/master`);
   assert.equal(audio.headers['content-type'], 'audio/wav');
   assert.equal((await s('POST', `/api/projects/${id}/music/master`, { raw: wav, headers: { 'x-mortiflix': '' } })).status, 403);

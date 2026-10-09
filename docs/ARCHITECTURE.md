@@ -176,6 +176,13 @@ are read in the browser (a small Standard MIDI File reader in `web/app.js`) and 
 a click on it becomes a note at that moment (`time_sec`, from the file's tempo). See
 [SECURITY.md](SECURITY.md) for its guards.
 
+`web/player.js` plays a piece in the browser: the captured notes (or a MIDI file, or an audio file such as your master)
+through a small Web Audio synth and drum kit, with instruments picked from each part's name and General MIDI drums
+on channel 10. Nothing is loaded from elsewhere, so it works offline and under the app's CSP. One piece plays at a
+time; the player bar, the library's play buttons and every piano roll's playhead follow it. The home page is the
+library: every piece with a sketch of its notes (`/api/projects` carries each piece's `music`: notes, master, tempo,
+length).
+
 ## Claude Code (`plugin/`)
 
 The repository is also a Claude Code plugin marketplace (`.claude-plugin/marketplace.json`). It has one plugin,

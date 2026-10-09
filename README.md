@@ -127,8 +127,12 @@ mortiflix-music rate <project> love  # how it landed: the studio's next picks fo
 mortiflix-music serve                # http://127.0.0.1:4747
 ```
 
-The web studio shows what's waiting on you, a live log of what Claude is doing, and the review room: MIDI shows as a
-**piano roll** (pick a part to bring it forward; click a bar to leave a note there), audio as a player you can note a
+The web studio opens on your **library**: everything you've made, each with a sketch of its notes and a play button, and
+what's waiting on you on top. Press play and you hear the MIDI right in the browser on a small built-in synth and drum
+kit (a sketch of the music; the real sounds come in your DAW), or your own master once you've imported it. The player
+bar stays at the bottom across pages, shows the section you're in, and Space plays and pauses. The studio also shows a
+live log of what Claude is doing, and the review room: MIDI shows as a
+**piano roll** you can play (pick a part to bring it forward; click a bar, or press *Note at the playhead* while it plays, to leave a note there), audio as a player you can note a
 moment on, a blueprint as paragraphs you can comment on. The **Flows** page shows every flow by shape or by feel, with how each has gone for you. The project page has the MIDI panel: the arrangement as a
 piano roll, **Download MIDI**, and **Import your master** when you finish a song in your own DAW. Sessions start by
 themselves while `serve` runs. To use it from your phone or another computer at home, run `mortiflix-music serve --network`

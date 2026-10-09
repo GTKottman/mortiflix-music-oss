@@ -400,7 +400,17 @@ function summary(root, p) {
     current: current ? { key: current.key, name: current.name } : null,
     done: steps.filter((s) => ['approved', 'done'].includes(s.state)).length,
     total: steps.length,
+    genre: p.intake?.answers?.genre || null,
+    flow: p.flow ? p.flow.name : null,
+    music: libraryMusic(root, p.id),
   };
+}
+
+// What the library shows of a piece's music: whether it has notes to play, its tempo and length, and your master.
+function libraryMusic(root, id) {
+  const mp = music.musicPaths(root, id);
+  const e = music.expectation(root, id);
+  return { notes: existsSync(mp.notes), master: existsSync(mp.master), bpm: e?.bpm || null, bars: e?.bars || null, seconds: e?.seconds || null };
 }
 
 function detail(root, id, runner) {

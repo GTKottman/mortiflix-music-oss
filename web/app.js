@@ -1,6 +1,8 @@
 // Mortiflix Music studio (web). No framework: a tiny DOM builder, hash routes, and live updates over SSE.
 // Everything the studio or a session wrote is inserted as text, never as HTML.
 
+import * as player from './player.js';
+
 const $app = document.getElementById('app');
 const $status = document.getElementById('top-status');
 let studio = null;
@@ -143,14 +145,18 @@ async function loadStudio() {
   );
 }
 
-// ---------- the studio (home) ----------
+// ---------- the library (home) ----------
 
+// Every piece you've made, newest first, each with a sketch of its notes and a play button; what's waiting on you
+// stays on top.
 async function studioView() {
   const projects = projectsCache = await api('/api/projects');
   const turn = projects.filter((p) => p.state === 'waiting' || p.state === 'paused');
-  const prod = projects.filter((p) => p.state === 'queued');
-  const done = projects.filter((p) => p.state === 'delivered');
+  const pieces = projects.filter((p) => !['draft', 'cancelled'].includes(p.state));
   const other = projects.filter((p) => p.state === 'draft' || p.state === 'cancelled');
+  const kinds = [...new Set(pieces.map((p) => p.pipeline.name))];
+  let kind = store.get('library-kind');
+  if (!kinds.includes(kind)) kind = null;
 
   const turnRow = (p, first) => {
     const what = p.state === 'paused'
@@ -163,33 +169,166 @@ async function studioView() {
       h('div', { class: 'main' }, h('a', { class: 'title', href: `#/p/${p.id}` }, p.title), h('div', { class: 'meta' }, what)),
       h('div', { class: 'end' }, h('a', { class: `btn${first ? ' primary' : ''}`, href: to }, p.state === 'paused' ? 'Open' : 'Review')));
   };
-  const prodRow = (p) => h('li', { class: 'row' },
-    p.working ? h('span', { class: 'ico' }, h('span', { class: 'pulse' })) : icon('ready'),
-    h('div', { class: 'main' }, h('a', { class: 'title', href: `#/p/${p.id}` }, p.title),
-      h('div', { class: 'meta' }, p.working ? (p.status?.text || `Working on ${p.current?.name || 'it'}`) : 'Waiting for its turn')),
-    h('div', { class: 'end' }, h('span', { class: 'chip' }, p.pipeline.name), `${p.done}/${p.total}`));
-  const doneRow = (p) => h('li', { class: 'row' }, icon('done'),
-    h('div', { class: 'main' }, h('a', { class: 'title', href: `#/p/${p.id}` }, p.title)),
-    h('div', { class: 'end' }, h('span', { class: 'chip' }, p.pipeline.name), ago(p.delivered_at)));
-  const otherRow = (p) => h('li', { class: 'row' }, icon('blocked'),
-    h('div', { class: 'main' }, h('a', { class: 'title', href: `#/p/${p.id}` }, p.title)),
-    h('div', { class: 'end' }, p.state));
 
-  const section = (title, list, row) => (list.length ? h('section', null, h('h2', null, title, h('span', { class: 'count' }, list.length)), h('ul', { class: 'rows' }, list.map(row))) : null);
+  const pieceRow = (p) => {
+    const m = p.music || {};
+    const playable = m.notes || m.master;
+    const sketch = h('div', { class: 'sketch' });
+    if (m.notes) notesFor(p).then((n) => fill(sketch, miniRoll(n, p.id))).catch(() => {});
+    const end = p.state === 'delivered' ? [m.seconds ? clock(m.seconds) : null, h('span', { class: 'quiet' }, ago(p.delivered_at))]
+      : p.state === 'queued' ? [p.working ? h('span', { class: 'pulse', 'aria-hidden': 'true' }) : null, `${p.done}/${p.total}`]
+        : turn.includes(p) ? h('span', null, 'waiting for you') : p.state;
+    return h('li', { class: 'row piece' },
+      playable ? playButton(p) : h('span', { class: 'play-slot' }, p.working ? h('span', { class: 'pulse' }) : icon(p.state === 'delivered' ? 'done' : 'ready')),
+      h('div', { class: 'main' }, h('a', { class: 'title', href: `#/p/${p.id}` }, p.title),
+        h('div', { class: 'meta' }, [p.pipeline.name, p.genre, m.bpm ? `${m.bpm} BPM` : null, p.flow].filter(Boolean).join(' · '))),
+      sketch,
+      h('div', { class: 'end' }, end));
+  };
+
+  const listBox = h('ul', { class: 'rows' });
+  const drawList = () => fill(listBox, pieces.filter((p) => !kind || p.pipeline.name === kind).map(pieceRow));
+  drawList();
 
   mount(
-    h('div', { class: 'head' }, h('h1', null, 'Studio'), h('div', { class: 'actions' }, h('a', { class: 'btn solid', href: '#/new' }, 'New piece'))),
+    h('div', { class: 'head' }, h('h1', null, 'Library'), h('div', { class: 'actions' }, h('a', { class: 'btn solid', href: '#/new' }, 'New piece'))),
     projects.length ? null : h('section', null, h('div', { class: 'empty' },
-      h('div', { class: 'big' }, 'Nothing in production yet.'),
-      h('p', null, 'Pick what to make, write the brief, and approve each stage as it comes in.'),
+      h('div', { class: 'big' }, 'Nothing here yet.'),
+      h('p', null, 'Pick what to make, write the brief, and approve each stage as it comes in. Everything you make lands here, ready to play.'),
       h('div', { class: 'actions' }, h('a', { class: 'btn solid', href: '#/new' }, 'Make a song'),
         h('button', { class: 'btn', onclick: startDemo }, 'Try the demo'), h('span', { class: 'meta' }, 'a song with placeholder work, free')))),
-    section('Your turn', turn, (p, i) => turnRow(p, i === 0)),
-    section('In production', prod, prodRow),
-    section('Delivered', done, doneRow),
-    other.length ? h('section', null, h('details', null, h('summary', null, `Drafts and cancelled (${other.length})`), h('ul', { class: 'rows' }, other.map(otherRow)))) : null,
+    turn.length ? h('section', null, h('h2', null, 'Your turn', h('span', { class: 'count' }, turn.length)), h('ul', { class: 'rows' }, turn.map((p, i) => turnRow(p, i === 0)))) : null,
+    pieces.length ? h('section', null, h('h2', null, 'Your music', h('span', { class: 'count' }, pieces.length)),
+      kinds.length > 1 ? h('div', { class: 'filter' }, choiceChips(['All', ...kinds], kind || 'All', (v) => { kind = v === 'All' ? null : v; store.set('library-kind', kind); drawList(); })) : null,
+      listBox) : null,
+    other.length ? h('section', null, h('details', null, h('summary', null, `Drafts and cancelled (${other.length})`), h('ul', { class: 'rows' }, other.map((p) => h('li', { class: 'row' }, icon('blocked'),
+      h('div', { class: 'main' }, h('a', { class: 'title', href: `#/p/${p.id}` }, p.title)), h('div', { class: 'end' }, p.state)))))) : null,
   );
   current.refresh = () => studioView();
+}
+
+// A piece's notes, fetched once per change to the project.
+const notesCache = new Map();
+function notesFor(p) {
+  const key = `${p.id}@${p.updated_at}`;
+  if (!notesCache.has(key)) notesCache.set(key, api(`/api/projects/${p.id}/music/notes`).catch((e) => { notesCache.delete(key); throw e; }));
+  return notesCache.get(key);
+}
+
+// A play/pause button for one thing the player can play. `loadIt` puts it on the player the first time.
+function playToggle(pid, title, loadIt) {
+  const b = h('button', { type: 'button', class: 'play', 'aria-label': `Play ${title}`, onclick: async () => {
+    if (player.state().id !== pid) {
+      try { await loadIt(); } catch (e) { return toast(e.message, true); }
+    }
+    player.toggle();
+  } }, playGlyph(false));
+  watch({ id: pid, el: b, update: (s) => {
+    const on = s.id === pid && s.playing;
+    if (b.dataset.on === String(on)) return;
+    b.dataset.on = String(on); fill(b, playGlyph(on)); b.setAttribute('aria-label', `${on ? 'Pause' : 'Play'} ${title}`);
+  } });
+  return b;
+}
+
+// Play a piece from the library: your master when you've imported one, otherwise its MIDI on the built-in synth.
+// The ids match the ones the project page plays them under.
+function playButton(p) {
+  const href = `#/p/${p.id}`;
+  if (p.music.master) return audioButton({ id: `${p.id}/master`, title: `${p.title} · your master`, href, url: `/api/projects/${p.id}/music/master?v=${encodeURIComponent(p.updated_at)}` });
+  return playToggle(p.id, p.title, async () => player.load({ id: p.id, title: p.title, href, piece: await notesFor(p) }));
+}
+
+// An audio file (a master, a delivered mix) on the player bar.
+const audioButton = ({ id, title, href, url }) => playToggle(id, title, () => player.loadAudio({ id, title, href, url }));
+
+// A MIDI file on the player bar, read in the browser.
+const midiButton = ({ id, title, href, url }) => playToggle(id, title, async () => {
+  let piece;
+  try { piece = readMidi(new Uint8Array(await (await fetch(url)).arrayBuffer())); } catch (e) { throw new Error(`Couldn't read this MIDI file: ${e.message}`); }
+  player.load({ id, title, href, piece });
+});
+
+// The library's little piano roll: every note in faint ink, drums left out, and the playhead while it plays.
+function miniRoll(piece, pid) {
+  const tracks = (piece.tracks || []).filter((t) => t.notes?.length && !(t.drums || t.kind === 'drums' || t.channel === 10));
+  const all = tracks.flatMap((t) => t.notes);
+  const wrap = h('div', { class: 'mini' });
+  if (!all.length) return wrap;
+  const bpb = piece.beatsPerBar || piece.beats_per_bar || 4;
+  const end = Math.ceil(Math.max(...all.map((n) => n.start + n.dur), ...(piece.tracks || []).flatMap((t) => t.notes.map((n) => n.start + n.dur))) / bpb) * bpb;
+  const lo = Math.min(...all.map((n) => n.pitch)) - 1; const hi = Math.max(...all.map((n) => n.pitch)) + 1;
+  const canvas = h('canvas', { 'aria-hidden': 'true' });
+  const head = h('div', { class: 'playhead', hidden: true });
+  add(wrap, canvas, head);
+  const draw = () => {
+    const w = canvas.clientWidth || 200; const ht = canvas.clientHeight || 34; const dpr = window.devicePixelRatio || 1;
+    canvas.width = w * dpr; canvas.height = ht * dpr;
+    const g = canvas.getContext('2d'); g.scale(dpr, dpr);
+    g.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim();
+    const row = ht / (hi - lo + 1);
+    for (const n of all) g.fillRect((n.start / end) * w, ht - (n.pitch - lo + 1) * row, Math.max(1, (n.dur / end) * w - 0.5), Math.max(1.5, row));
+  };
+  requestAnimationFrame(draw);
+  watch({ id: pid, el: wrap, update: (s) => playheadAt(head, s, pid) });
+  return wrap;
+}
+
+// Playheads and play buttons follow the player: one subscription, each element updated while it's on the page.
+const watchers = new Set();
+function watch(w) { watchers.add(w); w.update(player.state()); }
+function playheadAt(el, s, pid) {
+  const on = s.id === pid && s.duration > 0 && (s.playing || s.time > 0);
+  el.hidden = !on;
+  if (on) el.style.left = `${Math.min(100, (s.time / s.duration) * 100)}%`;
+}
+
+const SVG = 'http://www.w3.org/2000/svg';
+function playGlyph(pausing) {
+  const svg = document.createElementNS(SVG, 'svg');
+  svg.setAttribute('viewBox', '0 0 16 16'); svg.setAttribute('width', '14'); svg.setAttribute('height', '14'); svg.setAttribute('aria-hidden', 'true');
+  const path = document.createElementNS(SVG, 'path');
+  path.setAttribute('d', pausing ? 'M4 2.5h3v11H4zM9 2.5h3v11H9z' : 'M4.5 2.2v11.6L13.6 8z');
+  path.setAttribute('fill', 'currentColor');
+  svg.append(path);
+  return svg;
+}
+
+// The player bar: what's playing, its section, a scrubber with the sections marked, and the time. It stays put across
+// pages; Space plays and pauses (outside text fields).
+function playerBar() {
+  const bar = document.getElementById('playerbar');
+  const btn = h('button', { type: 'button', class: 'play big', 'aria-label': 'Play', onclick: () => player.toggle() }, playGlyph(false));
+  const title = h('a', { class: 'pb-title' });
+  const section = h('span', { class: 'pb-section' });
+  const scrub = h('input', { type: 'range', min: 0, max: 1000, value: 0, step: 1, 'aria-label': 'Position', class: 'pb-scrub' });
+  const ticks = h('div', { class: 'pb-ticks', 'aria-hidden': 'true' });
+  const time = h('span', { class: 'pb-time' });
+  const x = h('button', { type: 'button', class: 'pb-x', 'aria-label': 'Close the player', onclick: () => player.close() }, '×');
+  let dragging = false;
+  scrub.addEventListener('input', () => { dragging = true; const s = player.state(); time.textContent = `${clock((scrub.value / 1000) * s.duration)} / ${clock(s.duration)}`; });
+  scrub.addEventListener('change', () => { dragging = false; player.seek((scrub.value / 1000) * player.state().duration); });
+  add(bar, h('div', { class: 'pb-in' }, btn, h('div', { class: 'pb-what' }, title, section), h('div', { class: 'pb-track' }, ticks, scrub), time, x));
+  let shown = null; let wasPlaying = null; let markKey = '';
+  player.on((s) => {
+    bar.hidden = !s.id;
+    document.body.classList.toggle('has-player', Boolean(s.id));
+    if (s.id) {
+      if (shown !== s.id) { shown = s.id; title.textContent = s.title; if (s.href) title.href = s.href; else title.removeAttribute('href'); }
+      if (wasPlaying !== s.playing) { wasPlaying = s.playing; fill(btn, playGlyph(s.playing)); btn.setAttribute('aria-label', s.playing ? 'Pause' : 'Play'); }
+      section.textContent = s.section ? `· ${s.section}` : '';
+      const key = `${s.id}:${s.duration}`;
+      if (markKey !== key) { markKey = key; fill(ticks, s.duration ? s.markers.filter((m) => m.sec > 0).map((m) => h('span', { style: { left: `${(m.sec / s.duration) * 100}%` }, title: m.text })) : []); }
+      if (!dragging) { scrub.value = s.duration ? Math.round((s.time / s.duration) * 1000) : 0; time.textContent = `${clock(s.time)} / ${clock(s.duration)}`; }
+    } else shown = null;
+    for (const w of watchers) { if (!w.el.isConnected) watchers.delete(w); else w.update(s); }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== ' ' || e.repeat || !player.state().id) return;
+    if (e.target.closest('input, textarea, select, button, a, [contenteditable], [role=radio]')) return;
+    e.preventDefault();
+    player.toggle();
+  });
 }
 
 async function startDemo() {
@@ -202,7 +341,7 @@ async function startDemo() {
 
 // The MIDI panel: the arrangement as a piano roll, the MIDI pack to download, and (when you finish it in your own
 // DAW) the place to import your master and see how it fits the score.
-function musicPanel(id, ms) {
+function musicPanel(id, ms, title) {
   const own = ms.own; const e = ms.expect;
   const waiting = ms.finish === 'own' && !own;
   const input = h('input', { type: 'file', accept: '.wav,.aif,.aiff,.flac,.mp3,.m4a,.ogg,audio/*', style: { display: 'none' }, onchange: async (ev) => {
@@ -214,9 +353,9 @@ function musicPanel(id, ms) {
       current.refresh?.();
     } catch (err) { toast(err.data?.errors?.join(' · ') || err.message, true); }
   } });
-  const facts = own ? `${own.source}: ${own.measured.seconds} s, ${own.measured.lufs} LUFS, true peak ${own.measured.true_peak} dBTP` : e ? `${e.bars} bars at ${e.bpm} BPM (${e.meter}), ${e.seconds} s${ms.daw ? ` · import steps for ${ms.daw}` : ''}` : '';
+  const facts = own ? `${own.source}: ${clock(own.measured.seconds)}, ${own.measured.lufs} LUFS, true peak ${own.measured.true_peak} dBTP` : e ? `${e.bars} bars at ${e.bpm} BPM (${e.meter}), ${clock(e.seconds)}${ms.daw ? ` · import steps for ${ms.daw}` : ''}` : '';
   const roll = h('div', { class: 'roll-wrap' });
-  api(`/api/projects/${id}/music/notes`).then((n) => fill(roll, pianoRoll(n))).catch(() => roll.remove());
+  api(`/api/projects/${id}/music/notes`).then((n) => fill(roll, pianoRoll(n, { play: { id, title, href: `#/p/${id}` } }))).catch(() => roll.remove());
   return h('section', null, h('h2', null, 'MIDI'),
     h('div', { class: waiting ? 'turn-line' : 'state-line' },
       h('div', null,
@@ -226,7 +365,8 @@ function musicPanel(id, ms) {
         h('a', { class: 'btn', href: `/api/projects/${id}/music/midi.zip` }, 'Download MIDI'),
         ms.masters || own ? [h('button', { class: waiting ? 'btn primary' : 'btn', onclick: () => input.click() }, own ? 'Replace master' : 'Import your master'), input] : null)),
     roll,
-    own ? h('audio', { src: `/api/projects/${id}/music/master?v=${encodeURIComponent(own.imported_at)}`, controls: true, preload: 'none', style: { width: '100%', marginTop: '8px' } }) : null,
+    own ? h('div', { class: 'row with-play' }, audioButton({ id: `${id}/master`, title: `${title} · your master`, href: `#/p/${id}`, url: `/api/projects/${id}/music/master?v=${encodeURIComponent(own.imported_at)}` }),
+      h('div', { class: 'main' }, h('span', { class: 'title' }, 'Your master')), h('div', { class: 'end' }, clock(own.measured.seconds))) : null,
     own?.warnings?.length ? h('ul', { class: 'meta' }, own.warnings.map((w) => h('li', null, w))) : null);
 }
 
@@ -265,12 +405,13 @@ async function projectView(id) {
   }
 
   const ms = await api(`/api/projects/${id}/music`).catch(() => null);
-  const musicBlock = ms?.midi?.length ? musicPanel(id, ms) : null;
+  const musicBlock = ms?.midi?.length ? musicPanel(id, ms, p.title) : null;
 
   const deliverables = p.deliverables.length ? h('section', { class: 'deliver' }, h('h2', null, 'Delivered'),
-    p.deliverables.map((f) => h('div', null,
-      f.kind === 'audio' ? h('audio', { src: fileUrl(id, f.file), controls: true }) : null,
-      h('div', { class: 'row' }, icon('done'), h('div', { class: 'main' }, h('span', { class: 'title' }, f.label)), h('div', { class: 'end' }, h('a', { href: fileUrl(id, f.file, true) }, 'Download')))))) : null;
+    h('ul', { class: 'rows' }, p.deliverables.map((f) => h('li', { class: 'row' },
+      f.kind === 'audio' ? audioButton({ id: `${id}/${f.file}`, title: `${p.title} · ${f.label}`, href: `#/p/${id}`, url: fileUrl(id, f.file) })
+        : f.kind === 'midi' ? midiButton({ id: `${id}/${f.file}`, title: `${p.title} · ${f.label}`, href: `#/p/${id}`, url: fileUrl(id, f.file) }) : icon('done'),
+      h('div', { class: 'main' }, h('span', { class: 'title' }, f.label)), h('div', { class: 'end' }, h('a', { href: fileUrl(id, f.file, true) }, 'Download')))))) : null;
 
   const questions = openQs.length ? h('section', null, h('h2', null, 'Questions'), openQs.map((q) => questionForm(id, q))) : null;
 
@@ -309,7 +450,7 @@ async function projectView(id) {
 
   const open = new Set([...document.querySelectorAll('details[open][data-key]')].map((x) => x.dataset.key));
   mount(
-    h('a', { class: 'crumb', href: '#/' }, '← Studio'),
+    h('a', { class: 'crumb', href: '#/' }, '← Library'),
     h('div', { class: 'head' }, h('div', null, h('h1', null, p.title), h('div', { class: 'sub' }, h('span', { class: 'chip' }, d.pipeline.name),
       p.flow ? h('a', { class: 'chip', href: '#/flows', title: p.flow.picked === 'you' ? 'Your choice' : `The studio's pick: ${p.flow.why}` }, `Flow: ${p.flow.name}`) : null,
       p.flow?.picked === 'studio' ? h('span', null, `the studio's pick: ${p.flow.why}`) : null,
@@ -450,12 +591,14 @@ async function reviewView(id, stepKey, versionParam) {
     } else if (it.kind === 'midi') {
       // The MIDI as a piano roll: click a moment to note it (bar and beat, as seconds into the piece).
       stage = h('div', { class: 'roll-wrap' }, h('div', { class: 'meta' }, 'Reading the MIDI…'));
+      const pid = `${id}/${it.file}`;
       fetch(url).then((r) => r.arrayBuffer()).then((buf) => {
         const midi = readMidi(new Uint8Array(buf));
         const marks = (editable ? draft.notes : sub.feedback?.notes || []).filter((n) => n.item === sel && n.time_sec !== undefined).map((n) => n.time_sec);
-        fill(stage, pianoRoll(midi, { marks, onPick: editable ? (t) => addNote({ item: sel, time_sec: t }) : null }));
+        fill(stage, pianoRoll(midi, { marks, onPick: editable ? (t) => addNote({ item: sel, time_sec: t }) : null, play: { id: pid, title: `${d.project.title} · ${media.length > 1 ? it.label : `${step.name} v${sub.version}`}`, href: location.hash } }));
       }).catch((e) => fill(stage, h('div', { class: 'err' }, `Couldn't read this MIDI file: ${e.message}`)));
-      if (editable) tools.append(h('span', { class: 'meta' }, 'Click the roll to note a moment.'));
+      if (editable) tools.append(h('button', { class: 'btn', onclick: () => { const s = player.state(); if (s.id !== pid) return toast('Play it first, then note the moment you hear'); addNote({ item: sel, time_sec: Math.round(s.time * 100) / 100 }); } }, 'Note at the playhead'),
+        h('span', { class: 'meta' }, 'or click the roll to note a moment.'));
     } else if (it.kind === 'audio') {
       const audio = h('audio', { src: url, controls: true, style: { width: '100%' } });
       stage = h('div', { style: { padding: '12px 0' } }, audio);
@@ -960,8 +1103,9 @@ function readMidi(b) {
 
 // A piano roll for a piece: { bpm, beatsPerBar | beats_per_bar, tracks: [{ name, channel, notes }], markers? | sections? }.
 // Quiet by default: every part in faint ink; pick a part to see it in full ink. `marks` are noted moments (seconds),
-// and `onPick(seconds)` makes a click note that moment.
-function pianoRoll(piece, { marks = [], onPick = null } = {}) {
+// and `onPick(seconds)` makes a click note that moment. With `play` ({ id, title, href }) it gets a play button and a
+// playhead, and (when a click doesn't note) a click plays from there.
+function pianoRoll(piece, { marks = [], onPick = null, play = null } = {}) {
   const bpb = piece.beatsPerBar || piece.beats_per_bar || 4;
   const bpm = piece.bpm || 120;
   const tracks = (piece.tracks || []).filter((t) => t.notes?.length);
@@ -1011,13 +1155,15 @@ function pianoRoll(piece, { marks = [], onPick = null } = {}) {
     g.globalAlpha = 1; g.fillStyle = color('--pin');
     for (const sec of marks) g.fillRect(x((sec * bpm) / 60), 0, 2, ht);
   };
+  const secAt = (e) => { const r = canvas.getBoundingClientRect(); return Math.max(0, ((e.clientX - r.left) / r.width) * bars * bpb) * 60 / bpm; };
+  const loadMe = () => { if (player.state().id !== play.id) player.load({ ...play, piece }); };
   if (onPick) {
     canvas.style.cursor = 'crosshair';
-    canvas.addEventListener('click', (e) => {
-      const r = canvas.getBoundingClientRect();
-      const beat = Math.max(0, ((e.clientX - r.left) / r.width) * bars * bpb);
-      onPick(Math.round(((beat * 60) / bpm) * 100) / 100);
-    });
+    canvas.addEventListener('click', (e) => onPick(Math.round(secAt(e) * 100) / 100));
+  } else if (play) {
+    canvas.style.cursor = 'pointer';
+    canvas.title = 'Click to play from here';
+    canvas.addEventListener('click', (e) => { loadMe(); player.seek(secAt(e)); player.play(); });
   }
   canvas.addEventListener('mousemove', (e) => {
     const r = canvas.getBoundingClientRect();
@@ -1030,7 +1176,18 @@ function pianoRoll(piece, { marks = [], onPick = null } = {}) {
       if (focus) { e.currentTarget.classList.add('on'); e.currentTarget.setAttribute('aria-checked', 'true'); }
       draw();
     } }, `${t.channel ? `${t.channel} · ` : ''}${t.name || 'part'}`)));
-  const box = h('div', { class: 'roll-box' }, legend, canvas, h('div', { class: 'roll-foot' }, readout, h('span', { class: 'meta' }, `${tracks.length} parts · ${all.length} notes`)));
+  const stage = h('div', { class: 'roll-stage' }, canvas);
+  let playBtn = null;
+  if (play) {
+    const head = h('div', { class: 'playhead', hidden: true });
+    stage.append(head);
+    playBtn = playToggle(play.id, play.title, loadMe);
+    watch({ id: play.id, el: stage, update: (s) => {
+      playheadAt(head, s, play.id);
+      if (s.id === play.id && s.playing) readout.textContent = at((s.time * bpm) / 60);
+    } });
+  }
+  const box = h('div', { class: 'roll-box' }, h('div', { class: 'roll-head' }, playBtn, legend), stage, h('div', { class: 'roll-foot' }, readout, h('span', { class: 'meta' }, `${tracks.length} parts · ${all.length} notes`)));
   requestAnimationFrame(draw);
   new ResizeObserver(() => draw()).observe(canvas);
   return box;
@@ -1038,6 +1195,7 @@ function pianoRoll(piece, { marks = [], onPick = null } = {}) {
 
 // ---------- start ----------
 
+playerBar();
 await loadStudio();
 connect();
 render();
