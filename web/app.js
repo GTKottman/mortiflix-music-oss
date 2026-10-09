@@ -298,7 +298,10 @@ function playerBar() {
       if (markKey !== key) { markKey = key; fill(ticks, s.duration ? s.markers.filter((m) => m.sec > 0).map((m) => h('span', { style: { left: `${(m.sec / s.duration) * 100}%` }, title: m.text })) : []); }
       if (!dragging) { scrub.value = s.duration ? Math.round((s.time / s.duration) * 1000) : 0; time.textContent = `${clock(s.time)} / ${clock(s.duration)}`; }
     } else shown = null;
-    for (const w of watchers) { if (!w.el.isConnected) watchers.delete(w); else w.update(s); }
+    // A play button or playhead off the page is dropped once it's been gone a while (a redraw moves it straight back).
+    for (const w of watchers) {
+      if (w.el.isConnected) { w.gone = 0; w.update(s); } else if (Date.now() - (w.gone ||= Date.now()) > 5000) watchers.delete(w);
+    }
   });
   document.addEventListener('keydown', (e) => {
     if (e.key !== ' ' || e.repeat || !player.state().id) return;

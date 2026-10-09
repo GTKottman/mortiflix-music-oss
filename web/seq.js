@@ -43,9 +43,18 @@ export function partWords(t, role) {
   return { pad: 'Long, soft sounds in the background', keys: 'Chords on keys', lead: 'A tune on top', pluck: 'Short, bouncy notes' }[kind] || 'A part of the arrangement';
 }
 
-// Every frame while the player plays: `fn(state)` until the element leaves the page.
+// Every frame while the player plays: `fn(state)` until the element has left the page for good. A page that redraws
+// moves its parts into the new page, so a moment off the page doesn't count: only 5 s gone does.
 function follow(el, fn) {
-  const off = player.on((s) => { if (!el.isConnected && el.dataset.mounted) { off(); return; } if (el.isConnected) el.dataset.mounted = '1'; fn(s); });
+  let gone = 0;
+  const off = player.on((s) => {
+    if (!el.isConnected) {
+      if (el.dataset.mounted) { gone ||= Date.now(); if (Date.now() - gone > 5000) off(); }
+      return;
+    }
+    gone = 0; el.dataset.mounted = '1';
+    fn(s);
+  });
   return off;
 }
 
