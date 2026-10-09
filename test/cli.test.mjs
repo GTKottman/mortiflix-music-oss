@@ -31,3 +31,15 @@ test('renders run one at a time, in order, and report their output', async (t) =
   assert.equal(rb.exit_code, 3);
   assert.throws(() => q.get(a.id, 'other-project'), /no render/);
 });
+
+test('a render stopped from outside says so in its log', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'mfx-rq-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const q = new RenderQueue({ logDir: dir });
+  const a = q.add({ projectId: 'p', sessionId: 's', label: 'a', argv: ['sh', '-c', 'echo working; sleep 30'], cwd: dir, env: process.env });
+  await new Promise((r) => setTimeout(r, 200));
+  process.kill(q.jobs.get(a.id).proc.pid, 'SIGTERM');
+  const r = await q.wait(a.id, 'p', 5);
+  assert.equal(r.state, 'failed');
+  assert.match(r.output_tail, /stopped from outside by SIGTERM \(stopped on purpose, by the owner or the studio\), not by an error in it/);
+});

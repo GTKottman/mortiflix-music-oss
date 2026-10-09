@@ -88,7 +88,9 @@ export class RenderQueue {
       });
     };
     p.on('error', (e) => finish(127, e));
-    p.on('close', (code, signal) => finish(code ?? (signal ? 128 : 1)));
+    // A render stopped from outside (the owner, the studio, the system running out of memory) ends on a signal and
+    // writes nothing itself: the log says so, so the session doesn't take it for a crash in the render.
+    p.on('close', (code, signal) => finish(code ?? (signal ? 128 : 1), signal ? new Error(`The render was stopped from outside by ${signal} (${signal === 'SIGKILL' ? 'killed: often the system running out of memory' : 'stopped on purpose, by the owner or the studio'}), not by an error in it. Run it again; if it keeps stopping, say so with \`mfx needs-you\`.`) : null));
     this.onChange(job);
   }
 
