@@ -194,6 +194,6 @@ test('web: flows, a brief\'s flow, rating a piece and saving it as a flow', asyn
 
 test('web: on --network, only this machine\'s own names pass the Host check (DNS rebinding)', () => {
   const me = hostname().toLowerCase().split('.')[0];
-  for (const ok of ['192.168.1.205', '100.102.223.68', 'fe80::1', 'localhost', me, `${me}.local`, `${me}.tail1234.ts.net`]) assert.equal(ownName(ok), true, ok);
+  for (const ok of ['192.168.1.20', '100.64.0.7', 'fe80::1', 'localhost', me, `${me}.local`, `${me}.tail1234.ts.net`]) assert.equal(ownName(ok), true, ok);
   for (const bad of ['evil.example.com', `${me}.evil.com`, `${me}x.local`, 'rebind.1.2.3.4.nip.io', '']) assert.equal(ownName(bad), false, bad);
 });
