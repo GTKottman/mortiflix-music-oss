@@ -1,7 +1,7 @@
 // Reading the WAV files Strudel renders (PCM 16/24/32-bit or 32-bit float) and measuring them: level over a stretch of
 // time, and the mix balance a listener hears (how much energy sits in the low end and in the "mud" band, stereo width).
 // No dependencies; the numbers are reported as measurements, never as listening.
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 
 export function readWav(fileOrBuf) {
   const b = Buffer.isBuffer(fileOrBuf) ? fileOrBuf : readFileSync(fileOrBuf);
@@ -24,6 +24,19 @@ export function readWav(fileOrBuf) {
     }
   }
   return { rate: fmt.rate, channels: out, seconds: frames / fmt.rate };
+}
+
+// Writes { rate, channels: [Float32Array, ...] } as a 16-bit PCM WAV (clipped at full scale, as Strudel's export is).
+export function writeWav(file, { rate, channels }) {
+  const n = channels[0].length; const c = channels.length;
+  const b = Buffer.alloc(44 + n * c * 2);
+  b.write('RIFF', 0, 'latin1'); b.writeUInt32LE(36 + n * c * 2, 4); b.write('WAVEfmt ', 8, 'latin1');
+  b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(c, 22); b.writeUInt32LE(rate, 24);
+  b.writeUInt32LE(rate * c * 2, 28); b.writeUInt16LE(c * 2, 32); b.writeUInt16LE(16, 34);
+  b.write('data', 36, 'latin1'); b.writeUInt32LE(n * c * 2, 40);
+  for (let i = 0; i < n; i++) for (let k = 0; k < c; k++) b.writeInt16LE(Math.round(Math.max(-1, Math.min(1, channels[k][i])) * 32767), 44 + (i * c + k) * 2);
+  writeFileSync(file, b);
+  return file;
 }
 
 export const db = (x) => (x > 0 ? 20 * Math.log10(x) : -120);

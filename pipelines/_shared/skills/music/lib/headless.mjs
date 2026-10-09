@@ -1,13 +1,40 @@
 // Strudel in a headless Chrome, driven over the DevTools protocol (no npm dependencies). One page evaluates the score
 // exactly as the Strudel REPL does; from it we read the notes (haps) and render audio with Strudel's own offline
 // renderer (renderPatternAudio, the REPL's Export). Setup installs Strudel (MFX_STRUDEL) and finds Chrome (MFX_CHROME).
+// Long renders go in chunks: the offline renderer builds every note's audio graph up front and the browser runs all of
+// them for every block of audio, so one pass over a whole song grows with its square (32 bars: 54 s, 168 bars: 67 min).
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
-import { existsSync, readFileSync, mkdtempSync, readdirSync, rmSync, renameSync } from 'node:fs';
+import { existsSync, readFileSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { join, extname } from 'node:path';
 import { tmpdir } from 'node:os';
+import { readWav, writeWav } from './wav.mjs';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Every Chrome still open. If node ends without close() (an error, Ctrl-C, a stopped session), it's killed and its
+// profile removed on the way out; otherwise the headless Chrome outlives us and its profile stays in the temp folder.
+const open = new Set();
+function cleanUp() {
+  const wait = new Int32Array(new SharedArrayBuffer(4));
+  for (const s of open) {
+    // Chrome runs in its own process group (renderers, GPU and the rest): all of it goes.
+    try { process.kill(-s.chrome.pid, 'SIGKILL'); } catch { try { s.chrome?.kill('SIGKILL'); } catch { /* gone */ } }
+    for (let i = 0; i < 20 && existsSync(s.profile); i++) {
+      try { rmSync(s.profile, { recursive: true, force: true }); } catch { /* still being written */ }
+      if (existsSync(s.profile)) Atomics.wait(wait, 0, 0, 50);
+    }
+  }
+  open.clear();
+}
+let watching = false;
+function watchExit() {
+  if (watching) return;
+  watching = true;
+  process.on('exit', cleanUp);
+  // A signal skips 'exit' unless someone handles it; a program with its own handler (the studio server) keeps it.
+  for (const [sig, code] of [['SIGINT', 130], ['SIGTERM', 143], ['SIGHUP', 129]]) if (!process.listenerCount(sig)) process.once(sig, () => process.exit(code));
+}
 
 // The page: Strudel's web bundle, plus a `drum` control for General MIDI drum numbers on samples.
 const PAGE = `<!doctype html><meta charset="utf-8"><script type="module">
@@ -33,11 +60,18 @@ window.mfxHaps = async (code, cycles) => {
   }));
   return { cps, haps };
 };
-window.mfxRender = async (code, cycles, sampleRate, name, channel) => {
+// Renders the notes that start in [begin, until), from \`begin\` to where their sound has died away (the longest note's
+// end plus \`tail\` cycles, never past \`total\`). Returns { begin, end } in cycles, or { empty: true } when none start there.
+window.mfxRender = async (code, begin, until, total, tail, sampleRate, name, channel) => {
   let pat = await load(code);
   if (channel) pat = pat.filterValues((v) => v && v.midichan === channel);
-  await renderPatternAudio(pat, repl.scheduler.cps, 0, cycles, sampleRate, 512, false, name);
-  return { cps: repl.scheduler.cps };
+  const cps = repl.scheduler.cps;
+  const starts = (h) => h.whole && h.whole.begin.valueOf() >= begin && h.whole.begin.valueOf() < until;
+  const notes = pat.queryArc(begin, until, { _cps: cps }).filter((h) => h.hasOnset() && starts(h));
+  if (!notes.length) return { cps, empty: true };
+  const end = Math.min(total, Math.max(until, ...notes.map((h) => h.whole.end.valueOf())) + tail);
+  await renderPatternAudio(pat.filterHaps(starts), cps, begin, end, sampleRate, 512, false, name);
+  return { cps, begin, end };
 };
 window.mfxReady = true;
 </script>`;
@@ -66,7 +100,9 @@ export class HeadlessStrudel {
     this.profile = mkdtempSync(join(tmpdir(), 'mfx-strudel-'));
     this.downloads = join(this.profile, 'downloads');
     this.chrome = spawn(this.chromePath, ['--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check', `--user-data-dir=${this.profile}`,
-      '--remote-debugging-port=0', '--autoplay-policy=no-user-gesture-required', 'about:blank'], { stdio: 'ignore' });
+      '--remote-debugging-port=0', '--autoplay-policy=no-user-gesture-required', 'about:blank'], { stdio: 'ignore', detached: process.platform !== 'win32' });
+    open.add(this);
+    watchExit();
     let port = null;
     for (let i = 0; i < 100 && !port; i++) {
       await sleep(100);
@@ -114,17 +150,40 @@ export class HeadlessStrudel {
     try { return await this.eval(`mfxHaps(${JSON.stringify(code)}, ${Number(cycles)})`); } catch (e) { throw new Error(scoreError(e, this.errors)); }
   }
 
-  // Renders [0, cycles) to a 16-bit WAV at `out`. `channel` renders one part (its .midichan).
-  async render(code, cycles, out, { sampleRate = 48000, channel = 0 } = {}) {
-    if (this.rendered) await this.load();
-    this.rendered = true;
-    this.errors = [];
-    const name = `r${Date.now()}`;
-    try { await this.eval(`mfxRender(${JSON.stringify(code)}, ${Number(cycles)}, ${Number(sampleRate)}, ${JSON.stringify(name)}, ${Number(channel) || 0})`); }
-    catch (e) { throw new Error(scoreError(e, this.errors)); }
-    const want = join(this.downloads, `${name}.wav`);
+  // Renders [0, cycles) to a 16-bit WAV at `out`. `channel` renders one part (its .midichan). The song goes in chunks of
+  // `chunk` cycles, each with the notes that start in it and their full sound (releases, reverb and delay tails up to
+  // `tail` seconds), added together: the same audio as one pass, in time that grows with the length.
+  async render(code, cycles, out, { sampleRate = 48000, channel = 0, chunk = 8, tail = 6 } = {}) {
+    const total = Number(cycles);
+    let mix = null; let cps = null;
+    for (let begin = 0; begin < total; begin += chunk) {
+      // Strudel keeps each orbit's effects between renders: every chunk gets a fresh page.
+      if (this.rendered) await this.load();
+      this.rendered = true;
+      this.errors = [];
+      const name = `r${Date.now()}`;
+      const tailCycles = cps ? tail * cps : 4; // until the tempo is known (first chunk), 4 cycles
+      let r;
+      try { r = await this.eval(`mfxRender(${JSON.stringify(code)}, ${begin}, ${Math.min(total, begin + chunk)}, ${total}, ${tailCycles}, ${Number(sampleRate)}, ${JSON.stringify(name)}, ${Number(channel) || 0})`); }
+      catch (e) { throw new Error(scoreError(e, this.errors)); }
+      cps = r.cps;
+      if (!mix) mix = { rate: sampleRate, channels: [0, 1].map(() => new Float32Array(Math.round((total / cps) * sampleRate))) };
+      if (r.empty) continue;
+      const wav = readWav(await this.download(`${name}.wav`));
+      const at = Math.round((r.begin / cps) * sampleRate);
+      for (let c = 0; c < mix.channels.length; c++) {
+        const from = wav.channels[Math.min(c, wav.channels.length - 1)]; const to = mix.channels[c];
+        for (let i = 0; i < from.length && at + i < to.length; i++) to[at + i] += from[i];
+      }
+      rmSync(join(this.downloads, `${name}.wav`), { force: true });
+    }
+    return writeWav(out, mix);
+  }
+
+  async download(file) {
+    const want = join(this.downloads, file);
     for (let i = 0; i < 1200; i++) {
-      if (existsSync(want) && !readdirSync(this.downloads).some((f) => f.endsWith('.crdownload'))) { renameSync(want, out); return out; }
+      if (existsSync(want) && !readdirSync(this.downloads).some((f) => f.endsWith('.crdownload'))) return want;
       await sleep(100);
     }
     throw new Error('the render finished but no audio file arrived');
@@ -136,6 +195,7 @@ export class HeadlessStrudel {
     this.server?.close();
     await sleep(200);
     if (this.profile) rmSync(this.profile, { recursive: true, force: true });
+    open.delete(this);
   }
 }
 
