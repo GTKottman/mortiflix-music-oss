@@ -32,15 +32,26 @@ const GM = { 35: 'Kick 2', 36: 'Kick', 37: 'Rim', 38: 'Snare', 39: 'Clap', 40: '
 export const drumName = (p) => GM[p] || `Drum ${p}`;
 const KIT = [36, 38, 39, 42, 46, 49];   // always offered in the drum rows, so a clap can be added where there was none
 
-// What a part is, in plain words: from the plan's role when there is one, else from its name.
-export function partWords(t, role) {
+// What a part is, in plain words: from the plan's role (bass, pedal, chords, melody, drums, noise) and from how its
+// notes actually go (how many a bar, how long), so "Chords" says whether they're held or stabbed.
+export function partWords(t, role, bpb = 4) {
   const kind = player.instrumentKind(t);
   const harmony = role?.harmony;
+  const notes = t.notes || [];
+  const bars = Math.max(1, new Set(notes.map((n) => Math.floor(n.start / bpb))).size);
+  const perBar = notes.length / bars;
+  const avg = notes.reduce((x, n) => x + n.dur, 0) / Math.max(1, notes.length);
   if (kind === 'drums' || harmony === 'drums') return 'The beat: kick, snare, hats';
-  if (harmony === 'bass' || kind === 'bass') return 'The low notes: the bass line';
-  if (harmony === 'melody') return 'A tune: the melody you could hum';
-  if (harmony === 'chords') return kind === 'pad' ? 'Long, soft chords in the background' : 'Plays the chords';
-  return { pad: 'Long, soft sounds in the background', keys: 'Chords on keys', lead: 'A tune on top', pluck: 'Short, bouncy notes' }[kind] || 'A part of the arrangement';
+  if (harmony === 'noise') return 'Swooshes and risers between sections';
+  if (harmony === 'pedal') return 'One low note held underneath (a drone)';
+  if (harmony === 'bass' || (!harmony && kind === 'bass')) return 'The low notes: the bass line';
+  if (harmony === 'chords' || (!harmony && kind === 'pad')) return avg >= bpb / 2 ? 'Long held chords in the background' : 'Short chord hits that give the rhythm';
+  if (harmony === 'melody' || (!harmony && ['lead', 'pluck'].includes(kind))) {
+    if (perBar >= 8 && avg <= 0.5) return 'A fast repeating pattern (an arpeggio or riff)';
+    if (avg >= 1) return 'A tune: the melody you could hum';
+    return 'A second line weaving around the tune';
+  }
+  return avg >= bpb / 2 ? 'Long held sounds in the background' : 'A part of the arrangement';
 }
 
 // Every frame while the player plays: `fn(state)` until the element has left the page for good. A page that redraws
@@ -72,7 +83,7 @@ export function instrumentStrip({ tracks, roles = [], colors, pid, bpb = 4, load
     const meter = h('span', { class: 'part-meter', 'aria-hidden': 'true' });
     const card = h('button', { type: 'button', class: 'part', role: 'radio', 'aria-checked': 'false', style: { '--c': c }, onclick: () => pick(focus === t.channel ? null : t.channel) },
       h('span', { class: 'part-top' }, h('span', { class: 'swatch', 'aria-hidden': 'true' }), h('span', { class: 'part-name' }, t.name || `Part ${t.channel}`)),
-      h('span', { class: 'part-kind' }, partWords(t, roleOf(t))),
+      h('span', { class: 'part-kind' }, partWords(t, roleOf(t), bpb)),
       meter);
     cards.set(t.channel, { card, meter, c });
     row.append(card);
@@ -96,7 +107,7 @@ export function instrumentStrip({ tracks, roles = [], colors, pid, bpb = 4, load
     const barsWith = new Set(t.notes.map((n) => Math.floor(n.start / bpb) + 1)).size;
     const range = isDrums(t) ? `${[...new Set(t.notes.map((n) => n.pitch))].map(drumName).slice(0, 6).join(', ')}` : (() => { const ps = t.notes.map((n) => n.pitch); return `from ${pitchName(Math.min(...ps))} to ${pitchName(Math.max(...ps))}`; })();
     fill(panel,
-      h('div', { class: 'pp-head' }, h('span', { class: 'swatch', style: { '--c': colors.get(t.channel) }, 'aria-hidden': 'true' }), h('h3', null, t.name || `Part ${t.channel}`), h('span', { class: 'meta' }, partWords(t, role))),
+      h('div', { class: 'pp-head' }, h('span', { class: 'swatch', style: { '--c': colors.get(t.channel) }, 'aria-hidden': 'true' }), h('h3', null, t.name || `Part ${t.channel}`), h('span', { class: 'meta' }, partWords(t, role, bpb))),
       role?.job ? h('p', null, h('b', null, 'What it does: '), role.job) : null,
       role?.sound ? h('p', { class: 'meta' }, `Its sound, as planned: ${role.sound}. The player here uses a simple stand-in.`) : null,
       h('p', { class: 'meta' }, `${t.notes.length} notes, playing in ${barsWith} bars, ${range}.`),
