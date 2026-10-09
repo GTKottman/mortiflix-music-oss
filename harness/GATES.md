@@ -72,7 +72,10 @@ A 404, a blocked site, a missing source, a failed download or a tool error is ne
    - The step's review mode decides what must be in `items`: `document` the text, `audio` the audio, `midi` a `.mid`
      (the owner sees it as a piano roll). A `questions` step can be just a note and questions.
 
-   **Internal steps:** `mfx step done <step> --checks checks/<step>.json` (that file is the `error_checks` list).
+   **Internal steps:** `mfx step done <step> --checks checks/<step>.json --note "…"` (that file is the `error_checks`
+   list). The note is required: 2-5 plain sentences for the owner on what the step made and the choices in it ("Trip hop
+   at 82-94 BPM, built on a lazy half-time break; I read 6 sources, and the hook will come from its sad, falling
+   string phrase"). The owner reads it on the project page beside what you made, so no jargon without saying what it means.
 5. **Hand off and stop:** `mfx handoff "what you did, what's next, gotchas"`, update `checklist.md`, then end your
    turn. Don't wait or poll: the next session starts when the owner responds. If other steps are ready (steps can
    run side by side), carry on with them before you stop.

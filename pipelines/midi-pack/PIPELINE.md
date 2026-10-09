@@ -28,10 +28,10 @@ Skill: `.claude/skills/music/SKILL.md` is the whole method, stage by stage. Its 
 
 | Step | Review | What happens |
 |---|---|---|
-| `genre` | internal | Research the genre (skill §1, `craft/genre-research.md`): 5+ sources, `music/genre.json`, `$M genre` passes. Checks, `mfx step done genre`. |
+| `genre` | internal | Research the genre (skill §1, `craft/genre-research.md`): 5+ sources, `music/genre.json`, `$M genre` passes. Checks, `mfx step done genre --note "…"`. |
 | `blueprint` | document | Read `flow/FLOW.md` first: the sections, their intensities and the techniques follow it (§3, "The flow and the techniques"). The dramatic reading (§2), then the blueprint (§3): genre signature, hook, tempo/meter/key, the chart, the parts the brief asked for (and the genre needs) each on its own channel, sections with functions and intensities, the length from the genre unless the brief fixed it. A real title. `$M plan` passes. Submit `music/BLUEPRINT.md`; the note says the piece in three lines and lists the channels. |
-| `score` | internal | The score from the approved blueprint (§4, harmony lock, melody craft, rich voicing): notes only, `$M check` at 0 problems, which captures the MIDI with a clip per section and the cue sheet (§5). Checks, `mfx step done score`. |
-| `sketch` | internal | Sketch sounds for every channel (§7) so each part is easy to hear and tell apart (clarity over polish), `$M instruments` and `$M audition` pass, then `$M render --stems`. Checks, `mfx step done sketch`. |
+| `score` | internal | The score from the approved blueprint (§4, harmony lock, melody craft, rich voicing): notes only, `$M check` at 0 problems, which captures the MIDI with a clip per section and the cue sheet (§5). Checks, `mfx step done score --note "…"`. |
+| `sketch` | internal | Sketch sounds for every channel (§7) so each part is easy to hear and tell apart (clarity over polish), `$M instruments` and `$M audition` pass, then `$M render --stems`. Checks, `mfx step done sketch --note "…"`. |
 | `final` | midi | Submit, in this order: `out/music/midi/<title>-all.mid` (the piano roll), `out/music/score.wav` (the sketch), `out/music/midi/CUE-SHEET.md`, `music/MUSIC-SHEET.md`, and `out/music/midi.zip`. The note: the piece in one line, the channels and what each plays, where the hook enters, and that the sketch sounds are stand-ins. Notes come back as times on the roll or the sketch: change the blueprint (story) or the score, and run `$M check` again (it recaptures the MIDI). |
 
 ## Status lines

@@ -21,6 +21,7 @@ import * as keys from '../keys.mjs';
 import * as setup from '../setup.mjs';
 import * as music from '../music.mjs';
 import * as edits from '../edits.mjs';
+import * as made from '../made.mjs';
 import { costText } from '../usage.mjs';
 
 const MIME = {
@@ -81,6 +82,7 @@ export async function startServer(root, { port = 4747, host = '127.0.0.1', runne
     if (p === '/api/events') return events(req, res);
     if (p.startsWith('/api/')) return api(req, res, url);
     if ((m = p.match(/^\/files\/([a-z0-9-]+)\/(.+)$/))) return media(req, res, m[1], decodeURIComponent(m[2]), url.searchParams.has('download'));
+    if ((m = p.match(/^\/made\/([a-z0-9-]+)\/(.+)$/))) return madeMedia(req, res, m[1], decodeURIComponent(m[2]), url.searchParams.has('download'));
     return staticFile(res, p);
   }
 
@@ -191,6 +193,7 @@ export async function startServer(root, { port = 4747, host = '127.0.0.1', runne
     if (sub === '/pause' && method === 'POST') { gates.pause(root, id); runner.stopProject(id); return after(); }
     if (sub === '/resume' && method === 'POST') { gates.resume(root, id); return after(); }
     if (sub === '/cancel' && method === 'POST') { gates.cancel(root, id); runner.stopProject(id); return after(); }
+    if ((m = sub.match(/^\/steps\/([a-z0-9_-]+)\/made$/)) && method === 'GET') return send(res, 200, made.madeBy(root, id, m[1]));
     if ((m = sub.match(/^\/reviews\/([a-z0-9_-]+)\/(\d+)$/)) && method === 'POST') {
       return after(edits.respond(root, id, m[1], Number(m[2]), await json(req)));
     }
@@ -252,6 +255,17 @@ export async function startServer(root, { port = 4747, host = '127.0.0.1', runne
     if (!rel.startsWith('reviews/') || !isInside(base, file) || file === base || !existsSync(file)) return send(res, 404, { error: 'not found' });
     const real = realpathSync(file);
     if (!isInside(base, real)) return send(res, 404, { error: 'not found' });
+    return sendFile(req, res, id, real, download);
+  }
+
+  // What a step made, from the project folder (src/made.mjs): only readable music outputs.
+  function madeMedia(req, res, id, rel, download) {
+    const real = made.madeFile(root, id, rel);
+    if (!real) return send(res, 404, { error: 'not found' });
+    return sendFile(req, res, id, real, download);
+  }
+
+  function sendFile(req, res, id, real, download) {
     const st = statSync(real);
     const type = MIME[extname(real).toLowerCase()] || 'application/octet-stream';
     const headers = { 'content-type': type, 'accept-ranges': 'bytes', 'x-content-type-options': 'nosniff', 'content-security-policy': MEDIA_CSP, 'cache-control': 'private, max-age=3600' };

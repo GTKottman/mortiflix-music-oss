@@ -30,10 +30,10 @@ Skill: `.claude/skills/music/SKILL.md` is the whole method; §6 is about loop ki
 
 | Step | Review | What happens |
 |---|---|---|
-| `genre` | internal | Research the genre (skill §1, `craft/genre-research.md`): 5+ sources, `music/genre.json`, `$M genre` passes. Checks, `mfx step done genre`. |
+| `genre` | internal | Research the genre (skill §1, `craft/genre-research.md`): 5+ sources, `music/genre.json`, `$M genre` passes. Checks, `mfx step done genre --note "…"`. |
 | `plan` | document | Read `flow/FLOW.md` first: the sections, their intensities and the techniques follow it (§3, "The flow and the techniques"). The kit's blueprint (§3, §6): tempo/meter/key from the genre, the chart, the parts each on its own channel, one section per loop with a story-bearing name, a `function` (what it changes, what it's for in an arrangement) and an `intensity`; `"loops": true`, `"length_fixed": true`. `$M plan` passes. Submit `music/BLUEPRINT.md`; the note lists the loops in one line each. |
-| `score` | internal | The score from the approved plan (§4): notes only, every loop on its bars, `$M check` at 0 problems (clean loop points included), which writes `out/music/midi/sections/` (§5). Checks, `mfx step done score`. |
-| `sketch` | internal | Sketch sounds for every channel (§7), clear and distinct; `$M instruments` and `$M audition` pass, then `$M render --stems` (the whole kit, loop after loop). Checks, `mfx step done sketch`. |
+| `score` | internal | The score from the approved plan (§4): notes only, every loop on its bars, `$M check` at 0 problems (clean loop points included), which writes `out/music/midi/sections/` (§5). Checks, `mfx step done score --note "…"`. |
+| `sketch` | internal | Sketch sounds for every channel (§7), clear and distinct; `$M instruments` and `$M audition` pass, then `$M render --stems` (the whole kit, loop after loop). Checks, `mfx step done sketch --note "…"`. |
 | `final` | midi | Submit, in this order: `out/music/midi/<title>-all.mid` (the whole kit as a piano roll, a marker per loop), `out/music/score.wav` (the sketch), `out/music/midi/CUE-SHEET.md`, `music/MUSIC-SHEET.md`, and `out/music/midi.zip`. The note: the kit in one line, each loop in a few words, and that the sketch sounds are stand-ins. Notes come back as times on the roll or the sketch: the loop is the section at that bar; change it in the score and run `$M check` again. |
 
 ## Status lines

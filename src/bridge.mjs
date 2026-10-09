@@ -19,7 +19,11 @@ export async function openBridge({ root, projectId, sessionId, workdir, renders,
   const commands = {
     'status': ({ key, mode, list }) => (list ? projectPipeline(root, projectId).status_lines : gates.status(root, projectId, key, mode)),
     'step-start': ({ step }) => gates.stepStart(root, projectId, step),
-    'step-done': ({ step, checks }) => gates.stepDone(root, projectId, step, checks),
+    // Every internal step tells the owner what it made, in plain words: the project page shows it beside the work.
+    'step-done': ({ step, checks, note }) => {
+      if (!String(note || '').trim()) throw new Error(`add --note "…": what this step made and decided, in plain words for the owner (they read it on the project page)`);
+      return gates.stepDone(root, projectId, step, checks, { note });
+    },
     'checks': ({ step }) => gates.stepChecks(root, projectId, step).map(({ id, title, how, applies_to }) => ({ id, title, how, applies_to })),
     'submit': ({ step, submission }) => gates.submit(root, projectId, step, submission),
     'ask': ({ step, text, default: def, choices }) => gates.ask(root, projectId, step, text, { default: def ?? null, choices: choices ?? null }),

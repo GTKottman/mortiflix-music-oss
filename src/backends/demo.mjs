@@ -103,7 +103,16 @@ export async function run({ root, projectId, workdir, env, onActivity, signal, c
     const checks = (await mfx('checks', { step: step.key })).map((c) => ({ id: c.id, result: 'pass' }));
 
     if (step.review === 'internal') {
-      await mfx('step-done', { step: step.key, checks });
+      // Something readable for every kind of work, so the project page has a "what it made" to show.
+      const work = step.work || pipeline.steps.find((x) => x.key === step.key)?.work || [];
+      if (work.includes('research')) {
+        mkdirSync(join(workdir, 'music'), { recursive: true });
+        writeFileSync(join(workdir, 'music', 'GENRE.md'), `# ${project.intake.answers.genre || 'The genre'} (demo)\n\nPlaceholder research from the demo backend: no sources were read.\n\n## The beat\nA slow, steady backbeat.\n\n## The usual band\n- **Bass**: roots under each chord\n- **Pad**: holds the chords\n- **Drums**: the beat\n`);
+      }
+      if (work.includes('music') || work.includes('midi')) demoMusic(workdir, project.title, demoPiece(1));
+      const notes = { research: 'Demo: a placeholder genre page (no research was done).', music: 'Demo: the same 4-bar placeholder loop as always (bass, pad, drums in A minor).',
+        instruments: 'Demo: no instruments were chosen.', audio: 'Demo: no audio was made.', plan: 'Demo: a placeholder plan.' };
+      await mfx('step-done', { step: step.key, checks, note: work.map((x) => notes[x]).filter(Boolean).join(' ') || `Demo: ${step.name}, placeholder work.` });
       say(`${step.name} done (internal).`);
       did++;
       continue;

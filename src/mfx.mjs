@@ -8,7 +8,8 @@ const USAGE = `mfx: talk to the Mortiflix Music studio from inside a session
 
   mfx status <key> [--rendering]        what the owner sees while you work     (mfx status --list)
   mfx step start <step>                 mark a step as being worked on
-  mfx step done <step> --checks <file>  finish an internal step (file = its error_checks list)
+  mfx step done <step> --checks <file> --note "…"   finish an internal step (file = its error_checks list;
+                                        note = what it made and decided, in plain words for the owner)
   mfx checks <step>                     the error checks a step runs
   mfx submit <step> <submission.json>   send a step for review, then hand off and stop
   mfx ask <step> "question" [--default "..."] [--choices "A|B"]
@@ -78,7 +79,7 @@ export async function main(argv, env = process.env, cwd = process.cwd()) {
     case 'step': {
       const [sub, step] = f._;
       if (sub === 'start') return call('step-start', { step: need(step, '<step>') });
-      if (sub === 'done') return call('step-done', { step: need(step, '<step>'), checks: f.checks ? readJsonFile(f.checks, cwd) : [] });
+      if (sub === 'done') return call('step-done', { step: need(step, '<step>'), checks: f.checks ? readJsonFile(f.checks, cwd) : [], note: typeof f.note === 'string' ? f.note : null });
       throw new Error(`mfx step start|done <step>\n\n${USAGE}`);
     }
     case 'checks': return call('checks', { step: need(f._[0], '<step>') });

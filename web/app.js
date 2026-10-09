@@ -421,12 +421,26 @@ async function projectView(id) {
   // The MIDI, once the score passes its check; and, when the brief chose to finish it in the owner's own DAW, the
   // place to import that master.
   const subsByStep = (key) => d.submissions.filter((s) => s.step === key);
+  // Every step that has made something opens to show it: what Claude says it made, the summary, and the work itself.
+  const openKey = `steps-open-${id}`;
+  const opened = new Set(store.get(openKey) || []);
+  const hasWork = (s) => ['approved', 'done', 'in_review', 'changes', 'working'].includes(s.state) || subsByStep(s.key).length;
   const steps = h('section', null, h('h2', null, 'Steps', h('span', { class: 'count' }, `${d.steps.filter((s) => ['approved', 'done', 'skipped'].includes(s.state)).length}/${d.steps.length}`)),
-    h('ul', { class: 'rows' }, d.steps.map((s) => h('li', { class: 'row' }, icon(s.state),
-      h('div', { class: 'main' }, h('span', { class: 'title' }, s.name),
-        h('div', { class: 'meta' }, s.review === 'internal' ? 'made in the studio' : `you review ${s.review === 'questions' ? 'questions' : s.review === 'midi' ? 'the MIDI' : `the ${s.review}`}`,
-          subsByStep(s.key).length ? ' · ' : '', subsByStep(s.key).map((x, i) => [i ? ' ' : '', h('a', { href: `#/p/${id}/review/${s.key}/${x.version}` }, `v${x.version}`)]))),
-      h('div', { class: 'end' }, s.state === 'in_review' ? h('a', { href: `#/p/${id}/review/${s.key}` }, 'Review') : h('span', null, STATE_WORDS[s.state]))))));
+    h('ul', { class: 'rows' }, d.steps.map((s) => {
+      const panel = h('li', { class: 'made-row', hidden: !opened.has(s.key) });
+      if (opened.has(s.key)) fill(panel, stepMade(id, s.key));
+      const toggle = hasWork(s) ? h('button', { type: 'button', class: 'btn link', 'aria-expanded': String(opened.has(s.key)), onclick: (e) => {
+        const open = !opened.has(s.key);
+        if (open) { opened.add(s.key); fill(panel, stepMade(id, s.key)); } else opened.delete(s.key);
+        panel.hidden = !open; e.currentTarget.setAttribute('aria-expanded', String(open)); e.currentTarget.textContent = open ? 'Hide' : 'What it made';
+        store.set(openKey, [...opened]);
+      } }, opened.has(s.key) ? 'Hide' : 'What it made') : null;
+      return [h('li', { class: 'row' }, icon(s.state),
+        h('div', { class: 'main' }, h('span', { class: 'title' }, s.name),
+          h('div', { class: 'meta' }, s.review === 'internal' ? 'made in the studio' : `you review ${s.review === 'questions' ? 'questions' : s.review === 'midi' ? 'the MIDI' : `the ${s.review}`}`,
+            subsByStep(s.key).length ? ' · ' : '', subsByStep(s.key).map((x, i) => [i ? ' ' : '', h('a', { href: `#/p/${id}/review/${s.key}/${x.version}` }, `v${x.version}`)]))),
+        h('div', { class: 'end' }, toggle, s.state === 'in_review' ? h('a', { href: `#/p/${id}/review/${s.key}` }, 'Review') : h('span', null, STATE_WORDS[s.state]))), panel];
+    })));
 
   const log = h('div', { class: 'log', id: `log-${id}` });
   for (const a of d.activity.slice(-150)) appendLog(log, a, false);
@@ -462,6 +476,89 @@ async function projectView(id) {
   for (const det of document.querySelectorAll('details[data-key]')) if (open.has(det.dataset.key)) det.open = true;
   log.scrollTop = log.scrollHeight;
   current.refresh = () => projectView(id);
+}
+
+// ---------- what a step made ----------
+
+function stepMade(id, key) {
+  const box = h('div', { class: 'made' }, h('div', { class: 'meta' }, 'Loading…'));
+  api(`/api/projects/${id}/steps/${key}/made`).then((m) => {
+    const madeUrl = (f, download = false) => `/made/${id}/${f.split('/').map(encodeURIComponent).join('/')}${download ? '?download' : ''}`;
+    const piece = (pc, i) => {
+      let body = null;
+      if (pc.kind === 'markdown') body = mdView(pc.text || '');
+      else if (pc.kind === 'facts') body = h('ul', { class: 'facts' }, pc.facts.map((f) => h('li', null, f)));
+      else if (pc.kind === 'links') body = h('ul', { class: 'facts' }, pc.links.map((l) => h('li', null, h('a', { href: l.url, target: '_blank', rel: 'noopener noreferrer' }, l.title))));
+      else if (pc.kind === 'table') body = h('table', { class: 'grid' }, h('thead', null, h('tr', null, pc.head.map((x) => h('th', null, x)))), h('tbody', null, pc.rows.map((r) => h('tr', null, r.map((x) => h('td', null, x))))));
+      else if (pc.kind === 'code') body = h('pre', { class: 'code' }, pc.text);
+      else if (pc.kind === 'audio') body = h('ul', { class: 'rows' }, pc.files.map((f) => h('li', { class: 'row with-play' },
+        audioButton({ id: `${id}/made/${f}`, title: `${m.step.name} · ${f.split('/').pop()}`, href: `#/p/${id}`, url: madeUrl(f) }),
+        h('div', { class: 'main' }, h('span', { class: 'title' }, f.split('/').pop().replace(/\.(wav|mp3)$/, '').replace(/^\d+-/, ''))), h('div', { class: 'end' }, h('a', { href: madeUrl(f, true) }, 'Download')))));
+      else if (pc.kind === 'files') body = h('div', null, pc.zip ? h('p', null, h('a', { class: 'btn', href: `/api/projects/${id}/music/midi.zip` }, 'Download the MIDI pack')) : null,
+        h('ul', { class: 'facts files' }, pc.files.map((f) => h('li', null, h('a', { href: madeUrl(f, true) }, f.replace('out/music/midi/', ''))))));
+      else if (pc.kind === 'notes') {
+        body = h('div', { class: 'roll-wrap' });
+        api(`/api/projects/${id}/music/notes`).then((n) => fill(body, pianoRoll(n, { play: { id, title: m.step.name, href: `#/p/${id}` } }))).catch(() => body.remove());
+      }
+      // The first piece is open; long ones (the research, the code) can be opened when wanted.
+      return h('details', { class: 'piece', open: i === 0 && pc.kind !== 'code' ? true : null }, h('summary', null, pc.title), body);
+    };
+    fill(box,
+      m.step.describe ? h('p', { class: 'meta what-is' }, m.step.describe) : null,
+      m.step.note ? h('blockquote', { class: 'said' }, h('div', { class: 'who' }, 'What Claude says it made'), m.step.note) : null,
+      m.summary.length ? h('ul', { class: 'summary' }, m.summary.map((x) => h('li', null, x))) : null,
+      m.pieces.map(piece),
+      !m.step.note && !m.summary.length && !m.pieces.length ? h('p', { class: 'meta' }, m.step.state === 'done' || m.step.state === 'approved' ? 'This step left nothing to read in the project folder.' : 'Nothing yet: it shows here as soon as the step has made something.') : null,
+      m.step.checks.length ? h('details', { class: 'piece' }, h('summary', null, `Studio checks: ${m.step.checks.filter((c) => c.result === 'pass').length} of ${m.step.checks.length} passed`),
+        h('ul', { class: 'facts' }, m.step.checks.map((c) => h('li', null, `${c.result === 'pass' ? '✓' : '!'} ${c.id}${c.note ? `: ${c.note}` : ''}`)))) : null,
+      m.step.versions.length ? h('p', { class: 'meta' }, 'Sent to you: ', m.step.versions.map((v, i) => [i ? ' · ' : '', h('a', { href: `#/p/${id}/review/${key}/${v}` }, `v${v}`)])) : null);
+  }).catch((e) => fill(box, h('p', { class: 'err' }, e.message)));
+  return box;
+}
+
+// A small Markdown reader for what the studio writes (GENRE.md, BLUEPRINT.md, cue sheets): headings, lists, tables,
+// code, bold, code spans and links. It builds elements: nothing is ever inserted as HTML.
+function mdView(text) {
+  const root = h('div', { class: 'md' });
+  const inline = (line) => {
+    const out = [];
+    const re = /\*\*([^*]+)\*\*|`([^`]+)`|\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g;
+    let last = 0; let m;
+    while ((m = re.exec(line))) {
+      if (m.index > last) out.push(line.slice(last, m.index));
+      if (m[1]) out.push(h('b', null, m[1])); else if (m[2]) out.push(h('code', null, m[2])); else out.push(h('a', { href: m[4], target: '_blank', rel: 'noopener noreferrer' }, m[3]));
+      last = re.lastIndex;
+    }
+    if (last < line.length) out.push(line.slice(last));
+    return out;
+  };
+  const lines = String(text).replace(/\r/g, '').split('\n');
+  for (let i = 0; i < lines.length;) {
+    const l = lines[i];
+    if (!l.trim()) { i += 1; continue; }
+    if (/^```/.test(l)) { const buf = []; i += 1; while (i < lines.length && !/^```/.test(lines[i])) buf.push(lines[i++]); i += 1; add(root, h('pre', { class: 'code' }, buf.join('\n'))); continue; }
+    const hd = /^(#{1,4})\s+(.*)$/.exec(l);
+    if (hd) { add(root, h(`h${Math.min(4, hd[1].length + 2)}`, null, inline(hd[2]))); i += 1; continue; }
+    if (/^\s*\|/.test(l)) {
+      const rows = []; while (i < lines.length && /^\s*\|/.test(lines[i])) rows.push(lines[i++]);
+      const cells = (r) => r.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+      const body = rows.filter((r) => !/^\s*\|[\s:|-]+\|\s*$/.test(r));
+      add(root, h('table', { class: 'grid' }, h('thead', null, h('tr', null, cells(body[0] || '').map((c) => h('th', null, inline(c))))), h('tbody', null, body.slice(1).map((r) => h('tr', null, cells(r).map((c) => h('td', null, inline(c))))))));
+      continue;
+    }
+    if (/^\s*([-*]|\d+\.)\s+/.test(l)) {
+      const ordered = /^\s*\d+\./.test(l); const items = [];
+      while (i < lines.length && /^\s*([-*]|\d+\.)\s+/.test(lines[i])) {
+        let item = lines[i++].replace(/^\s*([-*]|\d+\.)\s+/, '');
+        while (i < lines.length && /^\s{2,}\S/.test(lines[i]) && !/^\s*([-*]|\d+\.)\s+/.test(lines[i])) item += ` ${lines[i++].trim()}`;
+        items.push(h('li', null, inline(item)));
+      }
+      add(root, h(ordered ? 'ol' : 'ul', null, items)); continue;
+    }
+    const para = []; while (i < lines.length && lines[i].trim() && !/^(#{1,4}\s|```|\s*\||\s*([-*]|\d+\.)\s+)/.test(lines[i])) para.push(lines[i++].trim());
+    add(root, h('p', null, inline(para.join(' '))));
+  }
+  return root;
 }
 
 function ratingChips(current, onPick) {

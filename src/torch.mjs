@@ -198,7 +198,7 @@ ${readJournal(root, id) || '(first session on this project)'}
 ## Talking to the studio: \`mfx\`
 
 - \`mfx status <key> [--rendering]\` · \`mfx status --list\`: what the owner sees while you work
-- \`mfx step start <step>\` · \`mfx step done <step> --checks <file>\` (internal steps)
+- \`mfx step start <step>\` · \`mfx step done <step> --checks <file> --note "…"\` (internal steps; the note tells the owner what it made)
 - \`mfx checks <step>\`: the checks that step runs
 - \`mfx submit <step> submission.json\`: send a step for review (then hand off and stop)
 - \`mfx ask <step> "question" --default "…"\`: one question, then hand off and stop

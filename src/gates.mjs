@@ -190,7 +190,7 @@ export function stepStart(root, id, stepKey) {
   });
 }
 
-export function stepDone(root, id, stepKey, reportedChecks) {
+export function stepDone(root, id, stepKey, reportedChecks, { note = null } = {}) {
   const pipeline = projectPipeline(root, id);
   const step = findStep(pipeline, stepKey);
   if (step.review !== 'internal') refuse(`${stepKey} is reviewed by you: only your approval finishes it (mfx submit ${stepKey} <file>)`);
@@ -199,7 +199,7 @@ export function stepDone(root, id, stepKey, reportedChecks) {
     const view = stepView(p, pipeline).find((s) => s.key === stepKey);
     if (view.state === 'blocked') refuse(`${stepKey} can't finish yet: it runs after ${step.after.join(', ')}`);
     if (view.state === 'done') refuse(`${stepKey} is already done`);
-    p.steps[stepKey] = { ...(p.steps[stepKey] || {}), state: 'done', version: view.version, done_at: now(), error_checks };
+    p.steps[stepKey] = { ...(p.steps[stepKey] || {}), state: 'done', version: view.version, done_at: now(), error_checks, ...(note ? { note: String(note).slice(0, 3000) } : {}) };
     settle(p, pipeline);
     event(root, id, { event: 'STEP_DONE', step: stepKey, details: error_checks.map((c) => `${c.id}:${c.result}`).join(' ') });
     return { step: stepKey, state: 'done', project_state: p.state };
