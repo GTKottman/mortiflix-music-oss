@@ -28,6 +28,41 @@ function demoPiece(version) {
 
 const demoMidi = (piece) => writeMidi({ ...piece, markers: [{ beat: 0, text: 'Demo loop' }] });
 
+// The same piece as a Strudel score, one labelled block per part and one value per bar (16 steps a bar), so a quick
+// edit in the review room has a real score to splice into (the music engine plays it when Strudel is set up).
+export function demoScore(piece, bars = 4) {
+  const lines = [`setcpm(${piece.bpm} / 4)`, `const BARS = ${bars}`, 'const cue = (p) => p.filterWhen((t) => t < BARS)', ''];
+  for (const t of piece.tracks) {
+    // The notes and their velocities in the same shape, so every note keeps its own dynamic.
+    const perBar = []; const velBar = [];
+    for (let bar = 0; bar < bars; bar += 1) {
+      const at = new Map();
+      for (const n of t.notes.filter((x) => x.start >= bar * 4 && x.start < bar * 4 + 4)) {
+        const step = Math.round((n.start - bar * 4) * 4);
+        if (!at.has(step)) at.set(step, { pitches: [], velocity: n.velocity, dur: Math.max(1, Math.round(n.dur * 4)) });
+        at.get(step).pitches.push(n.pitch);
+      }
+      const steps = [...at.keys()].sort((x, y) => x - y);
+      const tokens = []; const vels = [];
+      const rest = (n) => { const r = n > 1 ? `~@${n}` : '~'; tokens.push(r); vels.push(r); };
+      let pos = 0;
+      steps.forEach((st, i) => {
+        if (st > pos) rest(st - pos);
+        const e = at.get(st); const nextAt = i + 1 < steps.length ? steps[i + 1] : 16;
+        const len = Math.min(e.dur, nextAt - st);
+        const p = e.pitches.length > 1 ? `[${e.pitches.join(',')}]` : String(e.pitches[0]);
+        tokens.push(len > 1 ? `${p}@${len}` : p); vels.push(len > 1 ? `${e.velocity}@${len}` : String(e.velocity));
+        if (len < nextAt - st) rest(nextAt - st - len);
+        pos = nextAt;
+      });
+      if (!steps.length) rest(16);
+      perBar.push(`[${tokens.join(' ')}]`); velBar.push(`[${vels.join(' ')}]`);
+    }
+    lines.push(`${t.name.toLowerCase().replace(/[^a-z0-9]+/g, '_')}: cue(note("<${perBar.join(' ')}>").velocity("<${velBar.join(' ')}>")).midichan(${t.channel})`);
+  }
+  return `${lines.join('\n')}\n`;
+}
+
 // Where the music engine leaves a passed score (music/notes.json, the blueprint, out/music/midi/), so the project
 // page's MIDI panel and Download MIDI work in the demo too.
 function demoMusic(workdir, title, piece) {
@@ -35,8 +70,12 @@ function demoMusic(workdir, title, piece) {
   const midi = join(workdir, 'out', 'music', 'midi');
   mkdirSync(midi, { recursive: true });
   writeFileSync(join(workdir, 'music', 'blueprint.json'), JSON.stringify({ title, bpm: piece.bpm, meter: piece.meter, scale: 'A minor', bars: 4,
-    sections: [{ name: 'Demo loop', start_bar: 1, end_bar: 4, function: 'placeholder', intensity: 0.5 }] }, null, 2));
-  writeFileSync(join(workdir, 'music', 'notes.json'), JSON.stringify(piece, null, 2));
+    sections: [{ name: 'Demo loop', start_bar: 1, end_bar: 4, function: 'a placeholder loop from the demo backend', intensity: 5 }],
+    roles: [{ name: 'Bass', channel: 1, harmony: 'bass', job: 'the root under each chord' }, { name: 'Pad', channel: 2, harmony: 'chords', job: 'holds the chords' },
+      { name: 'Drums', channel: 10, harmony: 'drums', job: 'the beat' }],
+    chart: [{ bars: [1, 4], chords: ['Am', 'F', 'C', 'G'] }] }, null, 2));
+  writeFileSync(join(workdir, 'music', 'notes.json'), JSON.stringify({ ...piece, beats_per_bar: 4, bars: 4 }, null, 2));
+  writeFileSync(join(workdir, 'music', 'score.strudel.js'), demoScore(piece));
   writeFileSync(join(midi, 'demo-all.mid'), demoMidi(piece));
   for (const t of piece.tracks) writeFileSync(join(midi, `${String(t.channel).padStart(2, '0')}-${t.name.toLowerCase()}.mid`), writeMidi({ ...piece, tracks: [t] }));
   writeFileSync(join(midi, 'CUE-SHEET.md'), `# ${title}: cue sheet\n\nPlaceholder from the demo backend: 90 BPM, 4/4, A minor, 4 bars. Drums are on channel 10 (General MIDI).\n`);

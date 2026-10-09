@@ -133,7 +133,17 @@ kit (a sketch of the music; the real sounds come in your DAW), or your own maste
 bar stays at the bottom across pages, shows the section you're in, and Space plays and pauses. The studio also shows a
 live log of what Claude is doing, and the review room: MIDI shows as a
 **piano roll** you can play (pick a part to bring it forward; click a bar, or press *Note at the playhead* while it plays, to leave a note there), audio as a player you can note a
-moment on, a blueprint as paragraphs you can comment on. The **Flows** page shows every flow by shape or by feel, with how each has gone for you. The project page has the MIDI panel: the arrangement as a
+moment on, a blueprint as paragraphs you can comment on.
+
+**Change it right there.** On a MIDI review, drag across the bars you mean (pick a part first to change only that part), write
+what you want ("a different drum beat"), and press **Change it now**. Strudel finds what plays in those bars and the code
+behind it, Claude writes only the new bars, and the studio forces them in: everything outside them stays exactly as it was,
+and it checks that. The roll redraws and plays from just before the change within seconds. Then **Keep**, **Undo** or
+**Try another**. Before it writes, Claude is briefed by the studio's context engine: the section and what it's for, its
+chords, the bars around it, what the other parts play, the genre's beat, and the edits you've kept before. What you keep is
+saved as a measured difference (`taste.json`) and shapes the next edits and the next pieces you make; what you undo
+counts against that change. Quick edits use Sonnet through your own Claude Code or API key (`config quickModel` to change
+it). The **Flows** page shows every flow by shape or by feel, with how each has gone for you. The project page has the MIDI panel: the arrangement as a
 piano roll, **Download MIDI**, and **Import your master** when you finish a song in your own DAW. Sessions start by
 themselves while `serve` runs. To use it from your phone or another computer at home, run `mortiflix-music serve --network`
 (or `mortiflix-music config network true` once): it prints the addresses to open, no token, and anything on your network

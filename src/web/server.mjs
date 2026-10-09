@@ -20,6 +20,7 @@ import { Runner, BACKENDS } from '../runner.mjs';
 import * as keys from '../keys.mjs';
 import * as setup from '../setup.mjs';
 import * as music from '../music.mjs';
+import * as edits from '../edits.mjs';
 import { costText } from '../usage.mjs';
 
 const MIME = {
@@ -191,7 +192,7 @@ export async function startServer(root, { port = 4747, host = '127.0.0.1', runne
     if (sub === '/resume' && method === 'POST') { gates.resume(root, id); return after(); }
     if (sub === '/cancel' && method === 'POST') { gates.cancel(root, id); runner.stopProject(id); return after(); }
     if ((m = sub.match(/^\/reviews\/([a-z0-9_-]+)\/(\d+)$/)) && method === 'POST') {
-      return after(gates.respond(root, id, m[1], Number(m[2]), await json(req)));
+      return after(edits.respond(root, id, m[1], Number(m[2]), await json(req)));
     }
     if ((m = sub.match(/^\/questions\/([a-z0-9]+)$/)) && method === 'POST') {
       const { answer } = await json(req);
@@ -206,6 +207,20 @@ export async function startServer(root, { port = 4747, host = '127.0.0.1', runne
   async function musicApi(req, res, id, sub, method, after, url) {
     if (sub === '/music' && method === 'GET') return send(res, 200, music.musicStatus(root, id));
     if (sub === '/music/notes' && method === 'GET') return send(res, 200, music.musicNotes(root, id));
+    // Quick edits (src/edits.mjs): mark bars, say what to change, keep or undo.
+    if (sub === '/music/edits' && method === 'GET') return send(res, 200, edits.editState(root, id));
+    if (sub === '/music/edits' && method === 'POST') {
+      const b = await json(req);
+      const r = await edits.makeEdit(root, id, { from: b.from, to: b.to, channel: b.channel, ask: b.ask, retryOf: b.retry_of || null });
+      changed();
+      return send(res, 200, r);
+    }
+    let em;
+    if ((em = sub.match(/^\/music\/edits\/([a-f0-9]{6,20})\/(keep|undo)$/)) && method === 'POST') {
+      const r = em[2] === 'keep' ? await edits.keepEdit(root, id, em[1]) : await edits.undoEdit(root, id, em[1]);
+      changed();
+      return send(res, 200, r);
+    }
     if (sub === '/music/midi.zip' && method === 'GET') {
       const zip = music.midiPack(root, id);
       const p = loadProject(root, id);
@@ -300,6 +315,7 @@ export async function startServer(root, { port = 4747, host = '127.0.0.1', runne
   const close = async () => {
     for (const c of clients) c.end();
     if (withRunner) { await runner.stop(); await loop; runner.release(); }
+    await edits.closeStrudel();
     await new Promise((ok) => server.close(ok));
   };
   if (!socketPath && !quiet) {

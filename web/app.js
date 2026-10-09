@@ -554,6 +554,14 @@ async function reviewView(id, stepKey, versionParam) {
   const texts = sub.items.map((it, i) => ({ ...it, i })).filter((it) => it.kind === 'text');
   let sel = media[0]?.i ?? null;
   let pinMode = false;
+  let rollMeta = null; // the MIDI's tempo and meter, once it's read
+  let focusCh = null;  // the part picked on the roll: it stays picked when the roll redraws
+  // Quick edits (src/edits.mjs): whether this version can be changed right here, and the edits made on it.
+  let editInfo = editable && media.some((m) => m.kind === 'midi') ? await api(`/api/projects/${id}/music/edits`).catch(() => null) : null;
+  const canEdit = () => Boolean(editInfo?.can && editInfo.step === stepKey && editInfo.version === sub.version);
+  // A note's edit follows the studio's record of it (kept or undone elsewhere, or in another tab).
+  for (const n of draft.notes) delete n._busy;
+  for (const n of draft.notes) if (n.edit) { const e = editInfo?.edits.find((x) => x.id === n.edit.id); if (e) n.edit.status = e.status; }
 
   const stageBox = h('div');
   const notesBox = h('div');
@@ -561,7 +569,8 @@ async function reviewView(id, stepKey, versionParam) {
 
   function whereText(n) {
     const it = n.item !== null && n.item !== undefined ? sub.items[n.item] : null;
-    return [it?.label, n.time_sec !== undefined ? `at ${clock(n.time_sec)}` : null, n.x !== undefined ? 'pinned spot' : null, n.paragraph !== undefined ? `paragraph ${n.paragraph + 1}` : null].filter(Boolean).join(' · ') || 'general';
+    const bars = n.bars ? (n.bars[0] === n.bars[1] ? `bar ${n.bars[0]}` : `bars ${n.bars[0]}-${n.bars[1]}`) : null;
+    return [it?.label, bars, n.part ? n.part : null, !bars && n.time_sec !== undefined ? `at ${clock(n.time_sec)}` : null, n.x !== undefined ? 'pinned spot' : null, n.paragraph !== undefined ? `paragraph ${n.paragraph + 1}` : null].filter(Boolean).join(' · ') || 'general';
   }
 
   function addNote(n) {
@@ -573,7 +582,7 @@ async function reviewView(id, stepKey, versionParam) {
     drawDoc();
   }
 
-  function drawStage() {
+  function drawStage({ playFrom = null } = {}) {
     if (sel === null) return fill(stageBox);
     const it = sub.items[sel];
     const url = fileUrl(id, it.file);
@@ -592,13 +601,38 @@ async function reviewView(id, stepKey, versionParam) {
       // The MIDI as a piano roll: click a moment to note it (bar and beat, as seconds into the piece).
       stage = h('div', { class: 'roll-wrap' }, h('div', { class: 'meta' }, 'Reading the MIDI…'));
       const pid = `${id}/${it.file}`;
-      fetch(url).then((r) => r.arrayBuffer()).then((buf) => {
+      fetch(`${url}?v=${Date.now()}`).then((r) => r.arrayBuffer()).then((buf) => {
         const midi = readMidi(new Uint8Array(buf));
-        const marks = (editable ? draft.notes : sub.feedback?.notes || []).filter((n) => n.item === sel && n.time_sec !== undefined).map((n) => n.time_sec);
-        fill(stage, pianoRoll(midi, { marks, onPick: editable ? (t) => addNote({ item: sel, time_sec: t }) : null, play: { id: pid, title: `${d.project.title} · ${media.length > 1 ? it.label : `${step.name} v${sub.version}`}`, href: location.hash } }));
+        const bpb = midi.beatsPerBar || 4;
+        rollMeta = { bpm: midi.bpm, bpb };
+        const barOf = (sec) => Math.floor((sec * midi.bpm) / 60 / bpb) + 1;
+        const list = editable ? draft.notes : sub.feedback?.notes || [];
+        const noteEdits = new Set(list.map((n) => n.edit?.id).filter(Boolean));
+        const bands = [
+          ...(editInfo?.edits || []).filter((e) => e.step === stepKey && e.version === sub.version && e.status !== 'undone' && !noteEdits.has(e.id)).map((e) => ({ from: e.from, to: e.to, label: 'edited', kind: 'edited' })),
+          ...list.map((n, k) => ({ n, k })).filter(({ n }) => n.item === sel && (n.bars || n.time_sec !== undefined)).map(({ n, k }) => {
+            const [from, to] = n.bars || [barOf(n.time_sec), barOf(n.time_sec)];
+            return { from, to, label: String(editable ? k + 1 : n.n), kind: n.edit && n.edit.status !== 'undone' ? 'edited' : 'note', index: editable ? k : undefined };
+          }),
+        ];
+        const playInfo = { id: pid, title: `${d.project.title} · ${media.length > 1 ? it.label : `${step.name} v${sub.version}`}`, href: location.hash };
+        fill(stage, pianoRoll(midi, { bands, play: playInfo, focusChannel: focusCh, onFocus: (ch) => { focusCh = ch; },
+          onMark: editable ? ({ from, to, sec, channel, part }) => addNote({ item: sel, bars: [from, to], time_sec: sec, channel, part }) : null,
+          onMoveBand: editable ? (k, from, to) => { const n = draft.notes[k]; if (n.edit && n.edit.status !== 'undone') return toast('That note already changed those bars: undo it first'); n.bars = [from, to]; n.time_sec = Math.round((((from - 1) * bpb * 60) / midi.bpm) * 100) / 100; save(); drawNotes(); drawStage(); } : null }));
+        // After an edit: hear the new bars at once, from a bar before them.
+        if (playFrom) {
+          player.load({ ...playInfo, piece: midi }, { force: true });
+          player.seek(Math.max(0, ((playFrom - 2) * bpb * 60) / midi.bpm));
+          player.play();
+        }
       }).catch((e) => fill(stage, h('div', { class: 'err' }, `Couldn't read this MIDI file: ${e.message}`)));
-      if (editable) tools.append(h('button', { class: 'btn', onclick: () => { const s = player.state(); if (s.id !== pid) return toast('Play it first, then note the moment you hear'); addNote({ item: sel, time_sec: Math.round(s.time * 100) / 100 }); } }, 'Note at the playhead'),
-        h('span', { class: 'meta' }, 'or click the roll to note a moment.'));
+      if (editable) tools.append(h('button', { class: 'btn', onclick: () => {
+        const s = player.state();
+        if (s.id !== pid || !rollMeta) return toast('Play it first, then mark the bar you hear');
+        const bar = Math.floor((s.time * rollMeta.bpm) / 60 / rollMeta.bpb) + 1;
+        addNote({ item: sel, bars: [bar, bar], time_sec: Math.round((((bar - 1) * rollMeta.bpb * 60) / rollMeta.bpm) * 100) / 100 });
+      } }, 'Mark the playhead\'s bar'),
+        h('span', { class: 'meta' }, canEdit() ? 'or drag across bars. Pick a part first to change only that part.' : 'or drag across bars to mark them.'));
     } else if (it.kind === 'audio') {
       const audio = h('audio', { src: url, controls: true, style: { width: '100%' } });
       stage = h('div', { style: { padding: '12px 0' } }, audio);
@@ -638,12 +672,64 @@ async function reviewView(id, stepKey, versionParam) {
     const list = h('ul', { class: 'notes' }, draft.notes.map((n, k) => h('li', null,
       h('span', { class: 'num' }, k + 1),
       h('div', null, h('div', { class: 'where' }, whereText(n)),
-        h('textarea', { placeholder: 'What should change (or what you love)?', value: n.text, oninput: (e) => { n.text = e.target.value; save(); } })),
-      h('button', { class: 'x', 'aria-label': `Remove note ${k + 1}`, onclick: () => { draft.notes.splice(k, 1); save(); drawNotes(); drawStage(); drawDoc(); } }, '×'))));
+        h('textarea', { placeholder: n.bars && canEdit() ? 'What should change here? ("a different drum beat")' : 'What should change (or what you love)?', value: n.text, oninput: (e) => { n.text = e.target.value; save(); } }),
+        editControls(n)),
+      h('button', { class: 'x', 'aria-label': `Remove note ${k + 1}`, onclick: async () => {
+        if (n.edit?.status === 'tried' && !(await undo(n))) return; // a note's change goes with it
+        draft.notes.splice(draft.notes.indexOf(n), 1); save(); drawNotes(); drawStage(); drawDoc();
+      } }, '×'))));
     fill(notesBox, h('section', null, h('h2', null, 'Your notes', h('span', { class: 'count' }, draft.notes.length || '')),
       draft.notes.length ? list : h('p', { class: 'meta' }, media.length ? 'Note a moment on the MIDI or the audio, or comment on a paragraph. No notes needed to approve.' : 'Comment on a paragraph, or approve as it is.'),
       h('button', { class: 'btn link', onclick: () => addNote({}) }, 'Add a general note')));
     if (focusLast) list.querySelector('li:last-child textarea')?.focus();
+  }
+
+  // ---- quick edits: change the marked bars right here ----
+  let busy = false;
+  const barsWord = (n) => (n.bars[0] === n.bars[1] ? `bar ${n.bars[0]}` : `bars ${n.bars[0]}-${n.bars[1]}`);
+  function editControls(n) {
+    if (!canEdit() || !n.bars || sub.items[n.item]?.kind !== 'midi') return null;
+    if (n._busy) return h('div', { class: 'edit-line' }, h('span', { class: 'pulse', 'aria-hidden': 'true' }), ` Changing ${barsWord(n)}${n.part ? ` (${n.part})` : ''}…`);
+    const e = n.edit;
+    if (!e || e.status === 'undone') {
+      return h('div', { class: 'edit-line' }, h('button', { class: 'btn', disabled: busy, onclick: () => quickEdit(n) }, 'Change it now'),
+        h('span', { class: 'meta' }, e ? ' undone · ' : ' ', 'or leave it for the session'));
+    }
+    return h('div', { class: 'edit-line done' },
+      h('div', { class: 'facts' }, `Changed ${barsWord(n)}${e.part ? `, ${e.part}` : ''}: ${(e.facts || []).join(' · ')}`),
+      e.said ? h('div', { class: 'meta' }, e.said) : null,
+      e.warnings?.length ? h('div', { class: 'warn' }, `The check would flag: ${e.warnings.join(' · ')}`) : null,
+      h('div', { class: 'actions' },
+        e.status === 'kept' ? h('span', { class: 'chip ok' }, 'kept') : h('button', { class: 'btn', disabled: busy, onclick: () => keep(n) }, 'Keep'),
+        h('button', { class: 'btn link', disabled: busy, onclick: () => undo(n) }, 'Undo'),
+        h('button', { class: 'btn link', disabled: busy, onclick: () => quickEdit(n, e.id) }, 'Try another')));
+  }
+  async function quickEdit(n, retryOf = null) {
+    if (!(n.text || '').trim()) { toast('Say what should change first'); return; }
+    busy = true; n._busy = true; drawNotes();
+    try {
+      const r = await api(`/api/projects/${id}/music/edits`, { method: 'POST', body: { from: n.bars[0], to: n.bars[1], channel: n.channel ?? null, ask: n.text.trim(), retry_of: retryOf } });
+      const e = r.edit;
+      n.edit = { id: e.id, status: e.status, facts: e.facts, said: e.said, warnings: e.warnings, part: e.part };
+      editInfo = await api(`/api/projects/${id}/music/edits`).catch(() => editInfo);
+      save();
+      toast(`Changed in ${r.seconds} s`);
+      drawStage({ playFrom: n.bars[0] });
+    } catch (err) { toast(err.message, true); } finally { busy = false; delete n._busy; drawNotes(); }
+  }
+  async function keep(n) {
+    try { const r = await api(`/api/projects/${id}/music/edits/${n.edit.id}/keep`, { method: 'POST' }); n.edit.status = r.edit.status; save(); toast('Kept: the studio remembers this one'); } catch (err) { toast(err.message, true); }
+    drawNotes();
+  }
+  async function undo(n) {
+    busy = true; drawNotes();
+    try {
+      const r = await api(`/api/projects/${id}/music/edits/${n.edit.id}/undo`, { method: 'POST' });
+      n.edit.status = r.edit.status;
+      editInfo = await api(`/api/projects/${id}/music/edits`).catch(() => editInfo);
+      save(); drawStage({ playFrom: n.bars[0] });
+      return true;
+    } catch (err) { toast(err.message, true); return false; } finally { busy = false; drawNotes(); }
   }
 
   const questions = sub.questions.length ? h('section', null, h('h2', null, 'Questions'), sub.questions.map((q) => {
@@ -664,7 +750,9 @@ async function reviewView(id, stepKey, versionParam) {
   const err = h('div', { class: 'err' });
   const decide = async (verdict) => {
     err.textContent = '';
-    const notes = draft.notes.map((n) => ({ item: n.item ?? null, x: n.x, y: n.y, time_sec: n.time_sec, paragraph: n.paragraph, text: (n.text || '').trim() }));
+    // A note whose bars were already changed here goes to the session as done (so it isn't changed again).
+    const notes = draft.notes.map((n) => ({ item: n.item ?? null, x: n.x, y: n.y, time_sec: n.time_sec, paragraph: n.paragraph, bars: n.bars,
+      text: n.edit && n.edit.status !== 'undone' && (n.text || '').trim() ? `Changed in the studio already (my edit: keep it): ${n.text.trim()}` : (n.text || '').trim() }));
     if (notes.some((n) => !n.text)) { err.textContent = 'Every note needs some words (or remove it).'; return; }
     if (verdict === 'changes' && !notes.length && !draft.overall.trim()) { err.textContent = 'Say what to change: leave a note or write an overall comment.'; return; }
     try {
@@ -1102,10 +1190,12 @@ function readMidi(b) {
 }
 
 // A piano roll for a piece: { bpm, beatsPerBar | beats_per_bar, tracks: [{ name, channel, notes }], markers? | sections? }.
-// Quiet by default: every part in faint ink; pick a part to see it in full ink. `marks` are noted moments (seconds),
-// and `onPick(seconds)` makes a click note that moment. With `play` ({ id, title, href }) it gets a play button and a
-// playhead, and (when a click doesn't note) a click plays from there.
-function pianoRoll(piece, { marks = [], onPick = null, play = null } = {}) {
+// Quiet by default: every part in faint ink; pick a part to see it in full ink. `bands` shade bars: notes you left
+// ({ from, to, label, kind: 'note' }) and bars you changed ({ kind: 'edited' }). With `onMark({ from, to, sec, channel })`
+// a press-and-drag marks bars (snapped; the part you've picked comes along), and with `onMoveBand(index, from, to)` a
+// note's band can be dragged elsewhere. With `play` ({ id, title, href }) it gets a play button and a playhead, and
+// (when it doesn't mark) a click plays from there.
+function pianoRoll(piece, { bands = [], onMark = null, onMoveBand = null, play = null, focusChannel = null, onFocus = null } = {}) {
   const bpb = piece.beatsPerBar || piece.beats_per_bar || 4;
   const bpm = piece.bpm || 120;
   const tracks = (piece.tracks || []).filter((t) => t.notes?.length);
@@ -1121,7 +1211,7 @@ function pianoRoll(piece, { marks = [], onPick = null, play = null } = {}) {
   const kit = [...new Set(tracks.filter(isDrums).flatMap((t) => t.notes.map((n) => n.pitch)))].sort((a, b) => a - b);
   const lo = pitched.length ? Math.min(...pitched.map((n) => n.pitch)) - 2 : 0;
   const hi = pitched.length ? Math.max(...pitched.map((n) => n.pitch)) + 2 : -1;
-  let focus = null;
+  let focus = focusChannel === null ? null : tracks.find((t) => t.channel === focusChannel) || null;
   const canvas = h('canvas', { class: 'roll', role: 'img', 'aria-label': `Piano roll: ${tracks.length} parts, ${bars} bars at ${bpm} BPM` });
   const readout = h('span', { class: 'meta' }, `${bars} bars · ${bpm} BPM · ${bpb}/4`);
   const at = (beat) => `bar ${Math.floor(beat / bpb) + 1}, beat ${Math.floor(beat % bpb) + 1}`;
@@ -1152,14 +1242,51 @@ function pianoRoll(piece, { marks = [], onPick = null, play = null } = {}) {
       g.globalAlpha = on ? (focus ? 1 : 0.75) : 0.18;
       for (const n of t.notes) g.fillRect(x(n.start), y(t, n.pitch), Math.max(1.5, x(n.dur) - 1), tall(t));
     }
-    g.globalAlpha = 1; g.fillStyle = color('--pin');
-    for (const sec of marks) g.fillRect(x((sec * bpm) / 60), 0, 2, ht);
+    g.globalAlpha = 1;
   };
   const secAt = (e) => { const r = canvas.getBoundingClientRect(); return Math.max(0, ((e.clientX - r.left) / r.width) * bars * bpb) * 60 / bpm; };
+  const barAt = (e) => { const r = canvas.getBoundingClientRect(); return Math.min(bars, Math.max(1, Math.floor(((e.clientX - r.left) / r.width) * bars) + 1)); };
+  const barSec = (bar) => Math.round((((bar - 1) * bpb * 60) / bpm) * 100) / 100;
   const loadMe = () => { if (player.state().id !== play.id) player.load({ ...play, piece }); };
-  if (onPick) {
+  // The bands: shaded bars with their number on top; a note's band can be picked up and moved.
+  const bandLayer = h('div', { class: 'bands' });
+  const stage = h('div', { class: 'roll-stage' }, canvas, bandLayer);
+  const place = (el, from, to) => { el.style.left = `${((from - 1) / bars) * 100}%`; el.style.width = `${((to - from + 1) / bars) * 100}%`; };
+  for (const b of bands) {
+    const el = h('div', { class: `band ${b.kind}`, title: b.kind === 'edited' ? `Bars ${b.from}-${b.to}: changed by you` : `Your note ${b.label}` }, h('span', null, b.label));
+    place(el, b.from, b.to);
+    if (onMoveBand && b.kind !== 'edited' && b.index !== undefined) el.dataset.index = String(b.index);
+    bandLayer.append(el);
+  }
+  if (onMark) {
     canvas.style.cursor = 'crosshair';
-    canvas.addEventListener('click', (e) => onPick(Math.round(secAt(e) * 100) / 100));
+    const ghost = h('div', { class: 'band marking', hidden: true });
+    bandLayer.append(ghost);
+    let drag = null;
+    stage.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      const moving = e.target.closest('.band[data-index]');
+      const bar = barAt(e);
+      drag = moving ? { move: Number(moving.dataset.index), el: moving, grab: bar, from: bands.find((b) => b.index === Number(moving.dataset.index)).from, to: bands.find((b) => b.index === Number(moving.dataset.index)).to }
+        : { start: bar, from: bar, to: bar };
+      e.currentTarget.setPointerCapture(e.pointerId);
+      if (!moving) { ghost.hidden = false; place(ghost, bar, bar); }
+      e.preventDefault();
+    });
+    stage.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      const bar = barAt(e);
+      if (drag.move !== undefined) {
+        const len = drag.to - drag.from; const from = Math.min(bars - len, Math.max(1, drag.from + bar - drag.grab));
+        drag.nf = from; drag.nt = from + len; place(drag.el, from, from + len);
+      } else { drag.from = Math.min(drag.start, bar); drag.to = Math.max(drag.start, bar); place(ghost, drag.from, drag.to); }
+    });
+    stage.addEventListener('pointerup', () => {
+      const d = drag; drag = null; ghost.hidden = true;
+      if (!d) return;
+      if (d.move !== undefined) { if (d.nf !== undefined && d.nf !== d.from) onMoveBand(d.move, d.nf, d.nt); return; }
+      onMark({ from: d.from, to: d.to, sec: barSec(d.from), channel: focus?.channel ?? null, part: focus ? focus.name : null });
+    });
   } else if (play) {
     canvas.style.cursor = 'pointer';
     canvas.title = 'Click to play from here';
@@ -1170,13 +1297,13 @@ function pianoRoll(piece, { marks = [], onPick = null, play = null } = {}) {
     readout.textContent = at(((e.clientX - r.left) / r.width) * bars * bpb);
   });
   const legend = h('div', { class: 'choices roll-parts', role: 'radiogroup', 'aria-label': 'Parts' },
-    tracks.map((t) => h('button', { type: 'button', class: 'choice', role: 'radio', 'aria-checked': 'false', onclick: (e) => {
+    tracks.map((t) => h('button', { type: 'button', class: `choice${focus === t ? ' on' : ''}`, role: 'radio', 'aria-checked': String(focus === t), onclick: (e) => {
       focus = focus === t ? null : t;
       for (const b of legend.children) { b.classList.remove('on'); b.setAttribute('aria-checked', 'false'); }
       if (focus) { e.currentTarget.classList.add('on'); e.currentTarget.setAttribute('aria-checked', 'true'); }
+      onFocus?.(focus?.channel ?? null);
       draw();
     } }, `${t.channel ? `${t.channel} · ` : ''}${t.name || 'part'}`)));
-  const stage = h('div', { class: 'roll-stage' }, canvas);
   let playBtn = null;
   if (play) {
     const head = h('div', { class: 'playhead', hidden: true });

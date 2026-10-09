@@ -189,6 +189,21 @@ velocity) and `out/music/midi/`:
 From here on the MIDI is the music: the instruments are chosen from it, and the owner can take it into any DAW. The
 check also prints where each channel plays (lowest, middle, highest note).
 
+### The owner's own edits
+
+The owner can change bars themselves in the review room ("bar 9: a different drum beat"). The studio splices their
+bars in: every block on that channel gets a per-bar mask (`(…\n).mask(/*mfx-keep*/"<1!8 0 1!31>")`) and the
+new bars play from a block at the end of the score, between `// ---- your edits` and `// ---- end of your edits ----`
+(`owner_ch10: note("<~!8 [...] ~!31>")…`). The edits themselves are in `music/edits.json`.
+
+- **Leave them.** Write and change the score as usual. `check` puts every edit that isn't undone back into the score
+  before it evaluates, so a rewrite can't lose one, but don't fight them either: never write over those bars on that
+  channel unless the owner's notes ask you to.
+- The project's CLAUDE.md lists them, with what they measured ("closed hat 8 → 16 hits a bar"). It also lists the
+  differences the owner keeps making across pieces: write the score so they wouldn't need making again.
+- `node $M capture` is `check` that captures the MIDI even when the check finds problems. The studio uses it for the
+  owner's edits, which always go in. You use `check`.
+
 ## 6. Loop kits
 
 With `"loops": true` every section is a loop the owner will repeat in their DAW, and the check adds what that needs:

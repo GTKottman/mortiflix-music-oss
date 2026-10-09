@@ -308,3 +308,18 @@ body.has-player .toast { bottom: 84px; }
   .pb-track { grid-column: 1 / -1; grid-row: 2; }
   .pb-time { display: none; }
 }
+
+/* ---------- marking bars and quick edits ---------- */
+.bands { position: absolute; inset: 0; pointer-events: none; }
+.band { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--pin) 14%, transparent); box-shadow: inset 2px 0 0 var(--pin); pointer-events: auto; }
+.band[data-index] { cursor: grab; }
+.band span { position: absolute; top: 2px; left: 4px; font-size: 11px; font-weight: 600; color: var(--pin); }
+.band.edited { background: color-mix(in srgb, var(--ok) 13%, transparent); box-shadow: inset 2px 0 0 var(--ok); cursor: default; }
+.band.edited span { color: var(--ok); }
+.band.marking { background: color-mix(in srgb, var(--pin) 22%, transparent); pointer-events: none; }
+.band[hidden] { display: none; }
+.edit-line { margin-top: 6px; font-size: 13px; display: grid; gap: 4px; }
+.edit-line .btn { justify-self: start; }
+.edit-line.done .facts { color: var(--ink); }
+.edit-line .warn { color: var(--warn); }
+.edit-line .actions { gap: 12px; }

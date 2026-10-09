@@ -30,7 +30,8 @@ export const DEFAULT_CONFIG = {
   sandbox: false,                   // claude-code on Linux: run each session inside bubblewrap
   maxSessionMinutes: 240,
   renderPrefix: [],                 // wraps every `mfx render` command, e.g. a machine-wide queue: ["render-queue", "-l", "{label}", "--"]
-  maxTurns: 500,                    // anthropic-api: tool-use turns per session
+  maxTurns: 500,
+  quickModel: null,                 // quick edits in the review room: null = Sonnet (fast); any model id or Claude Code alias                    // anthropic-api: tool-use turns per session
   host: '127.0.0.1',
   network: false,                   // serve to your network (every address, no token); see docs/SECURITY.md
   port: 4747,

@@ -176,6 +176,17 @@ are read in the browser (a small Standard MIDI File reader in `web/app.js`) and 
 a click on it becomes a note at that moment (`time_sec`, from the file's tempo). See
 [SECURITY.md](SECURITY.md) for its guards.
 
+Quick edits (`src/edits.mjs`, `src/context.mjs`, `pipelines/_shared/skills/music/lib/edit.mjs`): the owner marks
+bars on a MIDI review and says what to change. A Strudel page is kept warm in the server. Every note it reads carries
+its source location, so `locate()` knows the exact tokens behind each bar. The context engine briefs Claude on the
+piece, the section, the chords, the bars around the mark, the other parts, the genre's beat and the owner's saved
+differences, and Claude answers with only the new bars. `renderEdits()` forces them in with a per-bar mask on every
+block on that channel plus an owner block. (Rewriting the token in place would freeze nested `<…>` alternations; a
+mask works for any score.) `verifyEdit()` refuses the edit if any note outside the marked bars moved. `strudel.mjs
+capture` then re-captures `notes.json` and the MIDI pack, and the version under review gets the new MIDI. Edits live in
+`music/edits.json`, and the engine re-applies them whenever the score is checked. Kept and undone edits become measured
+differences in `taste.json`, which feed later edits and every session's CLAUDE.md.
+
 `web/player.js` plays a piece in the browser: the captured notes (or a MIDI file, or an audio file such as your master)
 through a small Web Audio synth and drum kit, with instruments picked from each part's name and General MIDI drums
 on channel 10. Nothing is loaded from elsewhere, so it works offline and under the app's CSP. One piece plays at a

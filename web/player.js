@@ -2,7 +2,7 @@
 // samples, nothing loaded from elsewhere), or plays an audio file (your master). One piece at a time, shared by the
 // player bar, the library and every piano roll.
 //
-//   player.load({ id, title, href, piece })   piece: { bpm, beatsPerBar, tracks: [{ name, channel, kind?, notes }], markers }
+//   player.load({ id, title, href, piece }, { force })   piece: { bpm, beatsPerBar, tracks: [{ name, channel, kind?, notes }], markers }
 //   player.loadAudio({ id, title, href, url })
 //   player.play() · pause() · toggle() · seek(seconds) · close()
 //   player.on((state) => …)                    called on every change and every frame while playing; returns an unsubscribe
@@ -53,8 +53,9 @@ function sectionAt(sec) {
 
 // ---------- loading ----------
 
-export function load({ id, title, href = null, piece }) {
-  if (src?.id === id) return;
+// `force` reloads the same piece (its notes changed: an edit in the review room).
+export function load({ id, title, href = null, piece }, { force = false } = {}) {
+  if (src?.id === id && !force) return;
   close(false);
   const bpm = piece.bpm || 120;
   const bpb = piece.beatsPerBar || piece.beats_per_bar || 4;

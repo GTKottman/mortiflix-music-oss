@@ -7,6 +7,7 @@ import { studioRoot, ensureStudio, loadConfig, saveConfig, paths, readJson } fro
 import { listPipelines, findPipeline, exportPipeline, addPipeline } from './pipelines.mjs';
 import { createProject, addIntakeFile, startProject, listProjects, loadProject, projectPaths, projectPipeline, readEvents } from './projects.mjs';
 import * as gates from './gates.mjs';
+import * as edits from './edits.mjs';
 import { Runner, BACKENDS } from './runner.mjs';
 import * as keys from './keys.mjs';
 import * as setup from './setup.mjs';
@@ -527,7 +528,7 @@ async function review(root, given) {
         while (!['a', 'c', 's'].includes(choice)) choice = (await rl.question(`\n${C.b('[a]')}pprove, ask for ${C.b('[c]')}hanges, or ${C.b('[s]')}kip? `)).trim().toLowerCase()[0] || '';
         if (choice === 's') continue;
         if (choice === 'a') {
-          const r = gates.respond(root, id, s.key, sub.version, { verdict: 'approve', answers });
+          const r = edits.respond(root, id, s.key, sub.version, { verdict: 'approve', answers });
           console.log(C.green(`✔ ${s.name} approved.`));
           if (r.project_state === 'delivered' && loadProject(root, id).flow) {
             const v = (await rl.question(`How did it land? ${C.b('[l]')}ove it, it's ${C.b('[f]')}ine, ${C.b('[n]')}ot for me ${C.dim('(Enter skips)')}: `)).trim().toLowerCase()[0];
@@ -544,7 +545,7 @@ async function review(root, given) {
           notes.push(parseNote(line));
         }
         const overall = (await rl.question('Overall comment (optional): ')).trim();
-        gates.respond(root, id, s.key, sub.version, { verdict: 'changes', notes, overall, answers });
+        edits.respond(root, id, s.key, sub.version, { verdict: 'changes', notes, overall, answers });
         console.log(C.acc(`↺ Changes sent. ${C.b('mortiflix-music run')} makes the next version.`));
       }
     }
@@ -639,7 +640,7 @@ function respondCmd(root, [given, stepKey], a) {
   for (const kv of a.answer) { const [k, ...v] = String(kv).split('='); answers[k] = v.join('='); }
   const notes = a.note.map((n) => parseNote(String(n)));
   if (a.rate !== undefined && !flows.RATINGS[a.rate]) throw new Error('--rate love, fine or no');
-  const r = gates.respond(root, id, stepKey, version, { verdict: a.approve ? 'approve' : 'changes', notes, overall: typeof a.overall === 'string' ? a.overall : '', answers });
+  const r = edits.respond(root, id, stepKey, version, { verdict: a.approve ? 'approve' : 'changes', notes, overall: typeof a.overall === 'string' ? a.overall : '', answers });
   if (a.rate) flows.rateProject(root, id, a.rate);
   if (r.verdict === 'approve') console.log(C.green(`✔ ${view.name} v${version} approved.${r.project_state === 'delivered' ? ' Delivered.' : ''}`));
   else console.log(C.acc(`↺ Changes sent for ${view.name} v${version} (${notes.length} note${notes.length === 1 ? '' : 's'}). ${C.b('mortiflix-music run')} makes the next version.`));

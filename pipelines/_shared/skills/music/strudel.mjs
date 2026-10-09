@@ -15,6 +15,8 @@
 //   node strudel.mjs render [--stems] [--out f]  score + instruments → out/music/score.wav (+ out/music/stems/)
 //   node strudel.mjs master                      render + stems + loudness → out/music/master.wav, master.mp3 (songs)
 //   node strudel.mjs own-master                  the owner's own master (imported from their DAW): is it there, does it fit
+//   node strudel.mjs capture                     check, but the MIDI is captured even with problems (they're reported):
+//                                                for the owner's own edits in the studio, which always go in
 //   node strudel.mjs midi                        out/music/midi/ again, with CUE-SHEET.md
 //   node strudel.mjs sheet                       rewrites music/MUSIC-SHEET.md from whatever exists
 //
@@ -32,6 +34,7 @@ import { masterTo, TARGET } from './lib/master.mjs';
 import { zip, dirEntries } from './lib/zip.mjs';
 import { TECHNIQUES, planProblems as techniquePlanProblems, checkTechniques, heard } from './lib/techniques.mjs';
 import { flowPlanProblems, flowScoreProblems, flowLines } from './lib/flow.mjs';
+import { renderEdits } from './lib/edit.mjs';
 
 const args = process.argv.slice(2);
 const cmd = args.shift();
@@ -39,7 +42,7 @@ const opt = (name, dflt) => { const i = args.indexOf(`--${name}`); if (i < 0) re
 const F = {
   genre: 'music/genre.json', blueprint: opt('blueprint', 'music/blueprint.json'), instruments: 'music/instruments.json',
   notes: 'music/notes.json', check: 'music/check.json', audition: 'music/audition.json', master: 'music/master.json',
-  own: 'music/own-master/report.json', sheet: 'music/MUSIC-SHEET.md', flow: opt('flow', 'flow/flow.json'),
+  own: 'music/own-master/report.json', sheet: 'music/MUSIC-SHEET.md', flow: opt('flow', 'flow/flow.json'), edits: 'music/edits.json',
 };
 const out = opt('out', null);
 const videoSec = Number(opt('video-sec', 0)) || null;
@@ -47,7 +50,7 @@ const fps = Number(opt('fps', 30));
 const stems = Boolean(opt('stems', false));
 const tailBars = Number(opt('tail-bars', 1));
 const scorePath = args[0] || 'music/score.strudel.js';
-const COMMANDS = ['genre', 'techniques', 'plan', 'check', 'instruments', 'audition', 'render', 'master', 'own-master', 'midi', 'sheet'];
+const COMMANDS = ['genre', 'techniques', 'plan', 'check', 'capture', 'instruments', 'audition', 'render', 'master', 'own-master', 'midi', 'sheet'];
 
 const die = (msg) => { console.error(`✖ ${msg}`); process.exit(1); };
 const read = (f) => { try { return JSON.parse(readFileSync(f, 'utf8')); } catch (e) { if (!existsSync(f)) return null; die(`${f}: ${e.message}`); } };
@@ -143,20 +146,27 @@ if (cmd === 'own-master') {
 if (!existsSync(scorePath)) die(`no score at ${scorePath}`);
 const bpErrors = checkBlueprint(bp);
 if (bpErrors.length) die(bpErrors.join('\n  '));
-const code = readFileSync(scorePath, 'utf8');
+// The owner's edits (music/edits.json, made in the studio) are always in the score: put back if a rewrite dropped them.
+let code = readFileSync(scorePath, 'utf8');
+const ownerEdits = read(F.edits)?.edits?.filter((e) => e.status !== 'undone') || [];
+if (ownerEdits.length || code.includes('/*mfx-keep*/')) {
+  const withEdits = renderEdits(code, ownerEdits, bp.bars + 2);
+  if (withEdits.code !== code) { writeFileSync(scorePath, withEdits.code); code = withEdits.code; console.log(`(put the owner's ${ownerEdits.length} edit${ownerEdits.length === 1 ? '' : 's'} back into ${scorePath}: they stay unless the owner changes them)`); }
+  for (const ch of withEdits.missing) console.log(`! The owner edited channel ${ch}, but no block in the score plays on it now: their bars still play from the edits block.`);
+}
 const inst = read(F.instruments);
 const playable = () => (inst ? code + '\n' + instrumentCode(inst) : code);
 const { HeadlessStrudel } = await import('./lib/headless.mjs');
 const strudel = await new HeadlessStrudel().start().catch((e) => die(e.message));
 try {
-  if (cmd === 'check' || cmd === 'midi') {
+  if (cmd === 'check' || cmd === 'capture' || cmd === 'midi') {
     // A bar past the end catches parts that keep looping after the ending.
     const { cps, haps } = await strudel.haps(code, bp.bars + 1);
     const channels = hapsToChannels({ haps, cps, beatsPerCycle: bpb, names });
     const endBeat = bp.bars * bpb;
     const manifest = { title: bp.title || null, bpm: channels.bpm, meter: bp.meter || '4/4', beats_per_bar: bpb, bars: bp.bars,
       tracks: channels.tracks.map((t) => ({ ...t, notes: t.notes.filter((n) => n.start < endBeat) })) };
-    if (cmd === 'check') {
+    if (cmd === 'check' || cmd === 'capture') {
       const score = checkScore(channels, bp, { video_sec: videoSec, fps });
       const harmony = checkHarmony(manifest, bp);
       const curve = intensity(manifest, bp);
@@ -175,12 +185,13 @@ try {
       if (tech.results.length) console.log(`\nTechniques (planned → heard):\n${tech.results.map((t) => `  ${['sound', 'lock'].includes(t.kind) ? '·' : t.found ? '✔' : '✖'} ${t.name.padEnd(24)} ${t.evidence}`).join('\n')}`);
       if (score.hits.length) console.log(`\nHits:\n${score.hits.map((h) => `  ${h.ok ? '✔' : '✖'} ${String(h.t_sec).padStart(7)}s  bar ${h.bar} beat ${h.beat ?? 1} → ${h.music_sec}s (${h.off_sec >= 0 ? '+' : ''}${h.off_sec}s)  ${h.kind || 'direct'}: ${h.what}`).join('\n')}`);
       for (const w of report.warnings) console.log(`\n! ${w}`);
-      if (errors.length) fail(errors);
+      if (errors.length && cmd === 'check') fail(errors);
       else {
+        if (errors.length) console.log(`\n! Captured anyway (the owner's edit): ${errors.length} problem${errors.length === 1 ? '' : 's'} the check would block:\n  ${errors.join('\n  ')}`);
         // The score passed: its MIDI is the music from here on. Instruments are chosen from it; any DAW can play it.
         write(F.notes, manifest);
         const files = writeMidiPack(manifest, out || 'out/music/midi');
-        console.log(`\n✔ Check passed: harmony locked, the curve follows the story${tech.results.length ? ', every planned technique is in the notes' : ''}${flow ? `, it moves like "${flow.name}"` : ''}${bp.loops ? ', every loop repeats cleanly' : ''}${bp.hits?.length ? ', hits on the picture' : ''}.`);
+        if (!errors.length) console.log(`\n✔ Check passed: harmony locked, the curve follows the story${tech.results.length ? ', every planned technique is in the notes' : ''}${flow ? `, it moves like "${flow.name}"` : ''}${bp.loops ? ', every loop repeats cleanly' : ''}${bp.hits?.length ? ', hits on the picture' : ''}.`);
         console.log(`✔ MIDI: ${F.notes} and ${files} (every channel, the whole arrangement, a clip per section, CUE-SHEET.md).`);
         console.log(`  Where each channel plays:\n  ${registers(manifest).map(registerLine).join('\n  ')}`);
       }
