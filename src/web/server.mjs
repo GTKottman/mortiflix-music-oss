@@ -1,14 +1,16 @@
 // The web studio: your projects, the review room, settings, plus the runner (sessions start by themselves).
 //
 // Security, because a local web server can be reached by any page in your browser:
-//   - it listens on 127.0.0.1 unless you choose another host; then a token is required (printed at start)
-//   - the Host header must be one we serve (blocks DNS-rebinding)
+//   - it listens on 127.0.0.1 unless you choose another host; then a token is required (printed at start),
+//     unless you trust your network (`serve --network`): then anything on it may use the studio, no token
+//   - the Host header must be one we serve (blocks DNS-rebinding; on --network, an IP or this machine's own name)
 //   - every change needs the X-Mortiflix header, which other sites can't send without CORS (blocks CSRF)
 //   - media is served from the project records only, with a sandboxing CSP and nosniff
 import { createServer } from 'node:http';
 import { createReadStream, existsSync, statSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
 import { join, extname, basename, resolve } from 'node:path';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { networkInterfaces, hostname } from 'node:os';
 import { REPO, paths, loadConfig, saveConfig, readSecret, writeSecret, readJson, isInside, UserError } from '../studio.mjs';
 import { listPipelines } from '../pipelines.mjs';
 import * as flows from '../flows.mjs';
@@ -31,10 +33,10 @@ const APP_CSP = "default-src 'self'; img-src 'self' data: blob:; media-src 'self
 const MEDIA_CSP = "sandbox; default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'unsafe-inline'";
 const LOOPBACK = ['127.0.0.1', '::1', 'localhost'];
 
-export async function startServer(root, { port = 4747, host = '127.0.0.1', runner: withRunner = true, socketPath = null, quiet = false } = {}) {
+export async function startServer(root, { port = 4747, host = '127.0.0.1', runner: withRunner = true, socketPath = null, quiet = false, trustNetwork = false } = {}) {
   const loopback = LOOPBACK.includes(host);
   let token = null;
-  if (!loopback && !socketPath) {
+  if (!loopback && !socketPath && !trustNetwork) {
     token = readSecret(root, 'web_token') || randomBytes(18).toString('base64url');
     writeSecret(root, 'web_token', token);
   }
@@ -59,6 +61,7 @@ export async function startServer(root, { port = 4747, host = '127.0.0.1', runne
     const url = new URL(req.url, 'http://x');
     const hostHeader = String(req.headers.host || '').replace(/:\d+$/, '').replace(/^\[|\]$/g, '');
     if (!socketPath && loopback && !LOOPBACK.includes(hostHeader)) return send(res, 421, { error: 'unknown host' });
+    if (!socketPath && trustNetwork && !ownName(hostHeader)) return send(res, 421, { error: 'unknown host: open the studio by its IP address or this machine\'s name' });
 
     if (token) {
       const cookie = /(?:^|;\s*)mfx_token=([^;]+)/.exec(req.headers.cookie || '')?.[1];
@@ -285,8 +288,14 @@ export async function startServer(root, { port = 4747, host = '127.0.0.1', runne
   }
   const where = socketPath || `http://${host.includes(':') ? `[${host}]` : host}:${server.address().port}/`;
   if (!quiet) {
-    console.log(`Mortiflix Music studio: ${token ? `${where}?token=${token}` : where}`);
+    // 0.0.0.0 or :: is no address another device can open: print the ones it can (and this machine's own).
+    const wild = !socketPath && ['0.0.0.0', '::'].includes(host);
+    const links = wild ? reachable(server.address().port) : [where];
+    const tok = token ? `?token=${token}` : '';
+    console.log(`Mortiflix Music studio: ${links[0]}${tok}`);
+    for (const l of links.slice(1)) console.log(`                        ${l}${tok}`);
     if (token) console.log('(not on localhost: the link carries an access token; keep it private)');
+    if (trustNetwork) console.log('(open to your network: anything on it can use the studio, no token)');
   }
   const close = async () => {
     for (const c of clients) c.end();
@@ -301,6 +310,25 @@ export async function startServer(root, { port = 4747, host = '127.0.0.1', runne
 }
 
 class BadRequest extends Error {}
+
+// On --network, a request must name this machine: an IP address, localhost, or its own name (bare, .local or a
+// Tailscale *.ts.net name). Any other name is a page trying DNS rebinding.
+export function ownName(h) {
+  if (/^[\d.]+$/.test(h) || h.includes(':') || LOOPBACK.includes(h)) return true;
+  const me = hostname().toLowerCase().split('.')[0];
+  const first = h.toLowerCase().split('.')[0];
+  return first === me && (h === first || /\.(local|lan|home|ts\.net)$/i.test(h));
+}
+
+// The addresses other devices reach this machine at (LAN, VPN), then localhost. Container bridges are left out.
+function reachable(port) {
+  const out = [];
+  for (const [name, addrs] of Object.entries(networkInterfaces())) {
+    if (/^(docker|br-|veth|virbr|lo)/.test(name)) continue;
+    for (const a of addrs || []) if (a.family === 'IPv4' && !a.internal) out.push(`http://${a.address}:${port}/`);
+  }
+  return [...out, `http://localhost:${port}/`];
+}
 
 function send(res, code, body) {
   res.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });

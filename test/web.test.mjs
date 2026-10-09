@@ -3,10 +3,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { request } from 'node:http';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
+import { tmpdir, hostname } from 'node:os';
 import { randomBytes } from 'node:crypto';
 import { tempStudio } from './helpers.mjs';
-import { startServer } from '../src/web/server.mjs';
+import { startServer, ownName } from '../src/web/server.mjs';
 
 function call(socketPath, method, path, { body, raw, headers = {} } = {}) {
   return new Promise((ok, fail) => {
@@ -184,4 +184,10 @@ test('web: flows, a brief\'s flow, rating a piece and saving it as a flow', asyn
   assert.equal(saved.json.source, 'yours');
   assert.ok(!('dir' in saved.json));
   assert.equal((await s('GET', '/api/flows')).json.flows.length, 19);
+});
+
+test('web: on --network, only this machine\'s own names pass the Host check (DNS rebinding)', () => {
+  const me = hostname().toLowerCase().split('.')[0];
+  for (const ok of ['192.168.1.205', '100.102.223.68', 'fe80::1', 'localhost', me, `${me}.local`, `${me}.tail1234.ts.net`]) assert.equal(ownName(ok), true, ok);
+  for (const bad of ['evil.example.com', `${me}.evil.com`, `${me}x.local`, 'rebind.1.2.3.4.nip.io', '']) assert.equal(ownName(bad), false, bad);
 });

@@ -131,8 +131,10 @@ The web studio shows what's waiting on you, a live log of what Claude is doing, 
 **piano roll** (pick a part to bring it forward; click a bar to leave a note there), audio as a player you can note a
 moment on, a blueprint as paragraphs you can comment on. The **Flows** page shows every flow by shape or by feel, with how each has gone for you. The project page has the MIDI panel: the arrangement as a
 piano roll, **Download MIDI**, and **Import your master** when you finish a song in your own DAW. Sessions start by
-themselves while `serve` runs. To use it from another device, run `mortiflix-music serve --host 0.0.0.0`: you then get
-a private link with an access token (put it behind HTTPS if it leaves your network).
+themselves while `serve` runs. To use it from your phone or another computer at home, run `mortiflix-music serve --network`
+(or `mortiflix-music config network true` once): it prints the addresses to open, no token, and anything on your network
+can use the studio. On a network you don't trust, run `mortiflix-music serve --host 0.0.0.0` instead: you then get a
+private link with an access token (put it behind HTTPS if it leaves your network).
 
 **C. In Claude Code**
 

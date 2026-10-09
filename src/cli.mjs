@@ -61,6 +61,7 @@ export const HELP = `${C.b('mortiflix-music')}: a music studio on your machine. 
 
   ${C.b('The web studio')}
   mortiflix-music serve [--port 4747] [--host 127.0.0.1]        the studio in your browser, with the runner
+  mortiflix-music serve --network                              …open to your network, no token (or: config network true)
 
   ${C.b('Settings')}
   mortiflix-music config [key [value]]                          show or change settings
@@ -666,7 +667,11 @@ async function serve(root, a) {
   ensureStudio(root);
   const { startServer } = await import('./web/server.mjs');
   const config = loadConfig(root);
-  await startServer(root, { port: Number(a.port || config.port), host: typeof a.host === 'string' ? a.host : config.host });
+  // --network (or `config network true`): trust the network, so no token (every address unless --host names one).
+  // --host alone keeps the token.
+  const network = a.network === true || (typeof a.host !== 'string' && config.network === true);
+  const host = typeof a.host === 'string' ? a.host : network ? '0.0.0.0' : config.host;
+  await startServer(root, { port: Number(a.port || config.port), host, trustNetwork: network });
 }
 
 async function config(root, [key, value]) {

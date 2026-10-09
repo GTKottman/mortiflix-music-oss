@@ -32,6 +32,7 @@ export const DEFAULT_CONFIG = {
   renderPrefix: [],                 // wraps every `mfx render` command, e.g. a machine-wide queue: ["render-queue", "-l", "{label}", "--"]
   maxTurns: 500,                    // anthropic-api: tool-use turns per session
   host: '127.0.0.1',
+  network: false,                   // serve to your network (every address, no token); see docs/SECURITY.md
   port: 4747,
 };
 

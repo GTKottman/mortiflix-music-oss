@@ -89,7 +89,11 @@ A web server on localhost can be reached by any page open in your browser, so:
 
 - it binds to `127.0.0.1` unless you pass another `--host`; then every request needs an access token (printed once as
   a link; kept in an HttpOnly, SameSite=Strict cookie);
-- on loopback, requests whose `Host` isn't `localhost`/`127.0.0.1`/`::1` are refused (DNS rebinding);
+- `--network` (or `config network true`) trusts your network instead: it binds to every address and asks for no token,
+  so any device on the network can use the studio, run sessions and change settings. Use it only at home or on a
+  network like Tailscale that only you are on;
+- on loopback, requests whose `Host` isn't `localhost`/`127.0.0.1`/`::1` are refused (DNS rebinding); on `--network`,
+  the `Host` must be an IP address, `localhost` or this machine's own name (bare, `.local`, `.lan`, `.home`, `.ts.net`);
 - every change needs the `X-Mortiflix: 1` header, which another site can't send without a CORS preflight that this
   server never allows (CSRF);
 - media is served only from a project's `reviews/` folder, resolved and checked (no `../`, encoded or not), with
