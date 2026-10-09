@@ -176,7 +176,14 @@ export function noteEditor({ piece, colors, st, pid, play, editable, focus = nul
   const height = () => laneTop() + kit.length * DROW + 2;
 
   const canvas = h('canvas', { class: 'seq', tabindex: '0', 'aria-label': `The notes: ${tracks.length} instruments over ${totalBars} bars. Arrow keys move picked notes, Delete removes them.` });
-  canvas.style.touchAction = editable ? 'none' : 'pan-y';
+  // On a touch screen a finger on the notes would edit them and never scroll the page: the notes stay to look at until
+  // you tap "Edit notes" (the phone's own editor comes later).
+  const touch = window.matchMedia?.('(pointer: coarse)').matches;
+  let armed = !touch;
+  const live = () => editable && armed;
+  const arm = (on) => { armed = on; canvas.style.touchAction = live() ? 'none' : 'pan-y'; canvas.classList.toggle('armed', live()); if (armBtn) armBtn.textContent = on ? 'Done editing' : 'Edit notes'; drawTools(); };
+  let armBtn = null;
+  canvas.style.touchAction = live() ? 'none' : 'pan-y';
   let W = 800;
   const pxBeat = () => (W - GUT) / (st.vb * bpb);
   const x = (beat) => GUT + (beat - st.v0 * bpb) * pxBeat();
@@ -306,6 +313,7 @@ export function noteEditor({ piece, colors, st, pid, play, editable, focus = nul
   };
   canvas.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return;
+    if (e.pointerType === 'touch' && !live()) return; // a finger here scrolls the page; nothing else
     const { px, py } = point(e);
     if (px < GUT) { // the keys: hear that note on the picked instrument
       const t = focus !== null ? byCh.get(focus) : null;
@@ -327,7 +335,7 @@ export function noteEditor({ piece, colors, st, pid, play, editable, focus = nul
       else if (!st.selected.has(n.id)) { st.selected = new Set([n.id]); }
       if (focus !== n.ch) { focus = n.ch; onFocus?.(n.ch); }
       hear(n);
-      if (editable && st.selected.has(n.id)) {
+      if (live() && st.selected.has(n.id)) {
         const edge = x(n.start + n.dur) - px <= Math.min(8, n.dur * pxBeat() / 3);
         drag = { kind: edge ? 'resize' : 'move', before: snapshot(), anchor: n, b0: beatAt(px), p0: rowPitch(py), a0: area(py), from: new Map(picked().map((m) => [m.id, { ...m }])), moved: false, lastPitch: n.pitch };
         canvas.setPointerCapture(e.pointerId);
@@ -336,7 +344,7 @@ export function noteEditor({ piece, colors, st, pid, play, editable, focus = nul
       return;
     }
     if (!e.shiftKey) st.selected = new Set();
-    if (editable && st.tool === 'draw') {
+    if (live() && st.tool === 'draw') {
       const a = area(py);
       if (!a) { draw(); drawTools(); return; }
       if (focus === null) { toast('Pick an instrument at the top first: new notes go to it'); draw(); drawTools(); return; }
@@ -354,6 +362,7 @@ export function noteEditor({ piece, colors, st, pid, play, editable, focus = nul
       changedSoft();
       return;
     }
+    if (!live()) { draw(); drawTools(); return; }
     // Select: drag a box around notes.
     band = { x0: px, y0: py, x1: px, y1: py, add: e.shiftKey };
     canvas.setPointerCapture(e.pointerId);
@@ -364,7 +373,7 @@ export function noteEditor({ piece, colors, st, pid, play, editable, focus = nul
     if (band) { band.x1 = px; band.y1 = py; draw(); return; }
     if (!drag) {
       const n = hit(px, py);
-      canvas.style.cursor = px < GUT ? 'pointer' : area(py) === 'head' ? 'pointer' : n ? (editable && x(n.start + n.dur) - px <= Math.min(8, n.dur * pxBeat() / 3) ? 'ew-resize' : editable ? 'grab' : 'pointer') : editable && st.tool === 'draw' && focus !== null ? 'crosshair' : 'default';
+      canvas.style.cursor = px < GUT ? 'pointer' : area(py) === 'head' ? 'pointer' : n ? (live() && x(n.start + n.dur) - px <= Math.min(8, n.dur * pxBeat() / 3) ? 'ew-resize' : live() ? 'grab' : 'pointer') : live() && st.tool === 'draw' && focus !== null ? 'crosshair' : 'default';
       return;
     }
     const db = beatAt(px) - drag.b0;
@@ -411,7 +420,7 @@ export function noteEditor({ piece, colors, st, pid, play, editable, focus = nul
   canvas.addEventListener('pointerup', endDrag);
   canvas.addEventListener('pointercancel', endDrag);
   canvas.addEventListener('dblclick', (e) => {
-    if (!editable) return;
+    if (!live()) return;
     const { px, py } = point(e);
     const n = hit(px, py);
     if (n) { const before = snapshot(); st.notes = st.notes.filter((m) => m.id !== n.id); st.selected.delete(n.id); commit(before); }
@@ -434,7 +443,7 @@ export function noteEditor({ piece, colors, st, pid, play, editable, focus = nul
     if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
     if (mod && e.key.toLowerCase() === 'a') { e.preventDefault(); st.selected = new Set(st.notes.filter((n) => (focus === null || n.ch === focus) && n.start >= st.v0 * bpb && n.start < (st.v0 + st.vb) * bpb).map((n) => n.id)); draw(); drawTools(); return; }
     if (e.key === 'Escape') { st.selected = new Set(); draw(); drawTools(); return; }
-    if (!editable || !st.selected.size) return;
+    if (!live() || !st.selected.size) return;
     if (mod && e.key.toLowerCase() === 'd') { e.preventDefault(); act.repeat(); return; }
     if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); act.del(); return; }
     const arrows = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] };
@@ -500,7 +509,8 @@ export function noteEditor({ piece, colors, st, pid, play, editable, focus = nul
     select('Show', [[2, '2 bars'], [4, '4 bars'], [8, '8 bars'], [16, '16 bars'], [32, '32 bars']], st.vb, (v) => { st.vb = Number(v); go(st.v0); }),
     editable ? select('Snap to', SNAPS.map(([v, t]) => [v, t]), st.snap, (v) => { st.snap = Number(v); draw(); }) : null,
     editable ? tools : null,
-    h('label', { class: 'seq-pick' }, followBox, h('span', { class: 'meta' }, 'Follow the music')));
+    h('label', { class: 'seq-pick' }, followBox, h('span', { class: 'meta' }, 'Follow the music')),
+    touch && editable ? (armBtn = h('button', { type: 'button', class: 'btn primary', onclick: () => arm(!armed) }, 'Edit notes')) : null);
   const selBar = h('div', { class: 'seq-sel' });
   const pending = h('div', { class: 'seq-pending' });
   const help = h('details', { class: 'seq-help' }, h('summary', null, 'How to read and change this'),
@@ -517,7 +527,7 @@ export function noteEditor({ piece, colors, st, pid, play, editable, focus = nul
 
   function drawTools() {
     const sel = picked();
-    if (!sel.length) fill(selBar, h('span', { class: 'meta' }, editable ? (focus === null ? 'Pick an instrument above, then click in the grid to add its notes.' : `Adding notes to ${byCh.get(focus)?.name || 'this part'}. Click a note to pick it.`) : 'Click a note to see what it is.'));
+    if (!sel.length) fill(selBar, h('span', { class: 'meta' }, editable && !live() ? 'Tap "Edit notes" to change them; until then the page scrolls freely.' : editable ? (focus === null ? 'Pick an instrument above, then click in the grid to add its notes.' : `Adding notes to ${byCh.get(focus)?.name || 'this part'}. Click a note to pick it.`) : 'Click a note to see what it is.'));
     else {
       const chs = [...new Set(sel.map((n) => n.ch))];
       const one = sel.length === 1 ? sel[0] : null;

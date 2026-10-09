@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Mortiflix Music</title>
   <link rel="icon" href="img/mark.png">
   <link rel="stylesheet" href="app.css">
@@ -23,6 +23,17 @@
   </header>
   <main id="app"></main>
   <div class="playerbar" id="playerbar" hidden></div>
+  <!-- On a phone the menu is a tab bar at the bottom, where a thumb reaches it. -->
+  <nav class="tabs" id="tabs" aria-label="Menu">
+    <a href="#/" data-nav="studio"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 4v16M10 4v16M15 5l4 15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Library</span></a>
+    <a href="#/new" data-nav="new"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>New</span></a>
+    <a href="#/flows" data-nav="flows"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M3 12c2.5-5 4.5-5 6 0s3.5 5 6 0 3.5-5 6 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Flows</span></a>
+    <button type="button" id="tab-more" aria-expanded="false" aria-controls="more-sheet"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>More</span></button>
+  </nav>
+  <div class="more-sheet" id="more-sheet" hidden>
+    <a href="#/pipelines" data-nav="pipelines">Pipelines</a>
+    <a href="#/settings" data-nav="settings">Settings</a>
+  </div>
   <script type="module" src="app.js"></script>
 </body>
 </html>

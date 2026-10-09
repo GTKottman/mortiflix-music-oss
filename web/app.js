@@ -70,6 +70,8 @@ async function render() {
   const hit = routes.find(([re]) => re.test(path));
   const [re, view, nav] = hit || routes[0];
   for (const a of document.querySelectorAll('[data-nav]')) a.classList.toggle('on', a.dataset.nav === nav);
+  document.getElementById('tab-more')?.classList.toggle('on', ['pipelines', 'settings'].includes(nav));
+  moreSheet(false);
   if (leaveView) { try { leaveView(); } catch { /* already closed */ } leaveView = null; }
   unsavedNotes = 0;
   current = { name: view.name, refresh: null, args: path.match(re)?.slice(1) || [] };
@@ -316,9 +318,8 @@ async function startDemo() {
 
 // The MIDI panel: the arrangement as a piano roll, the MIDI pack to download, and (when you finish it in your own
 // DAW) the place to import your master and see how it fits the score.
-function musicPanel(id, ms, title) {
-  const own = ms.own; const e = ms.expect;
-  const waiting = ms.finish === 'own' && !own;
+// Import your master: a button that opens the file picker and sends the file.
+function importButton(id, label, primary = false) {
   const input = h('input', { type: 'file', accept: '.wav,.aif,.aiff,.flac,.mp3,.m4a,.ogg,audio/*', style: { display: 'none' }, onchange: async (ev) => {
     const f = ev.target.files[0]; if (!f) return;
     toast(`Importing ${f.name}…`);
@@ -328,16 +329,40 @@ function musicPanel(id, ms, title) {
       current.refresh?.();
     } catch (err) { toast(err.data?.errors?.join(' · ') || err.message, true); }
   } });
+  return [h('button', { class: primary ? 'btn primary' : 'btn', onclick: () => input.click() }, label), input];
+}
+
+// A play button with words beside it, for the one thing a card asks you to hear.
+function audioButtonLabeled(o, label) {
+  return h('span', { class: 'play-label' }, audioButton(o), h('span', null, label));
+}
+
+// A session's words, with the music files it names (out/music/score.wav) as links you can open or play.
+function linkPaths(id, text) {
+  const out = []; let last = 0;
+  const re = /\b((?:out\/)?music\/[\w./-]+\.(?:wav|mp3|mid|md))\b/g;
+  for (let m; (m = re.exec(text));) {
+    out.push(text.slice(last, m.index));
+    out.push(h('a', { href: `/made/${id}/${m[1].split('/').map(encodeURIComponent).join('/')}`, target: '_blank', rel: 'noopener' }, m[1].split('/').pop()));
+    last = m.index + m[1].length;
+  }
+  out.push(text.slice(last));
+  return out;
+}
+
+function musicPanel(id, ms, title, { turnShown = false } = {}) {
+  const own = ms.own; const e = ms.expect;
+  const waiting = ms.finish === 'own' && !own && !turnShown;
   const facts = own ? `${own.source}: ${clock(own.measured.seconds)}, ${own.measured.lufs} LUFS, true peak ${own.measured.true_peak} dBTP` : e ? `${e.bars} bars at ${e.bpm} BPM (${e.meter}), ${clock(e.seconds)}${ms.daw ? ` · import steps for ${ms.daw}` : ''}` : '';
   const roll = packBench(id, title);
-  return h('section', null, h('h2', null, 'MIDI'),
-    h('div', { class: waiting ? 'turn-line' : 'state-line' },
+  return h('section', null, turnShown ? null : h('h2', null, 'MIDI'),
+    turnShown ? null : h('div', { class: waiting ? 'turn-line' : 'state-line' },
       h('div', null,
         h('div', { class: 'what' }, waiting ? 'Finish it in your DAW' : own ? 'Your master is the music' : 'The MIDI is ready'),
         h('div', { class: 'why' }, waiting ? 'Every channel is its own MIDI file, with a clip per section and the tempo and sections as markers. Give each channel its sound, mix, export from bar 1, then import it here. ' : '', facts)),
       h('div', { class: 'actions' },
         h('a', { class: 'btn', href: `/api/projects/${id}/music/midi.zip` }, 'Download MIDI'),
-        ms.masters || own ? [h('button', { class: waiting ? 'btn primary' : 'btn', onclick: () => input.click() }, own ? 'Replace master' : 'Import your master'), input] : null)),
+        (ms.masters || own) && !turnShown ? importButton(id, own ? 'Replace master' : 'Import your master', waiting) : null)),
     roll,
     own ? h('div', { class: 'row with-play' }, audioButton({ id: `${id}/master`, title: `${title} · your master`, href: `#/p/${id}`, url: `/api/projects/${id}/music/master?v=${encodeURIComponent(own.imported_at)}` }),
       h('div', { class: 'main' }, h('span', { class: 'title' }, 'Your master')), h('div', { class: 'end' }, clock(own.measured.seconds))) : null,
@@ -386,9 +411,24 @@ async function projectView(id) {
   const currentStep = d.steps.find((s) => ['working', 'changes', 'ready'].includes(s.state));
   const act = (path, msg) => async () => { try { await api(`/api/projects/${id}/${path}`, { method: 'POST' }); toast(msg); } catch (e) { toast(e.message, true); } };
 
+  const ms = await api(`/api/projects/${id}/music`).catch(() => null);
+  const ownTurn = p.state === 'paused' && ms?.finish === 'own' && !ms.own && ms.midi?.length;
+
   let stateBlock;
-  if (p.state === 'paused') {
-    stateBlock = h('div', { class: 'needs' }, h('div', { class: 'what' }, p.needs_you?.by_you ? 'Paused.' : `Needs you: ${p.needs_you?.text || ''}`),
+  if (ownTurn) {
+    // Your turn to finish it in your DAW: the things to do, as buttons. What the session said (with its file names) is
+    // there to read, its files as links.
+    stateBlock = h('div', { class: 'turn-card' },
+      h('div', { class: 'what' }, 'Your turn: finish it in your DAW'),
+      h('p', { class: 'why' }, `The score is written and checked. Hear the sketch, change any notes below, then take the MIDI into ${ms.daw || 'your DAW'}, give each instrument its sound, mix, and import your master here.`),
+      h('div', { class: 'actions' },
+        ms.sketch ? audioButtonLabeled({ id: `${id}/sketch`, title: `${p.title} · the sketch`, href: `#/p/${id}`, url: `/made/${id}/${ms.sketch}` }, 'Hear the sketch') : null,
+        h('a', { class: 'btn', href: `/api/projects/${id}/music/midi.zip` }, 'Download MIDI'),
+        importButton(id, 'Import your master', true)),
+      p.needs_you?.text ? h('details', { class: 'said-by' }, h('summary', null, 'What Claude said'), h('p', null, linkPaths(id, p.needs_you.text)),
+        h('button', { class: 'btn link', onclick: act('resume', 'Resumed') }, 'Carry on without a master')) : null);
+  } else if (p.state === 'paused') {
+    stateBlock = h('div', { class: 'needs' }, h('div', { class: 'what' }, p.needs_you?.by_you ? 'Paused.' : ['Needs you: ', linkPaths(id, p.needs_you?.text || '')]),
       h('div', { class: 'actions', style: { marginTop: '10px' } }, h('button', { class: 'btn solid', onclick: act('resume', 'Resumed') }, 'Resume')));
   } else if (reviewing.length) {
     const s = reviewing[0];
@@ -410,8 +450,7 @@ async function projectView(id) {
     stateBlock = h('div', { class: 'state-line' }, h('span', { class: 'quiet' }, 'Cancelled.'));
   }
 
-  const ms = await api(`/api/projects/${id}/music`).catch(() => null);
-  const musicBlock = ms?.midi?.length ? musicPanel(id, ms, p.title) : null;
+  const musicBlock = ms?.midi?.length ? musicPanel(id, ms, p.title, { turnShown: ownTurn }) : null;
 
   const deliverables = p.deliverables.length ? h('section', { class: 'deliver' }, h('h2', null, 'Delivered'),
     h('ul', { class: 'rows' }, p.deliverables.map((f) => h('li', { class: 'row' },
@@ -450,8 +489,10 @@ async function projectView(id) {
 
   const log = h('div', { class: 'log', id: `log-${id}` });
   for (const a of d.activity.slice(-150)) appendLog(log, a, false);
-  const activity = h('section', null, h('h2', null, 'Activity', d.renders.length ? h('span', { class: 'count' }, d.renders.map((r) => `${r.label}: ${r.state}`).join(' · ')) : null),
-    d.activity.length ? log : h('div', { class: 'empty' }, 'Nothing yet. What the studio does shows up here as it happens.'));
+  // On a phone the session's log starts folded: it's long, and rarely what you came for.
+  const activity = h('section', null, h('details', { class: 'activity', open: window.innerWidth > 640 || Boolean(p.session?.running) ? true : null },
+    h('summary', null, h('h2', null, 'Activity', d.renders.length ? h('span', { class: 'count' }, d.renders.map((r) => `${r.label}: ${r.state}`).join(' · ')) : null)),
+    d.activity.length ? log : h('div', { class: 'empty' }, 'Nothing yet. What the studio does shows up here as it happens.')));
 
   const usage = p.usage;
   const brief = h('section', null, h('details', { 'data-key': 'brief' }, h('summary', null, 'Brief'),
@@ -1442,7 +1483,14 @@ function pianoRoll(piece, { bands = [], onMark = null, onMoveBand = null, play =
     for (let bar = 0; bar <= bars; bar += 1) { g.beginPath(); g.moveTo(Math.round(x(bar * bpb)) + 0.5, 0); g.lineTo(Math.round(x(bar * bpb)) + 0.5, ht); g.stroke(); }
     if (gap) { g.beginPath(); g.moveTo(0, top + gap / 2 + 0.5); g.lineTo(w, top + gap / 2 + 0.5); g.stroke(); }
     g.fillStyle = color('--muted'); g.font = `11px ${color('--text') || 'sans-serif'}`;
-    for (const m of markers) { const mx = x(m.beat); g.fillRect(mx, 0, 1, ht); g.fillText(m.text, mx + 4, 12); }
+    // Section names: each fits before the next section starts (cut short, or left out where there's no room).
+    markers.forEach((m, i) => {
+      const mx = x(m.beat); g.fillRect(mx, 0, 1, ht);
+      const room = (i + 1 < markers.length ? x(markers[i + 1].beat) : w) - mx - 8;
+      let text = m.text;
+      while (text.length > 1 && g.measureText(text).width > room) text = text.slice(0, -2) + '…';
+      if (room >= 18 && text.length > 1) g.fillText(text, mx + 4, 12);
+    });
     for (const t of tracks) {
       const on = focus === null || focus === t;
       g.fillStyle = colors?.get(t.channel) || (focus === t ? color('--ink') : color('--body'));
@@ -1540,6 +1588,15 @@ function pianoRoll(piece, { bands = [], onMark = null, onMoveBand = null, play =
   new ResizeObserver(() => draw()).observe(canvas);
   return box;
 }
+
+// The phone's "More" tab: the pages a phone rarely needs, in a small sheet above the tab bar.
+function moreSheet(open) {
+  const sheet = document.getElementById('more-sheet'); const btn = document.getElementById('tab-more');
+  if (!sheet || !btn) return;
+  sheet.hidden = !open; btn.setAttribute('aria-expanded', String(open));
+}
+document.getElementById('tab-more')?.addEventListener('click', (e) => { e.stopPropagation(); moreSheet(document.getElementById('more-sheet').hidden); });
+document.addEventListener('click', (e) => { if (!e.target.closest('#more-sheet')) moreSheet(false); });
 
 // ---------- start ----------
 

@@ -55,7 +55,7 @@ export function musicStatus(root, id) {
   // pack or a loop kit ends at the MIDI.
   const audio = (() => { try { return projectPipeline(root, id).steps.some((s) => s.review === 'audio'); } catch { return false; } })();
   return { finish: finishesOwnMaster(p) ? 'own' : 'strudel', expect: expectation(root, id), midi, sheet: existsSync(mp.sheet),
-    masters: audio || finishesOwnMaster(p), own: readJ(mp.report), state: p.state, needs_you: p.needs_you || null, daw: dawConfig(loadConfig(root)).name };
+    masters: audio || finishesOwnMaster(p), own: readJ(mp.report), sketch: ['out/music/score.mp3', 'out/music/score.wav'].find((f) => existsSync(join(projectPaths(root, id).work, f))) || null, state: p.state, needs_you: p.needs_you || null, daw: dawConfig(loadConfig(root)).name };
 }
 
 // The captured score for the piano roll: every channel's notes (in beats), the tempo and meter, and the blueprint's

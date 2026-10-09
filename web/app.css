@@ -42,6 +42,7 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; } /* phones never enlarge the text on their own */
 body { background: var(--bg); color: var(--body); font: 15px/1.6 var(--text); -webkit-font-smoothing: antialiased; }
 h1, h2, h3 { color: var(--ink); margin: 0; font-weight: 600; }
 h1 { font-family: var(--display); font-weight: 500; font-size: 26px; line-height: 1.25; letter-spacing: -0.01em; }
@@ -406,4 +407,80 @@ pre.code { white-space: pre-wrap; word-break: break-word; font-size: 12.5px; col
 @media (max-width: 640px) {
   .parts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .seq-where { min-width: 0; }
+}
+
+/* ---------- phones: a tab bar at the bottom, the player just above it ---------- */
+.tabs, .more-sheet { display: none; }
+@media (max-width: 640px) {
+  :root { --tabs: calc(58px + env(safe-area-inset-bottom)); }
+  .top .nav { display: none; }
+  .top-in { height: 52px; }
+  .brand span { display: inline; font-size: 15px; }
+  .brand img { width: 28px; }
+  .tabs { display: grid; grid-template-columns: repeat(4, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; height: var(--tabs);
+    padding-bottom: env(safe-area-inset-bottom); background: var(--bg); border-top: 1px solid var(--line); }
+  .tabs a, .tabs button { display: grid; place-items: center; align-content: center; gap: 2px; min-height: 44px; color: var(--muted); text-decoration: none;
+    font-size: 11px; background: none; border: 0; padding: 6px 0 0; cursor: pointer; }
+  .tabs a.on, .tabs button.on { color: var(--ink); }
+  .more-sheet:not([hidden]) { display: grid; position: fixed; right: 8px; bottom: calc(var(--tabs) + 8px); z-index: 7; min-width: 180px;
+    background: var(--raise); border: 1px solid var(--line); border-radius: 12px; padding: 6px; }
+  .more-sheet a { padding: 12px 14px; color: var(--ink); text-decoration: none; border-radius: 8px; }
+  .more-sheet a.on { background: var(--bg); }
+  main { padding-bottom: calc(var(--tabs) + 24px); }
+  .playerbar { bottom: var(--tabs); }
+  body.has-player main { padding-bottom: calc(var(--tabs) + 120px); }
+  .toast { bottom: calc(var(--tabs) + 16px); }
+  body.has-player .toast { bottom: calc(var(--tabs) + 96px); }
+  .pb-x { min-width: 44px; min-height: 44px; }
+  .log .l { grid-template-columns: 40px 10px 1fr; gap: 6px; }
+  .log { font-size: 12px; }
+}
+
+/* your turn, as things to do */
+.turn-card { border-left: 3px solid var(--accent); padding: 14px 0 14px 16px; margin: 4px 0 22px; }
+.turn-card .what { color: var(--ink); font-size: 17px; font-weight: 500; }
+.turn-card .why { color: var(--body); font-size: 14px; margin: 4px 0 12px; max-width: 62ch; }
+.turn-card .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.turn-card .said-by { margin-top: 10px; }
+.turn-card .said-by p { font-size: 14px; color: var(--body); white-space: pre-wrap; overflow-wrap: anywhere; margin: 6px 0; }
+.play-label { display: inline-flex; align-items: center; gap: 8px; color: var(--ink); font-size: 14px; margin-right: 6px; }
+.needs .what { overflow-wrap: anywhere; }
+details.activity > summary { list-style: none; padding: 0; }
+details.activity > summary::-webkit-details-marker { display: none; }
+details.activity > summary h2 { display: inline-flex; gap: 8px; align-items: baseline; }
+details.activity > summary h2::after { content: "▸"; color: var(--faint); font-size: 11px; }
+details.activity[open] > summary h2::after { content: "▾"; }
+@media (max-width: 640px) {
+  .turn-card .actions .btn { min-height: 44px; display: inline-flex; align-items: center; }
+  .play-label .play { width: 44px; height: 44px; }
+}
+
+/* ---------- phones: a smaller type ramp ----------
+   Sora is a wide face: at desktop sizes a phone shows a few words a line. Everything steps down together, and tap
+   targets stay at least 44px tall however small the words get. */
+@media (max-width: 640px) {
+  body { font-size: 13.5px; line-height: 1.5; }
+  h1 { font-size: 19px; }
+  h2 { font-size: 11px; }
+  .brand span { font-size: 14px; }
+  .btn { font-size: 13.5px; padding: 6px 12px; min-height: 40px; }
+  .crumb, .head .sub, .row .meta, .row .end, .turn-line .why, .field .help, .stage-label, .stage-tools, details > summary { font-size: 12px; }
+  .row.turn .title, .pick .title, .state-line { font-size: 14px; }
+  .turn-line .what, .turn-card .what { font-size: 15px; }
+  .turn-card .why, .needs .what, .note-from { font-size: 13px; }
+  .turn-card .said-by p, .part-panel, .seq-sel, .seq-pending, .facts, .md, table.grid, .changed li { font-size: 13px; }
+  .chip, .seq-help, .pp-say .choice, .seq-nav .choice, .seq-acts .btn { font-size: 12px; }
+  .seq-nav .choice, .pp-say .choice, .choice { min-height: 40px; }
+  .seq-pick select { min-height: 40px; }
+  .play { width: 40px; height: 40px; }
+  .row.piece { grid-template-columns: 42px minmax(0, 1fr) auto; }
+  .part-name { font-size: 13px; }
+  .part-kind, .notes .where { font-size: 11px; }
+  .pp-head h3 { font-size: 14px; }
+  .seq-where { font-size: 13px; }
+  .empty .big { font-size: 16px; }
+  .play-label { font-size: 13px; }
+  .tabs a, .tabs button { font-size: 10.5px; }
+  .toast { font-size: 13px; }
+  .log, pre.code, pre.journal { font-size: 11.5px; }
 }
