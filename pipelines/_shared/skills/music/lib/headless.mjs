@@ -153,31 +153,35 @@ export class HeadlessStrudel {
   // Renders [0, cycles) to a 16-bit WAV at `out`. `channel` renders one part (its .midichan). The song goes in chunks of
   // `chunk` cycles, each with the notes that start in it and their full sound (releases, reverb and delay tails up to
   // `tail` seconds), added together: the same audio as one pass, in time that grows with the length.
-  async render(code, cycles, out, { sampleRate = 48000, channel = 0, chunk = 8, tail = 6 } = {}) {
+  async render(code, cycles, out, { sampleRate = 48000, channel = 0, chunk = 4, tail = 6 } = {}) {
     const total = Number(cycles);
     let mix = null; let cps = null;
     for (let begin = 0; begin < total; begin += chunk) {
-      // Strudel keeps each orbit's effects between renders: every chunk gets a fresh page.
-      if (this.rendered) await this.load();
-      this.rendered = true;
-      this.errors = [];
-      const name = `r${Date.now()}`;
-      const tailCycles = cps ? tail * cps : 4; // until the tempo is known (first chunk), 4 cycles
-      let r;
-      try { r = await this.eval(`mfxRender(${JSON.stringify(code)}, ${begin}, ${Math.min(total, begin + chunk)}, ${total}, ${tailCycles}, ${Number(sampleRate)}, ${JSON.stringify(name)}, ${Number(channel) || 0})`); }
-      catch (e) { throw new Error(scoreError(e, this.errors)); }
-      cps = r.cps;
-      if (!mix) mix = { rate: sampleRate, channels: [0, 1].map(() => new Float32Array(Math.round((total / cps) * sampleRate))) };
-      if (r.empty) continue;
-      const wav = readWav(await this.download(`${name}.wav`));
-      const at = Math.round((r.begin / cps) * sampleRate);
-      for (let c = 0; c < mix.channels.length; c++) {
-        const from = wav.channels[Math.min(c, wav.channels.length - 1)]; const to = mix.channels[c];
-        for (let i = 0; i < from.length && at + i < to.length; i++) to[at + i] += from[i];
-      }
-      rmSync(join(this.downloads, `${name}.wav`), { force: true });
+      const part = await this.renderPart(code, { begin, until: Math.min(total, begin + chunk), total, tailCycles: cps ? tail * cps : 4, sampleRate, channel });
+      cps = part.cps;
+      mix ??= emptyMix(total, cps, sampleRate);
+      addPart(mix, part);
     }
     return writeWav(out, mix);
+  }
+
+  // One chunk: the notes that start in [begin, until), rendered until their sound has died away (`tailCycles` after the
+  // longest one ends, never past `total`), on a fresh page. → { cps, begin, wav } (wav null when no note starts there).
+  // Chunks don't depend on each other, so several pages can render one song at once (strudel.mjs does).
+  async renderPart(code, { begin, until, total, tailCycles, sampleRate = 48000, channel = 0 }) {
+    // Strudel keeps each orbit's effects between renders: every chunk gets a fresh page.
+    if (this.rendered) await this.load();
+    this.rendered = true;
+    this.errors = [];
+    const name = `r${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
+    let r;
+    try { r = await this.eval(`mfxRender(${JSON.stringify(code)}, ${begin}, ${until}, ${total}, ${tailCycles}, ${Number(sampleRate)}, ${JSON.stringify(name)}, ${Number(channel) || 0})`); }
+    catch (e) { throw new Error(scoreError(e, this.errors)); }
+    if (r.empty) return { cps: r.cps, begin, wav: null };
+    const file = await this.download(`${name}.wav`);
+    const wav = readWav(file);
+    rmSync(file, { force: true });
+    return { cps: r.cps, begin: r.begin, wav };
   }
 
   async download(file) {
@@ -196,6 +200,19 @@ export class HeadlessStrudel {
     await sleep(200);
     if (this.profile) rmSync(this.profile, { recursive: true, force: true });
     open.delete(this);
+  }
+}
+
+// Chunks are added into one buffer at the time they start (overlap-add): [0, total) cycles at `cps`.
+export function emptyMix(total, cps, rate) {
+  return { rate, cps, channels: [0, 1].map(() => new Float32Array(Math.round((total / cps) * rate))) };
+}
+export function addPart(mix, part) {
+  if (!part.wav) return;
+  const at = Math.round((part.begin / part.cps) * mix.rate);
+  for (let c = 0; c < mix.channels.length; c++) {
+    const from = part.wav.channels[Math.min(c, part.wav.channels.length - 1)]; const to = mix.channels[c];
+    for (let i = 0; i < from.length && at + i < to.length; i++) to[at + i] += from[i];
   }
 }
 

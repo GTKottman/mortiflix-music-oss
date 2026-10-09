@@ -23,6 +23,7 @@
 // Every command but sheet exits 1 when its stage isn't right yet, with the problems in plain words.
 import { readFileSync, writeFileSync, mkdirSync, existsSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
+import { freemem, cpus, availableParallelism } from 'node:os';
 import { hapsToChannels, checkBlueprint, checkScore, intensity, intensityChart, beatsPerBar, timeOf, sectionRanges, clipOf, checkLoops } from './lib/score.mjs';
 import { importSteps, DAW_NAMES } from './lib/daw.mjs';
 import { checkHarmony, noteName } from './lib/harmony.mjs';
@@ -164,6 +165,46 @@ const inst = read(F.instruments);
 const playable = () => (inst ? code + '\n' + instrumentCode(inst) : code);
 const { HeadlessStrudel } = await import('./lib/headless.mjs');
 const strudel = await new HeadlessStrudel().start().catch((e) => die(e.message));
+
+// Renders that don't depend on each other (the mix and each channel's stem, each instrument's audition) run side by
+// side, one headless Strudel each: as many as the cores and the free memory allow, at most 6 (MFX_RENDER_WORKERS sets
+// it). Results come back in the jobs' order whatever order they finish in.
+function renderWorkers(jobs) {
+  const set = Number(process.env.MFX_RENDER_WORKERS);
+  if (set >= 1) return Math.min(jobs, Math.floor(set));
+  let freeGb = freemem() / 2 ** 30;
+  try { const m = /MemAvailable:\s+(\d+)/.exec(readFileSync('/proc/meminfo', 'utf8')); if (m) freeGb = Number(m[1]) / 2 ** 20; } catch { /* not Linux */ }
+  const cores = (availableParallelism?.() || cpus().length) - 2;
+  return Math.max(1, Math.min(jobs, cores, Math.floor((freeGb * 0.7) / 1.2), 6)); // a long render's Chrome peaks near 1 GB
+}
+async function inParallel(jobs, fn) {
+  const n = renderWorkers(jobs.length);
+  const extra = await Promise.all(Array.from({ length: n - 1 }, () => new HeadlessStrudel().start()));
+  const pool = [strudel, ...extra];
+  const results = new Array(jobs.length); let next = 0;
+  try {
+    await Promise.all(pool.map(async (s) => { while (next < jobs.length) { const i = next++; results[i] = await fn(s, jobs[i], i); } }));
+  } finally { await Promise.all(extra.map((s) => s.close())); }
+  return results;
+}
+
+// Whole songs (the mix, the stems): every song cut into 8-bar chunks, and all the chunks of all the songs shared out
+// among the workers; each song is added up as its chunks come back and written when the last one is in.
+async function renderSongs(src, cycles, songs, { chunk = Number(process.env.MFX_RENDER_CHUNK) || 4, tail = 6, sampleRate = 48000 } = {}) {
+  const { cps } = await strudel.haps(src, 0.01);
+  const { emptyMix, addPart } = await import('./lib/headless.mjs');
+  const { writeWav } = await import('./lib/wav.mjs');
+  const starts = []; for (let b = 0; b < cycles; b += chunk) starts.push(b);
+  const left = songs.map(() => starts.length); const mixes = songs.map(() => null);
+  const jobs = songs.flatMap((song, k) => starts.map((begin) => ({ k, song, begin })));
+  await inParallel(jobs, async (s, j) => {
+    const part = await s.renderPart(src, { begin: j.begin, until: Math.min(cycles, j.begin + chunk), total: cycles, tailCycles: tail * cps, sampleRate, channel: j.song.channel });
+    mixes[j.k] ??= emptyMix(cycles, cps, sampleRate);
+    addPart(mixes[j.k], part);
+    if (--left[j.k] === 0) { writeWav(j.song.file, mixes[j.k]); mixes[j.k] = null; }
+  });
+}
+
 try {
   if (cmd === 'check' || cmd === 'capture' || cmd === 'midi') {
     // A bar past the end catches parts that keep looping after the ending.
@@ -214,9 +255,13 @@ try {
     const dir = out || 'out/music/audition'; mkdirSync(dir, { recursive: true });
     const auditionSrc = auditionCode(inst, r.registers);
     const results = []; const problems = [];
-    for (const reg of r.registers) {
-      const ns = auditionNotes(reg); const file = join(dir, `${String(reg.channel).padStart(2, '0')}-${slug(reg.name)}.wav`);
-      await strudel.render(auditionSrc, ns.length, file, { channel: reg.channel });
+    const files = await inParallel(r.registers, async (s, reg) => {
+      const file = join(dir, `${String(reg.channel).padStart(2, '0')}-${slug(reg.name)}.wav`);
+      await s.render(auditionSrc, auditionNotes(reg).length, file, { channel: reg.channel });
+      return file;
+    });
+    for (const [k, reg] of r.registers.entries()) {
+      const ns = auditionNotes(reg); const file = files[k];
       const wav = readWav(file); const bar = 2; // 120 BPM, 4/4: one note per 2-second bar
       const each = ns.map((n, i) => ({ note: reg.kind === 'drums' ? `GM ${n}` : noteName(n), ...levelOf(wav, i * bar, i * bar + 0.6) }));
       // Silence is judged by peak: a short hat is quiet on average but clearly there.
@@ -235,19 +280,21 @@ try {
     const file = cmd === 'master' ? 'out/music/mix.wav' : out || 'out/music/score.wav';
     mkdirSync(dirname(file), { recursive: true });
     const cycles = bp.bars + Math.max(0, tailBars);
-    await strudel.render(playable(), cycles, file);
-    console.log(`✔ ${file} (${bp.bars} bars + ${tailBars} bar tail${inst ? ', with music/instruments.json' : ', with the sounds written in the score'})`);
-    const stemReport = [];
+    // The mix and (with --stems, or for the master) every channel on its own, rendered side by side.
+    const jobs = [{ file, channel: 0 }];
     if (stems || cmd === 'master') {
       const notes = read(F.notes);
       const chans = notes ? notes.tracks.map((t) => [t.channel, t.name]) : Object.entries(names).map(([c, n]) => [Number(c), n]);
       const dir = join(dirname(file), 'stems'); mkdirSync(dir, { recursive: true });
-      for (const [ch, name] of chans) {
-        const f = join(dir, `${String(ch).padStart(2, '0')}-${slug(name)}.wav`);
-        await strudel.render(playable(), cycles, f, { channel: ch });
-        const lv = levelOf(readWav(f)); stemReport.push({ channel: ch, name, file: f, ...lv });
-        console.log(`  ✔ ${f}  (rms ${lv.rms_db} dB, peak ${lv.peak_db} dBFS)`);
-      }
+      for (const [ch, name] of chans) jobs.push({ file: join(dir, `${String(ch).padStart(2, '0')}-${slug(name)}.wav`), channel: ch, name });
+    }
+    const t0 = Date.now();
+    await renderSongs(playable(), cycles, jobs);
+    console.log(`✔ ${file} (${bp.bars} bars + ${tailBars} bar tail${inst ? ', with music/instruments.json' : ', with the sounds written in the score'}${jobs.length > 1 ? `, with ${jobs.length - 1} stems` : ''}; ${Math.round((Date.now() - t0) / 1000)} s)`);
+    const stemReport = [];
+    for (const j of jobs.slice(1)) {
+      const lv = levelOf(readWav(j.file)); stemReport.push({ channel: j.channel, name: j.name, file: j.file, ...lv });
+      console.log(`  ✔ ${j.file}  (rms ${lv.rms_db} dB, peak ${lv.peak_db} dBFS)`);
     }
     if (cmd === 'master') {
       const problems = [];
@@ -318,6 +365,10 @@ function writeMidiPack(manifest, dir) {
 
 // ---- readable versions ----
 
+// Any value a session wrote into the blueprint, in words: lists joined, objects as "channel 3, bar 1" (never
+// "[object Object]").
+const plainValue = (v) => (Array.isArray(v) ? v.map(plainValue).join('; ') : v && typeof v === 'object' ? Object.entries(v).map(([k, x]) => `${k.replace(/_/g, ' ')} ${plainValue(x)}`).join(', ') : String(v));
+
 function blueprintMarkdown(b, genre) {
   const chords = (c) => c.chords.map((x) => (Array.isArray(x) ? `[${x.join(' ')}]` : x)).join(' · ');
   return [`# ${b.title || 'Untitled'}`, '',
@@ -325,7 +376,7 @@ function blueprintMarkdown(b, genre) {
     b.dramatic_reading ? `**The story:** ${b.dramatic_reading}` : '', b.style ? `**Style:** ${b.style}` : '', '',
     b.genre_signature?.length ? ['## What makes it this genre', '', ...b.genre_signature.map((s) => `- **${s.id}** carries the ${s.carries}: ${s.how} (${s.where})`), ''].join('\n') : '',
     flow ? ['## The flow', '', ...flowLines(flow), ''].join('\n') : '',
-    b.motif ? ['## The hook', '', Object.entries(b.motif).map(([k, v]) => `- ${k}: ${Array.isArray(v) ? v.join('; ') : v}`).join('\n'), ''].join('\n') : '',
+    b.motif ? ['## The hook', '', Object.entries(b.motif).map(([k, v]) => `- ${k}: ${plainValue(v)}`).join('\n'), ''].join('\n') : '',
     '## The story, section by section', '', '| Bars | Section | What happens | Intensity |', '|---|---|---|---|',
     ...(b.sections || []).map((s) => `| ${s.start_bar}-${s.end_bar} | ${s.name} | ${s.function}${s.picture ? ` *(picture: ${s.picture})*` : ''} | ${'▮'.repeat(Math.round(s.intensity))}${'▯'.repeat(10 - Math.round(s.intensity))} ${s.intensity} |`), '',
     b.techniques?.length ? ['## Techniques', '', '| Technique | Part | Where | How |', '|---|---|---|---|',
