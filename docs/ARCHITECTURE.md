@@ -21,7 +21,10 @@ folder: the studio.
   session.env        other KEY=value lines handed to sessions, e.g. GEMINI_API_KEY (mode 600; `mortiflix-music keys`)
   checks.json        the studio's error checklist: proposed by sessions, approved by you
   TASTE.md           what you like, learned across projects (sessions add with `mfx taste`)
+  taste.json         how each piece landed (love it / fine / not for me) with its flow and techniques: it steers the
+                     studio's flow picks and the techniques sessions reach for
   pipelines/         your own pipelines (same slug overrides a built-in one)
+  flows/             your own flows: saved from your pieces or added from a zip (same slug overrides a built-in one)
   projects/<id>/     the working folder: the session runs here
   state/<id>/        the record: project.json, events.jsonl, the pinned pipeline, submissions, feedback, transcripts
   tools/             what setup installed: Strudel, a headless Chrome if you had none
@@ -34,13 +37,15 @@ files are copied into the record when submitted, so what you reviewed can't chan
 ## A project's life
 
 1. **Created** (`createProject`): the pipeline is snapshotted into `state/<id>/pipeline/` (with its shared skills).
-   The project is pinned to that snapshot forever; editing the pipeline later only affects new projects.
+   The project is pinned to that snapshot forever; editing the pipeline later only affects new projects. Its flow
+   (chosen in the brief, or picked by the studio: `src/flows.mjs`) is snapshotted the same way into `state/<id>/flow/`.
 2. **Started**: required intake answers are checked; the state becomes `queued`.
 3. **The runner** (`runner.mjs`) takes the oldest `queued` project, one session at a time:
-   - `prepareWorkdir` copies the pinned pipeline to `pipeline/`, its skills to `.claude/skills/`, the gate protocol
-     to `.mortiflix/GATES.md`, and the checklist on the first session;
+   - `prepareWorkdir` copies the pinned pipeline to `pipeline/`, its skills to `.claude/skills/`, the pinned flow to
+     `flow/`, the gate protocol to `.mortiflix/GATES.md`, and the checklist on the first session;
    - `writeTorch` writes `CLAUDE.md`: where things stand, the steps table, what you said, the error checks, the
-     brief (fenced as data), your taste, the journal;
+     brief (fenced as data), your taste, the flow (its curve, rules and techniques, and the techniques you've loved
+     or had lately), the journal;
    - `openBridge` starts a private Unix socket with a per-session token;
    - the backend runs the session with `MFX_SOCKET`/`MFX_TOKEN` in its environment and `bin/` on its `PATH`.
 4. **The session** works, talks to the studio only through `mfx`, submits at a gate, writes a handoff, and ends.
@@ -142,6 +147,21 @@ piano roll (`musicNotes`), and importing a master made in the owner's own DAW (c
 against the score's length and its first note, written to `music/own-master/`). The web studio (the project's MIDI
 panel, `/api/projects/<id>/music…`) and `mortiflix-music midi` / `music` use it; an import that fits resumes a project that was waiting for it. Whether a brief
 finishes its own music (`finishesOwnMaster`) goes into the session's `CLAUDE.md`.
+
+## Flows and taste (`src/flows.mjs`, `lib/flow.mjs`, `lib/techniques.mjs`)
+
+A flow (`flows/<slug>/flow.json` + `FLOW.md`; the format and the built-in set: [FLOWS.md](FLOWS.md)) is the shape a
+piece takes. `src/flows.mjs` lists and validates them (built-in and the studio's own), resolves a brief's choice
+(`resolveFlow`: a slug, the studio's pick, a bucket or a feel), keeps the owner's ratings in `taste.json`
+(`rateProject`), weighs the studio's pick by them (`pickFlow`: ratings, shared feels, a curiosity bonus for unheard
+flows, the last pieces' flows held back), turns a piece into a new flow (`saveFlowFrom`), and shares flows as zips.
+
+The engine enforces them. `lib/techniques.mjs` is the owner's list of 144 techniques, each with a detector over the
+captured MIDI (on a part, between two parts, on sections, on the motif) or marked as a sound for the instruments
+stage; `strudel.mjs plan` checks the blueprint's `techniques` and `check` refuses a score where a planned one isn't
+heard. `lib/flow.mjs` holds the plan to the flow (`"flow"`, the curve by correlation, the rules on the asked
+intensities, required / avoided / free techniques) and the score to it (the rules on the measured levels and on how
+much one section's notes another keeps).
 
 ## Sharing pipelines (`src/pipelines.mjs`, `src/zip.mjs`)
 

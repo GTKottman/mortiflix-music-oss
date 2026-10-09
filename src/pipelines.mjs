@@ -74,6 +74,7 @@ export function validatePipeline(def, dir) {
   for (const s of steps) for (const a of s.after || []) need(keys.has(a), `step "${s.key}" runs after unknown step "${a}"`);
   if (errors.length === 0 && hasCycle(steps)) errors.push('the steps wait on each other in a loop');
   need(steps.filter((s) => s.delivers).length <= 1, 'only one step can be the delivery');
+  need(def.flows === undefined || def.flows === null || ['song', 'kit'].includes(def.flows), '"flows": "song" or "kit" (which flows its pieces take), or leave it out');
   for (const name of def.shared_skills || []) {
     need(KEY.test(name), `shared skill "${name}": lowercase letters, digits, - or _`);
     if (dir && KEY.test(name)) need(sharedSkillDir(dir, name), `shared skill "${name}" not found in _shared/skills`);
@@ -128,6 +129,7 @@ function normalize(def, dir) {
     name: def.name,
     description: def.description || '',
     makes: def.makes || 'music',
+    flows: def.flows || null,
     intake: (def.intake || []).map((q) => ({ type: 'text', ...q })),
     steps,
     status_lines: def.status_lines || {},

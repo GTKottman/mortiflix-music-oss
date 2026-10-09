@@ -38,9 +38,13 @@ memory that carries a project across sessions and days.
 - **The rules live in code, not in the prompt.** Only you can approve a step you review. A submission is refused if
   it doesn't report every error check for its kind of work, or doesn't answer each note you left on the last version.
   What you reviewed is copied out of the session's reach, so it can't change afterwards.
-- **It learns your studio.** When you point out a real mistake, the session proposes a new check ("the bass never
-  flams with the kick"). Approve it once and every future piece runs it. Your taste carries across projects in
-  `TASTE.md`.
+- **Every piece has a shape, and it's chosen.** A flow decides how the music moves (a slow burn, a rondo, a pendulum,
+  theme and variations, an inverted arch…), which techniques give it its character, and what it never does. Pick
+  one, or let the studio pick: the check then listens for the flow's shape and every planned technique in the notes.
+- **It learns your taste.** Rate what you get (love it, fine, not for me) and the studio's picks lean toward the
+  flows and techniques you love and away from what you've just had; a piece you love can become a flow of your own.
+  When you point out a real mistake, the session proposes a new check ("the bass never flams with the kick").
+  Approve it once and every future piece runs it.
 - **Pipelines are folders.** A pipeline is a `pipeline.json` (steps, how each is reviewed, the error checks), a
   `PIPELINE.md` (the craft), and skills. Anyone can write one.
 
@@ -64,6 +68,23 @@ midi/
   CUE-SHEET.md                 tempo, key, sections, each channel's range, the chords, and your DAW's import steps
 MUSIC-SHEET.md                 every decision and measurement, from the genre to the master
 ```
+
+## Flows: the shape it takes
+
+Without them every piece drifts toward the same arc. With them the arc is a choice, from four shapes:
+
+| Shape | Flows for songs and MIDI packs | For loop kits |
+|---|---|---|
+| **Builds** (the energy climbs to somewhere) | Slow burn · Staircase · Drop | Energy ladder · Layer stack |
+| **Cycles** (something keeps coming back) | Rondo · Pendulum · Ostinato trance | A/B pairs |
+| **Stories** (something changes for good) | Two worlds · Inverted arch · False ending | Breaks and fills |
+| **Forms** (a classic way of handling an idea) | Theme and variations · Call and response · Through-composed | One groove, many turns · Call and answer |
+
+Or browse by feel (hypnotic, cinematic, danceable, intimate, restless, uplifting, dark, playful, epic, melancholic,
+warm). Each flow names the techniques that make it, from 144 (arpeggio, hocket, tresillo, inversion, stop-time…), and
+the check hears each one in the MIDI: a planned call and response has to really trade phrases. Rate what you get and
+the studio's picks follow your taste, so two studios that start the same grow apart. The whole story:
+[docs/FLOWS.md](docs/FLOWS.md).
 
 Name your DAW in setup (Ableton Live, FL Studio, Logic Pro, REAPER, Bitwig, Cubase, Studio One, GarageBand, Pro
 Tools) and the cue sheet says how to bring it in there. Drums are on channel 10 in General MIDI numbers, so they map
@@ -93,10 +114,11 @@ Then either:
 **A. In the terminal**
 
 ```sh
-mortiflix-music new midi-pack        # asks the brief's questions
+mortiflix-music new midi-pack        # asks the brief's questions, the flow among them (or --flow rondo)
 mortiflix-music run                  # sessions run until something waits on you
 mortiflix-music review               # read the note, answer questions, leave notes, approve or ask for changes
 mortiflix-music midi <project>       # the MIDI pack as one zip
+mortiflix-music rate <project> love  # how it landed: the studio's next picks follow it
 ```
 
 **B. In the browser**
@@ -107,7 +129,7 @@ mortiflix-music serve                # http://127.0.0.1:4747
 
 The web studio shows what's waiting on you, a live log of what Claude is doing, and the review room: MIDI shows as a
 **piano roll** (pick a part to bring it forward; click a bar to leave a note there), audio as a player you can note a
-moment on, a blueprint as paragraphs you can comment on. The project page has the MIDI panel: the arrangement as a
+moment on, a blueprint as paragraphs you can comment on. The **Flows** page shows every flow by shape or by feel, with how each has gone for you. The project page has the MIDI panel: the arrangement as a
 piano roll, **Download MIDI**, and **Import your master** when you finish a song in your own DAW. Sessions start by
 themselves while `serve` runs. To use it from another device, run `mortiflix-music serve --host 0.0.0.0`: you then get
 a private link with an access token (put it behind HTTPS if it leaves your network).
@@ -187,6 +209,7 @@ its skills to share.
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): the runner, the bridge (`mfx`), the gates, the session brief, the backends
 - [docs/MUSIC.md](docs/MUSIC.md): the music engine, stage by stage, and the MIDI pack
+- [docs/FLOWS.md](docs/FLOWS.md): flows, taste, the 144 techniques and how each is heard
 - [docs/PIPELINES.md](docs/PIPELINES.md): the pipeline format and how to write a good one
 - [harness/GATES.md](harness/GATES.md): the protocol every session follows
 - [docs/SECURITY.md](docs/SECURITY.md): what a session can and can't reach, and the web server's guards

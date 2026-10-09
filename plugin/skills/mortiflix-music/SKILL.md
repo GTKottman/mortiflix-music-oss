@@ -82,10 +82,12 @@ demo backend, with real gates. Then review it with them (step 6). It's the faste
 1. `mortiflix-music pipelines --json`. Without a pipeline argument, offer each one: its name, what it's for and its
    reviewed steps. In short: `song` is a finished instrumental (a master, stems and the MIDI); `midi-pack` is MIDI for
    the owner to finish in their DAW, with a sketch to hear it by; `loop-kit` is a family of loops to arrange.
-2. Ask for a title, then the `intake` questions in order: required ones first; `choice` through AskUserQuestion with
+2. Ask for a title, then **the flow** when the pipeline has `flows` (`mortiflix-music flows --json`): offer "Let the
+   studio choose" first (the default: it learns from the owner's ratings), then a shape (builds, cycles, stories,
+   forms), a feel, or one flow by name with its one-line summary. Then the `intake` questions in order: required ones first; `choice` through AskUserQuestion with
    the default marked; `long` in chat; `files` as paths on this machine (check that they exist; a `.mid` of theirs is
    welcome where the pipeline asks for one). Don't invent answers. Skip optional ones the owner passes on.
-3. `mortiflix-music new <slug> --title "…" --set <id>=<value> … --file <id>=<path> … --yes`
+3. `mortiflix-music new <slug> --title "…" [--flow <slug | studio | shape:<bucket> | feel:<feel>>] --set <id>=<value> … --file <id>=<path> … --yes`
 4. If it fails with "needs your … key", nothing was created. The owner adds the key (rule 4), then run it again.
 
 ## 5. Running the studio
@@ -135,6 +137,9 @@ says so.
      when `default` is null). Read it all back, then
      `mortiflix-music respond <id> <step> --changes --note "…" … [--overall "…"] [--answer qid=value …]`
    - **Approve**: only on the owner's clear yes. `mortiflix-music respond <id> <step> --approve [--answer qid=value …]`
+     On the step that delivers, ask how it landed (love it, it's fine, not for me; skipping is fine) and pass it as
+     `--rate love|fine|no`: the studio's next flow picks follow it. Later: `mortiflix-music rate <id> <rating>`.
+     A piece they love can become a flow of their own: `mortiflix-music flows save <id> --name "…"`.
 5. After the responses, go back to step 5 to run the next sessions. Then return here.
 
 **A song the owner finishes in their own DAW** (the song pipeline's `finish` answer). The song is reviewed with

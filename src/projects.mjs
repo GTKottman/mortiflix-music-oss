@@ -9,6 +9,7 @@ import { randomBytes } from 'node:crypto';
 import { pipeline as streamPipeline } from 'node:stream/promises';
 import { paths, readJson, writeJson, withLock, UserError } from './studio.mjs';
 import { findPipeline, loadPipeline, snapshotPipeline } from './pipelines.mjs';
+import { resolveFlow, snapshotFlow } from './flows.mjs';
 
 export const STATES = ['draft', 'queued', 'waiting', 'paused', 'delivered', 'cancelled'];
 
@@ -22,6 +23,7 @@ export function projectPaths(root, id) {
     file: join(state, 'project.json'),
     events: join(state, 'events.jsonl'),
     pipeline: join(state, 'pipeline'),
+    flow: join(state, 'flow'),
     reviews: join(state, 'reviews'),
     sessions: join(state, 'sessions'),
     lock: join(state, '.lock'),
@@ -35,8 +37,11 @@ export function newId(title) {
   return `${ymd}-${slug}-${randomBytes(2).toString('hex')}`;
 }
 
-export function createProject(root, { pipeline: slug, title, answers = {}, backend = null }) {
+// flow: a flow's slug, "studio" (the studio picks, the default), "shape:<bucket>", "feel:<feel>" or "none".
+export function createProject(root, { pipeline: slug, title, answers = {}, backend = null, flow: flowChoice = 'studio', rng }) {
   const pipeline = findPipeline(root, slug);
+  // The flow first: a choice that doesn't exist should stop here, before anything is written.
+  const chosen = resolveFlow(root, pipeline.flows, flowChoice, { rng });
   title = String(title || '').trim() || pipeline.name;
   const id = newId(title);
   const pp = projectPaths(root, id);
@@ -44,6 +49,7 @@ export function createProject(root, { pipeline: slug, title, answers = {}, backe
   mkdirSync(pp.reviews, { recursive: true });
   mkdirSync(pp.sessions, { recursive: true });
   snapshotPipeline(pipeline, pp.pipeline);
+  if (chosen) snapshotFlow(chosen.flow, pp.flow);
   const clean = {};
   for (const q of pipeline.intake) {
     if (q.type === 'files') continue;
@@ -56,6 +62,7 @@ export function createProject(root, { pipeline: slug, title, answers = {}, backe
     id,
     title,
     pipeline: { slug: pipeline.slug, name: pipeline.name, hash: pipeline.hash, makes: pipeline.makes },
+    flow: chosen ? { slug: chosen.flow.slug, name: chosen.flow.name, bucket: chosen.flow.bucket, feels: chosen.flow.feels, picked: chosen.picked, why: chosen.why, hash: chosen.flow.hash } : null,
     state: 'draft',
     backend,
     created_at: now(),
@@ -71,7 +78,7 @@ export function createProject(root, { pipeline: slug, title, answers = {}, backe
     usage: { sessions: 0, input_tokens: 0, output_tokens: 0 },
   };
   writeJson(pp.file, project);
-  event(root, id, { event: 'CREATED', actor: 'you', details: `${pipeline.name}: ${title}` });
+  event(root, id, { event: 'CREATED', actor: 'you', details: `${pipeline.name}: ${title}${chosen ? ` · flow: ${chosen.flow.name} (${chosen.picked === 'you' ? 'your choice' : `the studio's pick: ${chosen.why}`})` : ''}` });
   return project;
 }
 

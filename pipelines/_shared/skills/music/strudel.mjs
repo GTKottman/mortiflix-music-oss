@@ -3,8 +3,10 @@
 // writes down what it found, so the whole piece can be followed from the brief to the master (music/MUSIC-SHEET.md).
 //
 //   node strudel.mjs genre                       music/genre.json → checked, music/GENRE.md            (songs)
-//   node strudel.mjs plan                        music/blueprint.json → checked, music/BLUEPRINT.md
-//   node strudel.mjs check                       the score → harmony lock, story curve (and, for a loop kit, clean loops);
+//   node strudel.mjs techniques                  the technique list (how each is heard); with a captured score, what it plays
+//   node strudel.mjs plan                        music/blueprint.json → checked against the flow (flow/flow.json), music/BLUEPRINT.md
+//   node strudel.mjs check                       the score → harmony lock, story curve, the planned techniques heard, the
+//                                                flow's shape (and, for a loop kit, clean loops);
 //                                                its MIDI: music/notes.json + out/music/midi/ (every channel, the arrangement,
 //                                                a clip per section, the cue sheet) + midi.zip
 //   node strudel.mjs instruments                 the sound of every channel (music/instruments.json), checked against
@@ -28,6 +30,8 @@ import { SYNTHS, checkInstruments, instrumentCode, auditionCode, auditionNotes, 
 import { readWav, levelOf, mixBalance } from './lib/wav.mjs';
 import { masterTo, TARGET } from './lib/master.mjs';
 import { zip, dirEntries } from './lib/zip.mjs';
+import { TECHNIQUES, planProblems as techniquePlanProblems, checkTechniques, heard } from './lib/techniques.mjs';
+import { flowPlanProblems, flowScoreProblems, flowLines } from './lib/flow.mjs';
 
 const args = process.argv.slice(2);
 const cmd = args.shift();
@@ -35,7 +39,7 @@ const opt = (name, dflt) => { const i = args.indexOf(`--${name}`); if (i < 0) re
 const F = {
   genre: 'music/genre.json', blueprint: opt('blueprint', 'music/blueprint.json'), instruments: 'music/instruments.json',
   notes: 'music/notes.json', check: 'music/check.json', audition: 'music/audition.json', master: 'music/master.json',
-  own: 'music/own-master/report.json', sheet: 'music/MUSIC-SHEET.md',
+  own: 'music/own-master/report.json', sheet: 'music/MUSIC-SHEET.md', flow: opt('flow', 'flow/flow.json'),
 };
 const out = opt('out', null);
 const videoSec = Number(opt('video-sec', 0)) || null;
@@ -43,7 +47,7 @@ const fps = Number(opt('fps', 30));
 const stems = Boolean(opt('stems', false));
 const tailBars = Number(opt('tail-bars', 1));
 const scorePath = args[0] || 'music/score.strudel.js';
-const COMMANDS = ['genre', 'plan', 'check', 'instruments', 'audition', 'render', 'master', 'own-master', 'midi', 'sheet'];
+const COMMANDS = ['genre', 'techniques', 'plan', 'check', 'instruments', 'audition', 'render', 'master', 'own-master', 'midi', 'sheet'];
 
 const die = (msg) => { console.error(`✖ ${msg}`); process.exit(1); };
 const read = (f) => { try { return JSON.parse(readFileSync(f, 'utf8')); } catch (e) { if (!existsSync(f)) return null; die(`${f}: ${e.message}`); } };
@@ -65,6 +69,23 @@ if (cmd === 'genre') {
   writeSheet(); process.exit();
 }
 
+// The technique list: every name, how the check hears it (or that the instruments stage gives it); with a captured
+// score, what it already plays, section by section.
+if (cmd === 'techniques') {
+  const KIND = { notes: 'Heard on a part ("part": channel)', pair: 'Heard between two parts ("part": [a, b])', section: 'Heard on whole sections ("where": [names])', motif: 'Heard on the motif ("motif.at": its first statement)', sound: 'Given by the instruments stage (not in the notes)', lock: 'Guaranteed by the harmony lock' };
+  for (const [kind, title] of Object.entries(KIND)) {
+    console.log(`\n${title}:`);
+    for (const [name, d] of Object.entries(TECHNIQUES)) if (d.kind === kind) console.log(`  ${name.padEnd(26)} ${d.how}`);
+  }
+  const b = read(F.blueprint); const notes = read(F.notes);
+  if (b && notes) {
+    const h = heard(notes, b);
+    console.log(`\nWhat ${F.notes} plays now (${h.length}):\n  ${h.map((x) => `${x.name}${x.parts.length ? ` (ch ${x.parts.join(' + ')})` : ''}${x.where.length ? ` in ${x.where.join(', ')}` : ''}`).join('\n  ')}`);
+  }
+  process.exit(0);
+}
+
+const flow = read(F.flow);
 const bp = read(F.blueprint);
 if (!bp) die(`no blueprint at ${F.blueprint} (write it first: SKILL.md, "The blueprint")`);
 const bpb = (() => { try { return beatsPerBar(bp.meter || '4/4'); } catch (e) { return die(`${F.blueprint}: ${e.message}`); } })();
@@ -79,6 +100,8 @@ if (cmd === 'plan') {
     const L = genre.length;
     if (L && !bp.length_fixed && (seconds < L.min_sec * 0.9 || seconds > L.max_sec * 1.1)) problems.push(`blueprint.json: the piece runs ${fmtSec(seconds)} (${bp.bars} bars at ${bp.bpm} BPM) but ${genre.name} tracks run ${fmtSec(L.min_sec)}-${fmtSec(L.max_sec)}: change "bars" and the sections (or set "length_fixed": true when the brief fixed the length)`);
   }
+  problems.push(...techniquePlanProblems(bp));
+  if (flow) problems.push(...flowPlanProblems(bp, flow));
   if (bp.style !== undefined && String(bp.style).length > 1000) problems.push(`blueprint.json: "style" is ${String(bp.style).length} characters; keep it within 1000`);
   for (const r of bp.roles || []) if (!Number.isInteger(r.channel) || r.channel < 1 || r.channel > 16) problems.push(`blueprint.json: role "${r.name}" needs a channel 1-16 (drums on 10)`);
   if (new Set((bp.roles || []).map((r) => r.channel)).size !== (bp.roles || []).length) problems.push('blueprint.json: two roles share a channel; every part gets its own');
@@ -138,13 +161,18 @@ try {
       const harmony = checkHarmony(manifest, bp);
       const curve = intensity(manifest, bp);
       const loops = bp.loops ? checkLoops(manifest, bp) : { errors: [], warnings: [] };
-      const errors = [...score.errors, ...harmony.errors, ...curve.problems, ...loops.errors];
-      const report = { ok: errors.length === 0, errors, warnings: [...score.warnings, ...loops.warnings], seconds: score.seconds, hits: score.hits, intensity: curve.sections,
+      // The planned techniques, heard in the notes; and the flow's shape, measured.
+      const tech = checkTechniques(manifest, bp);
+      const shape = flow ? flowScoreProblems(manifest, bp, flow, curve) : { errors: [], warnings: [] };
+      const errors = [...score.errors, ...harmony.errors, ...curve.problems, ...loops.errors, ...tech.errors, ...shape.errors];
+      const report = { ok: errors.length === 0, errors, warnings: [...score.warnings, ...loops.warnings, ...shape.warnings], seconds: score.seconds, hits: score.hits, intensity: curve.sections,
+        flow: flow ? flow.slug : null, techniques: tech.results.map(({ name, kind, found, evidence, parts, where }) => ({ name, kind, found, evidence, parts, where })), technique_notes: tech.notes,
         parts: manifest.tracks.map((t) => ({ channel: t.channel, name: t.name, notes: t.notes.length, velocity_range: t.notes.length ? [Math.min(...t.notes.map((n) => n.velocity)), Math.max(...t.notes.map((n) => n.velocity))] : null })) };
       write(F.check, report);
       console.log(`${bp.title || scorePath}: ${bp.bars} bars at ${bp.bpm} BPM (${bp.meter || '4/4'}) = ${score.seconds}s${bp.offset_sec ? `, starting ${bp.offset_sec}s into the video` : ''}`);
       console.log(`Parts: ${report.parts.map((p) => `${p.name} (${p.notes})`).join(', ')}`);
       console.log(`\nIntensity (asked vs measured, one block per bar):\n${intensityChart(curve)}`);
+      if (tech.results.length) console.log(`\nTechniques (planned → heard):\n${tech.results.map((t) => `  ${['sound', 'lock'].includes(t.kind) ? '·' : t.found ? '✔' : '✖'} ${t.name.padEnd(24)} ${t.evidence}`).join('\n')}`);
       if (score.hits.length) console.log(`\nHits:\n${score.hits.map((h) => `  ${h.ok ? '✔' : '✖'} ${String(h.t_sec).padStart(7)}s  bar ${h.bar} beat ${h.beat ?? 1} → ${h.music_sec}s (${h.off_sec >= 0 ? '+' : ''}${h.off_sec}s)  ${h.kind || 'direct'}: ${h.what}`).join('\n')}`);
       for (const w of report.warnings) console.log(`\n! ${w}`);
       if (errors.length) fail(errors);
@@ -152,7 +180,7 @@ try {
         // The score passed: its MIDI is the music from here on. Instruments are chosen from it; any DAW can play it.
         write(F.notes, manifest);
         const files = writeMidiPack(manifest, out || 'out/music/midi');
-        console.log(`\n✔ Check passed: harmony locked, the curve follows the story${bp.loops ? ', every loop repeats cleanly' : ''}${bp.hits?.length ? ', hits on the picture' : ''}.`);
+        console.log(`\n✔ Check passed: harmony locked, the curve follows the story${tech.results.length ? ', every planned technique is in the notes' : ''}${flow ? `, it moves like "${flow.name}"` : ''}${bp.loops ? ', every loop repeats cleanly' : ''}${bp.hits?.length ? ', hits on the picture' : ''}.`);
         console.log(`✔ MIDI: ${F.notes} and ${files} (every channel, the whole arrangement, a clip per section, CUE-SHEET.md).`);
         console.log(`  Where each channel plays:\n  ${registers(manifest).map(registerLine).join('\n  ')}`);
       }
@@ -279,9 +307,12 @@ function blueprintMarkdown(b, genre) {
     `**${b.bpm} BPM · ${b.meter || '4/4'} · ${b.scale} · ${b.bars} bars (${fmtSec(seconds)})**${genre ? ` · ${genre.name}` : ''}`, '',
     b.dramatic_reading ? `**The story:** ${b.dramatic_reading}` : '', b.style ? `**Style:** ${b.style}` : '', '',
     b.genre_signature?.length ? ['## What makes it this genre', '', ...b.genre_signature.map((s) => `- **${s.id}** carries the ${s.carries}: ${s.how} (${s.where})`), ''].join('\n') : '',
+    flow ? ['## The flow', '', ...flowLines(flow), ''].join('\n') : '',
     b.motif ? ['## The hook', '', Object.entries(b.motif).map(([k, v]) => `- ${k}: ${Array.isArray(v) ? v.join('; ') : v}`).join('\n'), ''].join('\n') : '',
     '## The story, section by section', '', '| Bars | Section | What happens | Intensity |', '|---|---|---|---|',
     ...(b.sections || []).map((s) => `| ${s.start_bar}-${s.end_bar} | ${s.name} | ${s.function}${s.picture ? ` *(picture: ${s.picture})*` : ''} | ${'▮'.repeat(Math.round(s.intensity))}${'▯'.repeat(10 - Math.round(s.intensity))} ${s.intensity} |`), '',
+    b.techniques?.length ? ['## Techniques', '', '| Technique | Part | Where | How |', '|---|---|---|---|',
+      ...b.techniques.map((t) => `| ${t.name} | ${[].concat(t.part ?? []).map((ch) => (b.roles || []).find((r) => r.channel === ch)?.name || `ch ${ch}`).join(' + ') || 'all'} | ${[].concat(t.where ?? 'all').join(', ')} | ${t.how || ''} |`), ''].join('\n') : '',
     '## Chords', '', ...(b.chart || []).map((c) => `- bars ${c.bars[0]}-${c.bars[1]}: ${chords(c)}`), '',
     '## The parts (one MIDI channel each)', '', '| Channel | Part | Role | Its job | Sound idea |', '|---|---|---|---|---|',
     ...(b.roles || []).map((r) => `| ${r.channel} | ${r.name} | ${r.harmony} | ${r.job || ''} | ${r.instrument_idea || r.sound || ''} |`), '',
@@ -294,7 +325,7 @@ function writeSheet() {
   const b = read(F.blueprint); if (!b) return;
   const genre = read(F.genre); const notes = read(F.notes); const check = read(F.check); const ins = read(F.instruments);
   const aud = read(F.audition); const mas = read(F.master); const own = read(F.own);
-  const icheck = read('music/instruments-check.json');
+  const icheck = read('music/instruments-check.json'); const flow = read(F.flow);
   const mark = (ok, label) => `${ok === true ? '✔' : ok === false ? '✖' : '·'} ${label}`;
   const stages = [
     genre ? mark(profileProblems(genre).length === 0, 'Genre researched') : null,
@@ -319,6 +350,8 @@ function writeSheet() {
     }), '',
     ins?.concept ? `Sound concept: ${ins.concept}\n` : '',
     check?.intensity?.length ? ['## The story, measured', '', '| Section | Bars | Asked | Measured |', '|---|---|---|---|', ...check.intensity.map((s) => `| ${s.name} | ${s.bars[0]}-${s.bars[1]} | ${s.asked} | ${s.measured} |`), ''].join('\n') : '',
+    flow ? ['## The flow', '', ...flowLines(flow), ''].join('\n') : '',
+    check?.techniques?.length ? ['## Techniques, heard', '', ...check.techniques.map((t) => `- ${['sound', 'lock'].includes(t.kind) ? '·' : t.found ? '✔' : '✖'} ${t.name}: ${t.evidence}`), ...(check.technique_notes || []).filter((x) => /instruments stage/.test(x)).map((x) => `- · ${x}`), ''].join('\n') : '',
     check?.hits?.length ? ['## Hits', '', ...check.hits.map((h) => `- ${h.ok ? '✔' : '✖'} ${h.t_sec}s → bar ${h.bar}.${h.beat ?? 1} (${h.off_sec >= 0 ? '+' : ''}${h.off_sec}s): ${h.what}`), ''].join('\n') : '',
     check && !check.ok ? `## Open problems in the score\n\n${check.errors.map((e) => `- ${e}`).join('\n')}\n` : '',
     icheck?.warnings?.length || icheck?.errors?.length ? `## Instrument notes\n\n${[...(icheck.errors || []), ...(icheck.warnings || [])].map((e) => `- ${e}`).join('\n')}\n` : '',

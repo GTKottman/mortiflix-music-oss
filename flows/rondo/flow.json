@@ -1,0 +1,60 @@
+{
+  "slug": "rondo",
+  "name": "Rondo",
+  "for": "song",
+  "bucket": "cycles",
+  "feels": [
+    "playful",
+    "warm"
+  ],
+  "summary": "A theme that keeps coming home between detours: A, then B, A again, then C, A again.",
+  "shape": {
+    "curve": [
+      [
+        0,
+        4
+      ],
+      [
+        0.25,
+        6
+      ],
+      [
+        0.45,
+        4.5
+      ],
+      [
+        0.7,
+        7.5
+      ],
+      [
+        0.85,
+        5
+      ],
+      [
+        1,
+        6.5
+      ]
+    ],
+    "rules": [
+      "rondo"
+    ]
+  },
+  "sections": {
+    "min": 5,
+    "max": 9
+  },
+  "techniques": {
+    "required": [
+      "Motif",
+      "Transposition",
+      "Call and Response"
+    ],
+    "avoid": [
+      "Fade-Out"
+    ],
+    "free": 3
+  },
+  "motif": "The theme is the A sections. Its returns keep at least half of its notes; a detour can carry it transposed.",
+  "surprise": "The last return keeps the melody but changes the chords under it.",
+  "ending": "The theme, cut a bar short, landing on the tonic."
+}

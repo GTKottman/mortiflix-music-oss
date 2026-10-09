@@ -1,0 +1,58 @@
+{
+  "slug": "through-composed",
+  "name": "Through-composed",
+  "for": "song",
+  "bucket": "forms",
+  "feels": [
+    "cinematic",
+    "restless"
+  ],
+  "summary": "It never repeats, only travels: every section is new ground, held together by how each one grows out of the last.",
+  "shape": {
+    "curve": [
+      [
+        0,
+        2
+      ],
+      [
+        0.3,
+        5
+      ],
+      [
+        0.6,
+        6
+      ],
+      [
+        0.85,
+        8
+      ],
+      [
+        1,
+        3
+      ]
+    ],
+    "rules": [
+      "through"
+    ]
+  },
+  "sections": {
+    "min": 5,
+    "max": 9
+  },
+  "techniques": {
+    "required": [
+      "Development",
+      "Sequence",
+      "Transposition"
+    ],
+    "avoid": [
+      "Ostinato",
+      "Repetition",
+      "Riff"
+    ],
+    "free": 3
+  },
+  "motif": "Not a returning theme: a cell that keeps developing (its rhythm here, its first interval there).",
+  "surprise": "The piece arrives somewhere (a key, a register, a groove) that would have been impossible at the start.",
+  "ending": "Far from where it began."
+}

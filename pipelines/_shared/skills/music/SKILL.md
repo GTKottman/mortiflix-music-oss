@@ -20,8 +20,8 @@ genre ─▶ blueprint ─▶ score ─▶ MIDI ─▶ instruments ─▶ auditi
 | Stage | You write | The engine (`node $M <command>`) | It writes |
 |---|---|---|---|
 | Genre | `music/genre.json` | `genre`: every field, 5+ sources, hook and beat elements | `music/GENRE.md` |
-| Blueprint | `music/blueprint.json` | `plan`: sections, chart, roles/channels, genre signature, length | `music/BLUEPRINT.md` |
-| Score | `music/score.strudel.js` | `check`: harmony lock, intensity curve, nothing past the end, clean loops (loop kits) | `music/check.json` |
+| Blueprint | `music/blueprint.json` | `plan`: sections, chart, roles/channels, genre signature, length, **the flow** (its curve, rules and techniques) | `music/BLUEPRINT.md` |
+| Score | `music/score.strudel.js` | `check`: harmony lock, intensity curve, nothing past the end, **every planned technique heard**, **the flow's shape measured**, clean loops (loop kits) | `music/check.json` |
 | MIDI | (nothing: it's captured) | `check`, once it passes | `music/notes.json`, `out/music/midi/` (+ `sections/`, `CUE-SHEET.md`) |
 | Instruments | `music/instruments.json` | `instruments`: every channel, register clashes, palette rules | `music/instruments-check.json` |
 | Audition | (nothing) | `audition`: lowest, middle, highest note of every part | `out/music/audition/*.wav` |
@@ -78,9 +78,16 @@ Write it at the top of the blueprint:
   "dramatic_reading": "confusion -> recognition -> confidence",
   "style": "one dense line of descriptors, under 1000 characters: genre, instruments and their roles, groove, mood",
   "genre_signature": [ { "id": "dusty-breakbeat", "carries": "beat", "how": "half-time break, ghosted snares", "where": "from bar 9" } ],
-  "motif": { "rhythm": "...", "contour": "...", "length_bars": 2, "role": "Glass hook", "returns": ["bar 17, an octave up", "bar 41, augmented"] },
+  "flow": "slow-burn",
+  "motif": { "rhythm": "...", "contour": "...", "length_bars": 2, "role": "Glass hook", "returns": ["bar 17, an octave up", "bar 41, augmented"],
+             "at": { "channel": 3, "bar": 9, "beats": 8 } },
   "sections": [
-    { "name": "Headlights on wet glass", "start_bar": 1, "end_bar": 8, "function": "establish: pad and sub only, the motif withheld", "intensity": 2 }
+    { "name": "Headlights on wet glass", "start_bar": 1, "end_bar": 8, "function": "establish: pad and sub only, the motif withheld", "intensity": 2, "material": "A" }
+  ],
+  "techniques": [
+    { "name": "Pedal Tone", "part": 1, "where": "all", "how": "the sub holds D under every chord until the last section" },
+    { "name": "Call and Response", "part": [3, 4], "where": ["The overpass"], "how": "the glass hook asks, the guitar answers a bar later" },
+    { "name": "Augmentation", "part": 3, "where": ["Home"], "how": "the hook at half speed, as the city lets go" }
   ],
   "chart": [ { "bars": [1, 8], "chords": ["Dm9", "Cmaj7", ["Gm7", "A7sus4"], "Dm9"] } ],
   "roles": [ { "channel": 1, "harmony": "bass", "name": "Sub", "job": "roots, the floor", "instrument_idea": "sine, low-passed" } ],
@@ -90,11 +97,15 @@ Write it at the top of the blueprint:
 
 A loop kit adds `"loops": true` and `"length_fixed": true`: every section is then one loop (see section 6).
 
-Decide in this order: the motif and hook (melody craft) → tempo, meter and scale → the chart → the roles → the story.
+Decide in this order: **the flow** (read `flow/FLOW.md`) → the motif and hook (melody craft) → tempo, meter and scale →
+the chart → the roles → the story, in the flow's shape → the techniques.
 
 - **Sections** cover bars 1..bars, contiguous. Names are specific and story-bearing, never "Intro/Verse/Chorus/A/B"
-  (a returning idea is "Return of …"). Each `function` says what happens: establish, develop, destabilise,
-  withhold, release, reinterpret, resolve, and what rises or is held back.
+  (a returning idea is "Return of …"). Each `function` says what happens and what rises or is held back. **The flow
+  decides the arc**, not habit: a slow burn never breaks down, an inverted arch opens at its peak, a pendulum swings
+  wider each time, a theme-and-variations never repeats a section. Not every piece builds to a climax and resolves.
+- **`material`** (a letter: `A`, `B`, `A+B`…) marks what each section is made of, when the flow's rules need it
+  (a rondo's returning `A`, two worlds meeting in `A+B`, a through-composed piece where every letter is new).
 - **`intensity` (0-10) is the energy curve**, section by section: the check measures
   each section (parts playing, notes per beat, velocity, range) and fails if the order disagrees. Builds really build;
   breakdowns really thin out. Don't raise everything at once: contrast makes intensity legible.
@@ -106,6 +117,29 @@ Decide in this order: the motif and hook (melody craft) → tempo, meter and sca
   length comes from the genre's `length` unless the brief fixed it (then `"length_fixed": true`).
 
 `node $M plan` checks it and writes `music/BLUEPRINT.md`, the readable version (it's what the owner reviews).
+
+### The flow and the techniques
+
+The flow (`flow/flow.json`, its craft in `flow/FLOW.md`) was chosen with the brief: by the owner, or picked by the
+studio from what the owner has loved and away from what they've had lately (the session brief says which, and why).
+It sets:
+
+- **an energy curve** (position in the piece → intensity): the sections' intensities follow it (the plan check wants
+  them to match its shape at 60% or better);
+- **rules** the plan and the notes both keep (`rising`, `peak_first`, `alternating`, `rondo`, `false_stop`,
+  `shared_drums`…): `plan` holds the intensities to them, `check` measures the score against them;
+- **techniques** it needs (its identity), techniques it avoids, and how many more the piece picks itself.
+
+**`techniques`** names every one the piece uses, from the owner's list (`node $M techniques` prints all 144 and how each
+is heard): its `name`, the `part` (a channel; two channels for things between parts, like call and response or a
+hocket), `where` (section names, or `"all"`), and `how` it works in this piece. Pick the free ones for **this** piece:
+the session brief lists what the owner has loved, and what they've had in their last pieces (reach past those).
+
+**The check listens for every planned technique in the captured notes**, on that part, in those sections, and refuses
+a score that only names one: staccato means the notes really are short, a call and response means one part really
+rests while the other plays, an inversion means the motif really comes back upside down (motif techniques need
+`motif.at`: the channel, bar and length in beats of its first full statement). Sound techniques (vibrato, pitch bend,
+sidechain pumping, growl…) aren't in the notes: they go to the instruments stage (§7) and are listed there.
 
 ## 4. The score: `music/score.strudel.js`, notes only
 
@@ -136,8 +170,9 @@ drums: cue(note("[36 ~ ~ 36 38 ~ 36 ~], [42*8]").velocity("<.8 .95>").mask(lift)
 node $M check
 ```
 
-It reports the harmony lock, parts that play past the end, roles that never play, and **the intensity curve**: a
-sparkline per section, asked vs measured. Iterate until **0 problems**. Then read the curve against the story: does it
+It reports the harmony lock, parts that play past the end, roles that never play, **the intensity curve** (a
+sparkline per section, asked vs measured), **every planned technique** (✔ heard, with what it found, or ✖ with what
+counts) and **the flow's rules**, measured. Iterate until **0 problems**. Then read the curve against the story: does it
 rise where it should, does it thin out where it should?
 
 When it passes, the score's notes become **the MIDI**: `music/notes.json` (every channel's notes in beats, with
@@ -188,6 +223,8 @@ clips in `sections/` are the kit.
 - `sound`: Strudel's built-in synths need no downloads and carry no licence questions: `sine`, `triangle`, `square`,
   `sawtooth`, `supersaw`, `pulse`, and `white`/`pink`/`brown`/`crackle` noise. A sample or soundfont needs `"source"`
   (where it comes from and its licence, also in `assets/SOURCES.md`), and only when the licence allows the owner's use.
+- Sound techniques the blueprint planned (vibrato, portamento, pitch bend, growl, sidechain pumping…) are made here,
+  in `set`, on the part they were planned for.
 - `set`: the sound's shaping, as Strudel methods: filters (`.lpf .hpf .lpq .lpenv`), envelopes (`.attack .decay
   .sustain .release`), FM (`.fm .fmh`), `.vib`, `.penv` (pitch envelope, for drums), `.shape .distort`, `.crush
   .coarse` (lo-fi), `.room .size`, `.delay .delaytime .delayfeedback`. It can't change notes, timing or the channel.

@@ -1,0 +1,36 @@
+{
+  "slug": "pendulum",
+  "name": "Pendulum",
+  "for": "song",
+  "bucket": "cycles",
+  "feels": [
+    "restless",
+    "cinematic"
+  ],
+  "summary": "Calm and storm in turns, each swing wider than the last, until the last storm never comes back.",
+  "shape": {
+    "rules": [
+      "alternating",
+      "widening"
+    ]
+  },
+  "sections": {
+    "min": 4,
+    "max": 8
+  },
+  "techniques": {
+    "required": [
+      "Pendulum",
+      "Crescendo",
+      "Diminuendo"
+    ],
+    "avoid": [
+      "Drone",
+      "Pedal Tone"
+    ],
+    "free": 3
+  },
+  "motif": "The same motif in the calm and in the storm: tender, then hammered.",
+  "surprise": "The calm sections get calmer as the storms get bigger: the gap between them is the drama.",
+  "ending": "The last storm, the widest, cut off without a calm after it."
+}

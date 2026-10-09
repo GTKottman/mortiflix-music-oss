@@ -1,0 +1,50 @@
+{
+  "slug": "call-and-response",
+  "name": "Call and response",
+  "for": "song",
+  "bucket": "forms",
+  "feels": [
+    "playful",
+    "danceable"
+  ],
+  "summary": "Two voices trading phrases, one asking and one answering, until they finish each other's sentences.",
+  "shape": {
+    "curve": [
+      [
+        0,
+        3
+      ],
+      [
+        0.5,
+        6
+      ],
+      [
+        0.8,
+        8
+      ],
+      [
+        1,
+        5
+      ]
+    ],
+    "rules": [
+      "no_breakdown"
+    ]
+  },
+  "sections": {
+    "min": 4,
+    "max": 7
+  },
+  "techniques": {
+    "required": [
+      "Call and Response",
+      "Question-and-Answer Phrase",
+      "Hocket"
+    ],
+    "avoid": [],
+    "free": 3
+  },
+  "motif": "The call is the motif. The answer changes each time; the call barely does.",
+  "surprise": "The answer comes first once, and the call has to respond to it.",
+  "ending": "One last call, left unanswered."
+}

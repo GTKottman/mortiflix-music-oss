@@ -1,0 +1,59 @@
+{
+  "slug": "slow-burn",
+  "name": "Slow burn",
+  "for": "song",
+  "bucket": "builds",
+  "feels": [
+    "hypnotic",
+    "cinematic"
+  ],
+  "summary": "One long rise with no breakdown: energy is only ever added, never taken away, until the piece arrives where it was always heading.",
+  "shape": {
+    "curve": [
+      [
+        0,
+        1.5
+      ],
+      [
+        0.35,
+        4
+      ],
+      [
+        0.7,
+        7
+      ],
+      [
+        0.9,
+        9
+      ],
+      [
+        1,
+        8
+      ]
+    ],
+    "rules": [
+      "no_breakdown",
+      "peak_late"
+    ]
+  },
+  "sections": {
+    "min": 4,
+    "max": 7
+  },
+  "techniques": {
+    "required": [
+      "Ostinato",
+      "Crescendo",
+      "Pedal Tone"
+    ],
+    "avoid": [
+      "Drop",
+      "Breakdown",
+      "Stop-Time"
+    ],
+    "free": 3
+  },
+  "motif": "Heard first as a fragment; the full motif is withheld until the peak, where it finally plays complete.",
+  "surprise": "The pedal under everything finally moves in the last third: the harmony the piece has been holding back.",
+  "ending": "At or just after the peak: a held chord that rings out, not a fade back to the start."
+}

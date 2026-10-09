@@ -1,0 +1,57 @@
+{
+  "slug": "theme-and-variations",
+  "name": "Theme and variations",
+  "for": "song",
+  "bucket": "forms",
+  "feels": [
+    "playful",
+    "intimate"
+  ],
+  "summary": "One motif, rewritten in every section: upside down, slower, faster, in a new register, never the same twice.",
+  "shape": {
+    "curve": [
+      [
+        0,
+        3
+      ],
+      [
+        0.3,
+        5
+      ],
+      [
+        0.55,
+        4
+      ],
+      [
+        0.8,
+        8
+      ],
+      [
+        1,
+        5
+      ]
+    ],
+    "rules": [
+      "through"
+    ]
+  },
+  "sections": {
+    "min": 4,
+    "max": 8
+  },
+  "techniques": {
+    "required": [
+      "Motif",
+      "Inversion",
+      "Augmentation",
+      "Diminution"
+    ],
+    "avoid": [
+      "Repetition"
+    ],
+    "free": 2
+  },
+  "motif": "The theme is stated plainly in the first section; every later section is one way of rewriting it.",
+  "surprise": "One variation so far from the theme that it is only recognised by its rhythm.",
+  "ending": "The theme once more, plainly, but now under the harmony of the last variation."
+}

@@ -2,6 +2,7 @@
   "slug": "song",
   "name": "Song",
   "description": "An instrumental song from a genre and a topic: the genre researched, a blueprint you approve, the score written and checked as MIDI, an instrument chosen for every channel, mastered. You get the master, the stems and the MIDI (every channel, the arrangement, a clip per section).",
+  "flows": "song",
   "makes": "music",
   "shared_skills": [
     "music"
@@ -148,7 +149,7 @@
       "applies_to": [
         "plan"
       ],
-      "how": "node .claude/skills/music/strudel.mjs plan passes: sections contiguous with a function and an intensity, the genre signature uses the profile's elements (hook and beat), the length fits the genre (or the brief), every part on its own channel, style within 1000 characters."
+      "how": "node .claude/skills/music/strudel.mjs plan passes: sections contiguous with a function and an intensity, the genre signature uses the profile's elements (hook and beat), the length fits the genre (or the brief), every part on its own channel, style within 1000 characters; and it follows the flow (flow/flow.json): \"flow\" set, the intensities on its curve and rules, its techniques planned (each with part, where and how), nothing it avoids, its number of free picks."
     },
     {
       "id": "music-check",
@@ -156,7 +157,7 @@
       "applies_to": [
         "music"
       ],
-      "how": "node .claude/skills/music/strudel.mjs check ends with 0 problems (harmony locked to the chart, every role playing, nothing past the end, the intensity curve following the sections) and wrote music/notes.json and out/music/midi/."
+      "how": "node .claude/skills/music/strudel.mjs check ends with 0 problems (harmony locked to the chart, every role playing, nothing past the end, the intensity curve following the sections) and wrote music/notes.json and out/music/midi/; every planned technique is heard in the notes, and the flow's shape measures as it should."
     },
     {
       "id": "score-is-notes",

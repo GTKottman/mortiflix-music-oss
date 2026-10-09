@@ -8,15 +8,19 @@
 | `mortiflix-music status <id> --json` | `{ id, title, pipeline, state, status, needs_you, working, steps: [{ key, name, review, state, version }], deliverables: [{ label, kind, path }], usage, cost, log: [{ t, event, step, version, details }] }` |
 | `mortiflix-music review [<id>] --json` | an array, one per project waiting on the owner (below) |
 | `mortiflix-music pipelines --json` | `[{ slug, name, description, steps: [{ key, name, review, after }], intake: [{ id, label, type, required, choices, default, help }] }]` |
+| `mortiflix-music flows --json` | `{ buckets, feels, ratings, flows: [{ slug, name, for: song\|kit, bucket, feels, summary, shape, techniques: { required, avoid, free }, source, stats: { used, love, fine, no } \| null }] }` |
+| `mortiflix-music flows show <flow> --json` | one flow with its `flow_md` |
 | `mortiflix-music setup status --json` | `{ backend, backends, tools, parts, tool_info, daws }` |
 | `mortiflix-music keys --json` | which keys are set and where they come from (never their values) |
 
 | Act | |
 |---|---|
 | `mortiflix-music init --yes [--backend …]` | create the studio |
-| `mortiflix-music new <slug> --title "…" --set id=value … --file id=path … --yes` | create and queue a project |
+| `mortiflix-music new <slug> --title "…" [--flow …] --set id=value … --file id=path … --yes` | create and queue a project; `--flow` is a flow's slug, `studio` (the default), `shape:<bucket>`, `feel:<feel>` or `none` |
+| `mortiflix-music rate <id> <love \| fine \| no>` | how a piece landed (the studio's flow picks follow it) |
+| `mortiflix-music flows save <id> --name "…"` · `flows export <flow>` · `flows add <file \| https://…>` | a piece as a flow of the owner's own; share flows |
 | `mortiflix-music run` | run sessions until everything waits on the owner (run it in the background) |
-| `mortiflix-music respond <id> <step> --approve \| --changes [--note "…"]… [--overall "…"] [--answer qid=value]…` | decide a step in review (`--version N` to name the version; default is the one in review) |
+| `mortiflix-music respond <id> <step> --approve \| --changes [--note "…"]… [--overall "…"] [--answer qid=value]… [--rate love\|fine\|no]` | decide a step in review (`--version N` to name the version; default is the one in review) |
 | `mortiflix-music answer <id> <qid> ["answer"]` | answer a project question (no answer takes the default) |
 | `mortiflix-music reopen <id> <step> "what to change"` | send an approved step back |
 | `mortiflix-music pause \| resume \| cancel <id>` | |

@@ -1,0 +1,58 @@
+{
+  "slug": "two-worlds",
+  "name": "Two worlds",
+  "for": "song",
+  "bucket": "stories",
+  "feels": [
+    "cinematic",
+    "uplifting"
+  ],
+  "summary": "Two separate ideas, each with its own sound and space, that meet late and play together.",
+  "shape": {
+    "curve": [
+      [
+        0,
+        3
+      ],
+      [
+        0.25,
+        5
+      ],
+      [
+        0.5,
+        4
+      ],
+      [
+        0.75,
+        6
+      ],
+      [
+        0.9,
+        9
+      ],
+      [
+        1,
+        6
+      ]
+    ],
+    "rules": [
+      "merge",
+      "peak_late"
+    ]
+  },
+  "sections": {
+    "min": 4,
+    "max": 7
+  },
+  "techniques": {
+    "required": [
+      "Call and Response",
+      "Contrary Motion"
+    ],
+    "avoid": [],
+    "free": 3
+  },
+  "motif": "Each world has its own motif. When they meet, both are heard at once, moving against each other.",
+  "surprise": "They meet in a key neither of them started in.",
+  "ending": "After the meeting, one world fades and the other carries what it learned."
+}

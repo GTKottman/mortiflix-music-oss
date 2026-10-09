@@ -145,3 +145,43 @@ test('web: the MIDI panel hands over the MIDI pack and its notes and takes the o
   assert.equal(audio.headers['content-type'], 'audio/wav');
   assert.equal((await s('POST', `/api/projects/${id}/music/master`, { raw: wav, headers: { 'x-mortiflix': '' } })).status, 403);
 });
+
+test('web: flows, a brief\'s flow, rating a piece and saving it as a flow', async (t) => {
+  const { mkdirSync, writeFileSync } = await import('node:fs');
+  const { projectPaths } = await import('../src/projects.mjs');
+  const root = tempStudio(t);
+  const socketPath = join(tmpdir(), `mfx-web-${randomBytes(4).toString('hex')}.sock`);
+  const srv = await startServer(root, { socketPath, quiet: true, runner: false });
+  t.after(() => srv.close());
+  const s = (...a) => call(socketPath, ...a);
+  const cat = (await s('GET', '/api/flows')).json;
+  assert.equal(cat.flows.length, 18);
+  assert.ok(cat.buckets.builds && cat.feels.includes('hypnotic') && cat.ratings.love);
+  assert.ok(!('dir' in cat.flows[0]), 'no paths on disk in the API');
+  assert.match((await s('GET', '/api/flows/rondo')).json.flow_md, /^# Rondo/);
+  assert.equal((await s('GET', '/api/flows/nope')).status, 400);
+
+  const pipes = (await s('GET', '/api/pipelines')).json;
+  assert.equal(pipes.find((p) => p.slug === 'loop-kit').flows, 'kit');
+  const made = await s('POST', '/api/projects', { body: { pipeline: 'song', title: 'Harbour', answers: { genre: 'g', topic: 't' }, flow: 'feel:melancholic' } });
+  const id = made.json.id;
+  const p = (await s('GET', `/api/projects/${id}`)).json.project;
+  assert.ok(p.flow.feels.includes('melancholic'));
+  assert.equal(p.flow.picked, 'studio');
+  assert.equal((await s('POST', '/api/projects', { body: { pipeline: 'song', title: 'x', flow: 'energy-ladder' } })).status, 400);
+
+  assert.equal((await s('POST', `/api/projects/${id}/rate`, { body: { rating: 'meh' } })).status, 400);
+  assert.equal((await s('POST', `/api/projects/${id}/rate`, { body: { rating: 'love' } })).json.rating, 'love');
+  assert.equal((await s('GET', `/api/projects/${id}`)).json.project.rating, 'love');
+  assert.equal((await s('GET', '/api/flows')).json.flows.find((f) => f.slug === p.flow.slug).stats.love, 1);
+
+  assert.equal((await s('POST', `/api/projects/${id}/flow`, { body: { name: 'Harbour' } })).status, 400, 'no blueprint yet');
+  const w = projectPaths(root, id).work;
+  mkdirSync(join(w, 'music'), { recursive: true });
+  writeFileSync(join(w, 'music/blueprint.json'), JSON.stringify({ bars: 16, sections: [{ name: 'Low', start_bar: 1, end_bar: 8, function: 'x', intensity: 2 }, { name: 'High', start_bar: 9, end_bar: 16, function: 'y', intensity: 8 }] }));
+  const saved = await s('POST', `/api/projects/${id}/flow`, { body: { name: 'Harbour shape' } });
+  assert.equal(saved.json.slug, 'harbour-shape');
+  assert.equal(saved.json.source, 'yours');
+  assert.ok(!('dir' in saved.json));
+  assert.equal((await s('GET', '/api/flows')).json.flows.length, 19);
+});

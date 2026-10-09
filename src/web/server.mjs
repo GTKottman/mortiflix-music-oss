@@ -11,6 +11,7 @@ import { join, extname, basename, resolve } from 'node:path';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { REPO, paths, loadConfig, saveConfig, readSecret, writeSecret, readJson, isInside, UserError } from '../studio.mjs';
 import { listPipelines } from '../pipelines.mjs';
+import * as flows from '../flows.mjs';
 import { createProject, addIntakeFile, startProject, listProjects, loadProject, projectPaths, projectPipeline, readEvents, readJournal } from '../projects.mjs';
 import * as gates from '../gates.mjs';
 import { Runner, BACKENDS } from '../runner.mjs';
@@ -138,6 +139,16 @@ export async function startServer(root, { port = 4747, host = '127.0.0.1', runne
     if (p === '/pipelines' && method === 'GET') {
       return send(res, 200, listPipelines(root).map(({ dir, ...x }) => x));
     }
+    // Flows: every one with how it has gone for you; one with its FLOW.md.
+    if (p === '/flows' && method === 'GET') {
+      const stats = flows.flowStats(root);
+      return send(res, 200, { buckets: flows.BUCKETS, feels: flows.FEELS, ratings: flows.RATINGS, kinds: flows.KINDS,
+        flows: flows.listFlows(root).map(({ dir, ...f }) => ({ ...f, stats: stats[f.slug] || null })) });
+    }
+    if ((m = p.match(/^\/flows\/([a-z0-9_-]+)$/)) && method === 'GET') {
+      const { dir, ...f } = flows.findFlow(root, m[1]);
+      return send(res, 200, { ...f, flow_md: readFileSync(join(dir, 'FLOW.md'), 'utf8') });
+    }
     if (p === '/checks' && method === 'GET') return send(res, 200, readJson(paths(root).checks));
     if ((m = p.match(/^\/checks\/([a-z0-9-]+)$/)) && method === 'POST') {
       const { approve } = await json(req);
@@ -146,7 +157,7 @@ export async function startServer(root, { port = 4747, host = '127.0.0.1', runne
     if (p === '/projects' && method === 'GET') return send(res, 200, listProjects(root).map((x) => summary(root, x)));
     if (p === '/projects' && method === 'POST') {
       const body = await json(req);
-      const created = createProject(root, { pipeline: body.pipeline, title: body.title, answers: body.answers || {}, backend: BACKENDS[body.backend] ? body.backend : null });
+      const created = createProject(root, { pipeline: body.pipeline, title: body.title, answers: body.answers || {}, backend: BACKENDS[body.backend] ? body.backend : null, flow: typeof body.flow === 'string' ? body.flow : 'studio' });
       return after({ id: created.id });
     }
     if (!(m = p.match(/^\/projects\/([a-z0-9-]+)(\/.*)?$/))) return send(res, 404, { error: 'not found' });
@@ -166,6 +177,12 @@ export async function startServer(root, { port = 4747, host = '127.0.0.1', runne
       const missing = keys.projectMissingKeys(root, id);
       if (missing.length) return send(res, 409, { error: keys.missingKeysText(missing, 'start it'), needs_keys: missing });
       return after(startProject(root, id) && { ok: true });
+    }
+    if (sub === '/rate' && method === 'POST') return after(flows.rateProject(root, id, String((await json(req)).rating || '')));
+    if (sub === '/flow' && method === 'POST') {
+      const body = await json(req);
+      const { dir, ...f } = flows.saveFlowFrom(root, id, { name: body.name, bucket: body.bucket || null, feels: Array.isArray(body.feels) ? body.feels : null });
+      return after(f);
     }
     if (sub === '/pause' && method === 'POST') { gates.pause(root, id); runner.stopProject(id); return after(); }
     if (sub === '/resume' && method === 'POST') { gates.resume(root, id); return after(); }

@@ -13,6 +13,7 @@ import * as setup from './setup.mjs';
 import { costText } from './usage.mjs';
 import * as music from './music.mjs';
 import * as plat from './platform.mjs';
+import * as flows from './flows.mjs';
 
 const C = process.stdout.isTTY && !process.env.NO_COLOR
   ? { b: (s) => `\x1b[1m${s}\x1b[0m`, dim: (s) => `\x1b[2m${s}\x1b[0m`, acc: (s) => `\x1b[38;5;208m${s}\x1b[0m`, red: (s) => `\x1b[31m${s}\x1b[0m`, green: (s) => `\x1b[32m${s}\x1b[0m` }
@@ -32,15 +33,25 @@ export const HELP = `${C.b('mortiflix-music')}: a music studio on your machine. 
   mortiflix-music pipelines                                     what the studio can make
   mortiflix-music pipelines export <slug> [--out file.zip]      one shareable zip: the pipeline and every skill it uses
   mortiflix-music pipelines add <file.zip | https://…> [--replace]  add someone's pipeline to your studio
-  mortiflix-music new <pipeline> [--title "…"] [--set key=value]… [--file key=path]… [--backend demo]
+  mortiflix-music new <pipeline> [--title "…"] [--set key=value]… [--file key=path]… [--flow <flow>] [--backend demo]
+                                                                --flow: a flow's slug, studio (the studio picks: the default),
+                                                                shape:<bucket>, feel:<feel>, or none
   mortiflix-music run [--watch]                                 run sessions until everything waits on you
   mortiflix-music list                                          your projects
   mortiflix-music status <project>                              steps, versions, the log
   mortiflix-music review [<project>]                            review what's waiting (approve, notes, answers)
-  mortiflix-music respond <project> <step> --approve|--changes [--note "…"]… [--overall "…"] [--answer id=value]…
+  mortiflix-music respond <project> <step> --approve|--changes [--note "…"]… [--overall "…"] [--answer id=value]… [--rate love|fine|no]
   mortiflix-music answer <project> <question-id> [answer]       answer a question the session asked
   mortiflix-music reopen <project> <step> "what to change"      send an approved step back (you changed your mind)
+  mortiflix-music rate <project> <love|fine|no>                how it landed: the studio learns your taste from it
   mortiflix-music pause|resume|cancel <project>
+
+  ${C.b('Flows')} (the shape a piece takes)
+  mortiflix-music flows [--by feel]                             every flow, by shape (or by feel), with how each has gone for you
+  mortiflix-music flows show <flow>                             what it asks for, and its FLOW.md
+  mortiflix-music flows save <project> --name "…" [--bucket b] [--feels a,b]   a piece you made, as a flow of your own
+  mortiflix-music flows export <flow> [--out file.zip]          share a flow
+  mortiflix-music flows add <file.zip | https://…> [--replace]  add someone's flow
 
   ${C.b('MIDI and your DAW')}
   mortiflix-music midi <project> [--out pack.zip]               save the MIDI pack: every channel, the arrangement, a clip
@@ -94,6 +105,15 @@ export async function run(argv = process.argv.slice(2)) {
       case 'demo': return demo(root);
       case 'pipelines': return a.json ? json(pipelinesView(root)) : pipelines(root, rest, a);
       case 'new': return newProject(root, rest[0], a);
+      case 'flows': return flowsCmd(root, rest, a);
+      case 'rate': {
+        ownerOnly();
+        const [given, rating] = rest;
+        if (!flows.RATINGS[rating]) throw new Error('mortiflix-music rate <project> <love|fine|no>');
+        const id = pick(root, given);
+        flows.rateProject(root, id, rating);
+        return console.log(`${C.green('✔')} ${flows.RATINGS[rating].label}. The studio will remember it when it picks your next flow.`);
+      }
       case 'run': return runLoop(root, a);
       case 'list': case 'ls': return list(root, a);
       case 'status': return a.json ? json(statusView(root, pick(root, rest[0]))) : status(root, pick(root, rest[0]));
@@ -281,6 +301,7 @@ async function newProject(root, slug, a) {
     try {
       console.log(`${C.b(pipeline.name)}  ${C.dim(pipeline.description)}\n`);
       if (!title) title = (await rl.question(`${C.b('Title')}: `)).trim();
+      if (pipeline.flows && a.flow === undefined) a.flow = await askFlow(rl, root, pipeline.flows);
       for (const q of pipeline.intake) {
         if (q.type === 'files' ? files.some((f) => f.field === q.id) : answers[q.id] !== undefined) continue;
         const label = `${C.b(q.label || q.id)}${q.required ? '' : C.dim(' (optional)')}`;
@@ -309,15 +330,98 @@ async function newProject(root, slug, a) {
     console.log(`\n${C.acc('●')} Before it starts: this project needs your ${missing.map((id) => keys.KEYS[id].name).join(' and ')}.`);
     for (const id of missing) if (!(await askKey(root, id, { required: true }))) throw new Error(`no ${keys.KEYS[id].name}: nothing was created`);
   }
-  const p = createProject(root, { pipeline: slug, title, answers, backend: typeof a.backend === 'string' ? a.backend : null });
+  const p = createProject(root, { pipeline: slug, title, answers, backend: typeof a.backend === 'string' ? a.backend : null, flow: typeof a.flow === 'string' ? a.flow : 'studio' });
   for (const f of files) {
     if (!existsSync(f.path) || !statSync(f.path).isFile()) throw new Error(`no file ${f.path}`);
     await addIntakeFile(root, p.id, { field: f.field, name: basename(f.path), stream: createReadStream(f.path) });
   }
   startProject(root, p.id);
   console.log(`\n${C.green('✔')} ${C.b(p.title)} is queued as ${C.b(p.id)}`);
+  if (p.flow) console.log(`  Flow: ${C.b(p.flow.name)} ${C.dim(p.flow.picked === 'you' ? '(your choice)' : `(the studio's pick: ${p.flow.why})`)}`);
   console.log(`  ${C.b('mortiflix-music run')} starts it (or it starts by itself under ${C.b('mortiflix-music serve')}).`);
   return p.id;
+}
+
+// The flow question in `new`: the studio's pick (the default), a bucket or a feel to pick from, or one by name.
+async function askFlow(rl, root, kind) {
+  const all = flows.listFlows(root, kind).filter((f) => !f.error);
+  if (!all.length) return 'none';
+  const buckets = [...new Set(all.map((f) => f.bucket))];
+  const feels = [...new Set(all.flatMap((f) => f.feels))].sort();
+  console.log(`${C.b('Flow')} ${C.dim('the shape the piece takes')}`);
+  console.log(`  1. Let the studio choose ${C.dim('(the default: it learns from what you rate)')}`);
+  console.log(`  2. Surprise me from a shape ${C.dim(`(${buckets.join(', ')})`)}`);
+  console.log(`  3. Surprise me from a feel ${C.dim(`(${feels.join(', ')})`)}`);
+  console.log('  4. Pick one');
+  const v = (await rl.question('Flow [1]: ')).trim();
+  if (v === '2') { const b = (await rl.question(`  Shape (${buckets.join(', ')}): `)).trim().toLowerCase(); return buckets.includes(b) ? `shape:${b}` : 'studio'; }
+  if (v === '3') { const f = (await rl.question(`  Feel (${feels.join(', ')}): `)).trim().toLowerCase(); return feels.includes(f) ? `feel:${f}` : 'studio'; }
+  if (v === '4') {
+    all.forEach((f, i) => console.log(`  ${String(i + 1).padStart(2)}. ${C.b(f.name)} ${C.dim(`${f.bucket} · ${f.feels.join(', ')}`)}\n      ${C.dim(f.summary)}`));
+    const n = Number((await rl.question('  Which one: ')).trim());
+    return all[n - 1]?.slug || 'studio';
+  }
+  return 'studio';
+}
+
+async function flowsCmd(root, [sub, arg] = [], a = {}) {
+  const r = existsSync(paths(root).config) ? root : null;
+  if (sub === 'show') {
+    if (!arg) throw new Error('mortiflix-music flows show <flow>');
+    const f = flows.findFlow(r, arg);
+    if (a.json) return json({ ...f, flow_md: readFileSync(join(f.dir, 'FLOW.md'), 'utf8') });
+    console.log(`${C.b(f.name)}  ${C.dim(`${f.slug} · for ${flows.KINDS[f.for]} · ${f.bucket} · ${f.feels.join(', ')} · ${f.source}`)}\n`);
+    console.log(readFileSync(join(f.dir, 'FLOW.md'), 'utf8'));
+    return;
+  }
+  if (sub === 'save') {
+    needStudio(root); ownerOnly();
+    if (!arg || typeof a.name !== 'string') throw new Error('mortiflix-music flows save <project> --name "…" [--bucket b] [--feels a,b] [--replace]');
+    const f = flows.saveFlowFrom(root, pick(root, arg), { name: a.name, bucket: typeof a.bucket === 'string' ? a.bucket : null, feels: typeof a.feels === 'string' ? a.feels.split(',').map((x) => x.trim().toLowerCase()) : null, replace: Boolean(a.replace) });
+    return console.log(`${C.green('✔')} ${C.b(f.name)} (${f.slug}) is one of your flows: ${f.techniques.required.join(', ') || 'no fixed techniques'}. Use it with ${C.b(`--flow ${f.slug}`)}, or the studio may pick it.`);
+  }
+  if (sub === 'export') {
+    if (!arg) throw new Error('mortiflix-music flows export <flow> [--out file.zip]');
+    const x = flows.exportFlow(r, arg);
+    const file = typeof a.out === 'string' ? a.out : `${x.slug}.mortiflix-flow.zip`;
+    writeFileSync(file, x.zip);
+    return console.log(`${C.green('✔')} ${file}: ${x.name}. Anyone adds it with ${C.b('mortiflix-music flows add <file>')}.`);
+  }
+  if (sub === 'add') {
+    needStudio(root);
+    if (!arg) throw new Error('mortiflix-music flows add <file.zip | https://…> [--replace]');
+    let buf;
+    if (/^https:\/\//.test(arg)) { const res = await fetch(arg, { redirect: 'follow' }); if (!res.ok) throw new Error(`couldn't download it: HTTP ${res.status}`); buf = Buffer.from(await res.arrayBuffer()); }
+    else if (/^[a-z]+:\/\//i.test(arg)) throw new Error('only https links (or a file on this computer)');
+    else buf = readFileSync(arg);
+    const x = flows.addFlow(root, buf, { replace: Boolean(a.replace) });
+    return console.log(`${C.green('✔')} ${x.name} (${x.slug}) is in your studio, for ${flows.KINDS[x.for]}${x.overrides_built_in ? ', in place of the built-in one' : ''}.`);
+  }
+  if (sub) throw new Error('mortiflix-music flows [show <flow> | save <project> --name "…" | export <flow> | add <file|url>]');
+  const all = flows.listFlows(r);
+  const stats = r ? flows.flowStats(r) : {};
+  if (a.json) return json({ buckets: flows.BUCKETS, feels: flows.FEELS, ratings: flows.RATINGS, flows: all.map(({ dir, ...f }) => ({ ...f, stats: stats[f.slug] || null })) });
+  const line = (f) => {
+    if (f.error) return `  ${C.red('✖')} ${f.slug}: ${f.error}`;
+    const st = stats[f.slug];
+    const how = st ? [st.used ? `used ${st.used}×` : null, st.love ? `loved ${st.love}×` : null, st.no ? `not for you ${st.no}×` : null].filter(Boolean).join(', ') : '';
+    return `  ${C.b(f.name.padEnd(24))} ${C.dim(`${f.slug}${f.source === 'yours' ? ' · yours' : ''}`)}${how ? `  ${C.acc(how)}` : ''}\n  ${' '.repeat(24)} ${C.dim(f.summary)}`;
+  };
+  for (const [kind, label] of Object.entries(flows.KINDS)) {
+    const mine = all.filter((f) => f.error || f.for === kind);
+    if (!mine.length) continue;
+    console.log(`\n${C.b(`For ${label}`)}`);
+    if (a.by === 'feel') {
+      for (const feel of [...new Set(mine.flatMap((f) => f.feels || []))].sort()) { console.log(`\n ${C.acc(feel)}`); for (const f of mine.filter((x) => x.feels?.includes(feel))) console.log(line(f)); }
+    } else {
+      for (const b of [...new Set([...Object.keys(flows.BUCKETS), ...mine.map((f) => f.bucket)])]) {
+        const fs = mine.filter((f) => f.bucket === b); if (!fs.length) continue;
+        console.log(`\n ${C.acc(flows.BUCKETS[b] || b)}`);
+        for (const f of fs) console.log(line(f));
+      }
+    }
+  }
+  console.log(C.dim(`\nThe studio picks a flow for every new piece unless you name one (new … --flow <slug>). Rate what you get\n(mortiflix-music rate <project> love|fine|no) and its picks follow your taste.`));
 }
 
 async function runLoop(root, a) {
@@ -362,6 +466,7 @@ function status(root, id) {
   const p = loadProject(root, id);
   const pipeline = projectPipeline(root, id);
   console.log(`${C.b(p.title)}  ${C.dim(`${pipeline.name} · ${p.id}`)}`);
+  if (p.flow) console.log(C.dim(`Flow: ${p.flow.name} (${p.flow.picked === 'you' ? 'your choice' : `the studio's pick: ${p.flow.why}`})${p.rating ? ` · you rated it: ${flows.RATINGS[p.rating].label}` : ''}`));
   console.log(`${STATE_LABEL[p.state]}${p.status ? ` · ${p.status.text}` : ''}${p.needs_you ? `\n${C.red(`needs you: ${p.needs_you.text}`)}` : ''}\n`);
   for (const s of gates.stepView(p, pipeline)) {
     const icon = { approved: C.green('✔'), done: C.green('✔'), skipped: C.dim('–'), in_review: C.acc('●'), changes: C.red('↺'), working: '…', ready: '○', blocked: C.dim('·') }[s.state];
@@ -421,8 +526,13 @@ async function review(root, given) {
         while (!['a', 'c', 's'].includes(choice)) choice = (await rl.question(`\n${C.b('[a]')}pprove, ask for ${C.b('[c]')}hanges, or ${C.b('[s]')}kip? `)).trim().toLowerCase()[0] || '';
         if (choice === 's') continue;
         if (choice === 'a') {
-          gates.respond(root, id, s.key, sub.version, { verdict: 'approve', answers });
+          const r = gates.respond(root, id, s.key, sub.version, { verdict: 'approve', answers });
           console.log(C.green(`✔ ${s.name} approved.`));
+          if (r.project_state === 'delivered' && loadProject(root, id).flow) {
+            const v = (await rl.question(`How did it land? ${C.b('[l]')}ove it, it's ${C.b('[f]')}ine, ${C.b('[n]')}ot for me ${C.dim('(Enter skips)')}: `)).trim().toLowerCase()[0];
+            const rating = { l: 'love', f: 'fine', n: 'no' }[v];
+            if (rating) { flows.rateProject(root, id, rating); console.log(C.dim('  Noted: the studio picks your next flows with it.')); }
+          }
           continue;
         }
         console.log(C.dim('Notes, one per line, blank line to finish. Point at things with a prefix:\n  2: text        item 2\n  2@0.5,0.3: …  a spot on item 2 (fractions across, down)\n  1@12.5s: …    12.5 s into item 1\n  0¶3: …        paragraph 3 of item 0'));
@@ -470,7 +580,7 @@ async function studioView(root, all = listProjects(root)) {
 // Every pipeline with its steps and the brief's questions (what `mortiflix-music new` asks).
 function pipelinesView(root) {
   return listPipelines(existsSync(paths(root).config) ? root : null).map((p) => (p.error ? { slug: p.slug, source: p.source, error: p.error } : {
-    slug: p.slug, name: p.name, description: p.description, source: p.source,
+    slug: p.slug, name: p.name, description: p.description, source: p.source, flows: p.flows,
     steps: p.steps.map((s) => ({ key: s.key, name: s.name, review: s.review, after: s.after })),
     intake: p.intake,
   }));
@@ -481,6 +591,7 @@ function statusView(root, id) {
   const pipeline = projectPipeline(root, id);
   return {
     id: p.id, title: p.title, pipeline: pipeline.slug, state: p.state, label: STATE_LABEL[p.state],
+    flow: p.flow, rating: p.rating || null,
     status: p.status?.text || null, needs_you: p.needs_you?.text || null, working: Boolean(p.session?.running),
     steps: gates.stepView(p, pipeline).map((s) => ({ key: s.key, name: s.name, review: s.review, state: s.state, version: s.version })),
     deliverables: p.deliverables.map((d) => ({ ...d, path: join(projectPaths(root, id).state, d.file) })),
@@ -526,7 +637,9 @@ function respondCmd(root, [given, stepKey], a) {
   const answers = {};
   for (const kv of a.answer) { const [k, ...v] = String(kv).split('='); answers[k] = v.join('='); }
   const notes = a.note.map((n) => parseNote(String(n)));
+  if (a.rate !== undefined && !flows.RATINGS[a.rate]) throw new Error('--rate love, fine or no');
   const r = gates.respond(root, id, stepKey, version, { verdict: a.approve ? 'approve' : 'changes', notes, overall: typeof a.overall === 'string' ? a.overall : '', answers });
+  if (a.rate) flows.rateProject(root, id, a.rate);
   if (r.verdict === 'approve') console.log(C.green(`✔ ${view.name} v${version} approved.${r.project_state === 'delivered' ? ' Delivered.' : ''}`));
   else console.log(C.acc(`↺ Changes sent for ${view.name} v${version} (${notes.length} note${notes.length === 1 ? '' : 's'}). ${C.b('mortiflix-music run')} makes the next version.`));
 }

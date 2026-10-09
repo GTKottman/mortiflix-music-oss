@@ -1,0 +1,61 @@
+{
+  "slug": "false-ending",
+  "name": "False ending",
+  "for": "song",
+  "bucket": "stories",
+  "feels": [
+    "playful",
+    "uplifting"
+  ],
+  "summary": "It resolves and stops, long enough to believe it is over, then comes back changed and goes further.",
+  "shape": {
+    "curve": [
+      [
+        0,
+        3
+      ],
+      [
+        0.35,
+        7
+      ],
+      [
+        0.55,
+        4
+      ],
+      [
+        0.6,
+        0.5
+      ],
+      [
+        0.85,
+        8.5
+      ],
+      [
+        1,
+        5
+      ]
+    ],
+    "rules": [
+      "false_stop",
+      "peak_late"
+    ]
+  },
+  "sections": {
+    "min": 5,
+    "max": 8
+  },
+  "techniques": {
+    "required": [
+      "Fermata",
+      "Octave Displacement",
+      "Variation"
+    ],
+    "avoid": [
+      "Fade-Out"
+    ],
+    "free": 3
+  },
+  "motif": "Resolves fully before the stop; comes back an octave higher and varied.",
+  "surprise": "The stop itself: a resolved cadence, a held chord, near-silence, then the return.",
+  "ending": "After the return: a real ending that answers the false one (a different final chord)."
+}

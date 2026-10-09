@@ -154,6 +154,20 @@ input[type=file]::file-selector-button:hover { border-color: var(--muted); }
 .pick .title { color: var(--ink); font-weight: 600; font-size: 16px; }
 .pick .desc { color: var(--body); grid-column: 1; }
 .pick .chain { color: var(--muted); font-size: 13px; grid-column: 1 / -1; }
+.pick.on .title::after { content: ' ✓'; color: var(--ok); }
+.pick .meta { justify-self: end; }
+/* flows */
+h3.group { font-size: 13px; color: var(--muted); font-weight: 500; margin: 18px 0 2px; }
+details.flow { border-bottom: 1px solid var(--line); padding: 10px 0; }
+details.flow > summary { cursor: pointer; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; list-style: none; }
+details.flow > summary::-webkit-details-marker { display: none; }
+details.flow > summary .title { color: var(--ink); font-weight: 600; }
+details.flow > summary .stat { margin-left: auto; }
+details.flow[open] > summary .title { text-decoration: underline; }
+details.flow > p { margin: 8px 0 4px; }
+.flow-facts { margin: 0; padding-left: 18px; }
+.flow-md h3 { font-size: 14px; margin: 14px 0 4px; color: var(--ink); }
+.flow-md p { white-space: pre-wrap; margin: 4px 0; color: var(--body); }
 
 /* ---- activity log ---- */
 .log { font-family: var(--mono); font-size: 12.5px; line-height: 1.55; max-height: 380px; overflow: auto; padding: 4px 0; }

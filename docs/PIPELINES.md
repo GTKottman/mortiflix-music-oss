@@ -22,6 +22,7 @@ in your studio's `pipelines/` folder (a pipeline with the same slug as a built-i
   "name": "Game music loops",
   "description": "One line people see when they pick what to make.",
   "makes": "midi",
+  "flows": "kit",
   "shared_skills": ["music"],
   "intake": [
     { "id": "game", "label": "What's the game?", "type": "long", "required": true, "help": "Shown under the field." },
@@ -45,6 +46,10 @@ in your studio's `pipelines/` folder (a pipeline with the same slug as a built-i
 
 `makes` is what the studio calls the result (`music`, `midi`, or anything you like). Steps use the music engine
 through the shared `music` skill ([MUSIC.md](MUSIC.md)).
+
+`flows` says which flows its pieces take: `"song"` (one piece, in sections) or `"kit"` (loops). The brief then gets a
+**Flow** question and every project pins one ([FLOWS.md](FLOWS.md)); leave it out for a pipeline that doesn't plan its
+music in sections.
 
 ### Intake
 

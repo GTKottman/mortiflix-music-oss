@@ -1,0 +1,50 @@
+{
+  "slug": "ostinato-trance",
+  "name": "Ostinato trance",
+  "for": "song",
+  "bucket": "cycles",
+  "feels": [
+    "hypnotic",
+    "dark"
+  ],
+  "summary": "One pattern that never stops; everything around it slowly changes, so the same notes keep meaning something new.",
+  "shape": {
+    "curve": [
+      [
+        0,
+        3
+      ],
+      [
+        0.5,
+        7
+      ],
+      [
+        1,
+        4
+      ]
+    ],
+    "rules": [
+      "no_breakdown"
+    ]
+  },
+  "sections": {
+    "min": 4,
+    "max": 7
+  },
+  "techniques": {
+    "required": [
+      "Ostinato",
+      "Cross-Rhythm",
+      "Swell"
+    ],
+    "avoid": [
+      "Stop-Time",
+      "Break",
+      "Drop"
+    ],
+    "free": 2
+  },
+  "motif": "The ostinato is the motif. Other parts never play it; they comment on it.",
+  "surprise": "A part that has been playing against the ostinato's rhythm (a cross-rhythm) suddenly locks onto it.",
+  "ending": "Everything leaves; the ostinato plays alone for its last bars and stops mid-pattern."
+}

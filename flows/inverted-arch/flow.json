@@ -1,0 +1,54 @@
+{
+  "slug": "inverted-arch",
+  "name": "Inverted arch",
+  "for": "song",
+  "bucket": "stories",
+  "feels": [
+    "melancholic",
+    "cinematic"
+  ],
+  "summary": "It starts at the peak and comes apart: the loudest moment is the first, and the piece is what remains after.",
+  "shape": {
+    "curve": [
+      [
+        0,
+        9
+      ],
+      [
+        0.25,
+        7
+      ],
+      [
+        0.6,
+        4
+      ],
+      [
+        1,
+        1.5
+      ]
+    ],
+    "rules": [
+      "peak_first",
+      "ends_low"
+    ]
+  },
+  "sections": {
+    "min": 3,
+    "max": 6
+  },
+  "techniques": {
+    "required": [
+      "Diminuendo",
+      "Fragmentation",
+      "Augmentation"
+    ],
+    "avoid": [
+      "Buildup",
+      "Drop"
+    ],
+    "free": 2
+  },
+  "motif": "Stated whole and loud at the start; it breaks into fragments, then slows (augmented) as it fades.",
+  "surprise": "One fragment of the motif comes back whole, once, near the end, then is gone.",
+  "ending": "A single note, the motif's first, left ringing."
+}

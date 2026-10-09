@@ -60,6 +60,8 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ } },
   del(k) { try { localStorage.removeItem(k); } catch { /* private mode */ } },
 };
+const RATINGS = { love: 'Love it', fine: 'It\'s fine', no: 'Not for me' };
+const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const BACKEND_NAMES = { 'claude-code': 'Claude Code', 'anthropic-api': 'Claude API', demo: 'Demo' };
 const ICONS = { approved: ['✓', 'done'], done: ['✓', 'done'], skipped: ['–', ''], in_review: ['●', 'review'], changes: ['↺', 'changes'], working: ['…', ''], ready: ['○', ''], blocked: ['·', ''] };
 const STATE_WORDS = { approved: 'approved', done: 'done', skipped: 'skipped', in_review: 'waiting for you', changes: 'changes asked', working: 'in progress', ready: 'up next', blocked: 'later' };
@@ -72,6 +74,7 @@ const routes = [
   [/^new(?:\/([a-z0-9_-]+))?$/, newView, 'new'],
   [/^p\/([a-z0-9-]+)$/, projectView, 'studio'],
   [/^p\/([a-z0-9-]+)\/review\/([a-z0-9_-]+)(?:\/(\d+))?$/, reviewView, 'studio'],
+  [/^flows$/, flowsView, 'flows'],
   [/^pipelines$/, pipelinesView, 'pipelines'],
   [/^settings$/, settingsView, 'settings'],
 ];
@@ -261,6 +264,9 @@ async function projectView(id) {
     stateBlock = h('div', { class: 'state-line' }, h('span', { class: 'quiet' }, 'Cancelled.'));
   }
 
+  const ms = await api(`/api/projects/${id}/music`).catch(() => null);
+  const musicBlock = ms?.midi?.length ? musicPanel(id, ms) : null;
+
   const deliverables = p.deliverables.length ? h('section', { class: 'deliver' }, h('h2', null, 'Delivered'),
     p.deliverables.map((f) => h('div', null,
       f.kind === 'audio' ? h('audio', { src: fileUrl(id, f.file), controls: true }) : null,
@@ -268,11 +274,11 @@ async function projectView(id) {
 
   const questions = openQs.length ? h('section', null, h('h2', null, 'Questions'), openQs.map((q) => questionForm(id, q))) : null;
 
+  // How it landed: a rating teaches the studio your taste; a piece you love can become a flow of your own.
+  const tasteBlock = p.flow && (p.state === 'delivered' || p.rating) ? tasteSection(id, p, Boolean(ms?.expect)) : null;
+
   // The MIDI, once the score passes its check; and, when the brief chose to finish it in the owner's own DAW, the
   // place to import that master.
-  const ms = await api(`/api/projects/${id}/music`).catch(() => null);
-  const musicBlock = ms?.midi?.length ? musicPanel(id, ms) : null;
-
   const subsByStep = (key) => d.submissions.filter((s) => s.step === key);
   const steps = h('section', null, h('h2', null, 'Steps', h('span', { class: 'count' }, `${d.steps.filter((s) => ['approved', 'done', 'skipped'].includes(s.state)).length}/${d.steps.length}`)),
     h('ul', { class: 'rows' }, d.steps.map((s) => h('li', { class: 'row' }, icon(s.state),
@@ -304,14 +310,41 @@ async function projectView(id) {
   const open = new Set([...document.querySelectorAll('details[open][data-key]')].map((x) => x.dataset.key));
   mount(
     h('a', { class: 'crumb', href: '#/' }, '← Studio'),
-    h('div', { class: 'head' }, h('div', null, h('h1', null, p.title), h('div', { class: 'sub' }, h('span', { class: 'chip' }, d.pipeline.name), h('span', null, p.backend ? `${BACKEND_NAMES[p.backend]} backend` : ''))), actions),
-    stateBlock, musicBlock, deliverables, questions, steps, activity, brief, events, journal,
+    h('div', { class: 'head' }, h('div', null, h('h1', null, p.title), h('div', { class: 'sub' }, h('span', { class: 'chip' }, d.pipeline.name),
+      p.flow ? h('a', { class: 'chip', href: '#/flows', title: p.flow.picked === 'you' ? 'Your choice' : `The studio's pick: ${p.flow.why}` }, `Flow: ${p.flow.name}`) : null,
+      p.flow?.picked === 'studio' ? h('span', null, `the studio's pick: ${p.flow.why}`) : null,
+      h('span', null, p.backend ? `${BACKEND_NAMES[p.backend]} backend` : ''))), actions),
+    stateBlock, musicBlock, deliverables, tasteBlock, questions, steps, activity, brief, events, journal,
     h('p', { class: 'meta', style: { color: 'var(--faint)', fontSize: '12px', marginTop: '18px' } },
       `${usage.sessions} session${usage.sessions === 1 ? '' : 's'}${usage.output_tokens ? ` · ${usage.output_tokens.toLocaleString()} output tokens` : ''}${usage.cost_text ? ` · ${usage.cost_text}` : ''}`),
   );
   for (const det of document.querySelectorAll('details[data-key]')) if (open.has(det.dataset.key)) det.open = true;
   log.scrollTop = log.scrollHeight;
   current.refresh = () => projectView(id);
+}
+
+function ratingChips(current, onPick) {
+  return choiceChips(Object.values(RATINGS), current ? RATINGS[current] : null, (label) => onPick(Object.keys(RATINGS).find((k) => RATINGS[k] === label)));
+}
+
+function tasteSection(id, p, canSave) {
+  const save = h('div');
+  const openSave = () => {
+    let name = ''; const err = h('div', { class: 'err' });
+    const input = h('input', { type: 'text', placeholder: `A name, e.g. "${p.title} shape"`, oninput: (e) => { name = e.target.value; } });
+    fill(save, h('div', { class: 'field' }, h('label', null, 'Name the flow'), h('div', null, input,
+      h('div', { class: 'help' }, 'Its sections\' rise and fall, the techniques it really plays, its motif and ending become a flow you can pick for new pieces (the studio may pick it too).'),
+      err, h('div', { class: 'actions', style: { marginTop: '10px' } }, h('button', { class: 'btn solid', onclick: async () => {
+        try { const f = await api(`/api/projects/${id}/flow`, { method: 'POST', body: { name } }); toast(`${f.name} is one of your flows`); fill(save, h('p', { class: 'meta' }, `Saved as "${f.name}". Pick it in a new brief, or find it under Flows.`)); } catch (e) { err.textContent = e.message; }
+      } }, 'Save flow'), h('button', { class: 'btn link', onclick: () => fill(save, saveLink) }, 'Cancel')))));
+    input.focus();
+  };
+  const saveLink = h('button', { class: 'btn link', onclick: openSave }, 'Make this a flow of your own');
+  if (canSave) fill(save, saveLink);
+  return h('section', null, h('h2', null, 'How did it land?'),
+    ratingChips(p.rating, async (rating) => { try { await api(`/api/projects/${id}/rate`, { method: 'POST', body: { rating } }); toast('Noted: the studio picks your next flows with it'); } catch (e) { toast(e.message, true); } }),
+    h('p', { class: 'meta', style: { marginTop: '8px' } }, `It followed "${p.flow.name}". Your ratings steer which flows and techniques the studio reaches for next.`),
+    canSave ? save : null);
 }
 
 // A second click confirms (no browser dialogs).
@@ -479,6 +512,10 @@ async function reviewView(id, stepKey, versionParam) {
       h('input', { type: 'text', style: { marginTop: q.choices ? '8px' : '0' }, placeholder: q.default !== null ? `Default: ${q.default}` : 'Needs an answer', value: q.choices && q.choices.includes(draft.answers[q.id]) ? '' : (draft.answers[q.id] || ''), oninput: (e) => set(e.target.value) }));
   })) : null;
 
+  const rateBox = editable && step.delivers && d.project.flow ? h('section', null, h('h2', null, 'How did it land?', h('span', { class: 'count' }, 'optional')),
+    ratingChips(draft.rating || null, (r) => { draft.rating = r; save(); }),
+    h('p', { class: 'meta', style: { marginTop: '8px' } }, 'Sent with your approval. The studio picks your next flows with it.')) : null;
+
   const overall = editable ? h('section', null, h('h2', null, 'Anything else'), h('textarea', { placeholder: 'An overall comment (optional)', value: draft.overall, oninput: (e) => { draft.overall = e.target.value; save(); } })) : null;
 
   const err = h('div', { class: 'err' });
@@ -489,6 +526,7 @@ async function reviewView(id, stepKey, versionParam) {
     if (verdict === 'changes' && !notes.length && !draft.overall.trim()) { err.textContent = 'Say what to change: leave a note or write an overall comment.'; return; }
     try {
       await api(`/api/projects/${id}/reviews/${stepKey}/${sub.version}`, { method: 'POST', body: { verdict, notes, overall: draft.overall, answers: draft.answers } });
+      if (verdict === 'approve' && draft.rating && rateBox) await api(`/api/projects/${id}/rate`, { method: 'POST', body: { rating: draft.rating } }).catch(() => {});
       store.del(draftKey);
       toast(verdict === 'approve' ? `${step.name} approved` : 'Changes sent: the studio is on it');
       location.hash = `#/p/${id}`;
@@ -513,7 +551,7 @@ async function reviewView(id, stepKey, versionParam) {
         versions.length > 1 ? versions.map((v, i) => [i ? ' ' : '', v.version === sub.version ? h('b', null, `v${v.version}`) : h('a', { href: `#/p/${id}/review/${stepKey}/${v.version}` }, `v${v.version}`)]) : null))),
     h('div', { class: 'review' },
       h('div', { class: 'stage-wrap' }, h('div', { class: 'note-from' }, sub.note), changed, stageBox, docBox),
-      h('aside', { class: 'side' }, notesBox, questions, overall, checks,
+      h('aside', { class: 'side' }, notesBox, questions, overall, rateBox, checks,
         editable ? h('div', { class: 'decide' }, err,
           h('button', { class: 'btn primary', onclick: () => decide('approve') }, 'Approve'),
           h('button', { class: 'btn', onclick: () => decide('changes') }, 'Ask for changes')) : null)),
@@ -525,6 +563,41 @@ async function reviewView(id, stepKey, versionParam) {
 }
 
 // ---------- new piece ----------
+
+// The flow question: the studio's pick (the default), a shape or a feel for it to pick from, or one by name.
+function flowPicker(kind, cat, onChange) {
+  const list = cat.flows.filter((f) => !f.error && f.for === kind);
+  const buckets = [...new Set([...Object.keys(cat.buckets), ...list.map((f) => f.bucket)])].filter((b) => list.some((f) => f.bucket === b));
+  const feels = [...new Set(list.flatMap((f) => f.feels))].sort();
+  const MODES = { studio: 'Let the studio choose', shape: 'From a shape', feel: 'From a feel', pick: 'Pick one' };
+  let mode = 'studio';
+  const box = h('div');
+  const help = h('div', { class: 'help' });
+  const draw = () => {
+    let below = null;
+    if (mode === 'studio') help.textContent = 'It leans toward the flows you\'ve loved, away from the ones you just had, and now and then tries one you haven\'t heard.';
+    if (mode === 'shape') {
+      help.textContent = 'The studio picks a flow with this shape.';
+      below = choiceChips(buckets.map(cap), null, (v) => { const b = v.toLowerCase(); onChange(`shape:${b}`); help.textContent = `${(cat.buckets[b] || cap(b)).replace(/^[^:]+: /, '')}: ${list.filter((f) => f.bucket === b).map((f) => f.name).join(', ')}.`; });
+    }
+    if (mode === 'feel') {
+      help.textContent = 'The studio picks a flow with this feel.';
+      below = choiceChips(feels.map(cap), null, (v) => { const f = v.toLowerCase(); onChange(`feel:${f}`); help.textContent = `Flows that feel ${f}: ${list.filter((x) => x.feels.includes(f)).map((x) => x.name).join(', ')}.`; });
+    }
+    if (mode === 'pick') {
+      help.textContent = '';
+      const rows = h('div', { role: 'radiogroup', 'aria-label': 'Flows' }, list.map((f) => h('div', { class: 'pick', role: 'radio', 'aria-checked': 'false', tabindex: '0', onclick: (e) => {
+        for (const r of rows.children) { r.classList.remove('on'); r.setAttribute('aria-checked', 'false'); }
+        e.currentTarget.classList.add('on'); e.currentTarget.setAttribute('aria-checked', 'true'); onChange(f.slug);
+      } }, h('span', { class: 'title' }, f.name), h('span', { class: 'meta' }, [cap(f.bucket), ...f.feels].join(' · ')), h('div', { class: 'desc' }, f.summary))));
+      below = rows;
+    }
+    fill(box, choiceChips(Object.values(MODES), MODES[mode], (v) => { mode = Object.keys(MODES).find((k) => MODES[k] === v); onChange(mode === 'studio' ? 'studio' : null); draw(); }),
+      below ? h('div', { style: { marginTop: '10px' } }, below) : null, help);
+  };
+  draw();
+  return box;
+}
 
 async function newView(slug) {
   const pipelines = (await api('/api/pipelines')).filter((p) => !p.error);
@@ -544,6 +617,8 @@ async function newView(slug) {
   let title = '';
   let backend = null;
   let createdId = null;
+  let flow = 'studio';
+  const cat = p.flows ? await api('/api/flows').catch(() => null) : null;
   const err = h('div', { class: 'err' });
   const keysBox = h('div');
 
@@ -562,7 +637,8 @@ async function newView(slug) {
     startBtn.disabled = true;
     try {
       if (!createdId) {
-        const { id } = await api('/api/projects', { method: 'POST', body: { pipeline: slug, title, answers, backend } });
+        if (cat && !flow) throw new Error('Pick a flow (or let the studio choose).');
+        const { id } = await api('/api/projects', { method: 'POST', body: { pipeline: slug, title, answers, backend, flow: cat ? flow : 'none' } });
         for (const [fieldId, list] of Object.entries(files)) {
           for (const f of list) {
             startBtn.textContent = `Uploading ${f.name}…`;
@@ -596,12 +672,56 @@ async function newView(slug) {
     h('div', { class: 'head' }, h('div', null, h('h1', null, p.name), h('div', { class: 'sub' }, p.description))),
     h('section', null,
       field('Title', h('input', { type: 'text', placeholder: p.name, oninput: (e) => { title = e.target.value; } })),
+      cat ? field('Flow', flowPicker(p.flows, cat, (v) => { flow = v; }), { optional: true }) : null,
       fields,
       studio?.config.backend === 'demo' ? null
         : field('Made by', choiceChips([BACKEND_NAMES[studio?.config.backend] || 'Studio default', 'Demo (placeholder work, free)'], BACKEND_NAMES[studio?.config.backend] || 'Studio default', (v) => { backend = v.startsWith('Demo') ? 'demo' : null; }), { help: 'The demo walks every stage with placeholder work: handy to learn the review room.' })),
     keysBox,
     h('div', { class: 'form-end' }, err, startBtn),
   );
+}
+
+// ---------- flows ----------
+
+async function flowsView() {
+  const cat = await api('/api/flows');
+  let by = store.get('flows-by') || 'shape';
+  const body = h('div');
+  const statLine = (st) => (st ? [st.used ? `used ${st.used}×` : null, st.love ? `loved ${st.love}×` : null, st.fine ? `fine ${st.fine}×` : null, st.no ? `not for you ${st.no}×` : null].filter(Boolean).join(' · ') : '');
+  const row = (f) => {
+    const more = h('div', { class: 'flow-md' });
+    return h('details', { class: 'flow', ontoggle: async (e) => {
+      if (!e.target.open || more.dataset.loaded) return;
+      more.dataset.loaded = '1';
+      try { const x = await api(`/api/flows/${f.slug}`); fill(more, ...x.flow_md.split(/\n\s*\n/).filter((t) => t.trim()).slice(1).map((t) => (/^#+ /.test(t) ? h('h3', null, t.replace(/^#+ /, '')) : h('p', null, t.replace(/\*\*/g, ''))))); } catch (err) { fill(more, h('p', { class: 'err' }, err.message)); }
+    } },
+    h('summary', null, h('span', { class: 'title' }, f.name), f.source === 'yours' ? h('span', { class: 'chip' }, 'yours') : null, h('span', { class: 'meta' }, f.feels.join(' · ')), statLine(f.stats) ? h('span', { class: 'meta stat' }, statLine(f.stats)) : null),
+    h('p', null, f.summary),
+    h('ul', { class: 'meta flow-facts' },
+      f.techniques.required.length ? h('li', null, `Its techniques: ${f.techniques.required.join(', ')}${f.techniques.free ? `, plus ${f.techniques.free} the piece picks` : ''}`) : null,
+      f.techniques.avoid.length ? h('li', null, `Avoids: ${f.techniques.avoid.join(', ')}`) : null,
+      f.from ? h('li', null, `Made from "${f.from.title}"`) : null),
+    more);
+  };
+  const draw = () => {
+    const parts = [];
+    for (const [kind, label] of Object.entries(cat.kinds)) {
+      const list = cat.flows.filter((f) => !f.error && f.for === kind);
+      if (!list.length) continue;
+      const groups = by === 'feel'
+        ? [...new Set(list.flatMap((f) => f.feels))].sort().map((x) => [cap(x), list.filter((f) => f.feels.includes(x))])
+        : [...new Set([...Object.keys(cat.buckets), ...list.map((f) => f.bucket)])].map((b) => [cat.buckets[b] || cap(b), list.filter((f) => f.bucket === b)]).filter(([, fs]) => fs.length);
+      parts.push(h('section', null, h('h2', null, `For ${label}`, h('span', { class: 'count' }, list.length)),
+        groups.map(([g, fs]) => [h('h3', { class: 'group' }, g), fs.map(row)])));
+    }
+    const broken = cat.flows.filter((f) => f.error);
+    if (broken.length) parts.push(h('section', null, h('h2', null, 'Flows that need fixing'), broken.map((f) => h('p', { class: 'err' }, `${f.slug}: ${f.error}`))));
+    fill(body, ...parts);
+  };
+  mount(h('div', { class: 'head' }, h('div', null, h('h1', null, 'Flows'), h('div', { class: 'sub' }, 'The shape a piece takes. Pick one in a brief, or let the studio choose: it learns from how you rate what you get.'))),
+    choiceChips(['By shape', 'By feel'], by === 'feel' ? 'By feel' : 'By shape', (v) => { by = v === 'By feel' ? 'feel' : 'shape'; store.set('flows-by', by); draw(); }),
+    body);
+  draw();
 }
 
 // ---------- pipelines ----------

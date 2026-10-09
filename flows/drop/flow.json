@@ -1,0 +1,70 @@
+{
+  "slug": "drop",
+  "name": "Drop",
+  "for": "song",
+  "bucket": "builds",
+  "feels": [
+    "danceable",
+    "epic"
+  ],
+  "summary": "A build that pulls everything tight, a moment of near-silence, then everything lands at once.",
+  "shape": {
+    "curve": [
+      [
+        0,
+        3
+      ],
+      [
+        0.3,
+        5
+      ],
+      [
+        0.44,
+        8
+      ],
+      [
+        0.47,
+        1
+      ],
+      [
+        0.53,
+        1
+      ],
+      [
+        0.56,
+        10
+      ],
+      [
+        0.8,
+        9
+      ],
+      [
+        1,
+        4
+      ]
+    ],
+    "rules": [
+      "quiet_before_peak"
+    ]
+  },
+  "sections": {
+    "min": 5,
+    "max": 8
+  },
+  "techniques": {
+    "required": [
+      "Buildup",
+      "Drop",
+      "Riff"
+    ],
+    "avoid": [
+      "Rubato",
+      "Ritardando",
+      "Accelerando"
+    ],
+    "free": 3
+  },
+  "motif": "The riff is teased in the build (thinned, filtered in the sound stage, missing its last note) and played whole in the drop.",
+  "surprise": "The bar before the drop keeps only one sound from the riff, so the drop answers it.",
+  "ending": "The outro strips back to the riff alone."
+}

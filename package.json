@@ -20,6 +20,7 @@
     "src",
     "web",
     "pipelines",
+    "flows",
     "harness",
     "docs",
     "README.md",

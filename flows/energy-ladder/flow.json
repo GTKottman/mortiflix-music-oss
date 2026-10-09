@@ -1,0 +1,38 @@
+{
+  "slug": "energy-ladder",
+  "name": "Energy ladder",
+  "for": "kit",
+  "bucket": "builds",
+  "feels": [
+    "uplifting",
+    "danceable"
+  ],
+  "summary": "Loops ordered from bare to full: each one keeps the last and adds a layer, so the kit is an arrangement waiting to be dragged in order.",
+  "shape": {
+    "curve": [
+      [
+        0,
+        2
+      ],
+      [
+        1,
+        9
+      ]
+    ],
+    "rules": [
+      "rising"
+    ]
+  },
+  "techniques": {
+    "required": [
+      "Riff"
+    ],
+    "avoid": [
+      "Breakdown"
+    ],
+    "free": 2
+  },
+  "motif": "One riff carried up the ladder: hinted in the first loop, complete by the middle, doubled at the top.",
+  "surprise": "The top loop changes one chord of the riff, so it lands somewhere new.",
+  "ending": "The last loop is the full arrangement."
+}

@@ -1,0 +1,36 @@
+{
+  "slug": "layer-stack",
+  "name": "Layer stack",
+  "for": "kit",
+  "bucket": "builds",
+  "feels": [
+    "hypnotic",
+    "warm"
+  ],
+  "summary": "One groove taken apart: every loop is one or two parts, and any of them stack together in a DAW.",
+  "shape": {
+    "curve": [
+      [
+        0,
+        5
+      ],
+      [
+        1,
+        5
+      ]
+    ],
+    "rules": [
+      "layers"
+    ]
+  },
+  "techniques": {
+    "required": [
+      "Ostinato"
+    ],
+    "avoid": [],
+    "free": 2
+  },
+  "motif": "Shared out: no single loop holds all of it; stacked together they make the whole.",
+  "surprise": "Two layers that sound plain alone make a counter-melody together.",
+  "ending": "The last loop is the layer that holds the others together (often the bass)."
+}

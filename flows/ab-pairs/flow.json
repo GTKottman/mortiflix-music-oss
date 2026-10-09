@@ -1,0 +1,26 @@
+{
+  "slug": "ab-pairs",
+  "name": "A/B pairs",
+  "for": "kit",
+  "bucket": "cycles",
+  "feels": [
+    "restless",
+    "danceable"
+  ],
+  "summary": "Every idea comes as twins: a calm loop and a busy one, made to switch between in a DAW.",
+  "shape": {
+    "rules": [
+      "pairs"
+    ]
+  },
+  "techniques": {
+    "required": [
+      "Variation"
+    ],
+    "avoid": [],
+    "free": 2
+  },
+  "motif": "Each pair shares its hook: the calm twin hints it, the busy twin plays it out.",
+  "surprise": "One pair's busy twin changes the groove under the same hook.",
+  "ending": "The last pair is the strongest contrast in the kit."
+}

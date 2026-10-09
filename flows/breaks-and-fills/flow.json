@@ -1,0 +1,26 @@
+{
+  "slug": "breaks-and-fills",
+  "name": "Breaks and fills",
+  "for": "kit",
+  "bucket": "stories",
+  "feels": [
+    "danceable",
+    "restless"
+  ],
+  "summary": "The main loops plus the pieces that join them: fills, breaks and stops, everything needed to tell a track's story.",
+  "shape": {
+    "rules": []
+  },
+  "techniques": {
+    "required": [
+      "Fill",
+      "Break",
+      "Stop-Time"
+    ],
+    "avoid": [],
+    "free": 1
+  },
+  "motif": "The main loops carry the hook; the fills and breaks quote a piece of it.",
+  "surprise": "A stop-time loop that plays the hook's rhythm as hits.",
+  "ending": "A final loop that ends: a last hit and silence."
+}

@@ -1,0 +1,24 @@
+{
+  "slug": "call-and-answer",
+  "name": "Call and answer",
+  "for": "kit",
+  "bucket": "forms",
+  "feels": [
+    "playful",
+    "warm"
+  ],
+  "summary": "Loops built as conversations: in each, two parts trade phrases, and the loops answer each other.",
+  "shape": {
+    "rules": []
+  },
+  "techniques": {
+    "required": [
+      "Call and Response"
+    ],
+    "avoid": [],
+    "free": 2
+  },
+  "motif": "The call is shared across the kit; each loop answers it differently.",
+  "surprise": "One loop where the answer comes first.",
+  "ending": "The last loop leaves the call unanswered."
+}

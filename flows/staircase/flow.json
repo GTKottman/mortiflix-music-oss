@@ -1,0 +1,47 @@
+{
+  "slug": "staircase",
+  "name": "Staircase",
+  "for": "song",
+  "bucket": "builds",
+  "feels": [
+    "uplifting",
+    "epic"
+  ],
+  "summary": "Every section is one clear step up: one new layer, one new register, never a step back, until the top step.",
+  "shape": {
+    "curve": [
+      [
+        0,
+        1
+      ],
+      [
+        1,
+        10
+      ]
+    ],
+    "rules": [
+      "rising",
+      "peak_late"
+    ]
+  },
+  "sections": {
+    "min": 5,
+    "max": 8
+  },
+  "techniques": {
+    "required": [
+      "Ascending Staircase",
+      "Octave Displacement",
+      "Crescendo"
+    ],
+    "avoid": [
+      "Breakdown",
+      "Drop",
+      "Diminuendo"
+    ],
+    "free": 3
+  },
+  "motif": "The same motif on every step, each time one layer richer; at the top it jumps an octave.",
+  "surprise": "The top step lands on a borrowed chord (say bVI) instead of the expected tonic.",
+  "ending": "An abrupt, coordinated cutoff on the top step."
+}

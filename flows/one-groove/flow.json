@@ -1,0 +1,26 @@
+{
+  "slug": "one-groove",
+  "name": "One groove, many turns",
+  "for": "kit",
+  "bucket": "forms",
+  "feels": [
+    "hypnotic",
+    "danceable"
+  ],
+  "summary": "The drums never change: every loop keeps the same beat while the harmony, bass and hook turn around it.",
+  "shape": {
+    "rules": [
+      "shared_drums"
+    ]
+  },
+  "techniques": {
+    "required": [
+      "Variation"
+    ],
+    "avoid": [],
+    "free": 3
+  },
+  "motif": "The beat is the constant; every loop finds a new thing to put on it.",
+  "surprise": "One loop puts the harmony somewhere unexpected over the same beat.",
+  "ending": "The last loop is the most stripped back: the beat and one other part."
+}
