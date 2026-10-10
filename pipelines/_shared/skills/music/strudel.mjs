@@ -379,7 +379,7 @@ function writeMidiPack(manifest, dir) {
 
 // Any value a session wrote into the blueprint, in words: lists joined, objects as "channel 3, bar 1" (never
 // "[object Object]").
-const plainValue = (v) => (Array.isArray(v) ? v.map(plainValue).join('; ') : v && typeof v === 'object' ? Object.entries(v).map(([k, x]) => `${k.replace(/_/g, ' ')} ${plainValue(x)}`).join(', ') : String(v));
+function plainValue(v) { return (Array.isArray(v) ? v.map(plainValue).join('; ') : v && typeof v === 'object' ? Object.entries(v).map(([k, x]) => `${k.replace(/_/g, ' ')} ${plainValue(x)}`).join(', ') : String(v)); }
 
 function blueprintMarkdown(b, genre) {
   const chords = (c) => c.chords.map((x) => (Array.isArray(x) ? `[${x.join(' ')}]` : x)).join(' · ');
