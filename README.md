@@ -2,51 +2,110 @@
 
 <h1 align="center">Mortiflix Music</h1>
 
-<p align="center"><b>A music studio on your own machine.</b><br>
-Claude writes the music as MIDI, step by step. You approve every stage.</p>
+<p align="center"><b>Claude composes. You decide.</b><br>
+A music studio on your own machine that writes music the way a composer does, and stops for you at every turn.</p>
 
 ---
 
-Most "AI music" tools are one prompt and a slot machine, and what comes out is a finished audio file you can't
-change. Mortiflix Music works like a composer you brief: it researches the genre, plans the piece in words for you to
-approve, writes every part as notes on its own MIDI channel, checks them, and hands you **the MIDI**: every channel,
-the whole arrangement, a clip per section, and the steps to bring it into your DAW. If you want, it also gives every
-channel a sound and masters the track.
-
-It's built for **one person**: you write the briefs, you review every stage, and the studio runs on your machine.
-The work is done by Claude through **your own Claude Code login or your own Anthropic API key**. Mortiflix Music is
-the harness around it: the pipelines, the gates, the music engine that checks every note, the review room, and the
-memory that carries a project across sessions and days.
+Most "AI music" tools are one prompt and a slot machine: you get a finished audio file, and if it's wrong you pull
+the lever again. Mortiflix Music never takes the music out of your hands. Claude researches the genre, plans the
+piece in words, writes it note by note, and checks every note. **Nothing moves forward until you say so.** What you
+get at the end is **the MIDI**: every part on its own channel, ready for your DAW, or a mastered track if you want
+the studio to finish it.
 
 ```
- genre ──▶ blueprint ──▶ score ──▶ MIDI ──▶ sounds ──▶ final ──▶ delivered
-              ▲                                          ▲
-              └──────────────── you ─────────────────────┘
-       approve, note a bar on the piano roll, answer questions (the session stops at every gate)
+  you: the brief
+      │
+      ▼
+   genre ──▶ blueprint ──▶ score ──▶ check ──▶ MIDI ──▶ sounds ──▶ master ──▶ final
+ researched   in words     a layer    every     every             (or your     │
+                  │        at a time  note      channel            own DAW)    │
+                  ▼           │                                                ▼
+              YOU APPROVE   YOU WATCH IT GROW                    YOU APPROVE, NOTE A BAR,
+              or ask for                                         OR CHANGE THE NOTES YOURSELF
+              changes
 ```
 
-## Why it's built this way
+## How a song gets composed
 
-- **Notes first, sounds second.** The score holds only music: pitches, rhythm, velocity and structure, one part per
-  MIDI channel. Its MIDI is captured the moment the score passes its check, and only then is a sound chosen for each
-  channel. A sound can never change a note, so the MIDI you take into your DAW is exactly what you heard.
-- **Every stage is checked by a machine.** The engine plays the score and refuses it until every note fits the chord
-  of the moment (the harmony lock), the energy rises and falls where the blueprint said it would, every part plays and
-  nothing runs past the end. In a loop kit, no note may ring over a loop point.
-- **Sessions end at gates.** A Claude session works until it has something for you to review, submits it, writes a
-  handoff and stops. When you respond, a fresh session picks up from the journal. Waiting on you costs nothing.
-- **The rules live in code, not in the prompt.** Only you can approve a step you review. A submission is refused if
-  it doesn't report every error check for its kind of work, or doesn't answer each note you left on the last version.
-  What you reviewed is copied out of the session's reach, so it can't change afterwards.
-- **Every piece has a shape, and it's chosen.** A flow decides how the music moves (a slow burn, a rondo, a pendulum,
-  theme and variations, an inverted arch…), which techniques give it its character, and what it never does. Pick
-  one, or let the studio pick: the check then listens for the flow's shape and every planned technique in the notes.
-- **It learns your taste.** Rate what you get (love it, fine, not for me) and the studio's picks lean toward the
-  flows and techniques you love and away from what you've just had; a piece you love can become a flow of your own.
-  When you point out a real mistake, the session proposes a new check ("the bass never flams with the kick").
-  Approve it once and every future piece runs it.
-- **Pipelines are folders.** A pipeline is a `pipeline.json` (steps, how each is reviewed, the error checks), a
-  `PIPELINE.md` (the craft), and skills. Anyone can write one.
+Every piece follows the same method. Each stage leaves a file you can read, and a machine check refuses it until it's
+right.
+
+1. **You write the brief.** The genre, what the piece is about, how long, who finishes the sound (the studio, or you
+   in your DAW), and the flow: the shape the music takes (a slow burn, a rondo, an inverted arch…), or let the studio
+   pick one from what you've loved before.
+2. **The genre is researched first.** A session reads 5+ sources and writes down what makes the genre itself: its
+   tempo range, lineup, beat grids, harmony, hook traits and its unforgettable elements. The song is written *from*
+   that profile, not from a vague idea of the style.
+3. **The drama is read.** The topic becomes one transformation the listener should feel from the first bar to the
+   last, like `confusion -> recognition -> confidence`, and a list of what the music must not do.
+4. **The piece is planned in words: the blueprint.** The hook, tempo, key and meter, the chord chart for every bar,
+   at least 6 parts (most pieces have 7 to 10), each with a name, a job and its own MIDI channel, and the story as
+   named sections, each with an energy level from 0 to 10. It also names the techniques the piece will use, from 144
+   (call and response, a pedal tone, augmentation…), with where and how. For example:
+
+   | Bars | Section | What happens | Energy |
+   |---|---|---|---|
+   | 1–8 | Headlights on wet glass | Pad and sub only; the hook is held back | 2 |
+   | 9–24 | The overpass | The beat arrives; the glass hook asks, the guitar answers a bar later | 6 |
+   | 25–40 | Return of the headlights | The hook comes back an octave up; every part plays | 8 |
+   | 41–48 | Home | The hook at half speed as the city lets go; the sub finally moves | 4 |
+
+   **This is your first gate.** You read the blueprint as plain paragraphs, comment on any of them, and approve it
+   or ask for changes. Once you approve it, it's the contract: its tempo, key, chords, parts and sections are kept,
+   and changing any of them comes back to you.
+5. **The score is written a layer at a time, while you watch.** The beat, then the bass, the chords, the hook, then
+   the rest (counter-lines, answers, risers). Each layer appears on the project page as it lands, and you can play it.
+   The score is only notes: pitches, rhythm, velocity and structure. No sounds yet.
+6. **Every note is checked.** The engine plays the score and refuses it until every note fits the chord of the moment,
+   each section's measured energy follows the blueprint's curve, every planned technique can really be heard in the
+   notes (a call and response has to trade phrases), the flow's shape holds and nothing runs past the end. The session
+   fixes and checks again until there are 0 problems. Only then is the score captured as **MIDI**.
+7. **Sounds come last.** Each channel gets a sound chosen from the notes it really plays, and every sound is
+   auditioned at its part's lowest, middle and highest note. A sound can never change a note, so the MIDI you take
+   into your DAW is exactly what you heard.
+8. **It's finished, by the studio or by you.** The studio renders and masters it (-14 LUFS), or hands you the MIDI to
+   finish in your own DAW, and checks your master against the score when you import it.
+9. **Your final gate.** You hear it, see it as a piano roll, and leave notes on exact bars. In a MIDI pack or a
+   loop kit you can also change the notes yourself, right there (below). Approve it, and it's delivered. Rate how it
+   landed, and the next piece leans your way.
+
+The whole method, stage by stage: [docs/MUSIC.md](docs/MUSIC.md).
+
+## You stay in the loop
+
+Claude does the work; you keep the say. That's built into the code, not left to a prompt:
+
+- **Only you cross a gate.** A session can finish its own internal steps, but it can't approve a step you review.
+  It submits, writes a handoff and stops. When you answer, a fresh session picks up from the journal, so waiting on
+  you costs nothing, for an hour or a week.
+- **Every note you leave gets an answer.** A new version is refused unless it says, note by note, exactly what it
+  changed ("moved the hook's first entry to bar 17", never "addressed"), or why it didn't.
+- **What you reviewed can't change behind your back.** Everything you're shown is copied out of the session's reach
+  the moment it's submitted.
+- **Your words outrank the defaults.** Your brief, notes and answers come before the pipeline's own craft rules. A
+  session that disagrees does what you asked and says so.
+- **You're asked, not assumed.** When a choice is yours, the session asks it at the gate. A question with a sensible
+  default lets you just approve; one without a default waits for your answer.
+- **You can put your hands on the notes.** In a MIDI review, drag across the bars you mean, say what you want ("a
+  different drum beat") and press **Change it now**: Claude writes only those bars, the studio forces them in and
+  proves nothing else moved, and it plays back within seconds. Keep it, undo it, or try another. Or edit the notes
+  yourself in the piano roll. Your edits are put back in on every check, so no later rewrite can lose them.
+- **It learns your taste, with your permission.** What you rate, keep and undo shapes the next pieces. When you point
+  out a real mistake, the session proposes a new check ("the bass never flams with the kick"); approve it once and
+  every future piece runs it.
+- **It never burns tokens behind your back.** Two sessions in a row that move nothing forward pause the project and
+  tell you why.
+
+## Who it's for
+
+It's built for **one person**: you write the briefs, you review every stage, and the studio runs on your machine. The
+work is done by Claude through **your own Claude Code login or your own Anthropic API key**. Mortiflix Music is the
+harness around it: the pipelines, the gates, the music engine that checks every note, the review room, and the memory
+that carries a project across sessions and days.
+
+Pipelines are folders: a `pipeline.json` (the steps, how each is reviewed, the error checks), a `PIPELINE.md` (the
+craft) and skills. Anyone can write one.
 
 ## What it makes
 
