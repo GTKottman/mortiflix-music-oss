@@ -188,7 +188,7 @@ async function studioView() {
   const section = (title, list, row) => (list.length ? h('section', null, h('h2', null, title, h('span', { class: 'count' }, list.length)), h('ul', { class: 'rows' }, list.map(row))) : null);
 
   mount(
-    h('div', { class: 'head' }, h('h1', null, 'Studio'), h('div', { class: 'actions' }, h('a', { class: 'btn solid', href: '#/new' }, 'New video'))),
+    h('div', { class: 'head' }, h('h1', null, 'Studio'), h('div', { class: 'actions' }, h('a', { class: 'btn solid', href: '#/new' }, 'New project'))),
     projects.length ? null : h('section', null, h('div', { class: 'empty' },
       h('div', { class: 'big' }, 'Nothing in production yet.'),
       h('p', null, 'Pick what to make, write the brief, and approve each stage as it comes in.'),
@@ -548,46 +548,51 @@ async function reviewView(id, stepKey, versionParam) {
 
 // ---------- new video ----------
 
+// New project, like Premiere's: a small window with a name, a preset (the pipeline: it sets the project's mood) and
+// the idea. The preset's other settings start at their defaults, folded away. Create makes the project, starts it and
+// opens its canvas.
 async function newView(slug) {
   const pipelines = (await api('/api/pipelines')).filter((p) => !p.error);
-  if (!slug) {
-    mount(h('div', { class: 'head' }, h('h1', null, 'New video')),
-      h('section', null, h('h2', null, 'What are we making?'), pipelines.map((p) => h('div', { class: 'pick', onclick: () => { location.hash = `#/new/${p.slug}`; } },
-        h('a', { class: 'title', href: `#/new/${p.slug}` }, p.name), h('span', { class: 'chip' }, p.makes),
-        h('div', { class: 'desc' }, p.description),
-        h('div', { class: 'chain' }, p.steps.filter((s) => s.review !== 'internal').map((s) => s.name).join(' → '))))));
-    return;
-  }
-  const p = pipelines.find((x) => x.slug === slug);
-  if (!p) throw new Error(`no pipeline ${slug}`);
-  const answers = {};
-  const files = {};
-  for (const q of p.intake) if (q.type === 'choice' && q.default) answers[q.id] = q.default;
-  let title = '';
+  const draftKey = 'mfx-new-project';
+  const draft = store.get(draftKey) || {};
+  let p = pipelines.find((x) => x.slug === (slug || draft.slug)) || pipelines.find((x) => x.slug === 'explainer') || pipelines[0];
+  let title = draft.title || '';
+  let answers = {};
+  let files = {};
   let backend = null;
   let createdId = null;
   const err = h('div', { class: 'err' });
   const keysBox = h('div');
+  const win = h('div', { class: 'np-win', role: 'dialog', 'aria-label': 'New project' });
+  const save = () => store.set(draftKey, { slug: p.slug, title, idea: answers[ideaOf(p)?.id] || '' });
+  // "The idea" is the preset's first required long answer; other required answers sit beside it.
+  const ideaOf = (pl) => pl.intake.find((q) => q.required && q.type === 'long') || pl.intake.find((q) => q.type === 'long');
+  const reset = () => {
+    answers = {}; files = {};
+    for (const q of p.intake) if (q.type === 'choice' && q.default) answers[q.id] = q.default;
+    const idea = ideaOf(p);
+    if (idea && draft.idea && draft.slug === p.slug) answers[idea.id] = draft.idea;
+  };
+  const control = (q) => {
+    if (q.type === 'long') return h('textarea', { rows: 3, value: answers[q.id] || '', oninput: (e) => { answers[q.id] = e.target.value; save(); } });
+    if (q.type === 'choice') return choiceChips(q.choices, answers[q.id] || q.default || null, (v) => { answers[q.id] = v; draw(); });
+    if (q.type === 'files') return h('input', { type: 'file', multiple: true, onchange: (e) => { files[q.id] = [...e.target.files]; } });
+    return h('input', { type: 'text', value: answers[q.id] || '', oninput: (e) => { answers[q.id] = e.target.value; } });
+  };
+  const row = (label, ctl, help) => h('div', { class: 'np-row' }, h('label', null, label), h('div', null, ctl, help ? h('div', { class: 'help' }, help) : null));
 
-  const field = (label, control, { help, optional } = {}) => h('div', { class: 'field' }, h('label', null, label, optional ? h('div', { class: 'opt' }, 'optional') : null), h('div', null, control, help ? h('div', { class: 'help' }, help) : null));
-  const fields = p.intake.map((q) => {
-    let control;
-    if (q.type === 'long') control = h('textarea', { oninput: (e) => { answers[q.id] = e.target.value; } });
-    else if (q.type === 'choice') control = choiceChips(q.choices, q.default || null, (v) => { answers[q.id] = v; });
-    else if (q.type === 'files') control = h('input', { type: 'file', multiple: true, onchange: (e) => { files[q.id] = [...e.target.files]; } });
-    else control = h('input', { type: 'text', oninput: (e) => { answers[q.id] = e.target.value; } });
-    return field(q.label || q.id, control, { help: q.help, optional: !q.required });
-  });
-
-  const startBtn = h('button', { class: 'btn solid', onclick: async () => {
+  const createBtn = h('button', { class: 'btn primary', onclick: async () => {
     err.textContent = '';
-    startBtn.disabled = true;
+    if (!title.trim()) { err.textContent = 'Give it a name.'; return; }
+    const missing = p.intake.filter((q) => q.required && (q.type === 'files' ? !(files[q.id] || []).length : !String(answers[q.id] || '').trim()));
+    if (missing.length) { err.textContent = `${missing.map((q) => q.label || q.id).join(', ')}: needed for this preset.`; return; }
+    createBtn.disabled = true;
     try {
       if (!createdId) {
-        const { id } = await api('/api/projects', { method: 'POST', body: { pipeline: slug, title, answers, backend } });
+        const { id } = await api('/api/projects', { method: 'POST', body: { pipeline: p.slug, title, answers, backend } });
         for (const [fieldId, list] of Object.entries(files)) {
           for (const f of list) {
-            startBtn.textContent = `Uploading ${f.name}…`;
+            createBtn.textContent = `Uploading ${f.name}…`;
             await api(`/api/projects/${id}/files?field=${encodeURIComponent(fieldId)}&name=${encodeURIComponent(f.name)}`, { method: 'POST', raw: f });
           }
         }
@@ -597,33 +602,54 @@ async function newView(slug) {
       try {
         await api(`/api/projects/${id}/start`, { method: 'POST' });
       } catch (e) {
-        // Keys this project needs: ask for them right here, then Start again.
+        // Keys this project needs: ask for them right here, then Create again.
         if (!e.data?.needs_keys) { location.hash = `#/p/${id}`; throw e; }
         const { keys } = await api('/api/keys');
-        const drawKeys = (list) => fill(keysBox, h('section', null, h('h2', null, 'Before it starts'), h('p', { class: 'meta' }, e.message),
+        const drawKeys = (list) => fill(keysBox, h('div', { class: 'np-keys' }, h('p', { class: 'meta' }, e.message),
           list.filter((k) => e.data.needs_keys.includes(k.id)).map((k) => keyRow(k, (r) => drawKeys(r.keys)))));
         drawKeys(keys);
-        throw new Error('Add the key above, then Start.');
+        throw new Error('Add the key above, then Create.');
       }
-      location.hash = `#/p/${id}`;
+      store.del(draftKey);
+      location.hash = `#/p/${id}/canvas`;
     } catch (e) {
       err.textContent = e.message;
-      startBtn.disabled = false;
-      startBtn.textContent = 'Start';
+      createBtn.disabled = false;
+      createBtn.textContent = 'Create';
     }
-  } }, 'Start');
+  } }, 'Create');
 
-  mount(
-    h('a', { class: 'crumb', href: '#/new' }, '← Everything we make'),
-    h('div', { class: 'head' }, h('div', null, h('h1', null, p.name), h('div', { class: 'sub' }, p.description))),
-    h('section', null,
-      field('Title', h('input', { type: 'text', placeholder: p.name, oninput: (e) => { title = e.target.value; } })),
-      fields,
+  function draw() {
+    if (!p) return fill(win, h('div', { class: 'np-head' }, 'New project'), h('p', { class: 'err' }, 'No presets found in pipelines/. Run mortiflix setup.'));
+    const idea = ideaOf(p);
+    const main = p.intake.filter((q) => q.required && q !== idea);
+    const rest = p.intake.filter((q) => !q.required && q !== idea);
+    const summary = rest.filter((q) => q.type === 'choice').map((q) => answers[q.id]).filter(Boolean).map((v) => String(v).split(': ')[0]).join(' · ');
+    const open = store.get('mfx-new-settings-open') ?? false;
+    const settings = h('details', { class: 'np-settings', open, ontoggle: (e) => store.set('mfx-new-settings-open', e.target.open) },
+      h('summary', null, 'Preset settings', summary ? h('span', { class: 'np-sum' }, summary) : null),
+      rest.map((q) => row(q.label || q.id, control(q), q.help)),
       studio?.config.backend === 'demo' ? null
-        : field('Made by', choiceChips([BACKEND_NAMES[studio?.config.backend] || 'Studio default', 'Demo (placeholder work, free)'], BACKEND_NAMES[studio?.config.backend] || 'Studio default', (v) => { backend = v.startsWith('Demo') ? 'demo' : null; }), { help: 'The demo walks every stage with placeholder work: handy to learn the review room.' })),
-    keysBox,
-    h('div', { class: 'form-end' }, err, startBtn),
-  );
+        : row('Made by', choiceChips([BACKEND_NAMES[studio?.config.backend] || 'Studio default', 'Demo (placeholder work, free)'], backend === 'demo' ? 'Demo (placeholder work, free)' : BACKEND_NAMES[studio?.config.backend] || 'Studio default', (v) => { backend = v.startsWith('Demo') ? 'demo' : null; }),
+          'The demo walks every stage with placeholder work: handy to learn the canvas.'));
+    fill(win,
+      h('div', { class: 'np-head' }, h('span', null, 'New project'), h('a', { class: 'np-x', href: '#/', 'aria-label': 'Close' }, '×')),
+      h('div', { class: 'np-body' },
+        row('Name', h('input', { type: 'text', value: title, placeholder: 'Give it a name', oninput: (e) => { title = e.target.value; save(); } })),
+        row('Preset', h('select', { onchange: (e) => { p = pipelines.find((x) => x.slug === e.target.value); reset(); save(); draw(); } },
+          pipelines.map((x) => h('option', { value: x.slug, selected: x.slug === p.slug }, x.name))),
+        h('div', null, h('div', { class: 'help' }, p.description), h('div', { class: 'help np-chain' }, p.steps.filter((x) => x.review !== 'internal').map((x) => x.name).join(' · ')))),
+        idea ? row('The idea', control(idea), idea.help) : null,
+        main.map((q) => row(q.label || q.id, control(q), q.help)),
+        settings,
+        keysBox),
+      h('div', { class: 'np-foot' }, err, h('a', { class: 'btn', href: '#/' }, 'Cancel'), createBtn));
+  }
+
+  reset();
+  mount(h('div', { class: 'np-wrap' }, win));
+  draw();
+  win.querySelector('input[type=text]')?.focus();
 }
 
 // ---------- pipelines ----------

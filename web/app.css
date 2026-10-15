@@ -357,3 +357,20 @@ body.in-canvas main { max-width: none; padding: 0; margin: 0; }
   .cv-modes { gap: 14px; }
   .cv-status .btn { max-width: 44vw; overflow: hidden; text-overflow: ellipsis; }
 }
+
+/* ---- New project: a small window, like Premiere's (FilmCraft popup: 6 px corners, #303030 outline, shadow) ---- */
+.np-wrap { display: grid; place-items: start center; padding: 32px 0; }
+.np-win { width: min(640px, 100%); background: var(--bg); border: 1px solid var(--field-line); border-radius: var(--radius-pop); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.55); }
+.np-head { height: 32px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; border-bottom: 1px solid var(--line); color: var(--ink); font-size: 12px; }
+.np-x { color: var(--muted); text-decoration: none; font-size: 16px; }
+.np-body { padding: 8px 16px; }
+.np-row { display: grid; grid-template-columns: 96px 1fr; gap: 12px; padding: 8px 0; align-items: start; }
+.np-row > label { color: var(--muted); padding-top: 4px; }
+.np-row select { width: 100%; }
+.np-chain { color: var(--faint); }
+.np-settings { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 4px; }
+.np-settings > summary { display: flex; gap: 10px; align-items: baseline; color: var(--body); font-size: 12px; }
+.np-sum { color: var(--faint); font-size: 11px; }
+.np-foot { display: flex; gap: 10px; align-items: center; justify-content: flex-end; padding: 10px 16px; border-top: 1px solid var(--line); }
+.np-foot .err { margin-right: auto; }
+@media (max-width: 640px) { .np-row { grid-template-columns: 1fr; gap: 4px; } .np-wrap { padding: 0; } }
