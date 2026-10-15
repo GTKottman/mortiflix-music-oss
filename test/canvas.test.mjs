@@ -97,7 +97,8 @@ test('canvas: OK, Cut it and Fix; a fix starts a session that remakes only that 
   await approveUntil('music');
   let g = canvasView(root, p.id);
   assert.deepEqual(g.order.shots, ['s01', 's02', 's03', 's04']);
-  assert.equal(g.nodes.s02.state, 'ready');
+  assert.equal(g.nodes.s02.state, 'ready', 'a shot planned before the animatic is ready once it has its video');
+  assert.equal(g.nodes.s02.planned, undefined);
   const before = g.nodes.s02.versions.length;
 
   nodeAction(root, p.id, 's01', { action: 'ok' });

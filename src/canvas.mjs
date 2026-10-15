@@ -90,6 +90,7 @@ export function syncCanvas(root, id) {
       seen.add(nid);
       const n = nodes[nid] || { id: nid, kind, versions: [] };
       Object.assign(n, fields, { kind, colour: colourOf(fields.beat) });
+      delete n.planned; // a planned shot (before the animatic) is real once it has a version
       if (!n.versions.some((v) => v.sha === version.sha)) n.versions.push({ v: n.versions.length + 1, made_at: new Date().toISOString(), ...version });
       n.current = n.versions.at(-1).v;
       nodes[nid] = n;

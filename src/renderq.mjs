@@ -39,6 +39,10 @@ export class RenderQueue {
       ...(job.state === 'waiting' ? { renders_ahead: this.ahead(job) } : {}),
       ...(job.exitCode !== undefined ? { exit_code: job.exitCode } : {}),
       ...(['done', 'failed'].includes(job.state) ? { output_tail: tail } : {}),
+      ...(job.state === 'running' && job.progress ? { progress: { ...job.progress,
+        ...(job.progress.total ? { percent: Math.round((job.progress.done / job.progress.total) * 100) } : {}),
+        // Time left from the rate so far.
+        ...(job.progress.total && job.progress.done ? { seconds_left: Math.round(((Date.now() - Date.parse(job.startedAt)) / job.progress.done) * (job.progress.total - job.progress.done) / 1000) } : {}) } } : {}),
       started_at: job.startedAt || null,
       ended_at: job.endedAt || null,
     };
@@ -74,6 +78,19 @@ export class RenderQueue {
     job.proc = p;
     p.stdout.pipe(out, { end: false });
     p.stderr.pipe(out, { end: false });
+    // How far it is, read from the render's own output (Remotion's "Rendered 120/450", "Encoded …"; ffmpeg's
+    // "time=00:00:03.12"), for the owner's live view. At most one update a second.
+    const watch = (d) => {
+      const s = String(d);
+      const m = [...s.matchAll(/(Rendered|Encoded|Rendering frames|Stitching)[^\d]{0,12}(\d+)\s*\/\s*(\d+)/g)].pop();
+      const t = [...s.matchAll(/time=(\d+):(\d+):(\d+(?:\.\d+)?)/g)].pop();
+      if (m) job.progress = { phase: /Encod|Stitch/.test(m[1]) ? 'encoding' : 'rendering', done: Number(m[2]), total: Number(m[3]) };
+      else if (t) job.progress = { phase: 'encoding', seconds: Number(t[1]) * 3600 + Number(t[2]) * 60 + Number(t[3]) };
+      else return;
+      if (Date.now() - (job.shownAt || 0) > 1000) { job.shownAt = Date.now(); this.onChange(job); }
+    };
+    p.stdout.on('data', watch);
+    p.stderr.on('data', watch);
     const finish = (code, err) => {
       if (job.state !== 'running') return;
       job.exitCode = code;

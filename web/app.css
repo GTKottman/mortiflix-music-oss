@@ -490,3 +490,19 @@ button.cv-tnode { cursor: pointer; font: inherit; color: inherit; }
 .cv-skill-fix { color: var(--warn); }
 .cv-skill-text { white-space: pre-wrap; font-size: 11px; background: var(--well); border: 1px solid var(--field-line); border-radius: var(--radius); padding: 10px; margin-top: 10px; max-height: 50vh; overflow: auto; }
 @media (max-width: 900px) { .cv-grid-two { grid-template-columns: 1fr; grid-template-rows: auto auto; grid-template-areas: "one" "skills"; } }
+/* where the computer's at */
+.cv-render { padding: 6px 0 8px; border-bottom: 1px solid var(--line); }
+.cv-render-top { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--ink); }
+.cv-bar { height: 6px; background: var(--well); border: 1px solid var(--field-line); margin-top: 4px; }
+.cv-bar i { display: block; height: 100%; background: var(--focus); transition: width 0.4s linear; }
+.cv-sub { color: var(--muted); font-size: 11px; text-transform: uppercase; margin: 8px 0 4px; }
+.cv-todo ul { list-style: none; margin: 0; padding: 0; font-size: 11px; }
+.cv-todo li { display: flex; gap: 6px; padding: 1px 0; color: var(--body); }
+.cv-todo .td-completed { color: var(--muted); text-decoration: line-through; }
+.cv-todo .td-in_progress { color: var(--ink); }
+.td-mark { width: 12px; flex: none; }
+.cv-todo .td-completed .td-mark { color: var(--ok); text-decoration: none; }
+.cv-todo .td-in_progress .td-mark { color: var(--focus); }
+.cv-file-list { display: flex; flex-wrap: wrap; gap: 4px; }
+.cv-file-list code { font-size: 11px; background: var(--well); padding: 1px 5px; border-radius: var(--radius); color: var(--body); }
+.cv-counters { color: var(--muted); font-size: 11px; padding: 8px 0; border-bottom: 1px solid var(--line); margin-bottom: 6px; }

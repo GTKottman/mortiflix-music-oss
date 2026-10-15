@@ -57,7 +57,9 @@ export async function run({ root, workdir, prompt, env, transcript, onActivity, 
     if (m.type === 'assistant') {
       for (const b of m.message?.content || []) {
         if (b.type === 'text' && b.text.trim()) onActivity({ kind: 'text', text: b.text });
-        if (b.type === 'tool_use') onActivity({ kind: 'tool', text: describeTool(b.name, b.input) });
+        // The session's own to-do list goes to the live view as it is (what it's doing, what's next).
+        if (b.type === 'tool_use' && b.name === 'TodoWrite' && Array.isArray(b.input?.todos)) onActivity({ kind: 'todo', text: 'To-do list', todos: b.input.todos.slice(0, 40).map((x) => ({ content: String(x.content || '').slice(0, 200), status: x.status })) });
+        else if (b.type === 'tool_use') onActivity({ kind: 'tool', text: describeTool(b.name, b.input) });
       }
     } else if (m.type === 'user') {
       for (const b of m.message?.content || []) {

@@ -51,8 +51,11 @@ export async function run({ root, projectId, workdir, env, onActivity, signal, c
     }
     const project = loadProject(root, projectId);
     if (project.state !== 'queued' || project.questions.some((q) => !q.answered_at)) break;
-    const step = stepView(project, pipeline).find((s) => ['ready', 'working', 'changes'].includes(s.state));
+    const view = stepView(project, pipeline);
+    const step = view.find((s) => ['ready', 'working', 'changes'].includes(s.state));
     if (!step) break;
+    // Its to-do list, like a real session keeps one: the live view shows it.
+    onActivity({ kind: 'todo', text: 'To-do list', todos: view.filter((s) => !['skipped'].includes(s.state)).map((s) => ({ content: s.name, status: ['approved', 'done', 'in_review'].includes(s.state) ? 'completed' : s === step ? 'in_progress' : 'pending' })) });
     const version = step.version + 1;
     say(`Working on ${step.name}${step.state === 'changes' ? ` (v${version}, answering your notes)` : ''}.`);
     if (statusKeys.length) await mfx('status', { key: statusKeys[did % statusKeys.length], mode: 'working' });

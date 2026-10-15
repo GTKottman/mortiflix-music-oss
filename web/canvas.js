@@ -260,12 +260,33 @@ export function canvasView(ui, id, mode = 'edit') {
         } }, 'Send the answers'))) : null);
   }
 
+  // Where the computer's at, in detail: what it's doing now, the steps, any render with its progress and time left,
+  // the session's own to-do list, the files it made this session, a few counters, then everything it did.
   function drawDoing() {
+    const acts = d.activity || [];
+    let from = acts.length - 1;
+    while (from >= 0 && !/^Session started/.test(acts[from].text || '')) from--;
+    const session = from >= 0 ? acts.slice(from) : [];
+    const live = d.running && session.length && !session.some((a) => /^Session ended/.test(a.text || ''));
+    const todos = [...session].reverse().find((a) => a.kind === 'todo')?.todos || null;
+    const rel = (p) => String(p).replace(/^.*\/projects\/[a-z0-9-]+\//, '');
+    const files = [...new Set(session.filter((a) => a.kind === 'tool' && /^(Write|Edit) /.test(a.text)).map((a) => rel(a.text.replace(/^(Write|Edit) /, ''))))];
+    const tools = session.filter((a) => a.kind === 'tool').length;
+    const mins = session.length ? Math.max(0, Math.round((Date.parse(session.at(-1).t) - Date.parse(session[0].t)) / 60000)) : 0;
     const log = h('div', { class: 'log', id: `log-${id}` });
-    for (const a of d.activity || []) ui.appendLog(log, a, false);
+    for (const a of acts) if (a.kind !== 'todo') ui.appendLog(log, a, false);
+    const clockLeft = (sec) => (sec >= 60 ? `${Math.floor(sec / 60)} min ${sec % 60} s` : `${sec} s`);
     fill(doing,
       h('div', { class: 'cv-now' }, d.running ? h('span', { class: 'pulse', 'aria-hidden': 'true' }) : null, h('span', null, d.status || 'Waiting')),
       h('ol', { class: 'cv-steps' }, d.steps.map((s) => h('li', { class: `st-${s.state}` }, ui.icon(s.state), h('span', null, s.name)))),
+      (d.renders || []).map((r) => h('div', { class: 'cv-render' },
+        h('div', { class: 'cv-render-top' }, h('span', null, r.state === 'waiting' ? `Waiting to render: ${r.label}${r.renders_ahead ? ` (${r.renders_ahead} ahead)` : ''}` : `Rendering: ${r.label}`),
+          r.progress ? h('span', { class: 'cv-meta' }, [r.progress.percent !== undefined ? `${r.progress.percent}%` : null, r.progress.total ? `${r.progress.phase === 'encoding' ? 'encoded' : 'frame'} ${r.progress.done}/${r.progress.total}` : r.progress.seconds !== undefined ? `${Math.round(r.progress.seconds)} s done` : null, r.progress.seconds_left !== undefined ? `${clockLeft(r.progress.seconds_left)} left` : null].filter(Boolean).join(' · ')) : null),
+        h('div', { class: 'cv-bar' }, h('i', { style: { width: `${r.progress?.percent ?? (r.state === 'running' ? 8 : 0)}%` } })))),
+      todos ? h('div', { class: 'cv-todo' }, h('div', { class: 'cv-sub' }, 'Its to-do list'),
+        h('ul', null, todos.map((x) => h('li', { class: `td-${x.status}` }, h('span', { class: 'td-mark' }, x.status === 'completed' ? '✓' : x.status === 'in_progress' ? '●' : '○'), x.content)))) : null,
+      files.length ? h('div', { class: 'cv-files' }, h('div', { class: 'cv-sub' }, `Files this session (${files.length})`), h('div', { class: 'cv-file-list' }, files.slice(-12).map((f) => h('code', null, f)))) : null,
+      session.length ? h('div', { class: 'cv-counters' }, `${live ? 'This session' : 'Last session'}: ${mins} min · ${tools} actions · ${files.length} files`) : null,
       log);
     log.scrollTop = log.scrollHeight;
   }
