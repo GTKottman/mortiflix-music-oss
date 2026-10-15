@@ -278,6 +278,13 @@ export function finishEdit(root, id, eid, { ok, note = '' } = {}) {
     writeFileSync(cp.edits, JSON.stringify({ edits: all }, null, 2));
     syncEditCount(root, id, all);
     event(root, id, { event: ok ? 'EDIT_DONE' : 'EDIT_FAILED', details: `${eid} on ${e.label}${note ? `: ${String(note).slice(0, 200)}` : ''}` });
+    // A piece that is in the FilmCraft project gets its new version there too (filmcraft.mjs), right after.
+    if (ok) {
+      setImmediate(() => import('./filmcraft.mjs')
+        .then((f) => f.swapIntoFilmcraft(root, id, e.node))
+        .then((r) => { if (r.swapped) event(root, id, { event: 'FILMCRAFT_UPDATED', details: `${e.label} v${r.version} replaced its clip in FilmCraft (${r.via === 'app' ? 'the open app' : 'the project file'})` }); })
+        .catch((err) => event(root, id, { event: 'FILMCRAFT_UPDATE_FAILED', details: `${e.label}: ${err.message}` })));
+    }
     return e;
   });
 }

@@ -70,7 +70,7 @@ export function makeFilmcraftProject(root, id, { log = () => {} } = {}) {
     // Without separate voice lines, a shot keeps its own sound (narration and music are in it).
     prepVideo(join(state, v.file), dest, { from: v.from_sec ?? null, to: v.to_sec ?? null, audio: !lines.length && !music });
     const len = +(v.to_sec - (v.from_sec || 0)).toFixed(3);
-    files.push({ node: s.id, kind: 'shot', version: s.current, beat: s.beat || null, file: dest, label: `${s.label} · ${s.title || ''}`.trim().slice(0, 80), start_sec: +t.toFixed(3), seconds: len });
+    files.push({ node: s.id, kind: 'shot', version: s.current, beat: s.beat || null, file: dest, label: `${s.label} · ${s.title || ''}`.trim().slice(0, 80), start_sec: +t.toFixed(3), seconds: len, audio: !lines.length && !music });
     t += len;
   }
   const shotStart = Object.fromEntries(files.map((f) => [f.beat, f.start_sec]));
@@ -121,7 +121,7 @@ export function makeFilmcraftProject(root, id, { log = () => {} } = {}) {
 
   const map = {
     format: 'mortiflix.filmcraft', version: 1, project: id, fcproj, sequence: seq, fps, made_at: new Date().toISOString(), filmcraft: fc.version,
-    clips: files.map(({ node, kind, version, beat, item, clip, label, start_sec, seconds, file }) => ({ node, kind, version, beat, item, clip, label, start_sec, seconds: seconds ?? null, file })),
+    clips: files.map(({ node, kind, version, beat, item, clip, label, start_sec, seconds, file, audio }) => ({ node, kind, version, beat, item, clip, label, start_sec, seconds: seconds ?? null, file, ...(kind === 'shot' ? { audio } : {}) })),
   };
   writeFileSync(fp.map, JSON.stringify(map, null, 2));
   log(`FilmCraft project: ${fcproj} (${files.length} clips)`);
@@ -197,4 +197,47 @@ export async function filmcraftSelection(root, id, opts = {}) {
     if (c && !out.some((x) => x.node === c.node)) out.push({ clip, node: c.node, kind: c.kind, label: c.label, version: c.version });
   }
   return { open: true, selected: out };
+}
+
+// ---- a new version goes into FilmCraft ----
+
+// A piece got a new version on the canvas (the owner's request, made by a session): it replaces the old one in the
+// FilmCraft project, at the same place on the timeline, its linked sound with it. The old version stays in the bin, so
+// FilmCraft's own undo (or replacing back from the bin) brings it back. Through the open app when FilmCraft is open,
+// else straight into the project file with the headless engine.
+export async function swapIntoFilmcraft(root, id, node, { log = () => {} } = {}) {
+  const map = loadMap(root, id);
+  if (!map) return { swapped: false, why: 'no FilmCraft project' };
+  const entries = map.clips.filter((c) => c.node === node);
+  if (!entries.length) return { swapped: false, why: `${node} isn't in the FilmCraft project` };
+  const g = canvasView(root, id);
+  const n = g.nodes[node];
+  const v = n?.versions?.find((x) => x.v === n.current);
+  if (!v?.file || entries.every((c) => c.version === n.current)) return { swapped: false, why: 'already the newest version' };
+  const state = projectPaths(root, id).state;
+  const fp = filmcraftPaths(root, id);
+  const isAudio = entries[0].kind !== 'shot';
+  const dest = join(fp.media, `${n.label}-v${n.current}.${isAudio ? 'wav' : 'mp4'}`);
+  if (isAudio) prepAudio(join(state, v.file), dest);
+  else prepVideo(join(state, v.file), dest, { from: v.from_sec ?? null, to: v.to_sec ?? null, audio: entries[0].audio !== false });
+  const name = entries[0].label;
+
+  let via;
+  try {
+    await control('ui.inspect', undefined, { timeoutMs: 2500 });
+    via = 'app';
+  } catch { via = 'file'; }
+  const exec = via === 'app'
+    ? (command, params) => control('engine.execute', { command, params }, { timeoutMs: 30_000 })
+    : async (command, params) => JSON.parse(run(filmcraftCli(root).cli, ['--compact', '--project', map.fcproj, '--save', 'exec', command, JSON.stringify(params)], command).trim() || 'null');
+  const imp = await exec('file.import', { paths: [dest] });
+  if (imp?.errors?.length || !imp?.items?.length) throw new Error(`FilmCraft couldn't import ${dest}`);
+  const item = imp.items[0];
+  await exec('clip.replaceFromBin', { clips: entries.map((c) => c.clip), item });
+  for (const c of entries) await exec('clip.rename', { clip: c.clip, name });
+  if (via === 'app') await exec('file.save', {});
+  for (const c of entries) { (c.previous ||= []).push({ version: c.version, item: c.item, file: c.file }); Object.assign(c, { version: n.current, item, file: dest }); }
+  writeFileSync(fp.map, JSON.stringify(map, null, 2));
+  log(`${n.label} v${n.current} is in FilmCraft (${via === 'app' ? 'the open app' : 'the project file'})`);
+  return { swapped: true, via, node, version: n.current, item };
 }
