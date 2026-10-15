@@ -1,6 +1,8 @@
 // Mortiflix studio (web). No framework: a tiny DOM builder, hash routes, and live updates over SSE.
 // Everything the studio or a session wrote is inserted as text, never as HTML.
 
+import { canvasView } from './canvas.js';
+
 const $app = document.getElementById('app');
 const $status = document.getElementById('top-status');
 let studio = null;
@@ -73,6 +75,7 @@ const routes = [
   [/^p\/([a-z0-9-]+)$/, projectView, 'studio'],
   [/^p\/([a-z0-9-]+)\/review\/([a-z0-9_-]+)(?:\/(\d+))?$/, reviewView, 'studio'],
   [/^p\/([a-z0-9-]+)\/booth$/, boothView, 'studio'],
+  [/^p\/([a-z0-9-]+)\/canvas(?:\/(import|export))?$/, openCanvas, 'studio'],
   [/^pipelines$/, pipelinesView, 'pipelines'],
   [/^settings$/, settingsView, 'settings'],
 ];
@@ -139,6 +142,15 @@ async function loadStudio() {
     working ? h('span', null, `Working on ${working.title}`) : null,
     h('span', { class: 'chip' }, BACKEND_NAMES[studio.config.backend] || studio.config.backend),
   );
+}
+
+// ---------- the canvas (web/canvas.js) ----------
+
+async function openCanvas(id, mode) {
+  const cv = canvasView({ h, fill, api, fileUrl, clock, store, icon, appendLog, studio: () => studio }, id, mode || 'edit');
+  mount(await cv.show());
+  current.refresh = () => cv.refresh();
+  leaveView = () => cv.leave();
 }
 
 // ---------- the studio (home) ----------
@@ -304,6 +316,7 @@ async function projectView(id) {
   const journal = d.journal ? h('section', null, h('details', { 'data-key': 'journal' }, h('summary', null, 'Studio journal'), h('pre', { class: 'journal' }, d.journal))) : null;
 
   const actions = h('div', { class: 'actions' },
+    h('a', { class: 'btn', href: `#/p/${id}/canvas` }, 'Open the canvas'),
     ['queued', 'waiting'].includes(p.state) ? h('button', { class: 'btn', onclick: act('pause', 'Paused') }, 'Pause') : null,
     !['delivered', 'cancelled'].includes(p.state) ? h('button', { class: 'btn link danger', onclick: async () => { if (confirmInline(actions, 'Cancel this project?')) await act('cancel', 'Cancelled')(); } }, 'Cancel') : null);
 

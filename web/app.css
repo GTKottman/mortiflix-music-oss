@@ -286,3 +286,74 @@ details > summary { cursor: pointer; color: var(--muted); font-size: 11px; paddi
 .booth-keys { margin-top: 18px; color: var(--faint); }
 .booth-review .row { grid-template-columns: 28px 1fr auto; }
 .booth-review .main span { white-space: normal; }
+
+/* ---------- the canvas: FilmCraft's workspace (panels on black gutters, 38 px header, board at the bottom) ---------- */
+body.in-canvas { background: #000; overflow: hidden; }
+body.in-canvas > .top { display: none; }
+body.in-canvas main { max-width: none; padding: 0; margin: 0; }
+.canvas { height: 100vh; display: flex; flex-direction: column; max-width: 100vw; overflow-x: hidden; }
+.cv-head { height: 38px; flex: 0 0 38px; background: var(--header); border-bottom: 1px solid #000; display: flex; align-items: center; gap: 24px; padding: 0 12px; min-width: 0; }
+.cv-brand { display: flex; align-items: center; gap: 8px; color: var(--ink); text-decoration: none; font-weight: 600; font-size: 14px; }
+.cv-brand img { width: 26px; height: auto; }
+.cv-title { color: var(--body); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 28ch; }
+.cv-modes { display: flex; gap: 24px; align-self: stretch; }
+.cv-mode { display: flex; align-items: center; color: var(--muted); text-decoration: none; font-size: 14px; border-bottom: 2px solid transparent; padding-top: 2px; }
+.cv-mode:hover { color: var(--body); }
+.cv-mode.on { color: var(--body); border-bottom-color: var(--body); }
+.cv-mode.off { color: var(--faint); cursor: default; }
+.cv-status { margin-left: auto; display: flex; align-items: center; gap: 12px; min-width: 0; font-size: 11px; color: var(--muted); }
+.cv-live { display: flex; align-items: center; gap: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.cv-out { color: var(--muted); font-size: 11px; }
+.cv-grid { flex: 1; min-height: 0; display: grid; gap: 4px; padding: 4px; background: #000;
+  grid-template-columns: minmax(0, 1fr) 360px; grid-template-rows: minmax(0, 1fr) 236px;
+  grid-template-areas: "monitor doing" "board board"; }
+.cv-grid-one { grid-template-columns: 1fr; grid-template-rows: 1fr; grid-template-areas: "one"; }
+.cv-panel { background: var(--bg); display: flex; flex-direction: column; min-height: 0; min-width: 0; border: 0; padding: 0; }
+.cv-p-monitor { grid-area: monitor; } .cv-p-doing { grid-area: doing; } .cv-p-board { grid-area: board; }
+.cv-tabs { height: 32px; flex: 0 0 32px; display: flex; align-items: center; gap: 16px; padding: 0 10px; border-bottom: 1px solid var(--line); }
+.cv-tab { color: var(--muted); font-size: 12px; height: 100%; display: flex; align-items: center; border-bottom: 1px solid transparent; }
+.cv-tab.on { color: var(--ink); border-bottom-color: var(--ink); }
+.cv-keep { margin-left: auto; display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; cursor: pointer; }
+.cv-keep input { accent-color: var(--accent); }
+.cv-body { flex: 1; min-height: 0; overflow: auto; padding: 10px; }
+.cv-monitor { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+.cv-stage { flex: 1; min-height: 0; background: #000; position: relative; display: grid; place-items: center; }
+.cv-stage img, .cv-stage video { position: absolute; inset: 0; width: 100%; height: 100%; display: block; object-fit: contain; }
+.cv-stage audio { width: min(520px, 90%); }
+.cv-text { margin: 0; padding: 16px; color: var(--body); white-space: pre-wrap; max-height: 100%; overflow: auto; width: 100%; }
+.cv-caption { display: flex; gap: 12px; align-items: baseline; padding: 8px 10px; border-top: 1px solid var(--line); font-size: 11px; }
+.cv-label { color: var(--ink); font-size: 12px; }
+.cv-meta { color: var(--muted); }
+.cv-caption a { margin-left: auto; }
+.cv-empty { color: var(--muted); padding: 24px; }
+.cv-empty .big { color: var(--ink); font-size: 14px; margin-bottom: 6px; }
+.cv-now { display: flex; align-items: center; gap: 8px; color: var(--ink); padding-bottom: 8px; }
+.cv-steps { list-style: none; margin: 0 0 8px; padding: 0 0 8px; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 11px; color: var(--muted); }
+.cv-steps li { display: flex; align-items: center; gap: 2px; }
+.cv-steps .st-in_review, .cv-steps .st-working { color: var(--ink); }
+.cv-doing .log { max-height: none; font-size: 11px; }
+.cv-doing .log .l { grid-template-columns: 44px 12px 1fr; }
+.cv-board { padding: 8px 10px; overflow-y: hidden; }
+.cv-strip { list-style: none; margin: 0; padding: 0; display: flex; gap: 4px; height: 100%; }
+.cv-card { width: 168px; height: 100%; display: flex; flex-direction: column; text-align: left; padding: 0; border: 0; background: var(--clip-video); color: var(--clip-text); cursor: pointer; border-left: 1px solid #000; border-top: 1px solid rgba(255, 255, 255, 0.15); }
+.cv-card:hover { filter: brightness(1.06); }
+.cv-card.on { outline: 2px solid var(--selected); outline-offset: -2px; }
+.cv-thumb { flex: 1; min-height: 0; background: #000; display: grid; place-items: center; overflow: hidden; }
+.cv-thumb img, .cv-thumb video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cv-thumb.kind-audio { background: var(--clip-audio); }
+.cv-kind { color: var(--clip-text); font-size: 11px; }
+.cv-name { font-size: 11.5px; padding: 3px 6px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cv-step { font-size: 11px; padding: 0 6px 4px; color: rgba(217, 217, 217, 0.7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cv-brief { display: grid; grid-template-columns: 200px 1fr; gap: 6px 16px; margin: 0; }
+.cv-brief dt { color: var(--muted); font-size: 11px; }
+.cv-brief dd { margin: 0; color: var(--body); white-space: pre-wrap; }
+@media (max-width: 900px) {
+  body.in-canvas { overflow: auto; }
+  .canvas { height: auto; min-height: 100vh; }
+  .cv-grid { grid-template-columns: 1fr; grid-template-rows: 56vw 200px auto; grid-template-areas: "monitor" "board" "doing"; }
+  .cv-title, .cv-out, .cv-live { display: none; }
+  .cv-head { gap: 14px; padding: 0 8px; }
+  .cv-brand span { display: none; }
+  .cv-modes { gap: 14px; }
+  .cv-status .btn { max-width: 44vw; overflow: hidden; text-overflow: ellipsis; }
+}
