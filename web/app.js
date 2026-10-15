@@ -584,7 +584,7 @@ async function newView(slug) {
   const ideaOf = (pl) => pl.intake.find((q) => q.required && q.type === 'long') || pl.intake.find((q) => q.type === 'long');
   const reset = () => {
     answers = {}; files = {};
-    for (const q of p.intake) if (q.type === 'choice' && q.default) answers[q.id] = q.default;
+    for (const q of p.intake) if (q.default && q.type !== 'files') answers[q.id] = q.default;
     const idea = ideaOf(p);
     if (idea && draft.idea && draft.slug === p.slug) answers[idea.id] = draft.idea;
   };
@@ -635,6 +635,35 @@ async function newView(slug) {
     }
   } }, 'Create');
 
+  // The pencil by Preset: change the preset's name, description and default answers, and save it as your own.
+  let editing = false;
+  function presetEditor() {
+    const defs = Object.fromEntries(p.intake.filter((q) => q.type !== 'files').map((q) => [q.id, q.default || '']));
+    let name = p.source === 'studio' ? p.name : `My ${p.name.toLowerCase()}`;
+    let description = p.description;
+    const msg = h('div', { class: 'err' });
+    const ctl = (q) => (q.type === 'choice' ? customChips(q.choices, defs[q.id] || null, (v) => { defs[q.id] = v; })
+      : q.type === 'long' ? h('textarea', { rows: 2, value: defs[q.id], oninput: (e) => { defs[q.id] = e.target.value; } })
+        : h('input', { type: 'text', value: defs[q.id], oninput: (e) => { defs[q.id] = e.target.value; } }));
+    const saveBtn = h('button', { class: 'btn primary', onclick: async () => {
+      msg.textContent = '';
+      try {
+        const r = await api(`/api/pipelines/${p.slug}/preset`, { method: 'POST', body: { name, description, defaults: defs, replace: p.source === 'studio' && name === p.name } });
+        const fresh = (await api('/api/pipelines')).filter((x) => !x.error);
+        pipelines.splice(0, pipelines.length, ...fresh);
+        p = pipelines.find((x) => x.slug === r.slug);
+        editing = false; reset(); save(); draw(); toast(`Saved your preset "${r.name}"`);
+      } catch (e) { msg.textContent = e.message; }
+    } }, 'Save as my preset');
+    return h('div', { class: 'np-edit' },
+      h('div', { class: 'np-edit-head' }, `Change the preset: ${p.name}`),
+      row('Name', h('input', { type: 'text', value: name, oninput: (e) => { name = e.target.value; } })),
+      row('Description', h('textarea', { rows: 2, value: description, oninput: (e) => { description = e.target.value; } })),
+      h('div', { class: 'help np-edit-note' }, 'Default answers: every new project with this preset starts with these.'),
+      p.intake.filter((q) => q.type !== 'files').map((q) => row(q.label || q.id, ctl(q))),
+      h('div', { class: 'np-edit-foot' }, msg, h('button', { class: 'btn', onclick: () => { editing = false; draw(); } }, 'Cancel'), saveBtn));
+  }
+
   function draw() {
     if (!p) return fill(win, h('div', { class: 'np-head' }, 'New project'), h('p', { class: 'err' }, 'No presets found in pipelines/. Run mortiflix setup.'));
     const idea = ideaOf(p);
@@ -654,9 +683,11 @@ async function newView(slug) {
       h('div', { class: 'np-head' }, h('span', null, 'New project'), h('a', { class: 'np-x', href: '#/', 'aria-label': 'Close' }, '×')),
       h('div', { class: 'np-body' },
         row('Name', h('input', { type: 'text', value: title, placeholder: 'Give it a name', oninput: (e) => { title = e.target.value; save(); } })),
-        row('Preset', h('select', { onchange: (e) => { p = pipelines.find((x) => x.slug === e.target.value); reset(); save(); draw(); } },
+        row('Preset', h('div', { class: 'np-preset' }, h('select', { onchange: (e) => { p = pipelines.find((x) => x.slug === e.target.value); editing = false; reset(); save(); draw(); } },
           pipelines.map((x) => h('option', { value: x.slug, selected: x.slug === p.slug }, x.name))),
+          h('button', { class: 'btn np-pencil', title: 'Change this preset', 'aria-label': 'Change this preset', onclick: () => { editing = !editing; draw(); } }, '✎')),
         h('div', null, h('div', { class: 'help' }, p.description), h('div', { class: 'help np-chain' }, p.steps.filter((x) => x.review !== 'internal').map((x) => x.name).join(' · ')))),
+        editing ? presetEditor() : null,
         idea ? row('The idea', control(idea), idea.help) : null,
         main.map((q) => row(q.label || q.id, control(q), q.help)),
         settings,

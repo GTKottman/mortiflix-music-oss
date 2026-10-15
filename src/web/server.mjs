@@ -10,7 +10,7 @@ import { createReadStream, existsSync, statSync, readFileSync, readdirSync, real
 import { join, extname, basename, resolve } from 'node:path';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { REPO, paths, loadConfig, saveConfig, readSecret, writeSecret, readJson, isInside, UserError } from '../studio.mjs';
-import { listPipelines } from '../pipelines.mjs';
+import { listPipelines, savePreset } from '../pipelines.mjs';
 import { createProject, addIntakeFile, startProject, listProjects, loadProject, projectPaths, projectPipeline, readEvents, readJournal } from '../projects.mjs';
 import * as gates from '../gates.mjs';
 import { Runner, BACKENDS } from '../runner.mjs';
@@ -158,6 +158,10 @@ export async function startServer(root, { port = 4646, host = '127.0.0.1', runne
     }
     if (p === '/pipelines' && method === 'GET') {
       return send(res, 200, listPipelines(root).map(({ dir, ...x }) => x));
+    }
+    if ((m = p.match(/^\/pipelines\/([a-z0-9_-]+)\/preset$/)) && method === 'POST') {
+      const b = await json(req);
+      return after(savePreset(root, m[1], { name: b.name, description: b.description, defaults: b.defaults || {}, replace: Boolean(b.replace) }));
     }
     if (p === '/checks' && method === 'GET') return send(res, 200, readJson(paths(root).checks));
     if ((m = p.match(/^\/checks\/([a-z0-9-]+)$/)) && method === 'POST') {

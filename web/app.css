@@ -379,3 +379,10 @@ body.in-canvas main { max-width: none; padding: 0; margin: 0; }
 .cv-ribbon { display: block; height: 14px; line-height: 14px; padding: 0 6px; font-size: 10px; color: #000; font-weight: 600; }
 .custom-choice { display: flex; flex-direction: column; gap: 8px; }
 .custom-in { max-width: 320px; }
+.np-preset { display: flex; gap: 6px; }
+.np-pencil { flex: 0 0 auto; font-size: 13px; }
+.np-edit { border: 1px solid var(--field-line); border-radius: var(--radius); background: var(--well); padding: 6px 12px; margin: 4px 0 8px; }
+.np-edit-head { color: var(--ink); font-size: 12px; padding: 4px 0 2px; }
+.np-edit-note { padding: 6px 0 0; }
+.np-edit-foot { display: flex; gap: 10px; align-items: center; justify-content: flex-end; padding: 8px 0 4px; }
+.np-edit-foot .err { margin-right: auto; }

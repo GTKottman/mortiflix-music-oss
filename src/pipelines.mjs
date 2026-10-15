@@ -227,3 +227,41 @@ export function addPipeline(root, buf, { replace = false } = {}) {
       scripts: files.filter((f) => /\.(mjs|js|cjs|py|sh)$/.test(f)) };
   } finally { rmSync(tmp, { recursive: true, force: true }); }
 }
+
+// Your own preset (the pencil by Preset in New project): a copy of a pipeline in the studio's pipelines/ folder with
+// your name, description and default answers (any value, your own words included). Shared skills stay shared. Saving
+// again under the same name replaces your copy; a built-in pipeline is never changed.
+export function savePreset(root, fromSlug, { name, description, defaults = {}, replace = false } = {}) {
+  const src = findPipeline(root, fromSlug);
+  const clean = String(name || '').trim().slice(0, 80);
+  if (!clean) throw new UserError('give the preset a name');
+  const slug = clean.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'preset';
+  const dest = join(paths(root).pipelines, slug);
+  if (existsSync(join(builtInDir(), slug, 'pipeline.json'))) throw new UserError(`"${clean}" is the name of a built-in preset: pick another name`);
+  if (existsSync(dest) && !replace && dest !== src.dir) throw new UserError(`you already have a preset called "${clean}"`);
+  const tmp = mkdtempSync(join(tmpdir(), 'mfx-preset-'));
+  try {
+    cpSync(src.dir, join(tmp, 'p'), { recursive: true, dereference: true });
+    const def = readJson(join(tmp, 'p', 'pipeline.json'));
+    def.slug = slug;
+    def.name = clean;
+    if (description !== undefined) def.description = String(description).slice(0, 1000);
+    for (const q of def.intake || []) {
+      if (!(q.id in defaults) || q.type === 'files') continue;
+      const v = defaults[q.id] === null || defaults[q.id] === undefined ? '' : String(defaults[q.id]).slice(0, q.type === 'long' ? 20_000 : 500);
+      if (!v.trim()) { delete q.default; continue; }
+      if (q.type === 'choice' && !q.choices.includes(v)) {
+        if (q.custom === false) throw new UserError(`"${q.label || q.id}" must be one of: ${q.choices.join(', ')}`);
+        q.choices = [...q.choices, v];
+      }
+      q.default = v;
+    }
+    def.based_on = src.based_on || src.slug;
+    writeFileSync(join(tmp, 'p', 'pipeline.json'), JSON.stringify(def, null, 2) + '\n');
+    loadPipeline(join(tmp, 'p'));
+    mkdirSync(paths(root).pipelines, { recursive: true });
+    rmSync(dest, { recursive: true, force: true });
+    cpSync(join(tmp, 'p'), dest, { recursive: true });
+    return { slug, name: clean };
+  } finally { rmSync(tmp, { recursive: true, force: true }); }
+}

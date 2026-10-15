@@ -21,3 +21,23 @@ test('intake: a choice takes a custom answer; "custom": false and empty or huge 
   for (const f of ['PIPELINE.md', 'checklist.md']) writeFileSync(join(paths(root).root, 'pipelines', 'fixed-explainer', f), readFileSync(join(REPO, 'pipelines', 'explainer', f)));
   assert.throws(() => createProject(root, { pipeline: 'fixed-explainer', title: 'Fixed', answers: { topic: 'x', length: '75 s' } }), /must be one of: 30 s, 60 s, 90 s, 2 min$/);
 });
+
+test('presets: save your own copy with its own name and defaults; built-ins never change', async (t) => {
+  const { savePreset, listPipelines, findPipeline } = await import('../src/pipelines.mjs');
+  const root = tempStudio(t);
+  const r = savePreset(root, 'explainer', { name: 'Short explainer', defaults: { length: '45 s', aspect: '9:16', audience: 'city councillors' } });
+  assert.equal(r.slug, 'short-explainer');
+  const mine = findPipeline(root, 'short-explainer');
+  assert.equal(mine.source, 'studio');
+  assert.equal(mine.intake.find((q) => q.id === 'length').default, '45 s');
+  assert.ok(mine.intake.find((q) => q.id === 'length').choices.includes('45 s'));
+  assert.equal(mine.intake.find((q) => q.id === 'audience').default, 'city councillors');
+  assert.equal(findPipeline(root, 'explainer').intake.find((q) => q.id === 'length').default, '60 s');
+  assert.throws(() => savePreset(root, 'explainer', { name: 'Short explainer' }), /already have a preset/);
+  savePreset(root, 'short-explainer', { name: 'Short explainer', defaults: { length: '30 s' } });
+  assert.equal(findPipeline(root, 'short-explainer').intake.find((q) => q.id === 'length').default, '30 s');
+  assert.throws(() => savePreset(root, 'explainer', { name: 'Explainer' }), /built-in/);
+  const p = createProject(root, { pipeline: 'short-explainer', title: 'From my preset', answers: { topic: 'x', length: '30 s' } });
+  assert.equal(p.pipeline.slug, 'short-explainer');
+  assert.ok(listPipelines(root).some((x) => x.slug === 'short-explainer' && !x.error));
+});
