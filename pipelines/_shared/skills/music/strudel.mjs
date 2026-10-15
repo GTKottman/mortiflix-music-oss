@@ -27,6 +27,7 @@ import { SYNTHS, checkInstruments, instrumentCode, auditionCode, auditionNotes, 
 import { readWav, levelOf, mixBalance } from './lib/wav.mjs';
 import { masterTo, TARGET } from './lib/master.mjs';
 import { zip, dirEntries } from './lib/zip.mjs';
+import { partsProblems, varietyProblems } from './lib/variety.mjs';
 
 const args = process.argv.slice(2);
 const cmd = args.shift();
@@ -34,7 +35,7 @@ const opt = (name, dflt) => { const i = args.indexOf(`--${name}`); if (i < 0) re
 const F = {
   genre: 'music/genre.json', blueprint: opt('blueprint', 'music/blueprint.json'), instruments: 'music/instruments.json',
   notes: 'music/notes.json', check: 'music/check.json', audition: 'music/audition.json', master: 'music/master.json',
-  own: 'music/own-master/report.json', sheet: 'music/MUSIC-SHEET.md',
+  own: 'music/own-master/report.json', sheet: 'music/MUSIC-SHEET.md', recent: 'music/recent.json',
 };
 const out = opt('out', null);
 const videoSec = Number(opt('video-sec', 0)) || null;
@@ -78,6 +79,11 @@ if (cmd === 'plan') {
     const L = genre.length;
     if (L && !bp.length_fixed && (seconds < L.min_sec * 0.9 || seconds > L.max_sec * 1.1)) problems.push(`blueprint.json: the piece runs ${fmtSec(seconds)} (${bp.bars} bars at ${bp.bpm} BPM) but ${genre.name} tracks run ${fmtSec(L.min_sec)}-${fmtSec(L.max_sec)}: change "bars" and the sections (or set "length_fixed": true when the brief fixed the length)`);
   }
+  // A full arrangement, and not the last piece again.
+  problems.push(...partsProblems(bp, genre));
+  const variety = varietyProblems(bp, read(F.recent)?.pieces || []);
+  problems.push(...variety.errors);
+  for (const w of variety.warnings) console.log(`! ${w}`);
   if (bp.style !== undefined && String(bp.style).length > 1000) problems.push(`blueprint.json: "style" is ${String(bp.style).length} characters; keep it within 1000`);
   for (const r of bp.roles || []) if (!Number.isInteger(r.channel) || r.channel < 1 || r.channel > 16) problems.push(`blueprint.json: role "${r.name}" needs a channel 1-16 (drums on 10)`);
   if (new Set((bp.roles || []).map((r) => r.channel)).size !== (bp.roles || []).length) problems.push('blueprint.json: two roles share a channel; every part gets its own');

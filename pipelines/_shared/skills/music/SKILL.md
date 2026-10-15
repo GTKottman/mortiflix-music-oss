@@ -129,8 +129,15 @@ Decide in this order: the motif and hook (melody craft) → tempo, meter and sca
   material, rests. The music opens up in the gaps between lines and after the last word.
 - **The chart** is built from the scale's own chords; borrowed colours where they serve the story. Vary the harmony
   across sections, and slow the harmonic rhythm to suspend time, speed it up to drive.
-- **Roles**: 3 to 10, each on **its own MIDI channel** 1–16 (drums on 10), with a vivid name, a job in the story, and
-  an `instrument_idea` (the instruments stage chooses the real sound).
+- **Roles**: a full song or MIDI pack is a full arrangement: **at least 6 parts, most land at 7-10** (up to 14), each on
+  **its own MIDI channel** 1–16 (drums on 10), with a vivid name, a job in the story, and an `instrument_idea` (the
+  instruments stage chooses the real sound). Start from the genre's lineup, then add what the story needs: a
+  counter-line, a texture, a second percussion layer, a doubled hook, a drone. Parts enter and leave by section, so
+  6+ parts doesn't mean everything plays at once. A video's score, or a piece whose brief fixed it small, can be
+  leaner. `plan` holds a full song to 6.
+- **Every piece sounds like itself.** `music/recent.json` lists the owner's last pieces (key, tempo, meter, parts,
+  opening progression). Vary tempo, mode, meter, form and the lineup from them. `plan` refuses a blueprint with the
+  same key, tempo and opening progression as one of them, and warns when two of the three match.
 - **Songs**: the `genre_signature` names which of the genre's unforgettable elements carry the hook and the beat; the
   length comes from the genre's `length` unless the brief fixed it (then `"length_fixed": true`).
 
