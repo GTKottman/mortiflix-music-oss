@@ -386,3 +386,22 @@ body.in-canvas main { max-width: none; padding: 0; margin: 0; }
 .np-edit-note { padding: 6px 0 0; }
 .np-edit-foot { display: flex; gap: 10px; align-items: center; justify-content: flex-end; padding: 8px 0 4px; }
 .np-edit-foot .err { margin-right: auto; }
+button.cv-tab { background: none; border: 0; border-bottom: 1px solid transparent; padding: 0; cursor: pointer; font: inherit; font-size: 12px; }
+/* the noodle graph */
+.cv-nodes { position: relative; height: 100%; overflow-x: auto; overflow-y: hidden; }
+.cv-noodles { position: absolute; left: 0; top: 0; pointer-events: none; }
+.cv-noodles path { fill: none; stroke: #8d8d8d; stroke-width: 2; }
+.cv-nodes-row { position: relative; display: flex; align-items: center; gap: 40px; padding: 8px 24px; min-height: 100%; width: max-content; }
+.cv-node { position: relative; width: 180px; display: flex; flex-direction: column; text-align: left; padding: 0; border: 1px solid #000; background: var(--control-surface, #242424); color: var(--body); cursor: pointer; border-radius: var(--radius); }
+.cv-node.on { outline: 2px solid var(--selected); outline-offset: 1px; }
+.cv-node-head { display: flex; align-items: center; gap: 6px; height: 20px; padding: 0 6px 0 0; color: var(--clip-text); font-size: 11px; border-radius: var(--radius) var(--radius) 0 0; overflow: hidden; }
+.cv-node-beat { height: 100%; display: flex; align-items: center; padding: 0 6px; color: #000; font-weight: 600; font-size: 10px; }
+.cv-node-still { height: 92px; background: #000; display: grid; place-items: center; overflow: hidden; }
+.cv-node-still img { width: 100%; height: 100%; object-fit: cover; }
+.cv-node-title { font-size: 11px; padding: 4px 6px 0; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cv-node-state { font-size: 11px; padding: 0 6px 5px; color: var(--muted); }
+.cv-sock { position: absolute; top: 50%; width: 10px; height: 10px; margin-top: -5px; border-radius: 50%; background: #8d8d8d; border: 2px solid var(--bg); }
+.cv-sock.in { left: -6px; } .cv-sock.out { right: -6px; }
+.cv-tnode { position: relative; width: 104px; padding: 6px 8px; background: var(--well); border: 1px solid var(--field-line); border-radius: 12px; text-align: center; }
+.cv-tnode-kind { display: block; color: var(--faint); font-size: 10px; text-transform: uppercase; }
+.cv-tnode-name { display: block; color: var(--body); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

@@ -79,8 +79,15 @@ export async function run({ root, projectId, workdir, env, onActivity, signal, c
         items.push({ path: `out/${step.key}-v${version}/sf0${i + 1}.svg`, label });
         frames.push({ id: `sf0${i + 1}`, file: `out/${step.key}-v${version}/sf0${i + 1}.svg`, label, beats: [`b0${i + 1}`] });
       }
-      mkdirSync(join(workdir, 'design'), { recursive: true });
-      writeFileSync(join(workdir, 'design', 'frames.json'), JSON.stringify({ frames }, null, 2));
+      if (step.key === 'transitions') {
+        // The board's cuts: one between each pair of shots, so the canvas has transition nodes to show.
+        const kinds = ['Crossfade', 'Match cut on the circle', 'Push left'];
+        mkdirSync(join(workdir, 'transitions'), { recursive: true });
+        writeFileSync(join(workdir, 'transitions', 'board.json'), JSON.stringify({ cuts: BEATS.slice(1).map((_, i) => ({ id: `t0${i + 1}`, from_scene: `s0${i + 1}`, to_scene: `s0${i + 2}`, transition: kinds[i % kinds.length] })) }, null, 2));
+      } else {
+        mkdirSync(join(workdir, 'design'), { recursive: true });
+        writeFileSync(join(workdir, 'design', 'frames.json'), JSON.stringify({ frames }, null, 2));
+      }
     } else if (step.review === 'video' || step.review === 'audio') {
       if (!hasFfmpeg) {
         await mfx('needs-you', { text: 'The demo needs ffmpeg to make its placeholder video. Install ffmpeg, then resume.' });

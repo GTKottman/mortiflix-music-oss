@@ -12,6 +12,7 @@ export function canvasView(ui, id, mode = 'edit') {
   let pieces = [];
   let sel = 0;
   let keep = store.get(keepKey) ?? true;
+  let boardView = store.get(`mfx-canvas-board-${id}`) || 'shots';
   let advance = null;
 
   const monitor = h('div', { class: 'cv-body cv-monitor' });
@@ -117,6 +118,7 @@ export function canvasView(ui, id, mode = 'edit') {
 
   function drawBoard() {
     if (!pieces.length) return fill(board, h('div', { class: 'cv-empty' }, 'Pieces line up here, in order, as they are made.'));
+    if (boardView === 'nodes' && pieces[0]?.id) return drawNodes();
     fill(board, h('ol', { class: 'cv-strip' }, pieces.map((it, k) => h('li', null,
       h('button', { class: `cv-card${k === sel ? ' on' : ''}`, onclick: () => go(k, true), title: it.label, style: it.colour ? { background: it.colour.hex } : null },
         it.beatLabel ? h('span', { class: 'cv-ribbon', style: { background: it.colour?.chip } }, it.beatLabel) : null,
@@ -128,6 +130,53 @@ export function canvasView(ui, id, mode = 'edit') {
         h('span', { class: 'cv-name' }, it.label),
         h('span', { class: 'cv-step' }, it.stepName))))));
     board.querySelector('.cv-card.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+
+  // The noodle graph: the shots as nodes, left to right, each in its beat's colour, joined by noodles through a
+  // transition node (the cut between two shots). Same shots, same selection as the Shots view.
+  function drawNodes() {
+    const n = graph?.nodes || {};
+    const cutBetween = (a, b) => Object.values(n).find((x) => x.kind === 'transition' && !x.missing && x.from === a && x.to === b);
+    const items = [];
+    pieces.forEach((it, k) => {
+      const s = n[it.id] || {};
+      items.push(h('button', { class: `cv-node${k === sel ? ' on' : ''}`, 'data-k': k, onclick: () => go(k, true), title: it.label },
+        h('span', { class: 'cv-node-head', style: { background: it.colour?.hex || 'var(--clip-video)' } },
+          h('span', { class: 'cv-node-beat', style: { background: it.colour?.chip || 'transparent' } }, it.beatLabel || ''), h('span', null, s.label || it.id)),
+        h('span', { class: 'cv-node-still' }, it.still ? h('img', { src: fileUrl(id, it.still), alt: '', loading: 'lazy' }) : h('span', { class: 'cv-kind' }, it.planned ? 'Planned' : 'Shot')),
+        h('span', { class: 'cv-node-title' }, s.title || it.label),
+        h('span', { class: 'cv-node-state' }, it.planned ? 'planned' : `v${it.version} · ready`),
+        h('span', { class: 'cv-sock in', 'aria-hidden': 'true' }), h('span', { class: 'cv-sock out', 'aria-hidden': 'true' })));
+      const next = pieces[k + 1];
+      if (next) {
+        const t = cutBetween(it.id, next.id);
+        items.push(h('div', { class: 'cv-tnode', title: t ? `${t.label}: ${t.title}` : 'A cut (no transition chosen yet)' },
+          h('span', { class: 'cv-tnode-kind' }, 'Transition'), h('span', { class: 'cv-tnode-name' }, t?.title || 'Cut'),
+          h('span', { class: 'cv-sock in', 'aria-hidden': 'true' }), h('span', { class: 'cv-sock out', 'aria-hidden': 'true' })));
+      }
+    });
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'cv-noodles');
+    const row = h('div', { class: 'cv-nodes-row' }, items);
+    const wrap = h('div', { class: 'cv-nodes' }, svg, row);
+    fill(board, wrap);
+    // Noodles: from each node's out socket to the next node's in socket, drawn once the layout is known.
+    requestAnimationFrame(() => {
+      const box = wrap.getBoundingClientRect();
+      svg.setAttribute('width', row.scrollWidth); svg.setAttribute('height', row.scrollHeight);
+      const all = [...row.children];
+      const paths = [];
+      for (let i = 0; i < all.length - 1; i++) {
+        const a = all[i].querySelector('.cv-sock.out').getBoundingClientRect();
+        const b = all[i + 1].querySelector('.cv-sock.in').getBoundingClientRect();
+        const x1 = a.left + a.width / 2 - box.left + wrap.scrollLeft; const y1 = a.top + a.height / 2 - box.top + wrap.scrollTop;
+        const x2 = b.left + b.width / 2 - box.left + wrap.scrollLeft; const y2 = b.top + b.height / 2 - box.top + wrap.scrollTop;
+        const dx = Math.max(24, (x2 - x1) / 2);
+        paths.push(`<path d="M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}"/>`);
+      }
+      svg.innerHTML = paths.join('');
+      row.querySelector('.cv-node.on')?.scrollIntoView({ block: 'nearest', inline: 'center' });
+    });
   }
 
   function drawDoing() {
@@ -176,7 +225,11 @@ export function canvasView(ui, id, mode = 'edit') {
     fill(root, head, h('div', { class: 'cv-grid' },
       panel('Monitor', monitor, null, 'cv-p-monitor'),
       panel('What the AI is doing', doing, null, 'cv-p-doing'),
-      panel('Board', board, keepBox, 'cv-p-board')));
+      h('section', { class: 'cv-panel cv-p-board' },
+        h('div', { class: 'cv-tabs' },
+          ['shots', 'nodes'].map((v) => h('button', { class: `cv-tab${boardView === v ? ' on' : ''}`, onclick: () => { boardView = v; store.set(`mfx-canvas-board-${id}`, v); draw(); } }, v === 'shots' ? 'Shots' : 'Nodes')),
+          keepBox),
+        board)));
     drawMonitor();
     drawBoard();
     drawDoing();
