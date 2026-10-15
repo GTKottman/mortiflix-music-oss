@@ -21,6 +21,7 @@ import * as craft from '../craft.mjs';
 import * as booth from '../booth.mjs';
 import * as music from '../music.mjs';
 import { canvasView, nodeAction } from '../canvas.mjs';
+import * as filmcraft from '../filmcraft.mjs';
 import * as pub from '../publish.mjs';
 import { costText } from '../usage.mjs';
 
@@ -204,8 +205,14 @@ export async function startServer(root, { port = 4646, host = '127.0.0.1', runne
     if (sub === '/resume' && method === 'POST') { gates.resume(root, id); return after(); }
     if (sub === '/cancel' && method === 'POST') { gates.cancel(root, id); runner.stopProject(id); return after(); }
     if ((m = sub.match(/^\/reviews\/([a-z0-9_-]+)\/(\d+)$/)) && method === 'POST') {
-      return after(gates.respond(root, id, m[1], Number(m[2]), await json(req)));
+      const out = gates.respond(root, id, m[1], Number(m[2]), await json(req));
+      // Edit the video: the studio builds the FilmCraft project itself, right away (no session, no cost).
+      if (out.verdict === 'edit') makeFilmcraft(id);
+      return after(out);
     }
+    if (sub === '/filmcraft' && method === 'GET') return send(res, 200, { job: fcJobs.get(id) || null, map: filmcraft.loadMap(root, id) });
+    if (sub === '/filmcraft/make' && method === 'POST') { makeFilmcraft(id); return after({ started: true }); }
+    if (sub === '/filmcraft/open' && method === 'POST') return after(filmcraft.openInFilmcraft(root, id));
     if ((m = sub.match(/^\/questions\/([a-z0-9]+)$/)) && method === 'POST') {
       const { answer } = await json(req);
       return after(gates.answerQuestion(root, id, m[1], answer ?? null));
@@ -279,6 +286,22 @@ export async function startServer(root, { port = 4646, host = '127.0.0.1', runne
       return createReadStream(file).pipe(res);
     }
     return send(res, 404, { error: 'not found' });
+  }
+
+  // FilmCraft projects being made, one job per project (a few seconds of ffmpeg and filmcraft-cli).
+  const fcJobs = new Map();
+  function makeFilmcraft(id) {
+    if (fcJobs.get(id)?.state === 'making') return;
+    const job = { state: 'making', log: [], started_at: new Date().toISOString() };
+    fcJobs.set(id, job);
+    changed();
+    setImmediate(() => {
+      try {
+        const map = filmcraft.makeFilmcraftProject(root, id, { log: (l) => job.log.push(l) });
+        Object.assign(job, { state: 'ready', fcproj: map.fcproj, clips: map.clips.length });
+      } catch (e) { Object.assign(job, { state: 'failed', error: e.message }); }
+      changed();
+    });
   }
 
   // Files from a project's record (what was submitted, the deliverables). Range requests for video and audio.

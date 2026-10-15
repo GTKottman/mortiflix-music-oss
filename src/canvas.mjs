@@ -151,13 +151,18 @@ export function syncCanvas(root, id) {
     }
 
     const lines = readJson(work, 'voice/lines.json', problems);
+    const timing = Object.fromEntries((readJson(work, 'voice/timing.json', problems)?.lines || []).map((t) => [t.id, t]));
     for (const [i, l] of (Array.isArray(lines) ? lines : lines?.lines || []).entries()) {
       if (!l?.id) continue;
       const beat = String(l.id).match(/^(b\d{2,3})-/)?.[1] || null;
-      const clip = l.file || `voice/clips/${l.id}.wav`;
-      const s = workFile(work, clip) ? snapshot(clip, l.id) : null;
-      put(l.id, 'line', { label: l.id, title: String(l.script || l.text || ''), beat, order: i }, s || { sha: sha(String(l.script || l.text || '')), file: null });
+      const clip = [l.file, `voice/clips/${l.id}.wav`, `voice/clips/${l.id}.mp3`].find((c) => c && workFile(work, c));
+      const s = clip ? snapshot(clip, l.id) : null;
+      const t = timing[l.id];
+      put(l.id, 'line', { label: l.id, title: String(l.script || l.text || ''), beat, order: i, start_sec: t?.start ?? null, end_sec: t?.end ?? null }, s || { sha: sha(String(l.script || l.text || '')), file: null });
     }
+    // The music as mixed (a video's score, or the owner's own master), for the FilmCraft hand-off's music track.
+    const mix = ['music/own-master/master.wav', 'out/music/master.wav', 'out/music/score.wav'].find((f) => workFile(work, f));
+    if (mix) put('music', 'music', { label: 'Music', title: 'The music', beat: null, order: 0 }, snapshot(mix, 'music'));
 
     const bp = readJson(work, 'music/blueprint.json', problems);
     (bp?.sections || []).forEach((sec, i) => {

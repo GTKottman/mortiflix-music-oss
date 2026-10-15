@@ -337,7 +337,8 @@ export function respond(root, id, stepKey, version, { verdict, overall = '', not
     writeJson(join(pp.work, 'feedback', `${stepKey}-v${version}.json`), feedback);
     p.steps[stepKey] = {
       ...(p.steps[stepKey] || {}),
-      state: verdict === 'approve' ? 'approved' : 'changes',
+      // Editing: the final is open in FilmCraft. Nothing runs until the owner asks for a version or the big render.
+      state: verdict === 'approve' ? 'approved' : verdict === 'edit' ? 'editing' : 'changes',
       ...(verdict === 'edit' ? { edit: true } : { edit: undefined }),
       version,
       decided_at: feedback.decided_at,

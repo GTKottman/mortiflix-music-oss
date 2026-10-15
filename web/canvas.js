@@ -15,6 +15,7 @@ export function canvasView(ui, id, mode = 'edit') {
   let boardView = store.get(`mfx-canvas-board-${id}`) || 'shots';
   let tsel = null; // a transition node picked on the noodle graph: the Monitor shows the cut and the library
   let library = null;
+  let fcInfo = null;
   let rightTab = 'doing';
   const asked = h('div', { class: 'cv-body cv-questions' });
   const answers = {};
@@ -373,6 +374,7 @@ export function canvasView(ui, id, mode = 'edit') {
     const p = raw.project;
     const runner = ui.studio()?.runner;
     graph = await api(`/api/projects/${id}/canvas`).catch(() => null);
+    fcInfo = mode === 'export' ? await api(`/api/projects/${id}/filmcraft`).catch(() => null) : null;
     d = { ...raw, title: p.title, status: p.status || (p.state === 'waiting' ? 'Waiting for you' : p.state === 'done' ? 'Delivered' : null),
       running: runner?.project === id, intake: p.intake, pipelineName: raw.pipeline?.name, intakeQs: raw.pipeline?.intake || [] };
     const keyOf = (x) => x.id || `${x.step}/${x.version}/${x.i}`;
@@ -405,7 +407,21 @@ export function canvasView(ui, id, mode = 'edit') {
     const { step, sub } = f;
     const video = sub.items.find((it) => it.kind === 'video');
     const waiting = step.state === 'in_review' && step.version === sub.version;
-    const editing = step.state === 'changes' && d.project.steps?.[step.key]?.edit;
+    const editing = step.state === 'editing';
+    const job = fcInfo?.job;
+    const map = fcInfo?.map;
+    const fcBlock = () => {
+      if (job?.state === 'making') return h('p', { class: 'cv-status-text' }, `Making your FilmCraft project… ${job.log.at(-1) || ''}`);
+      if (job?.state === 'failed') return h('div', null, h('p', { class: 'err' }, `Couldn't make the FilmCraft project: ${job.error}`),
+        h('button', { class: 'btn', onclick: async () => { await api(`/api/projects/${id}/filmcraft/make`, { method: 'POST' }); } }, 'Try again'));
+      if (map) return h('div', { class: 'cv-fc' },
+        h('p', { class: 'okmsg' }, `Your FilmCraft project is ready: ${map.clips.length} clips, every shot${map.clips.some((c) => c.kind === 'line') ? ', voice line' : ''}${map.clips.some((c) => c.kind === 'music') ? ' and the music' : ''} on its own.`),
+        h('div', { class: 'cv-export-actions' }, h('button', { class: 'btn primary', onclick: async () => {
+          try { await api(`/api/projects/${id}/filmcraft/open`, { method: 'POST' }); ui.toast('Opening FilmCraft'); } catch (e) { ui.toast(e.message, true); }
+        } }, 'Open in FilmCraft')),
+        h('p', { class: 'help' }, `In FilmCraft, click a scene or a sound, then ask for a different version (coming next). The project file: ${map.fcproj}`));
+      return h('p', { class: 'cv-status-text' }, 'Making your FilmCraft project…');
+    };
     const msg = h('div', { class: 'err' });
     const decide = async (verdict) => {
       try { await api(`/api/projects/${id}/reviews/${step.key}/${sub.version}`, { method: 'POST', body: { verdict, notes: [], overall: '', answers: {} } }); ui.toast(verdict === 'approve' ? 'The video is yours' : 'Making your FilmCraft project'); }
@@ -423,7 +439,7 @@ export function canvasView(ui, id, mode = 'edit') {
             h('button', { class: 'btn', onclick: () => decide('edit') }, 'Edit the video')),
           h('p', { class: 'help' }, 'Edit the video opens it in FilmCraft as a project: every scene, voice line and music cue its own clip. Click one and ask for a different version; small changes happen before the big render.'),
           msg)
-          : editing ? h('p', { class: 'cv-status-text' }, 'Making your FilmCraft project: every scene and sound as its own clip. It opens in FilmCraft when it is ready.')
+          : editing ? fcBlock()
             : d.project.state === 'delivered' ? h('div', null, h('p', { class: 'okmsg' }, 'Delivered.'),
               (d.project.deliverables || []).map((x) => h('div', null, h('a', { href: fileUrl(id, x.file, true) }, `Download ${x.label}`))))
               : h('p', { class: 'cv-status-text' }, STATE_WORDS[step.state] || step.state)))));
