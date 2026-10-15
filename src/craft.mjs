@@ -95,8 +95,13 @@ async function gh(path, fetchImpl) {
   return res.json();
 }
 
-export async function latestRelease(id, { fetchImpl = fetch } = {}) {
-  const r = await gh(`/repos/${OWNER}/${id}/releases/latest`, fetchImpl);
+// Apps held at a version the studio was built and tested against; the owner moves a pin on (config craftPins).
+// FilmCraft: the canvas's FilmCraft hand-off and click-to-regenerate are written for 0.8.0.
+export const PINS = { filmcraft: '0.8.0' };
+export const pinFor = (config, id) => ({ ...PINS, ...(config.craftPins || {}) })[id] || null;
+
+export async function latestRelease(id, { fetchImpl = fetch, version = null } = {}) {
+  const r = await gh(version ? `/repos/${OWNER}/${id}/releases/tags/v${version}` : `/repos/${OWNER}/${id}/releases/latest`, fetchImpl);
   return { tag: r.tag_name, version: String(r.tag_name).replace(/^v/, ''), assets: Object.fromEntries(r.assets.map((a) => [a.name, a.browser_download_url])) };
 }
 
@@ -191,7 +196,7 @@ export function craftStatus(root) {
 export async function installApp(root, id, { log = () => {}, fetchImpl = fetch, platform = hostPlatform(), arch = hostArch() } = {}) {
   const a = byId(id);
   if (!a) throw new UserError(`unknown app "${id}" (${APP_IDS.join(', ')})`);
-  const rel = await latestRelease(id, { fetchImpl });
+  const rel = await latestRelease(id, { fetchImpl, version: pinFor(loadConfig(root), id) });
   const pick = pickAssets(id, Object.keys(rel.assets), { platform, arch });
   if (!pick) throw new Error(`${a.name} ${rel.version} has no build for ${platform} ${arch}`);
   const sumsUrl = rel.assets['SHA256SUMS.txt'];
