@@ -20,6 +20,7 @@ import * as setup from '../setup.mjs';
 import * as craft from '../craft.mjs';
 import * as booth from '../booth.mjs';
 import * as music from '../music.mjs';
+import { syncCanvas } from '../canvas.mjs';
 import * as pub from '../publish.mjs';
 import { costText } from '../usage.mjs';
 
@@ -199,6 +200,8 @@ export async function startServer(root, { port = 4646, host = '127.0.0.1', runne
     }
     if (sub.startsWith('/booth')) return boothApi(req, res, id, sub, method, after);
     if (sub.startsWith('/music')) return musicApi(req, res, id, sub, method, after, url);
+    // The canvas's project graph (src/canvas.mjs), rebuilt from the session's files on every read.
+    if (sub === '/canvas' && method === 'GET') return send(res, 200, syncCanvas(root, id));
     return send(res, 404, { error: 'not found' });
   }
 
@@ -263,10 +266,12 @@ export async function startServer(root, { port = 4646, host = '127.0.0.1', runne
 
   // Files from a project's record (what was submitted, the deliverables). Range requests for video and audio.
   function media(req, res, id, rel, download) {
-    // Only the submitted files: checked on the resolved path, so encoded ../ can't climb out of reviews/.
-    const base = realpathSync(join(projectPaths(root, id).state, 'reviews'));
-    const file = resolve(base, rel.replace(/^reviews\//, ''));
-    if (!rel.startsWith('reviews/') || !isInside(base, file) || file === base || !existsSync(file)) return send(res, 404, { error: 'not found' });
+    // Only the submitted files and the canvas's snapshots: checked on the resolved path, so encoded ../ can't climb out.
+    const area = rel.startsWith('reviews/') ? 'reviews' : rel.startsWith('canvas/media/') ? 'canvas/media' : null;
+    if (!area || !existsSync(join(projectPaths(root, id).state, area))) return send(res, 404, { error: 'not found' });
+    const base = realpathSync(join(projectPaths(root, id).state, area));
+    const file = resolve(base, rel.slice(area.length + 1));
+    if (!isInside(base, file) || file === base || !existsSync(file)) return send(res, 404, { error: 'not found' });
     const real = realpathSync(file);
     if (!isInside(base, real)) return send(res, 404, { error: 'not found' });
     const st = statSync(real);

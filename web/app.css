@@ -374,3 +374,6 @@ body.in-canvas main { max-width: none; padding: 0; margin: 0; }
 .np-foot { display: flex; gap: 10px; align-items: center; justify-content: flex-end; padding: 10px 16px; border-top: 1px solid var(--line); }
 .np-foot .err { margin-right: auto; }
 @media (max-width: 640px) { .np-row { grid-template-columns: 1fr; gap: 4px; } .np-wrap { padding: 0; } }
+.cv-beat { display: inline-flex; align-items: center; color: var(--ink); font-size: 11px; padding-left: 6px; line-height: 12px; }
+.cv-says { padding: 0 10px 10px; color: var(--body); font-size: 12px; }
+.cv-ribbon { display: block; height: 14px; line-height: 14px; padding: 0 6px; font-size: 10px; color: #000; font-weight: 600; }

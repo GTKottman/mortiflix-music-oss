@@ -8,6 +8,7 @@ export function canvasView(ui, id, mode = 'edit') {
   const { h, fill, api, fileUrl, clock, store } = ui;
   const keepKey = `mfx-canvas-keep-${id}`;
   let d = null;
+  let graph = null;
   let pieces = [];
   let sel = 0;
   let keep = store.get(keepKey) ?? true;
@@ -22,8 +23,26 @@ export function canvasView(ui, id, mode = 'edit') {
   const panel = (name, body, extra = null, cls = '') => h('section', { class: `cv-panel ${cls}` },
     h('div', { class: 'cv-tabs' }, h('span', { class: 'cv-tab on' }, name), extra), body);
 
+  // The shots, in film order, each in its beat's colour: from the project graph (src/canvas.mjs). A shot plays its own
+  // seconds of the animatic; a planned shot (before the animatic) shows its style frame.
+  function shotPieces() {
+    const n = graph?.nodes || {};
+    return (graph?.order?.shots || []).map((sid) => {
+      const s = n[sid];
+      const v = s.versions?.find((x) => x.v === s.current);
+      const look = s.look ? n[s.look] : null;
+      const lookFile = look?.versions?.find((x) => x.v === look.current)?.file || null;
+      const beat = s.beat ? n[s.beat] : null;
+      return { kind: v?.file ? 'shot' : lookFile ? 'image' : 'planned', id: sid, file: v?.file || lookFile, from: v?.from_sec ?? null, to: v?.to_sec ?? null,
+        still: lookFile, label: `${s.label} · ${s.title || ''}`.trim(), beatLabel: beat?.label || null, beatTitle: beat?.title || null, colour: s.colour,
+        stepName: v?.file ? 'Animatic' : 'Planned shot', version: s.current || 1, planned: !v?.file, step: null };
+    });
+  }
+
   // Every picture, video and sound the project has so far, in pipeline order (latest version of each step).
   function collect() {
+    const shots = shotPieces();
+    if (shots.length) return shots;
     const out = [];
     for (const s of d.steps) {
       const sub = d.submissions.filter((x) => x.step === s.key).at(-1);
@@ -55,6 +74,14 @@ export function canvasView(ui, id, mode = 'edit') {
 
   function media(it, { autoplay = false } = {}) {
     const url = fileUrl(id, it.file || '');
+    if (it.kind === 'shot') {
+      // Only this shot's seconds of the video: start at its first frame, stop (or go on) at its last.
+      const v = h('video', { src: `${url}#t=${it.from},${it.to}`, controls: true, preload: 'auto', playsinline: true });
+      v.addEventListener('loadedmetadata', () => { v.currentTime = it.from; if (autoplay) v.play().catch(() => {}); });
+      v.addEventListener('timeupdate', () => { if (v.currentTime >= it.to - 0.02) { v.pause(); if (keep && !v.dataset.done) { v.dataset.done = '1'; go(sel + 1, true); } } });
+      return v;
+    }
+    if (it.kind === 'planned') return h('div', { class: 'cv-empty' }, h('div', { class: 'big' }, 'Planned'), h('p', null, 'This shot is made with the animatic.'));
     if (it.kind === 'image') return h('img', { src: url, alt: it.label });
     if (it.kind === 'video') {
       const v = h('video', { src: url, controls: true, preload: 'metadata', autoplay, playsinline: true });
@@ -81,17 +108,21 @@ export function canvasView(ui, id, mode = 'edit') {
     fill(monitor,
       h('div', { class: 'cv-stage' }, media(it, { autoplay })),
       h('div', { class: 'cv-caption' },
+        it.beatLabel ? h('span', { class: 'cv-beat', style: { borderLeft: `3px solid ${it.colour?.chip || 'transparent'}` } }, it.beatLabel) : null,
         h('span', { class: 'cv-label' }, it.label),
-        h('span', { class: 'cv-meta' }, `${it.stepName} · v${it.version} · ${sel + 1} of ${pieces.length}`),
-        h('a', { href: `#/p/${id}/review/${it.step}/${it.version}` }, 'Open in the review room')));
+        h('span', { class: 'cv-meta' }, `${it.stepName} · v${it.version}${it.from !== null && it.from !== undefined ? ` · ${clock(it.from)}–${clock(it.to)}` : ''} · ${sel + 1} of ${pieces.length}`),
+        it.step ? h('a', { href: `#/p/${id}/review/${it.step}/${it.version}` }, 'Open in the review room') : null),
+      it.beatTitle ? h('div', { class: 'cv-says' }, it.beatTitle) : null);
   }
 
   function drawBoard() {
     if (!pieces.length) return fill(board, h('div', { class: 'cv-empty' }, 'Pieces line up here, in order, as they are made.'));
     fill(board, h('ol', { class: 'cv-strip' }, pieces.map((it, k) => h('li', null,
-      h('button', { class: `cv-card${k === sel ? ' on' : ''}`, onclick: () => go(k, true), title: it.label },
+      h('button', { class: `cv-card${k === sel ? ' on' : ''}`, onclick: () => go(k, true), title: it.label, style: it.colour ? { background: it.colour.hex } : null },
+        it.beatLabel ? h('span', { class: 'cv-ribbon', style: { background: it.colour?.chip } }, it.beatLabel) : null,
         h('span', { class: `cv-thumb kind-${it.kind}` },
-          it.kind === 'image' ? h('img', { src: fileUrl(id, it.file), alt: '', loading: 'lazy' })
+          it.still ? h('img', { src: fileUrl(id, it.still), alt: '', loading: 'lazy' })
+          : it.kind === 'image' ? h('img', { src: fileUrl(id, it.file), alt: '', loading: 'lazy' })
             : it.kind === 'video' ? h('video', { src: `${fileUrl(id, it.file)}#t=0.5`, preload: 'metadata', muted: true })
               : h('span', { class: 'cv-kind' }, it.kind === 'audio' ? 'Sound' : 'Text')),
         h('span', { class: 'cv-name' }, it.label),
@@ -120,11 +151,13 @@ export function canvasView(ui, id, mode = 'edit') {
     const raw = await api(`/api/projects/${id}`);
     const p = raw.project;
     const runner = ui.studio()?.runner;
+    graph = await api(`/api/projects/${id}/canvas`).catch(() => null);
     d = { ...raw, title: p.title, status: p.status || (p.state === 'waiting' ? 'Waiting for you' : p.state === 'done' ? 'Delivered' : null),
       running: runner?.project === id, intake: p.intake, pipelineName: raw.pipeline?.name, intakeQs: raw.pipeline?.intake || [] };
-    const before = pieces[sel] ? `${pieces[sel].step}/${pieces[sel].version}/${pieces[sel].i}` : null;
+    const keyOf = (x) => x.id || `${x.step}/${x.version}/${x.i}`;
+    const before = pieces[sel] ? keyOf(pieces[sel]) : null;
     pieces = collect();
-    const at = before ? pieces.findIndex((p) => `${p.step}/${p.version}/${p.i}` === before) : -1;
+    const at = before ? pieces.findIndex((x) => keyOf(x) === before) : -1;
     if (at >= 0) sel = at; else sel = Math.min(sel, Math.max(0, pieces.length - 1));
   }
 

@@ -76,6 +76,21 @@ A 404, a blocked site, a missing photo, a failed download or a tool error is nev
    turn. Don't wait or poll: the next session starts when the owner responds. If other steps are ready (steps can
    run side by side), carry on with them before you stop.
 
+## The canvas: three small files
+
+The owner works on a canvas: every beat, style frame and shot of the video in its own place, each beat in its own
+colour. The studio builds it from three files you write in the working folder (ids are forever: `b04` stays `b04` when
+it's rewritten, moved or cut, and a new beat takes the next free number):
+
+```json
+// script/beats.json (with the script)
+{ "beats": [ { "id": "b01", "words": "Every city has a heartbeat.", "visual": "A city map pulses.", "target_sec": 6 } ] }
+// design/frames.json (with the style frames)
+{ "frames": [ { "id": "sf01", "file": "out/frames/sf01-open.png", "label": "SF01 · Opening", "beats": ["b01"] } ] }
+// out/scenes.json (with the animatic, and again with the final)
+{ "made_from": "out/animatic.mp4", "fps": 30, "scenes": [ { "key": "s01", "name": "The map wakes up", "from_frame": 0, "frames": 180, "beat": "b01" } ] }
+```
+
 ## Reading the owner's response
 
 It's in `feedback/<step>-v<n>.json` and summarized in `CLAUDE.md`:

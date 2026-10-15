@@ -17,6 +17,16 @@ export function available() {
 
 const PALETTES = [['#0f172a', '#f97316'], ['#1e1b4b', '#22d3ee'], ['#052e16', '#facc15'], ['#3b0764', '#f472b6']];
 
+// The demo's script: four numbered beats, so the canvas has beats, frames, shots and lines to line up.
+const BEATS = [
+  ['Open on a single shape that becomes the logo.', 'A dot grows out of the dark.'],
+  ['Three ideas, one per beat, each on its own colour.', 'Three cards slide in from the left.'],
+  ['The ideas join into one picture.', 'The cards fold together into a circle.'],
+  ['Close on the title and a call to action.', 'The title settles; a link fades in.'],
+];
+const BEAT_SEC = 2;
+const FPS = 24;
+
 export async function run({ root, projectId, workdir, env, onActivity, signal, config }) {
   const mfx = (cmd, args) => callStudio(cmd, args, env);
   const pause = (ms = config.demoDelayMs ?? 400) => new Promise((ok) => setTimeout(ok, ms));
@@ -54,15 +64,23 @@ export async function run({ root, projectId, workdir, env, onActivity, signal, c
       questions.push({ id: 'ending', text: 'What should the last card say?', default: 'Your title and a link' });
     } else if (step.review === 'document') {
       const file = join(dir, 'script.md');
-      writeFileSync(file, `# ${project.title}: ${step.name} v${version}\n\nOpen on a single shape that becomes the logo. This is placeholder copy from the demo studio.\n\nThe middle shows three ideas, one per beat, each on its own colour.\n\nClose on the title and a call to action.\n`);
+      const beats = BEATS.map(([words, visual], i) => ({ id: `b0${i + 1}`, words: version > 1 && i === 1 ? `${words} (v${version})` : words, visual, target_sec: BEAT_SEC }));
+      writeFileSync(file, `# ${project.title}: ${step.name} v${version}\n\n${beats.map((b) => `B${b.id.slice(1)} · ${b.words}\n*Visual: ${b.visual}*`).join('\n\n')}\n`);
+      mkdirSync(join(workdir, 'script'), { recursive: true });
+      writeFileSync(join(workdir, 'script', 'beats.json'), JSON.stringify({ version, beats }, null, 2));
       items.push({ path: `out/${step.key}-v${version}/script.md`, label: `${step.name} v${version}` });
     } else if (step.review === 'frames') {
-      for (let i = 0; i < 3; i++) {
+      const frames = [];
+      for (let i = 0; i < BEATS.length; i++) {
         const [bg, fg] = PALETTES[(i + version) % PALETTES.length];
-        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080"><rect width="1920" height="1080" fill="${bg}"/><circle cx="${560 + i * 400}" cy="540" r="${180 + i * 40}" fill="${fg}" opacity="0.9"/><text x="120" y="980" font-family="sans-serif" font-size="64" fill="#fff">SF0${i + 1} · ${escapeXml(project.title).slice(0, 40)} · v${version}</text></svg>`;
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080"><rect width="1920" height="1080" fill="${bg}"/><circle cx="${460 + i * 330}" cy="540" r="${160 + i * 30}" fill="${fg}" opacity="0.9"/><text x="120" y="980" font-family="sans-serif" font-size="64" fill="#fff">SF0${i + 1} · ${escapeXml(project.title).slice(0, 40)} · v${version}</text></svg>`;
         writeFileSync(join(dir, `sf0${i + 1}.svg`), svg);
-        items.push({ path: `out/${step.key}-v${version}/sf0${i + 1}.svg`, label: `SF0${i + 1} · ${['Open', 'Middle', 'End'][i]}` });
+        const label = `SF0${i + 1} · ${['Open', 'Ideas', 'Together', 'Close'][i]}`;
+        items.push({ path: `out/${step.key}-v${version}/sf0${i + 1}.svg`, label });
+        frames.push({ id: `sf0${i + 1}`, file: `out/${step.key}-v${version}/sf0${i + 1}.svg`, label, beats: [`b0${i + 1}`] });
       }
+      mkdirSync(join(workdir, 'design'), { recursive: true });
+      writeFileSync(join(workdir, 'design', 'frames.json'), JSON.stringify({ frames }, null, 2));
     } else if (step.review === 'video' || step.review === 'audio') {
       if (!hasFfmpeg) {
         await mfx('needs-you', { text: 'The demo needs ffmpeg to make its placeholder video. Install ffmpeg, then resume.' });
@@ -70,14 +88,20 @@ export async function run({ root, projectId, workdir, env, onActivity, signal, c
         return { ok: true };
       }
       const file = step.review === 'video' ? 'preview.mp4' : 'preview.wav';
+      const sec = BEATS.length * BEAT_SEC;
       const args = step.review === 'video'
-        ? ['ffmpeg', '-y', '-loglevel', 'error', '-f', 'lavfi', '-i', `testsrc2=size=1280x720:rate=24:duration=${3 + version}`, '-f', 'lavfi', '-i', `sine=frequency=${330 + 110 * version}:duration=${3 + version}`, '-shortest', '-pix_fmt', 'yuv420p', '-c:v', 'libx264', '-c:a', 'aac', join(dir, file)]
-        : ['ffmpeg', '-y', '-loglevel', 'error', '-f', 'lavfi', '-i', `sine=frequency=440:duration=${3 + version}`, join(dir, file)];
+        ? ['ffmpeg', '-y', '-loglevel', 'error', '-f', 'lavfi', '-i', `testsrc2=size=1280x720:rate=${FPS}:duration=${sec}`, '-f', 'lavfi', '-i', `sine=frequency=${330 + 110 * version}:duration=${sec}`, '-shortest', '-pix_fmt', 'yuv420p', '-c:v', 'libx264', '-bf', '0', '-c:a', 'aac', join(dir, file)]
+        : ['ffmpeg', '-y', '-loglevel', 'error', '-f', 'lavfi', '-i', `sine=frequency=440:duration=${sec}`, join(dir, file)];
       const job = await mfx('render', { label: `${step.name} v${version}`, argv: args, cwd: workdir });
       let r = job;
       while (!['done', 'failed'].includes(r.state)) r = await mfx('render-wait', { id: job.id, seconds: 30 });
       if (r.state === 'failed') return { ok: false, error: `the placeholder render failed: ${r.output_tail}` };
       items.push({ path: `out/${step.key}-v${version}/${file}`, label: `${step.name} v${version}` });
+      // The video's scenes, one per beat: the canvas cuts the shots out of it by these frames.
+      if (step.review === 'video') {
+        writeFileSync(join(workdir, 'out', 'scenes.json'), JSON.stringify({ made_from: `out/${step.key}-v${version}/${file}`, fps: FPS,
+          scenes: BEATS.map(([words], i) => ({ key: `s0${i + 1}`, name: words.replace(/\.$/, ''), from_frame: i * BEAT_SEC * FPS, frames: BEAT_SEC * FPS, beat: `b0${i + 1}` })) }, null, 2));
+      }
     }
 
     const fb = step.last_feedback;
