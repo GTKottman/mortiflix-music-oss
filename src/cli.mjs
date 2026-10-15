@@ -97,6 +97,7 @@ export const HELP = `${C.b('mortiflix')}: a motion design studio on your machine
   mortiflix setup install <${setup.TOOLS.join('|')}>
   mortiflix setup music <strudel|none> [--midi|--no-midi]
   mortiflix setup daw <${Object.keys(setup.DAWS).join('|')}|none>
+  mortiflix setup browser [http://127.0.0.1:PORT|none] [--start "command"]   the studio browser sessions drive
   mortiflix setup assets <url>… | --clear
   mortiflix setup publish <uploadpost|postiz|none> [--url <your Postiz>] [--profile <Upload-Post profile>]`;
 
@@ -1029,6 +1030,12 @@ async function setupCmd(root, [part, ...args], a) {
   if (part === 'music' && args.length) {
     const m = setup.saveMusic(root, { engine: args[0], midi: a.midi ? true : a['no-midi'] ? false : undefined });
     return console.log(`${C.green('✔')} Music: ${m.engine === 'none' ? 'none (music steps are skipped)' : `Strudel${m.midi ? ' + MIDI pack' : ''}`}.`);
+  }
+  if (part === 'browser') {
+    if (args.length || a.start !== undefined) setup.saveBrowser(root, { cdpUrl: args[0] === 'none' ? null : args[0], start: typeof a.start === 'string' ? a.start : undefined });
+    const b = setup.browserConfig(loadConfig(root));
+    const st = await setup.browserCheck(root);
+    return console.log(`${st.ok ? C.green('✔') : C.dim('·')} Studio browser: ${st.detail}${b.start ? `\n  Started when needed with: ${b.start}` : ''}`);
   }
   if (part === 'daw' && args.length) {
     const d = setup.saveDaw(root, args[0]);

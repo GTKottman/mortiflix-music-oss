@@ -790,6 +790,21 @@ async function setupSection() {
   const field = (label, control, help) => h('div', { class: 'field' }, h('label', null, label), h('div', null, control, help ? h('div', { class: 'help' }, help) : null));
   const chip = (ok, yes, no, neutral = false) => h('span', { class: `chip ${ok ? 'ok' : neutral ? '' : 'bad'}` }, ok ? yes : no);
   const refresh = async () => { info = await api('/api/setup'); draw(); };
+  // The studio browser: a Chromium of its own that sessions drive (never your personal Chrome, never Claude in Chrome).
+  // Its start command is set from the terminal only (mortiflix setup browser --start "…"): it's a command the studio runs.
+  const browserSetup = () => {
+    const b = info.browser || {};
+    let addr = b.cdpUrl || '';
+    const status = h('span', { class: 'meta' });
+    const check = async () => { status.textContent = 'Checking…'; const r = await api('/api/setup/browser/check'); status.textContent = `${r.ok ? '✔' : '✖'} ${r.detail}${!r.ok && r.canStart ? ' (it is started before each session)' : ''}`; };
+    return h('div', { class: 'tool-row' },
+      h('div', null, h('b', null, 'Studio browser'), ' ', h('span', { class: 'meta' }, 'its own Chromium, on this computer: every session drives it with browser-harness in its own tab, never your personal Chrome or Claude in Chrome.')),
+      h('div', { class: 'actions', style: { marginTop: '8px' } },
+        h('input', { type: 'text', placeholder: 'http://127.0.0.1:9333', value: addr, style: { maxWidth: '260px' }, oninput: (e) => { addr = e.target.value; } }),
+        h('button', { class: 'btn', onclick: async () => { try { info = await api('/api/setup/browser', { method: 'PUT', body: { cdpUrl: addr.trim() || null } }); draw(); toast('Studio browser saved'); } catch (e) { toast(e.message, true); } } }, 'Save'),
+        h('button', { class: 'btn', onclick: check }, 'Check'), status),
+      h('p', { class: 'meta' }, b.start ? `Started when needed with: ${b.start}` : 'To have the studio start it when it isn\'t running: mortiflix setup browser <address> --start "<command>"'));
+  };
 
   // One tool: its status, what installing it means, an Install button and the live log while it runs.
   const UPDATABLE = ['transitions', 'strudel', 'browser-harness', 'blender-addons', 'craft'];   // the others are reused when found
@@ -905,7 +920,8 @@ async function setupSection() {
         st.assets.sites.length ? h('div', null, toolRow('browser-harness'),
           st['browser-harness'].ok && info.recordings ? h('label', { class: 'toggle' }, h('input', { type: 'checkbox', checked: /enabled/i.test(info.recordings) && !/disabled/i.test(info.recordings), onchange: async (e) => { info = await api('/api/setup/recordings', { method: 'PUT', body: { enable: e.target.checked } }); draw(); } }),
             'Keep local browser recordings (screenshots and traces of what sessions do, on this machine only)') : null,
-          h('p', { class: 'meta' }, 'Sessions use your own Chrome: sign in to these sites there. The first time, Chrome may ask you to allow remote debugging (chrome://inspect/#remote-debugging).')) : null)),
+          h('p', { class: 'meta' }, 'Sessions use your own Chrome: sign in to these sites there. The first time, Chrome may ask you to allow remote debugging (chrome://inspect/#remote-debugging).')) : null,
+        browserSetup())),
       field(part('publish').title, h('div', null, ...intro('publish'), publishSetup())),
       field(part('3d').title, h('div', null, ...intro('3d'),
         toolRow('blender'),

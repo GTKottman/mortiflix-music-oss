@@ -279,6 +279,47 @@ export function saveDaw(root, id) {
   return dawConfig(loadConfig(root));
 }
 
+// The studio's browser: sessions drive it with browser-harness over its DevTools address (loopback only), never the
+// owner's own Chrome and never Claude in Chrome. `start` (set from the terminal only: it is a command the studio runs)
+// starts it when it isn't running.
+export function browserConfig(config) {
+  const b = config.browser || {};
+  return { cdpUrl: b.cdpUrl || null, start: b.start || null };
+}
+
+export function saveBrowser(root, { cdpUrl, start } = {}) {
+  const cur = browserConfig(loadConfig(root));
+  let url = cdpUrl === undefined ? cur.cdpUrl : cdpUrl || null;
+  if (url) {
+    let u; try { u = new URL(url); } catch { throw new UserError('the browser address looks like http://127.0.0.1:9333'); }
+    if (u.protocol !== 'http:' || !['127.0.0.1', 'localhost', '[::1]'].includes(u.hostname)) throw new UserError('the studio browser must be on this computer: http://127.0.0.1:<port>');
+    url = `http://${u.hostname}:${u.port || 80}`;
+  }
+  saveConfig(root, { browser: { cdpUrl: url, start: start === undefined ? cur.start : start || null } });
+  return browserConfig(loadConfig(root));
+}
+
+export async function browserCheck(root, { timeoutMs = 1500 } = {}) {
+  const b = browserConfig(loadConfig(root));
+  if (!b.cdpUrl) return { ok: false, configured: false, detail: 'no studio browser named: sessions use browser-harness\'s default' };
+  try {
+    const r = await fetch(`${b.cdpUrl}/json/version`, { signal: AbortSignal.timeout(timeoutMs) });
+    const j = await r.json();
+    return { ok: true, configured: true, detail: `${j.Browser || 'a browser'} on ${b.cdpUrl}`, cdpUrl: b.cdpUrl };
+  } catch { return { ok: false, configured: true, detail: `nothing answers on ${b.cdpUrl}`, cdpUrl: b.cdpUrl, canStart: Boolean(b.start) }; }
+}
+
+// Before a session: the studio browser up, started with its start command if it isn't (once, up to 15 s).
+export async function ensureBrowser(root) {
+  let st = await browserCheck(root);
+  if (st.ok || !st.configured) return st;
+  const b = browserConfig(loadConfig(root));
+  if (!b.start) return st;
+  spawn(process.platform === 'win32' ? 'cmd' : 'sh', process.platform === 'win32' ? ['/c', b.start] : ['-c', b.start], { detached: true, stdio: 'ignore' }).unref();
+  for (let i = 0; i < 30 && !st.ok; i++) { await new Promise((ok) => setTimeout(ok, 500)); st = await browserCheck(root); }
+  return { ...st, started: st.ok };
+}
+
 export function assetsConfig(config) {
   return { sites: (config.assets?.sites || []).filter((s) => s && s.url) };
 }
@@ -623,6 +664,8 @@ export function sessionToolsEnv(root) {
   if (c.ok) env.MFX_CHROME = c.path;
   const daw = dawConfig(config);
   if (daw.id) env.MFX_DAW = daw.id;
+  const browser = browserConfig(config);
+  if (browser.cdpUrl) env.BU_CDP_URL = browser.cdpUrl;
   const b = blenderStatus(root);
   if (b.ok) Object.assign(env, { MFX_BLENDER: b.path }, addonsStatus(root).installed?.length ? { ...blenderEnv(root), MFX3D: join(REPO_ROOT, 'harness', 'skills', 'blender-3d') } : {});
   const crafts = craft.sessionCraft(root);
@@ -649,7 +692,9 @@ export function blenderSkillDirs(root) {
 // The browser-harness skill text, when the owner uses asset sites and the tool is installed.
 export function browserHarnessSkill(root) {
   const bin = findBrowserHarness();
-  if (!assetsConfig(loadConfig(root)).sites.length || !bin) return null;
+  // Sessions get the browser when the owner listed asset sites or named a studio browser.
+  const config = loadConfig(root);
+  if ((!assetsConfig(config).sites.length && !browserConfig(config).cdpUrl) || !bin) return null;
   const f = join(toolsDir(root), 'browser-harness', 'SKILL.md');
   if (!existsSync(f) || !statSync(f).size) {
     // Installed before this studio knew about it: ask the tool for its own skill once, and keep it.

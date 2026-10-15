@@ -5,7 +5,7 @@ import { mkdirSync, rmSync, writeFileSync, readFileSync, existsSync, appendFileS
 import { join } from 'node:path';
 import { REPO, paths, loadConfig, readSessionEnv } from './studio.mjs';
 import { sessionVoiceEnv } from './voice/index.mjs';
-import { sessionToolsEnv } from './setup.mjs';
+import { sessionToolsEnv, ensureBrowser } from './setup.mjs';
 import { listProjects, loadProject, projectPaths, projectPipeline, update, event, readEvents, now } from './projects.mjs';
 import { settle, needsYou } from './gates.mjs';
 import { projectMissingKeys, missingKeysText } from './keys.mjs';
@@ -136,6 +136,13 @@ export class Runner extends EventEmitter {
       // Keys and settings for the session: session.env, the studio's voice (its key only if it narrates with it), and the
       // tools setup installed (Strudel, Chrome, the studio's Blender) with the owner's music and asset choices.
       const sessionEnv = { ...readSessionEnv(root), ...sessionVoiceEnv(root), ...sessionToolsEnv(root), MFX_HOME: REPO };
+      // The studio browser: up before the session (started if it can be), and this session's own browser-harness name.
+      if (sessionEnv.BU_CDP_URL) {
+        const b = await ensureBrowser(root);
+        if (b.started) this.addActivity(projectId, { kind: 'info', text: `Started the studio browser (${b.detail}).` });
+        else if (!b.ok) this.addActivity(projectId, { kind: 'info', text: `The studio browser isn't answering (${b.detail}): the session works without it.` });
+        sessionEnv.BU_NAME = `mfx-${projectId.slice(-4)}-${String(sessionId).replace(/[^a-z0-9]/gi, '').slice(-8)}`;
+      }
       bridge = await openBridge({ root, projectId, sessionId, workdir: pp.work, renders: this.renders, sessionEnv });
       this.addActivity(projectId, { kind: 'info', text: `Session started (${config.backend}). ${reason}` });
       result = await backend.run({

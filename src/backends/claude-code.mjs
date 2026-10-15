@@ -24,6 +24,8 @@ export const PARENT_SESSION_VARS = ['CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT', 'CLA
 export async function run({ root, workdir, prompt, env, transcript, onActivity, signal, config }) {
   const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose', ...withCraft(config.claudeArgs || [], workdir)];
   if (config.model) args.push('--model', config.model);
+  // Sessions use the studio browser through browser-harness; Claude in Chrome would drive the owner's own Chrome.
+  if (!args.includes('--disallowedTools')) args.push('--disallowedTools', 'mcp__claude-in-chrome__*');
   const sessionEnv = {
     ...process.env,
     ...env,

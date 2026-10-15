@@ -118,6 +118,9 @@ export async function startServer(root, { port = 4646, host = '127.0.0.1', runne
     // Setup: what each part is for, where it stands, and installing a tool (one at a time, log kept for the page).
     if (p === '/setup' && method === 'GET') return send(res, 200, await setupInfo(root, installs));
     if (p === '/setup/music' && method === 'PUT') { setup.saveMusic(root, await json(req)); return after(await setupInfo(root, installs)); }
+    // The studio browser: its address can be set here; its start command only from the terminal (mortiflix setup browser).
+    if (p === '/setup/browser' && method === 'PUT') { setup.saveBrowser(root, { cdpUrl: (await json(req)).cdpUrl ?? null }); return after(await setupInfo(root, installs)); }
+    if (p === '/setup/browser/check' && method === 'GET') return send(res, 200, await setup.browserCheck(root));
     if (p === '/setup/daw' && method === 'PUT') { setup.saveDaw(root, (await json(req)).daw ?? null); return after(await setupInfo(root, installs)); }
     if (p === '/setup/assets' && method === 'PUT') { setup.saveAssetSites(root, (await json(req)).sites); return after(await setupInfo(root, installs)); }
     if (p === '/setup/publish' && method === 'PUT') { const b = await json(req); pub.savePublish(root, { service: b.service, url: b.url, profile: b.profile }); return after(await setupInfo(root, installs)); }
@@ -509,7 +512,7 @@ function json(req, limit = 2_000_000) {
 async function setupInfo(root, installs) {
   const status = await setup.setupStatus(root);
   const jobs = Object.fromEntries([...installs].map(([k, j]) => [k, { state: j.state, log: j.log.slice(-60), error: j.error || null, problems: j.result?.problems || null }]));
-  return { parts: setup.PARTS, status, tools: setup.TOOL_INFO, daws: setup.DAWS, addons: setup.ADDONS.map(({ id, name, about, owner }) => ({ id, name, about, owner: Boolean(owner) })),
+  return { parts: setup.PARTS, status, tools: setup.TOOL_INFO, daws: setup.DAWS, browser: setup.browserConfig(loadConfig(root)), addons: setup.ADDONS.map(({ id, name, about, owner }) => ({ id, name, about, owner: Boolean(owner) })),
     recordings: setup.browserHarnessRecordings() || null, jobs };
 }
 

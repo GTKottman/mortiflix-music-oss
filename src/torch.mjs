@@ -68,7 +68,7 @@ function studioSection(root) {
 function installStudioSkills(root, work) {
   const skills = join(work, '.claude', 'skills');
   const put = (name, from) => { const dest = join(skills, name); rmSync(dest, { recursive: true, force: true }); cpSync(from, dest, { recursive: true }); return dest; };
-  for (const name of ['blender-3d', 'assets', 'browser-harness', 'blender-camera-director', 'blender-animate', 'blender-math', 'circuit-explainer-video', 'craft-apps']) rmSync(join(skills, name), { recursive: true, force: true });
+  for (const name of ['blender-3d', 'assets', 'browser', 'browser-harness', 'blender-camera-director', 'blender-animate', 'blender-math', 'circuit-explainer-video', 'craft-apps']) rmSync(join(skills, name), { recursive: true, force: true });
   const mcp = mcpServers(root, { dir: work });
   rmSync(craftMcpFile(work), { force: true });
   if (Object.keys(mcp.mcpServers).length) {
@@ -84,7 +84,8 @@ function installStudioSkills(root, work) {
   }
   const bh = browserHarnessSkill(root);
   if (bh) {
-    put('assets', join(REPO, 'harness', 'skills', 'assets'));
+    if (setupStatusSync(root).assets.sites.length) put('assets', join(REPO, 'harness', 'skills', 'assets'));
+    put('browser', join(REPO, 'harness', 'skills', 'browser'));
     mkdirSync(join(skills, 'browser-harness'), { recursive: true });
     writeFileSync(join(skills, 'browser-harness', 'SKILL.md'), bh);
   }

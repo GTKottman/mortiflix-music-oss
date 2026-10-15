@@ -33,3 +33,14 @@ test('skills file: written before a session from what was installed; listed in C
   assert.doesNotMatch(readSkillText(root, p.id, 'music'), /^tampered$/);
   assert.equal(readSkillText(root, p.id, '../secret'), null);
 });
+
+test('browser: the studio browser is on this computer only; sessions get its address; the start command is terminal-only', async (t) => {
+  const setup = await import('../src/setup.mjs');
+  const root = tempStudio(t);
+  assert.deepEqual(setup.browserConfig({}), { cdpUrl: null, start: null });
+  assert.throws(() => setup.saveBrowser(root, { cdpUrl: 'http://example.com:9333' }), /on this computer/);
+  assert.deepEqual(setup.saveBrowser(root, { cdpUrl: 'http://127.0.0.1:9333/', start: 'studio-browser' }), { cdpUrl: 'http://127.0.0.1:9333', start: 'studio-browser' });
+  assert.equal(setup.sessionToolsEnv(root).BU_CDP_URL, 'http://127.0.0.1:9333');
+  const r = await setup.browserCheck(root, { timeoutMs: 300 });
+  assert.equal(r.configured, true);
+});
