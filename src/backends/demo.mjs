@@ -118,8 +118,15 @@ export async function run({ root, projectId, workdir, env, onActivity, signal, c
       while (!['done', 'failed'].includes(r.state)) r = await mfx('render-wait', { id: job.id, seconds: 30 });
       if (r.state === 'failed') return { ok: false, error: `the placeholder render failed: ${r.output_tail}` };
       items.push({ path: `out/${step.key}-v${version}/${file}`, label: `${step.name} v${version}` });
+      // The music step's blueprint: one section per beat (the canvas's music cues).
+      if (step.key === 'music') {
+        mkdirSync(join(workdir, 'music'), { recursive: true });
+        const bars = 2;
+        writeFileSync(join(workdir, 'music', 'blueprint.json'), JSON.stringify({ title: project.title, bpm: 120, meter: '4/4', bars: BEATS.length * bars, scale: 'A:minor',
+          sections: BEATS.map(([words], i) => ({ id: `m0${i + 1}`, beat: `b0${i + 1}`, name: ['Arrival', 'Three ideas', 'Coming together', 'The close'][i], start_bar: i * bars + 1, end_bar: (i + 1) * bars, function: words, intensity: [3, 5, 7, 4][i] })) }, null, 2));
+      }
       // The video's scenes, one per beat: the canvas cuts the shots out of it by these frames.
-      if (step.review === 'video') {
+      if (step.review === 'video' && step.key !== 'music') {
         writeFileSync(join(workdir, 'out', 'scenes.json'), JSON.stringify({ made_from: `out/${step.key}-v${version}/${file}`, fps: FPS,
           scenes: BEATS.map(([words], i) => ({ key: `s0${i + 1}`, name: words.replace(/\.$/, ''), from_frame: i * BEAT_SEC * FPS, frames: BEAT_SEC * FPS, beat: `b0${i + 1}` })) }, null, 2));
       }

@@ -158,6 +158,7 @@ export function canvasView(ui, id, mode = 'edit') {
 
   function drawBoard() {
     if (!pieces.length) return fill(board, h('div', { class: 'cv-empty' }, 'Pieces line up here, in order, as they are made.'));
+    if (boardView === 'music') return drawMusic();
     if (boardView === 'nodes' && pieces[0]?.id) return drawNodes();
     fill(board, h('ol', { class: 'cv-strip' }, pieces.map((it, k) => h('li', null,
       h('button', { class: `cv-card${k === sel ? ' on' : ''}${it.state ? ` st-${String(it.state).replace(' ', '-')}` : ''}`, onclick: () => go(k, true), title: it.label, style: it.colour ? { background: it.colour.hex } : null },
@@ -262,6 +263,23 @@ export function canvasView(ui, id, mode = 'edit') {
 
   // Where the computer's at, in detail: what it's doing now, the steps, any render with its progress and time left,
   // the session's own to-do list, the files it made this session, a few counters, then everything it did.
+  // The music: the score's sections in their beats' colours (bars, what each does, how intense), and the MIDI pack:
+  // every part on its own channel, a clip per section, and the import steps for the owner's DAW (REAPER…).
+  async function drawMusic() {
+    const n = graph?.nodes || {};
+    const cues = (graph?.order?.cues || []).map((c) => n[c]).filter(Boolean);
+    const ms = await api(`/api/projects/${id}/music`).catch(() => null);
+    if (boardView !== 'music') return;
+    fill(board, h('div', { class: 'cv-music' },
+      cues.length ? h('ol', { class: 'cv-cues' }, cues.map((c) => h('li', { class: 'cv-cue', style: { background: c.colour?.hex || 'var(--clip-audio)' } },
+        h('span', { class: 'cv-node-beat', style: { background: c.colour?.chip || 'transparent' } }, n[c.beat]?.label || c.label),
+        h('span', { class: 'cv-cue-name' }, c.title),
+        h('span', { class: 'cv-cue-bars' }, c.bars ? `bars ${c.bars[0]}–${c.bars[1]}` : ''),
+        c.intensity !== null && c.intensity !== undefined ? h('span', { class: 'cv-cue-int', title: `intensity ${c.intensity}/10` }, h('i', { style: { width: `${c.intensity * 10}%` } })) : null)))
+        : h('div', { class: 'cv-empty' }, 'The music\'s sections appear here once it is planned (after the animatic).'),
+      ms?.midi?.length ? ui.musicPanel(id, ms) : h('p', { class: 'help' }, 'When the score passes its check, its MIDI pack shows here: every part on its own channel, a clip per section, and the steps to bring it into your DAW (Settings › Your DAW).')));
+  }
+
   function drawDoing() {
     const acts = d.activity || [];
     let from = acts.length - 1;
@@ -544,7 +562,7 @@ export function canvasView(ui, id, mode = 'edit') {
         rightTab === 'questions' ? asked : doing),
       h('section', { class: 'cv-panel cv-p-board' },
         h('div', { class: 'cv-tabs' },
-          ['shots', 'nodes'].map((v) => h('button', { class: `cv-tab${boardView === v ? ' on' : ''}`, onclick: () => { boardView = v; store.set(`mfx-canvas-board-${id}`, v); draw(); } }, v === 'shots' ? 'Shots' : 'Nodes')),
+          ['shots', 'nodes', 'music'].map((v) => h('button', { class: `cv-tab${boardView === v ? ' on' : ''}`, onclick: () => { boardView = v; store.set(`mfx-canvas-board-${id}`, v); draw(); } }, { shots: 'Shots', nodes: 'Nodes', music: 'Music' }[v])),
           keepBox),
         board)));
     drawMonitor();

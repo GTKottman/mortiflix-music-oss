@@ -506,3 +506,13 @@ button.cv-tnode { cursor: pointer; font: inherit; color: inherit; }
 .cv-file-list { display: flex; flex-wrap: wrap; gap: 4px; }
 .cv-file-list code { font-size: 11px; background: var(--well); padding: 1px 5px; border-radius: var(--radius); color: var(--body); }
 .cv-counters { color: var(--muted); font-size: 11px; padding: 8px 0; border-bottom: 1px solid var(--line); margin-bottom: 6px; }
+/* the music corner */
+.cv-music { display: flex; flex-direction: column; gap: 8px; height: 100%; overflow: auto; }
+.cv-cues { list-style: none; margin: 0; padding: 0; display: flex; gap: 4px; }
+.cv-cue { flex: 1; min-width: 140px; display: flex; flex-direction: column; gap: 2px; padding: 0 0 6px; color: var(--clip-text); border-left: 1px solid #000; border-top: 1px solid rgba(255, 255, 255, 0.15); }
+.cv-cue .cv-node-beat { height: 16px; align-self: flex-start; }
+.cv-cue-name { font-size: 12px; padding: 2px 6px 0; }
+.cv-cue-bars { font-size: 11px; padding: 0 6px; color: rgba(217, 217, 217, 0.75); }
+.cv-cue-int { display: block; height: 4px; margin: 2px 6px 0; background: rgba(0, 0, 0, 0.35); }
+.cv-cue-int i { display: block; height: 100%; background: var(--clip-text); }
+.cv-music .state-line, .cv-music section { padding: 6px 0; border-top: 0; }
