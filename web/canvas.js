@@ -66,7 +66,7 @@ export function canvasView(ui, id, mode = 'edit') {
 
   function drawHead() {
     const tab = (key, label, href, live = true) => h('a', { class: `cv-mode${mode === key ? ' on' : ''}${live ? '' : ' off'}`, href: live ? href : null }, label);
-    const finalSub = d.submissions.some((s) => d.steps.find((x) => x.key === s.step)?.review === 'video' && s.step === d.steps.at(-1)?.key);
+    const finalSub = Boolean(finalOf());
     const turn = d.steps.find((s) => s.state === 'in_review');
     fill(head,
       h('a', { class: 'cv-brand', href: '#/' }, h('img', { src: 'img/mark.png', alt: '' }), h('span', null, 'Mortiflix')),
@@ -390,9 +390,49 @@ export function canvasView(ui, id, mode = 'edit') {
           brief.map(([k, v]) => [h('dt', null, d.intakeQs.find((q) => q.id === k)?.label || k), h('dd', null, String(v))])))));
   }
 
+  // The final: the delivering step's latest version.
+  function finalOf() {
+    const step = d.steps.find((s) => s.delivers);
+    const sub = step ? d.submissions.filter((x) => x.step === step.key).at(-1) : null;
+    return sub ? { step, sub } : null;
+  }
+
+  // Export: the final, and the last choice. Get the video takes it as it is; Edit the video opens it in FilmCraft as a
+  // project, every scene and sound its own clip, so small changes are made before the big render.
+  function drawExport() {
+    const f = finalOf();
+    if (!f) return h('div', { class: 'cv-grid cv-grid-one' }, panel('Export', h('div', { class: 'cv-body' }, h('div', { class: 'cv-empty' }, h('div', { class: 'big' }, 'No final yet'), h('p', null, 'The final appears here once everything before it is approved.')))));
+    const { step, sub } = f;
+    const video = sub.items.find((it) => it.kind === 'video');
+    const waiting = step.state === 'in_review' && step.version === sub.version;
+    const editing = step.state === 'changes' && d.project.steps?.[step.key]?.edit;
+    const msg = h('div', { class: 'err' });
+    const decide = async (verdict) => {
+      try { await api(`/api/projects/${id}/reviews/${step.key}/${sub.version}`, { method: 'POST', body: { verdict, notes: [], overall: '', answers: {} } }); ui.toast(verdict === 'approve' ? 'The video is yours' : 'Making your FilmCraft project'); }
+      catch (e) { msg.textContent = e.message; }
+    };
+    return h('div', { class: 'cv-grid cv-grid-one' }, panel('Export', h('div', { class: 'cv-body cv-export' },
+      video ? h('div', { class: 'cv-stage cv-export-stage' }, h('video', { src: fileUrl(id, video.file), controls: true, preload: 'metadata', playsinline: true })) : null,
+      h('div', { class: 'cv-export-side' },
+        h('div', { class: 'cv-label' }, `${step.name} v${sub.version}`),
+        sub.note ? h('p', { class: 'cv-says' }, sub.note) : null,
+        waiting ? h('div', null,
+          h('p', { class: 'cv-q-text' }, 'Do you want the video, or do you want to edit the video?'),
+          h('div', { class: 'cv-export-actions' },
+            h('button', { class: 'btn primary', onclick: () => decide('approve') }, 'Get the video'),
+            h('button', { class: 'btn', onclick: () => decide('edit') }, 'Edit the video')),
+          h('p', { class: 'help' }, 'Edit the video opens it in FilmCraft as a project: every scene, voice line and music cue its own clip. Click one and ask for a different version; small changes happen before the big render.'),
+          msg)
+          : editing ? h('p', { class: 'cv-status-text' }, 'Making your FilmCraft project: every scene and sound as its own clip. It opens in FilmCraft when it is ready.')
+            : d.project.state === 'delivered' ? h('div', null, h('p', { class: 'okmsg' }, 'Delivered.'),
+              (d.project.deliverables || []).map((x) => h('div', null, h('a', { href: fileUrl(id, x.file, true) }, `Download ${x.label}`))))
+              : h('p', { class: 'cv-status-text' }, STATE_WORDS[step.state] || step.state)))));
+  }
+
   function draw() {
     drawHead();
     if (mode === 'import') return fill(root, head, drawImport());
+    if (mode === 'export') return fill(root, head, drawExport());
     const keepBox = h('label', { class: 'cv-keep' }, h('input', { type: 'checkbox', checked: keep, onchange: (e) => { keep = e.target.checked; store.set(keepKey, keep); } }), 'Keep playing into the next piece');
     fill(root, head, h('div', { class: 'cv-grid' },
       panel('Script', script, null, 'cv-p-script'),
@@ -436,7 +476,7 @@ export function canvasView(ui, id, mode = 'edit') {
       const busy = playing && !playing.paused;
       await load();
       drawHead();
-      if (mode === 'import') return draw();
+      if (mode === 'import' || mode === 'export') return draw();
       drawBoard();
       drawScript();
       drawDoing();

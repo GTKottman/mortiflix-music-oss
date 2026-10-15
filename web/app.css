@@ -467,3 +467,9 @@ button.cv-tnode { cursor: pointer; font: inherit; color: inherit; }
 .cv-q-send { padding-top: 10px; }
 .cv-q-send textarea { min-height: 44px; }
 .cv-turn-hint { color: var(--muted); font-size: 11px; white-space: nowrap; }
+/* export */
+.cv-export { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; padding: 10px; }
+.cv-export-stage { min-height: 360px; }
+.cv-export-side { display: flex; flex-direction: column; gap: 10px; }
+.cv-export-actions { display: flex; gap: 10px; }
+@media (max-width: 900px) { .cv-export { grid-template-columns: 1fr; } .cv-export-stage { min-height: 56vw; } }

@@ -287,8 +287,11 @@ export function proposeCheck(root, id, { title, how, example, work, same_as }) {
 export function respond(root, id, stepKey, version, { verdict, overall = '', notes = [], answers = {} }) {
   const pp = projectPaths(root, id);
   const pipeline = projectPipeline(root, id);
-  findStep(pipeline, stepKey);
-  if (!['approve', 'changes'].includes(verdict)) refuse('verdict must be approve or changes');
+  const target = findStep(pipeline, stepKey);
+  if (!['approve', 'changes', 'edit'].includes(verdict)) refuse('verdict must be approve, changes or edit');
+  // "Edit the video": instead of taking the final, the owner opens it in FilmCraft (the delivering step only).
+  if (verdict === 'edit' && !target.delivers) refuse('only the final can be edited in FilmCraft');
+  if (verdict === 'edit' && !String(overall).trim()) overall = 'Edit the video: make the FilmCraft project.';
   const dir = join(pp.reviews, stepKey, `v${version}`);
   if (!existsSync(join(dir, 'submission.json'))) refuse(`no ${stepKey} v${version}`);
   const sub = readJson(join(dir, 'submission.json'));
@@ -335,6 +338,7 @@ export function respond(root, id, stepKey, version, { verdict, overall = '', not
     p.steps[stepKey] = {
       ...(p.steps[stepKey] || {}),
       state: verdict === 'approve' ? 'approved' : 'changes',
+      ...(verdict === 'edit' ? { edit: true } : { edit: undefined }),
       version,
       decided_at: feedback.decided_at,
       last_feedback: { version, verdict, notes: cleanNotes.length },
@@ -344,7 +348,7 @@ export function respond(root, id, stepKey, version, { verdict, overall = '', not
       p.deliverables = sub.items.filter((it) => it.file).map((it) => ({ label: it.label, kind: it.kind, file: it.file, size: it.size }));
     }
     settle(p, pipeline);
-    event(root, id, { event: verdict === 'approve' ? 'APPROVED' : 'CHANGES_REQUESTED', actor: 'you', step: stepKey, version, details: cleanNotes.length ? `${cleanNotes.length} note(s)` : feedback.overall.slice(0, 200) });
+    event(root, id, { event: verdict === 'approve' ? 'APPROVED' : verdict === 'edit' ? 'EDIT_VIDEO' : 'CHANGES_REQUESTED', actor: 'you', step: stepKey, version, details: cleanNotes.length ? `${cleanNotes.length} note(s)` : feedback.overall.slice(0, 200) });
     return { step: stepKey, version, verdict, project_state: p.state };
   });
 }

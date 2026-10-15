@@ -155,3 +155,24 @@ test('canvas: the AI runs ahead through canvas steps; the build waits until all 
   await runner.loop();
   assert.equal(states().final, 'in_review', 'all approved: the build ran and the final waits');
 });
+
+test('export: "Edit the video" only on the final; it sends the final back with edit: true', async (t) => {
+  const { loadProject, projectPipeline } = await import('../src/projects.mjs');
+  const { stepView } = await import('../src/gates.mjs');
+  const root = tempStudio(t);
+  const p = createProject(root, { pipeline: 'logo-sting', title: 'Edit me' });
+  await addIntakeFile(root, p.id, { field: 'logo', name: 'logo.svg', buffer: Buffer.from('<svg/>') });
+  startProject(root, p.id);
+  const runner = new Runner(root);
+  runner.acquire();
+  t.after(() => runner.release());
+  await runner.loop();
+  assert.throws(() => respond(root, p.id, 'directions', 1, { verdict: 'edit' }), /only the final/);
+  respond(root, p.id, 'directions', 1, { verdict: 'approve' });
+  await runner.loop();
+  respond(root, p.id, 'final', 1, { verdict: 'edit' });
+  const pr = loadProject(root, p.id);
+  assert.equal(pr.steps.final.state, 'changes');
+  assert.equal(pr.steps.final.edit, true);
+  assert.equal(stepView(pr, projectPipeline(root, p.id)).find((s) => s.key === 'final').last_feedback.verdict, 'edit');
+});

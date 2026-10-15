@@ -104,6 +104,7 @@ export function sessionReason(root, id) {
     ANSWERED: `The owner answered a question (${e.details}).`,
     RESUMED: 'The owner resumed the project.',
     EDIT_REQUESTED: `The owner asked for a change on the canvas (${e.details}).`,
+    EDIT_VIDEO: 'The owner chose Edit the video: make the FilmCraft project (GATES.md, "Edit the video").',
   }[e.event])).filter(Boolean).join(' ') || 'Carrying on.';
 }
 
