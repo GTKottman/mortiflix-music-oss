@@ -50,7 +50,9 @@ export function createProject(root, { pipeline: slug, title, answers = {}, backe
     if (q.type === 'files') continue;
     const v = answers[q.id];
     if (v === undefined || v === null || v === '') continue;
-    if (q.type === 'choice' && !q.choices.includes(v)) throw new UserError(`"${q.label || q.id}" must be one of: ${q.choices.join(', ')}`);
+    // A choice takes one of its choices or the owner's own words (the Custom option), unless the pipeline says
+    // "custom": false for it.
+    if (q.type === 'choice' && !q.choices.includes(v) && (q.custom === false || !String(v).trim() || String(v).length > 500)) throw new UserError(`"${q.label || q.id}" must be one of: ${q.choices.join(', ')}${q.custom === false ? '' : ', or your own words (up to 500 characters)'}`);
     clean[q.id] = String(v).slice(0, 20_000);
   }
   const project = {

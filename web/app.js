@@ -354,7 +354,7 @@ function appendLog(log, a, scroll = true) {
 function questionForm(id, q) {
   let value = '';
   const input = q.choices
-    ? choiceChips(q.choices, null, (v) => { value = v; })
+    ? customChips(q.choices, null, (v) => { value = v; })
     : h('input', { type: 'text', placeholder: q.default ? `Default: ${q.default}` : 'Your answer', oninput: (e) => { value = e.target.value; } });
   const send = async (useDefault) => {
     try {
@@ -377,6 +377,20 @@ function choiceChips(choices, selected, onPick) {
     } }, c);
     add(wrap, b);
   }
+  return wrap;
+}
+
+// Choices plus "Custom": the owner can always type their own value instead (a length of 75 s, a 4:5 shape…).
+function customChips(choices, selected, onPick, placeholder = 'Your own') {
+  const own = selected && !choices.includes(selected) ? selected : '';
+  const input = h('input', { type: 'text', class: 'custom-in', placeholder, value: own, oninput: (e) => onPick(e.target.value) });
+  const wrap = h('div', { class: 'custom-choice' });
+  const chips = choiceChips([...choices, 'Custom'], own ? 'Custom' : selected, (v) => {
+    input.hidden = v !== 'Custom';
+    if (v === 'Custom') { onPick(input.value); input.focus(); } else onPick(v);
+  });
+  input.hidden = !own;
+  add(wrap, chips, input);
   return wrap;
 }
 
@@ -564,6 +578,7 @@ async function newView(slug) {
   const err = h('div', { class: 'err' });
   const keysBox = h('div');
   const win = h('div', { class: 'np-win', role: 'dialog', 'aria-label': 'New project' });
+  let updateSum = () => {};
   const save = () => store.set(draftKey, { slug: p.slug, title, idea: answers[ideaOf(p)?.id] || '' });
   // "The idea" is the preset's first required long answer; other required answers sit beside it.
   const ideaOf = (pl) => pl.intake.find((q) => q.required && q.type === 'long') || pl.intake.find((q) => q.type === 'long');
@@ -575,7 +590,8 @@ async function newView(slug) {
   };
   const control = (q) => {
     if (q.type === 'long') return h('textarea', { rows: 3, value: answers[q.id] || '', oninput: (e) => { answers[q.id] = e.target.value; save(); } });
-    if (q.type === 'choice') return choiceChips(q.choices, answers[q.id] || q.default || null, (v) => { answers[q.id] = v; draw(); });
+    if (q.type === 'choice') return q.custom === false ? choiceChips(q.choices, answers[q.id] || q.default || null, (v) => { answers[q.id] = v; updateSum(); })
+      : customChips(q.choices, answers[q.id] || q.default || null, (v) => { answers[q.id] = v; updateSum(); }, q.id === 'length' ? 'e.g. 75 s' : 'Your own');
     if (q.type === 'files') return h('input', { type: 'file', multiple: true, onchange: (e) => { files[q.id] = [...e.target.files]; } });
     return h('input', { type: 'text', value: answers[q.id] || '', oninput: (e) => { answers[q.id] = e.target.value; } });
   };
@@ -624,10 +640,12 @@ async function newView(slug) {
     const idea = ideaOf(p);
     const main = p.intake.filter((q) => q.required && q !== idea);
     const rest = p.intake.filter((q) => !q.required && q !== idea);
-    const summary = rest.filter((q) => q.type === 'choice').map((q) => answers[q.id]).filter(Boolean).map((v) => String(v).split(': ')[0]).join(' · ');
+    const sumText = () => rest.filter((q) => q.type === 'choice').map((q) => answers[q.id]).filter(Boolean).map((v) => String(v).split(': ')[0]).join(' · ');
+    const sumEl = h('span', { class: 'np-sum' }, sumText());
+    updateSum = () => { sumEl.textContent = sumText(); };
     const open = store.get('mfx-new-settings-open') ?? false;
     const settings = h('details', { class: 'np-settings', open, ontoggle: (e) => store.set('mfx-new-settings-open', e.target.open) },
-      h('summary', null, 'Preset settings', summary ? h('span', { class: 'np-sum' }, summary) : null),
+      h('summary', null, 'Preset settings', sumEl),
       rest.map((q) => row(q.label || q.id, control(q), q.help)),
       studio?.config.backend === 'demo' ? null
         : row('Made by', choiceChips([BACKEND_NAMES[studio?.config.backend] || 'Studio default', 'Demo (placeholder work, free)'], backend === 'demo' ? 'Demo (placeholder work, free)' : BACKEND_NAMES[studio?.config.backend] || 'Studio default', (v) => { backend = v.startsWith('Demo') ? 'demo' : null; }),
