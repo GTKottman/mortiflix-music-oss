@@ -9,7 +9,8 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync, mkdirSync, copyFileSync, realpathSync, statSync } from 'node:fs';
 import { join, extname, dirname } from 'node:path';
-import { projectPaths } from './projects.mjs';
+import { projectPaths, update, event, projectPipeline } from './projects.mjs';
+import { settle, GateError } from './gates.mjs';
 import { withLock, isInside } from './studio.mjs';
 
 // One FilmCraft label colour per beat, in order (crates/project Label::rgb / marker_rgb, v0.8.0). Their marker colours
@@ -27,7 +28,7 @@ const sha = (buf) => createHash('sha256').update(buf).digest('hex');
 
 export function canvasPaths(root, id) {
   const dir = join(projectPaths(root, id).state, 'canvas');
-  return { dir, graph: join(dir, 'graph.json'), media: join(dir, 'media'), lock: join(dir, '.lock') };
+  return { dir, graph: join(dir, 'graph.json'), media: join(dir, 'media'), lock: join(dir, '.lock'), owner: join(dir, 'owner.json'), edits: join(dir, 'edits.json') };
 }
 
 export function loadGraph(root, id) {
@@ -129,10 +130,13 @@ export function syncCanvas(root, id) {
         scenes.scenes.forEach((sc, i) => {
           if (!/^s\d{2,3}$/.test(sc.key)) return problems.push({ file: 'out/scenes.json', text: `scene key "${sc.key}" should look like s01` });
           if (sc.beat && !beatIds.has(sc.beat)) problems.push({ file: 'out/scenes.json', text: `${sc.key}: beat ${sc.beat} isn't in the script` });
+          const fields = { label: sc.key.toUpperCase(), title: sc.name || sc.key, beat: sc.beat || null, order: i, look: frames.find((f) => (f.beats || []).includes(sc.beat))?.id || null };
+          // A shot remade on its own (an edit request) arrives as its own file; the others are cut from the video.
+          const own = sc.file ? snapshot(sc.file, sc.key) : null;
+          if (own) return put(sc.key, 'shot', fields, { ...own, from_sec: 0, to_sec: +(sc.frames / fps).toFixed(3) });
           const from = +(sc.from_frame / fps).toFixed(3);
           const to = +((sc.from_frame + sc.frames) / fps).toFixed(3);
-          put(sc.key, 'shot', { label: sc.key.toUpperCase(), title: sc.name || sc.key, beat: sc.beat || null, order: i, look: frames.find((f) => (f.beats || []).includes(sc.beat))?.id || null },
-            { sha: `${src.sha}:${sc.from_frame}:${sc.frames}`, file: src.file, from_sec: from, to_sec: to });
+          put(sc.key, 'shot', fields, { sha: `${src.sha}:${sc.from_frame}:${sc.frames}`, file: src.file, from_sec: from, to_sec: to });
         });
       }
     } else {
@@ -182,3 +186,91 @@ export function syncCanvas(root, id) {
     return graph;
   });
 }
+
+// ---- what the owner does on the canvas, and the edit requests it makes ----
+
+const readOr = (f, dflt) => { try { return JSON.parse(readFileSync(f, 'utf8')); } catch { return dflt; } };
+
+export function loadOwner(root, id) { return readOr(canvasPaths(root, id).owner, { decisions: {} }); }
+export function loadEdits(root, id) { return readOr(canvasPaths(root, id).edits, { edits: [] }).edits; }
+const openOf = (edits) => edits.filter((e) => ['requested', 'working'].includes(e.state));
+
+// The graph as the canvas shows it: every node with the owner's decision and any edit on it, and its state.
+export function canvasView(root, id) {
+  const g = syncCanvas(root, id);
+  const owner = loadOwner(root, id);
+  const edits = loadEdits(root, id);
+  const nodes = {};
+  for (const [nid, n] of Object.entries(g.nodes)) {
+    const decision = owner.decisions[nid]?.verdict || null;
+    const pending = openOf(edits).filter((e) => e.node === nid).at(-1) || null;
+    const failed = !pending && edits.filter((e) => e.node === nid).at(-1)?.state === 'failed' ? edits.filter((e) => e.node === nid).at(-1) : null;
+    const state = decision === 'cut' ? 'cut' : pending ? 'generating' : failed ? 'needs you' : decision === 'ok' ? 'approved' : n.planned ? 'generating' : 'ready';
+    nodes[nid] = { ...n, owner: decision, pending, failed, state, edits: edits.filter((e) => e.node === nid).map(({ id: eid, text, state: st, version, at }) => ({ id: eid, text, state: st, version, at })) };
+  }
+  return { ...g, nodes, open_edits: openOf(edits).length };
+}
+
+// OK, Cut it (and taking either back) are the owner's decisions; Fix makes an edit request that starts a session at
+// once, so the AI remakes that one piece while the owner keeps going.
+export function nodeAction(root, id, nid, { action, text } = {}) {
+  const g = syncCanvas(root, id);
+  const node = g.nodes[nid];
+  if (!node) throw new CanvasError(`no piece ${nid} on this canvas`);
+  const cp = canvasPaths(root, id);
+  return withLock(cp.lock, () => {
+    const owner = loadOwner(root, id);
+    if (['ok', 'cut'].includes(action)) owner.decisions[nid] = { verdict: action, version: node.current, at: new Date().toISOString() };
+    else if (action === 'clear') delete owner.decisions[nid];
+    else if (action === 'fix') {
+      const words = String(text || '').trim().slice(0, 4000);
+      if (!words) throw new CanvasError('say what to change');
+      const all = loadEdits(root, id);
+      const edit = { id: `E${String(all.length + 1).padStart(3, '0')}`, node: nid, kind: node.kind, label: node.label, beat: node.beat || null, text: words, from_version: node.current, state: 'requested', at: new Date().toISOString() };
+      all.push(edit);
+      writeFileSync(cp.edits, JSON.stringify({ edits: all }, null, 2));
+      delete owner.decisions[nid];
+      writeFileSync(cp.owner, JSON.stringify(owner, null, 2));
+      syncEditCount(root, id, all);
+      event(root, id, { event: 'EDIT_REQUESTED', actor: 'you', details: `${edit.id} on ${node.label}: ${words.slice(0, 200)}` });
+      return { edit };
+    } else throw new CanvasError('action: ok, cut, clear or fix');
+    writeFileSync(cp.owner, JSON.stringify(owner, null, 2));
+    event(root, id, { event: action === 'clear' ? 'CANVAS_CLEARED' : action === 'ok' ? 'CANVAS_OK' : 'CANVAS_CUT', actor: 'you', details: node.label });
+    return { decision: owner.decisions[nid] || null };
+  });
+}
+
+// The session reports an edit: done only once its piece really has a new version (sync shows it), or failed.
+export function finishEdit(root, id, eid, { ok, note = '' } = {}) {
+  const g = syncCanvas(root, id);
+  const cp = canvasPaths(root, id);
+  return withLock(cp.lock, () => {
+    const all = loadEdits(root, id);
+    const e = all.find((x) => x.id === eid);
+    if (!e) throw new CanvasError(`no edit request ${eid}`);
+    if (!['requested', 'working'].includes(e.state)) throw new CanvasError(`${eid} is already ${e.state}`);
+    if (ok) {
+      const n = g.nodes[e.node];
+      if (!n || !(n.current > e.from_version)) throw new CanvasError(`${e.label} has no new version yet (still v${e.from_version}): write it where the canvas reads it (GATES.md, "The canvas"), then say edit done`);
+      e.version = n.current;
+    }
+    e.state = ok ? 'done' : 'failed';
+    e.note = String(note || '').slice(0, 2000);
+    e.finished_at = new Date().toISOString();
+    writeFileSync(cp.edits, JSON.stringify({ edits: all }, null, 2));
+    syncEditCount(root, id, all);
+    event(root, id, { event: ok ? 'EDIT_DONE' : 'EDIT_FAILED', details: `${eid} on ${e.label}${note ? `: ${String(note).slice(0, 200)}` : ''}` });
+    return e;
+  });
+}
+
+export const openEdits = (root, id) => openOf(loadEdits(root, id));
+
+// project.json carries how many edits are open, so the runner starts a session for them (gates.settle).
+function syncEditCount(root, id, all) {
+  const pipeline = projectPipeline(root, id);
+  update(root, id, (p) => { p.canvas_edits = openOf(all).length; settle(p, pipeline); return p; });
+}
+
+export class CanvasError extends GateError {}

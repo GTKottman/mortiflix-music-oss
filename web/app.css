@@ -405,3 +405,17 @@ button.cv-tab { background: none; border: 0; border-bottom: 1px solid transparen
 .cv-tnode { position: relative; width: 104px; padding: 6px 8px; background: var(--well); border: 1px solid var(--field-line); border-radius: 12px; text-align: center; }
 .cv-tnode-kind { display: block; color: var(--faint); font-size: 10px; text-transform: uppercase; }
 .cv-tnode-name { display: block; color: var(--body); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* OK / Fix / Cut it */
+.cv-actions { padding: 0 10px 10px; }
+.cv-act-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.cv-act-row .btn.on { background: var(--raise); border-color: var(--pressed); color: var(--ink); }
+.cv-state { color: var(--muted); font-size: 11px; margin-left: 4px; }
+.cv-state.st-approved { color: var(--ok); } .cv-state.st-generating { color: var(--focus); } .cv-state.st-needs-you { color: var(--bad); } .cv-state.st-cut { color: var(--faint); }
+.cv-status-text { color: var(--muted); font-size: 11px; flex-basis: 100%; }
+.cv-fix { padding-top: 8px; }
+.cv-fix textarea { min-height: 52px; }
+.cv-fix-end { display: flex; gap: 8px; justify-content: flex-end; padding-top: 6px; }
+.cv-card.st-cut, .cv-node.st-cut { opacity: 0.4; }
+.cv-card.st-approved .cv-step::before, .cv-node.st-approved .cv-node-state::before { content: "✓ "; color: var(--ok); }
+.cv-card.st-generating .cv-thumb, .cv-node.st-generating .cv-node-still { outline: 2px solid var(--focus); outline-offset: -2px; }
+.cv-card.st-needs-you .cv-thumb, .cv-node.st-needs-you .cv-node-still { outline: 2px solid var(--bad); outline-offset: -2px; }

@@ -20,7 +20,7 @@ import * as setup from '../setup.mjs';
 import * as craft from '../craft.mjs';
 import * as booth from '../booth.mjs';
 import * as music from '../music.mjs';
-import { syncCanvas } from '../canvas.mjs';
+import { canvasView, nodeAction } from '../canvas.mjs';
 import * as pub from '../publish.mjs';
 import { costText } from '../usage.mjs';
 
@@ -53,7 +53,7 @@ export async function startServer(root, { port = 4646, host = '127.0.0.1', runne
 
   const server = createServer((req, res) => {
     handle(req, res).catch((e) => {
-      const code = /^no (project|step|question|pipeline)/.test(e.message) ? 404 : e instanceof UserError || e instanceof BadRequest ? 400 : 500;
+      const code = /^no (project|step|question|pipeline)/.test(e.message) ? 404 : e instanceof UserError || e instanceof BadRequest || e instanceof gates.GateError ? 400 : 500;
       if (!res.headersSent) send(res, code, { error: e.message });
       else res.end();
     });
@@ -205,7 +205,12 @@ export async function startServer(root, { port = 4646, host = '127.0.0.1', runne
     if (sub.startsWith('/booth')) return boothApi(req, res, id, sub, method, after);
     if (sub.startsWith('/music')) return musicApi(req, res, id, sub, method, after, url);
     // The canvas's project graph (src/canvas.mjs), rebuilt from the session's files on every read.
-    if (sub === '/canvas' && method === 'GET') return send(res, 200, syncCanvas(root, id));
+    if (sub === '/canvas' && method === 'GET') return send(res, 200, canvasView(root, id));
+    if ((m = sub.match(/^\/canvas\/nodes\/([a-z0-9-]{2,24})$/)) && method === 'POST') {
+      const b = await json(req);
+      nodeAction(root, id, m[1], { action: b.action, text: b.text });
+      return after(canvasView(root, id));
+    }
     return send(res, 404, { error: 'not found' });
   }
 

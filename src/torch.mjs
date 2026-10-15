@@ -6,6 +6,7 @@ import { existsSync, readFileSync, writeFileSync, rmSync, mkdirSync, cpSync, rea
 import { join } from 'node:path';
 import { REPO, paths } from './studio.mjs';
 import { projectPaths, loadProject, projectPipeline, readJournal, readEvents, listProjects } from './projects.mjs';
+import { openEdits, loadGraph } from './canvas.mjs';
 const { opening } = await import(join(REPO, 'pipelines', '_shared', 'skills', 'music', 'lib', 'variety.mjs'));
 import { stepView, stepChecks, submissions } from './gates.mjs';
 import { finishesOwnMaster } from './music.mjs';
@@ -102,6 +103,7 @@ export function sessionReason(root, id) {
     CHANGES_REQUESTED: `The owner asked for changes on ${step(e.step)} v${e.version}.`,
     ANSWERED: `The owner answered a question (${e.details}).`,
     RESUMED: 'The owner resumed the project.',
+    EDIT_REQUESTED: `The owner asked for a change on the canvas (${e.details}).`,
   }[e.event])).filter(Boolean).join(' ') || 'Carrying on.';
 }
 
@@ -112,6 +114,20 @@ export function writeTorch(root, id, { backend, reason }) {
   const steps = stepView(project, pipeline);
   const subs = submissions(root, id);
   const taste = existsSync(join(root, 'TASTE.md')) ? readFileSync(join(root, 'TASTE.md'), 'utf8').trim() : '';
+
+  // Edit requests from the canvas: the owner clicked a piece and asked for a different version. They come first.
+  const edits = openEdits(root, id);
+  const g = edits.length ? loadGraph(root, id) : null;
+  const editsText = edits.length ? `
+## Edit requests from the canvas (do these first)
+
+The owner clicked these pieces on the canvas and asked for a different version. Remake only that piece, the way the
+step that made it would (same look, same timing unless the note says otherwise), write it where the canvas reads it
+(GATES.md, "The canvas"), run \`mfx canvas\`, then \`mfx edit done <id> "what you changed"\`. If it can't be done,
+\`mfx edit fail <id> "why"\`. Then carry on with the pipeline.
+
+${edits.map((e) => { const n = g?.nodes?.[e.node]; return `- **${e.id}** on ${e.label} (${e.kind}${e.beat ? `, beat ${e.beat.toUpperCase()}` : ''}, now v${e.from_version}${n?.title ? `: "${String(n.title).slice(0, 120)}"` : ''})\n${fence('EDIT', e.text)}`; }).join('\n')}
+` : '';
 
   // The owner's recent pieces, so this one sounds like itself: music/recent.json for `strudel.mjs plan`, and a line here.
   const recent = recentPieces(root, project.id);
@@ -205,7 +221,7 @@ Mistakes the owner should never have to point out. Every step runs the checks fo
 (\`mfx checks <step>\`), on exactly what it's sending, and reports each one (see the gate protocol).
 
 ${checksText}
-
+${editsText}
 ## The brief
 
 ${fence('BRIEF', `Title: ${project.title}\n${intake}`)}

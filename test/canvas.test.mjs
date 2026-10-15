@@ -73,3 +73,57 @@ test('canvas: the demo lines up beats, frames and shots cut from the animatic', 
   assert.deepEqual([g.nodes.s02.versions.at(-1).from_sec, g.nodes.s02.versions.at(-1).to_sec], [2, 4]);
   assert.equal(g.nodes.s02.beat, 'b02');
 });
+
+test('canvas: OK, Cut it and Fix; a fix starts a session that remakes only that shot, and every version is kept', async (t) => {
+  const { canvasView, nodeAction, finishEdit } = await import('../src/canvas.mjs');
+  const { loadProject } = await import('../src/projects.mjs');
+  const { submissions } = await import('../src/gates.mjs');
+  const root = tempStudio(t);
+  const p = createProject(root, { pipeline: 'explainer', title: 'Fixes', answers: { topic: 'tides' } });
+  startProject(root, p.id);
+  const runner = new Runner(root);
+  runner.acquire();
+  t.after(() => runner.release());
+  const approveUntil = async (stop) => {
+    for (let k = 0; k < 10; k++) {
+      await runner.loop();
+      const pr = loadProject(root, p.id);
+      const waiting = Object.entries(pr.steps).find(([, v]) => v.state === 'in_review');
+      if (!waiting || waiting[0] === stop) return;
+      const last = submissions(root, p.id).filter((s) => s.step === waiting[0]).at(-1);
+      respond(root, p.id, waiting[0], last.version, { verdict: 'approve' });
+    }
+  };
+  await approveUntil('music');
+  let g = canvasView(root, p.id);
+  assert.deepEqual(g.order.shots, ['s01', 's02', 's03', 's04']);
+  assert.equal(g.nodes.s02.state, 'ready');
+  const before = g.nodes.s02.versions.length;
+
+  nodeAction(root, p.id, 's01', { action: 'ok' });
+  nodeAction(root, p.id, 's04', { action: 'cut' });
+  assert.throws(() => nodeAction(root, p.id, 's02', { action: 'fix', text: ' ' }), /say what to change/);
+  const { edit } = nodeAction(root, p.id, 's02', { action: 'fix', text: 'slower, and the circle bigger' });
+  assert.equal(edit.id, 'E001');
+  assert.equal(loadProject(root, p.id).state, 'queued', 'a fix starts a session even while music waits for the owner');
+  assert.throws(() => finishEdit(root, p.id, 'E001', { ok: true }), /no new version yet/);
+  g = canvasView(root, p.id);
+  assert.deepEqual([g.nodes.s01.state, g.nodes.s02.state, g.nodes.s04.state], ['approved', 'generating', 'cut']);
+
+  await runner.loop();
+  g = canvasView(root, p.id);
+  assert.equal(g.nodes.s02.versions.length, before + 1, 's02 has a new version');
+  assert.equal(g.nodes.s02.versions.at(-1).from_sec, 0, 'remade alone: its own clip');
+  assert.equal(g.nodes.s03.versions.length, 1, 'the other shots are untouched');
+  assert.equal(g.nodes.s02.state, 'ready');
+  assert.equal(g.nodes.s02.edits[0].state, 'done');
+  assert.equal(loadProject(root, p.id).state, 'waiting', 'back to waiting on the music review');
+
+  nodeAction(root, p.id, 's03', { action: 'fix', text: 'please fail this one' });
+  await runner.loop();
+  g = canvasView(root, p.id);
+  assert.equal(g.nodes.s03.state, 'needs you');
+  assert.equal(g.nodes.s03.edits[0].state, 'failed');
+  nodeAction(root, p.id, 's04', { action: 'clear' });
+  assert.equal(canvasView(root, p.id).nodes.s04.state, 'ready');
+});

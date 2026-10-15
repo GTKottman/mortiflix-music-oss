@@ -91,6 +91,12 @@ it's rewritten, moved or cut, and a new beat takes the next free number):
 { "made_from": "out/animatic.mp4", "fps": 30, "scenes": [ { "key": "s01", "name": "The map wakes up", "from_frame": 0, "frames": 180, "beat": "b01" } ] }
 ```
 
+**Edit requests.** The owner can click any piece on the canvas and ask for a different version. Those arrive as edit
+requests (`mfx edits`, and listed at the top of CLAUDE.md) and come before everything else: remake only that piece,
+write it where the canvas reads it (a shot remade alone: give its scene in `out/scenes.json` a `"file"` of its own),
+`mfx canvas`, then `mfx edit done <id> "what you changed"` (refused until the piece has a new version) or
+`mfx edit fail <id> "why"`.
+
 ## Reading the owner's response
 
 It's in `feedback/<step>-v<n>.json` and summarized in `CLAUDE.md`:

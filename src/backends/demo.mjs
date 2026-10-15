@@ -3,7 +3,7 @@
 // same gate rules as a real session, so you can try the whole review loop (and develop the UI) without an
 // account or any cost. Nothing it makes is meant to be good.
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { callStudio } from '../mfx.mjs';
 import { loadProject, projectPipeline } from '../projects.mjs';
@@ -38,6 +38,17 @@ export async function run({ root, projectId, workdir, env, onActivity, signal, c
 
   for (let guard = 0; guard < 50; guard++) {
     if (signal?.aborted) return { ok: false, error: 'stopped' };
+    // Edit requests from the canvas come first: remake just that piece, then report it.
+    for (const e of await mfx('edits', {})) {
+      say(`Remaking ${e.label} (${e.id}): ${e.text}`);
+      await pause();
+      const made = await remake(e);
+      if (made !== true) { await mfx('edit-fail', { edit: e.id, note: made }); say(`${e.id} failed: ${made}`); continue; }
+      await mfx('canvas-sync', {});
+      await mfx('edit-done', { edit: e.id, note: `Demo: remade ${e.label} for "${e.text.slice(0, 80)}".` });
+      say(`${e.label} remade (${e.id}).`);
+      did++;
+    }
     const project = loadProject(root, projectId);
     if (project.state !== 'queued' || project.questions.some((q) => !q.answered_at)) break;
     const step = stepView(project, pipeline).find((s) => ['ready', 'working', 'changes'].includes(s.state));
@@ -123,6 +134,47 @@ export async function run({ root, projectId, workdir, env, onActivity, signal, c
   }
   await mfx('handoff', { text: did ? `Demo session: moved ${did} step(s) forward.` : 'Demo session: nothing to do.' });
   return { ok: true, usage: { input_tokens: 0, output_tokens: 0 } };
+
+  // One piece, remade alone: a shot gets its own clip, a frame a new picture, a beat new words. A note with the word
+  // "fail" fails on purpose, so the failure path can be tried too.
+  async function remake(e) {
+    if (/\bfail\b/i.test(e.text)) return 'Demo: failed on purpose (the note said "fail").';
+    const dir = join(workdir, 'edits', e.id);
+    mkdirSync(dir, { recursive: true });
+    const readJ = (rel) => JSON.parse(readFileSync(join(workdir, rel), 'utf8'));
+    if (e.kind === 'shot') {
+      if (!hasFfmpeg || !existsSync(join(workdir, 'out', 'scenes.json'))) return 'Demo: needs ffmpeg and the animatic to remake a shot.';
+      const sc = readJ('out/scenes.json');
+      const scene = sc.scenes.find((x) => x.key === e.node);
+      if (!scene) return `Demo: ${e.node} isn't in out/scenes.json.`;
+      const file = `edits/${e.id}/${e.node}.mp4`;
+      const job = await mfx('render', { label: `${e.label} (${e.id})`, argv: ['ffmpeg', '-y', '-loglevel', 'error', '-f', 'lavfi', '-i', `smptebars=size=1280x720:rate=${FPS}:duration=${scene.frames / FPS}`, '-pix_fmt', 'yuv420p', '-c:v', 'libx264', '-bf', '0', join(workdir, file)], cwd: workdir });
+      let r = job;
+      while (!['done', 'failed'].includes(r.state)) r = await mfx('render-wait', { id: job.id, seconds: 30 });
+      if (r.state === 'failed') return `Demo: the render failed: ${r.output_tail}`;
+      scene.file = file;
+      writeFileSync(join(workdir, 'out', 'scenes.json'), JSON.stringify(sc, null, 2));
+      return true;
+    }
+    if (e.kind === 'frame') {
+      const fr = readJ('design/frames.json');
+      const f = fr.frames.find((x) => x.id === e.node);
+      if (!f) return `Demo: ${e.node} isn't in design/frames.json.`;
+      f.file = `edits/${e.id}/${e.node}.svg`;
+      writeFileSync(join(workdir, f.file), `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080"><rect width="1920" height="1080" fill="#111"/><rect x="560" y="240" width="800" height="600" fill="#f97316"/><text x="120" y="980" font-family="sans-serif" font-size="64" fill="#fff">${escapeXml(f.label)} · remade (${e.id})</text></svg>`);
+      writeFileSync(join(workdir, 'design', 'frames.json'), JSON.stringify(fr, null, 2));
+      return true;
+    }
+    if (e.kind === 'beat') {
+      const b = readJ('script/beats.json');
+      const beat = b.beats.find((x) => x.id === e.node);
+      if (!beat) return `Demo: ${e.node} isn't in script/beats.json.`;
+      beat.words = `${beat.words.replace(/ \(changed.*\)$/, '')} (changed: ${e.text.slice(0, 40)})`;
+      writeFileSync(join(workdir, 'script', 'beats.json'), JSON.stringify(b, null, 2));
+      return true;
+    }
+    return `Demo: can't remake a ${e.kind} yet.`;
+  }
 }
 
 const escapeXml = (s) => String(s).replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' }[c]));

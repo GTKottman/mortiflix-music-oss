@@ -9,6 +9,7 @@ import { randomBytes } from 'node:crypto';
 import * as gates from './gates.mjs';
 import { projectPipeline, loadProject, update, now } from './projects.mjs';
 import { appendTaste } from './torch.mjs';
+import { syncCanvas, openEdits, finishEdit } from './canvas.mjs';
 import { isInside, loadConfig } from './studio.mjs';
 
 export async function openBridge({ root, projectId, sessionId, workdir, renders, sessionEnv }) {
@@ -30,6 +31,10 @@ export async function openBridge({ root, projectId, sessionId, workdir, renders,
     'needs-you': ({ text }) => gates.needsYou(root, projectId, text),
     'propose-check': (a) => gates.proposeCheck(root, projectId, a),
     'files': () => loadProject(root, projectId).intake.files,
+    'canvas-sync': () => { const g = syncCanvas(root, projectId); return { rev: g.rev, order: g.order, problems: g.problems }; },
+    'edits': () => openEdits(root, projectId),
+    'edit-done': ({ edit, note }) => finishEdit(root, projectId, edit, { ok: true, note }),
+    'edit-fail': ({ edit, note }) => finishEdit(root, projectId, edit, { ok: false, note }),
     'render': ({ label, argv, cwd }) => {
       const dir = cwd ? realpathSync(cwd) : work;
       if (!isInside(work, dir)) throw new gates.GateError('renders run inside the project folder');

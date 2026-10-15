@@ -7,6 +7,9 @@ import { resolve } from 'node:path';
 const USAGE = `mfx: talk to the Mortiflix studio from inside a session
 
   mfx status <key> [--rendering]        what the owner sees while you work     (mfx status --list)
+  mfx canvas                            rebuild the canvas from your files (beats, frames, scenes)
+  mfx edits                             the owner's open edit requests (do these first)
+  mfx edit done|fail <E001> ["note"]    report an edit request: done once its piece has a new version
   mfx step start <step>                 mark a step as being worked on
   mfx step done <step> --checks <file>  finish an internal step (file = its error_checks list)
   mfx checks <step>                     the error checks a step runs
@@ -98,6 +101,14 @@ export async function main(argv, env = process.env, cwd = process.cwd()) {
     case 'needs-you': return call('needs-you', { text: need(f._.join(' '), '"what you need"') });
     case 'propose-check': return call('propose-check', { title: f.title, how: f.how, example: f.example, work: f.work, same_as: f['same-as'] });
     case 'files': return call('files', {});
+    case 'canvas': return call('canvas-sync', {});
+    case 'edits': return call('edits', {});
+    case 'edit': {
+      const [sub, edit, ...words] = f._;
+      if (sub === 'done') return call('edit-done', { edit: need(edit, '<E001>'), note: words.join(' ') });
+      if (sub === 'fail') return call('edit-fail', { edit: need(edit, '<E001>'), note: need(words.join(' '), '"why"') });
+      throw new Error(`mfx edit done|fail <E001> ["note"]\n\n${USAGE}`);
+    }
     case undefined: case 'help': case '--help': case '-h':
       console.log(USAGE);
       return undefined;

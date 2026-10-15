@@ -147,7 +147,7 @@ async function loadStudio() {
 // ---------- the canvas (web/canvas.js) ----------
 
 async function openCanvas(id, mode) {
-  const cv = canvasView({ h, fill, api, fileUrl, clock, store, icon, appendLog, studio: () => studio }, id, mode || 'edit');
+  const cv = canvasView({ h, fill, api, fileUrl, clock, store, icon, appendLog, toast, studio: () => studio }, id, mode || 'edit');
   mount(await cv.show());
   current.refresh = () => cv.refresh();
   leaveView = () => cv.leave();

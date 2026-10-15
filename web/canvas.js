@@ -36,7 +36,8 @@ export function canvasView(ui, id, mode = 'edit') {
       const beat = s.beat ? n[s.beat] : null;
       return { kind: v?.file ? 'shot' : lookFile ? 'image' : 'planned', id: sid, file: v?.file || lookFile, from: v?.from_sec ?? null, to: v?.to_sec ?? null,
         still: lookFile, label: `${s.label} · ${s.title || ''}`.trim(), beatLabel: beat?.label || null, beatTitle: beat?.title || null, colour: s.colour,
-        stepName: v?.file ? 'Animatic' : 'Planned shot', version: s.current || 1, planned: !v?.file, step: null };
+        stepName: v?.file ? (v.from_sec === 0 && s.versions.length > 1 ? 'Remade' : 'Animatic') : 'Planned shot', version: s.current || 1, planned: !v?.file, step: null,
+        state: s.state, owner: s.owner, pending: s.pending, failed: s.failed, versions: s.versions?.length || 0 };
     });
   }
 
@@ -113,14 +114,38 @@ export function canvasView(ui, id, mode = 'edit') {
         h('span', { class: 'cv-label' }, it.label),
         h('span', { class: 'cv-meta' }, `${it.stepName} · v${it.version}${it.from !== null && it.from !== undefined ? ` · ${clock(it.from)}–${clock(it.to)}` : ''} · ${sel + 1} of ${pieces.length}`),
         it.step ? h('a', { href: `#/p/${id}/review/${it.step}/${it.version}` }, 'Open in the review room') : null),
-      it.beatTitle ? h('div', { class: 'cv-says' }, it.beatTitle) : null);
+      it.beatTitle ? h('div', { class: 'cv-says' }, it.beatTitle) : null,
+      it.id && graph?.nodes?.[it.id] ? actions(it) : null);
+  }
+
+  // OK / Fix / Cut it on the shot in the Monitor. Each one is sent at once: a Fix starts remaking that shot while you
+  // go on to the next.
+  const STATE_WORDS = { ready: 'ready', approved: 'OK', cut: 'cut', generating: 'remaking', 'needs you': 'needs you' };
+  function actions(it) {
+    const send = async (body) => {
+      try { graph = await api(`/api/projects/${id}/canvas/nodes/${it.id}`, { method: 'POST', body }); pieces = collect(); drawMonitor(); drawBoard(); }
+      catch (e) { ui.toast(e.message, true); }
+    };
+    const fixBox = h('textarea', { rows: 2, placeholder: `What should change in ${it.id.toUpperCase()}? (sent at once; it's remade while you carry on)` });
+    const fixRow = h('div', { class: 'cv-fix', hidden: true }, fixBox,
+      h('div', { class: 'cv-fix-end' }, h('button', { class: 'btn', onclick: () => { fixRow.hidden = true; } }, 'Cancel'),
+        h('button', { class: 'btn primary', onclick: async () => { const text = fixBox.value.trim(); if (!text) return ui.toast('Say what to change', true); await send({ action: 'fix', text }); if (keep) go(sel + 1, true); } }, 'Send')));
+    const status = it.pending ? `Remaking (${it.pending.id}): ${it.pending.text}` : it.failed ? `Couldn't remake (${it.failed.id}): ${it.failed.note || it.failed.text}` : null;
+    return h('div', { class: 'cv-actions' },
+      h('div', { class: 'cv-act-row' },
+        h('button', { class: `btn${it.owner === 'ok' ? ' on' : ''}`, onclick: async () => { await send({ action: it.owner === 'ok' ? 'clear' : 'ok' }); if (it.owner !== 'ok' && keep) go(sel + 1, true); } }, it.owner === 'ok' ? 'OK ✓' : 'OK'),
+        h('button', { class: 'btn', disabled: Boolean(it.pending), onclick: () => { fixRow.hidden = false; fixBox.focus(); } }, 'Fix'),
+        h('button', { class: `btn${it.owner === 'cut' ? ' on' : ''}`, onclick: () => send({ action: it.owner === 'cut' ? 'clear' : 'cut' }) }, it.owner === 'cut' ? 'Cut ✓ (bring back)' : 'Cut it'),
+        h('span', { class: `cv-state st-${String(it.state).replace(' ', '-')}` }, STATE_WORDS[it.state] || it.state, it.versions > 1 ? ` · ${it.versions} versions` : ''),
+        status ? h('span', { class: 'cv-status-text' }, status) : null),
+      fixRow);
   }
 
   function drawBoard() {
     if (!pieces.length) return fill(board, h('div', { class: 'cv-empty' }, 'Pieces line up here, in order, as they are made.'));
     if (boardView === 'nodes' && pieces[0]?.id) return drawNodes();
     fill(board, h('ol', { class: 'cv-strip' }, pieces.map((it, k) => h('li', null,
-      h('button', { class: `cv-card${k === sel ? ' on' : ''}`, onclick: () => go(k, true), title: it.label, style: it.colour ? { background: it.colour.hex } : null },
+      h('button', { class: `cv-card${k === sel ? ' on' : ''}${it.state ? ` st-${String(it.state).replace(' ', '-')}` : ''}`, onclick: () => go(k, true), title: it.label, style: it.colour ? { background: it.colour.hex } : null },
         it.beatLabel ? h('span', { class: 'cv-ribbon', style: { background: it.colour?.chip } }, it.beatLabel) : null,
         h('span', { class: `cv-thumb kind-${it.kind}` },
           it.still ? h('img', { src: fileUrl(id, it.still), alt: '', loading: 'lazy' })
@@ -128,7 +153,7 @@ export function canvasView(ui, id, mode = 'edit') {
             : it.kind === 'video' ? h('video', { src: `${fileUrl(id, it.file)}#t=0.5`, preload: 'metadata', muted: true })
               : h('span', { class: 'cv-kind' }, it.kind === 'audio' ? 'Sound' : 'Text')),
         h('span', { class: 'cv-name' }, it.label),
-        h('span', { class: 'cv-step' }, it.stepName))))));
+        h('span', { class: 'cv-step' }, it.state && it.state !== 'ready' ? `${STATE_WORDS[it.state] || it.state} · ${it.stepName}` : it.stepName))))));
     board.querySelector('.cv-card.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }
 
@@ -140,12 +165,12 @@ export function canvasView(ui, id, mode = 'edit') {
     const items = [];
     pieces.forEach((it, k) => {
       const s = n[it.id] || {};
-      items.push(h('button', { class: `cv-node${k === sel ? ' on' : ''}`, 'data-k': k, onclick: () => go(k, true), title: it.label },
+      items.push(h('button', { class: `cv-node${k === sel ? ' on' : ''}${it.state ? ` st-${String(it.state).replace(' ', '-')}` : ''}`, 'data-k': k, onclick: () => go(k, true), title: it.label },
         h('span', { class: 'cv-node-head', style: { background: it.colour?.hex || 'var(--clip-video)' } },
           h('span', { class: 'cv-node-beat', style: { background: it.colour?.chip || 'transparent' } }, it.beatLabel || ''), h('span', null, s.label || it.id)),
         h('span', { class: 'cv-node-still' }, it.still ? h('img', { src: fileUrl(id, it.still), alt: '', loading: 'lazy' }) : h('span', { class: 'cv-kind' }, it.planned ? 'Planned' : 'Shot')),
         h('span', { class: 'cv-node-title' }, s.title || it.label),
-        h('span', { class: 'cv-node-state' }, it.planned ? 'planned' : `v${it.version} · ready`),
+        h('span', { class: 'cv-node-state' }, it.planned ? 'planned' : `v${it.version} · ${STATE_WORDS[it.state] || it.state || 'ready'}`),
         h('span', { class: 'cv-sock in', 'aria-hidden': 'true' }), h('span', { class: 'cv-sock out', 'aria-hidden': 'true' })));
       const next = pieces[k + 1];
       if (next) {
@@ -190,6 +215,8 @@ export function canvasView(ui, id, mode = 'edit') {
   }
 
   function go(k, autoplay = false) {
+    // Keep playing steps over shots the owner cut.
+    if (autoplay) { const dir = k >= sel ? 1 : -1; while (pieces[k]?.state === 'cut' && k !== sel) k += dir; }
     if (k < 0 || k >= pieces.length) return;
     sel = k;
     drawMonitor(autoplay);
