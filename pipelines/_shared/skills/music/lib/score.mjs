@@ -172,3 +172,16 @@ export function intensityChart(report) {
     return `${s.name.slice(0, 28).padEnd(28)} bars ${String(s.bars[0]).padStart(3)}-${String(s.bars[1]).padEnd(3)} asked ${String(s.asked).padStart(2)}  measured ${String(s.measured).padStart(5)}  ${spark}`;
   }).join('\n');
 }
+
+// Each section as a range of beats: [start, end), with its number and name.
+export function sectionRanges(bp) {
+  const bpb = beatsPerBar(bp.meter || '4/4');
+  return (bp.sections || []).map((s, i) => ({ n: i + 1, name: s.name, start: (s.start_bar - 1) * bpb, end: s.end_bar * bpb, bars: s.end_bar - s.start_bar + 1 }));
+}
+
+// A section's notes, moved to start at beat 0 and cut at its end: a clip to drop into a DAW.
+export function clipOf(track, range) {
+  const notes = track.notes.filter((n) => n.start >= range.start - 1e-9 && n.start < range.end - 1e-9)
+    .map((n) => ({ ...n, start: +(n.start - range.start).toFixed(6), dur: +Math.min(n.dur, range.end - n.start).toFixed(6) }));
+  return { ...track, notes };
+}

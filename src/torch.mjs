@@ -8,7 +8,7 @@ import { REPO, paths } from './studio.mjs';
 import { projectPaths, loadProject, projectPipeline, readJournal, readEvents } from './projects.mjs';
 import { stepView, stepChecks, submissions } from './gates.mjs';
 import { finishesOwnMaster } from './music.mjs';
-import { blenderSkillDirs, blenderDocsDir, browserHarnessSkill, setupStatusSync } from './setup.mjs';
+import { blenderSkillDirs, blenderDocsDir, browserHarnessSkill, setupStatusSync, DAWS } from './setup.mjs';
 
 // The owner's own words: their direction for this video (outranks the pipeline's defaults, never the gate rules).
 const fence = (label, text) => `<<<${label} (the owner's words)\n${text}\n${label}>>>`;
@@ -42,6 +42,7 @@ function studioSection(root) {
   const lines = [];
   if (st.music.engine === 'none') lines.push('- **Music:** the owner chose no music. Skip any music step with a short note (`mfx step-done`), never improvise one.');
   else if (st.strudel.ok && st.chrome.ok) lines.push(`- **Music:** Strudel ${st.strudel.version}, through the **music** skill's engine (for a video, scored after the animatic).${st.music.midi ? ' The owner also wants the **MIDI pack** (every part, the cue sheet) with the final.' : ''}`);
+  if (st.music.engine !== 'none') lines.push(st.daw.id ? `- **The owner's DAW:** ${st.daw.name}. The MIDI pack's import steps are written for it (\`$MFX_DAW\` = \`${st.daw.id}\`).` : `- **The owner's DAW:** not named. The MIDI pack's import steps are written for any DAW (${Object.values(DAWS).slice(0, 5).join(', ')}…).`);
   else lines.push('- **Music:** Strudel isn\'t set up yet. When a music step is ready, `mfx needs-you`: "Run `mortiflix setup music`, then resume."');
   if (voiceConfig(root).engine === 'own') lines.push('- **Narration:** the owner narrates in their **own voice**. Write `voice/lines.json` as usual (short lines; delivery notes as a `[tag]` at the start, which the owner sees as direction), then `vo.mjs speak`: it lists the lines that still need a recording and the exact `mfx needs-you` text that sends the owner to the recording booth. When they resume, `speak` passes and `build` makes the track (timed per line).');
   if (st.assets.sites.length && st['browser-harness'].ok) {

@@ -171,7 +171,8 @@ the curve against the story: does it rise where it should, does it hold back und
 
 When it passes, the score's notes become **the MIDI**: `music/notes.json` (every channel's notes in beats, with
 velocity) and `out/music/midi/` (one `.mid` per channel, the whole arrangement in one file, tempo, meter, section names
-and hit points as markers, and `CUE-SHEET.md`). From here on the MIDI is the music: the instruments are chosen from it,
+and hit points as markers, a clip per section in `sections/` from its own bar 1, and `CUE-SHEET.md` with the steps to
+bring it into the owner's DAW, `$MFX_DAW`, or general steps when none is named). From here on the MIDI is the music: the instruments are chosen from it,
 and the owner can take it into any DAW. The check also prints where each channel plays (lowest, middle, highest note).
 
 ## 7. Instruments: a sound for every channel

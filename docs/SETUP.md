@@ -41,6 +41,9 @@ shell is downloaded into `tools/browsers`. You also choose:
   won't start.
 - **A MIDI pack**: every part as MIDI on its own channel, the stems, and a cue sheet (tempo, sections, hit points),
   delivered with every final so you can remake the music in your own DAW.
+- **Your DAW** (`mortiflix setup daw <name>`): Ableton Live, FL Studio, Logic Pro, REAPER, Bitwig Studio, Cubase,
+  Studio One, GarageBand or Pro Tools. Every MIDI pack's cue sheet then has the steps to bring it into that DAW;
+  without one, the steps are general. Nothing to install.
 
 Each brief also says who finishes its music. For videos the recommended answer is you: the studio writes and checks
 the score, and you take its MIDI into your own DAW and import your master (the project's Music panel, or

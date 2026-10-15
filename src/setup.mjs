@@ -60,6 +60,12 @@ export const PARTS = [
     tools: ['strudel', 'chrome'],
   },
   {
+    id: 'daw',
+    title: 'Your DAW',
+    why: 'The MIDI pack is made to be finished in a DAW. Name yours and every MIDI pack comes with the steps to bring it in there: the tempo, bar 1, one track per channel, the markers.',
+    needs: 'Nothing to install. Optional: without one, the steps are written for any DAW.',
+  },
+  {
     id: 'assets',
     title: 'Assets',
     why: 'If you use a stock site (footage, images, 3D models, sound effects), sessions can search it and download what fits, with your own login, in your own Chrome.',
@@ -223,6 +229,7 @@ export async function setupStatus(root) {
     blender: blenderStatus(root),
     'blender-addons': addonsStatus(root),
     music: musicConfig(config),
+    daw: dawConfig(config),
     assets: assetsConfig(config),
     publish: (({ service, ...rest }) => ({ service, ...rest, key: service === 'none' ? null : keySource(root, service) }))(publishConfig(config)),
     gpu: qwen.recommend(qwen.detectGpus()),
@@ -241,6 +248,24 @@ export function saveMusic(root, { engine, midi } = {}) {
   if (engine !== undefined && !['strudel', 'none'].includes(engine)) throw new UserError('music engine: strudel or none');
   saveConfig(root, { music: { engine: engine ?? cur.engine, midi: midi === undefined ? cur.midi : Boolean(midi) } });
   return musicConfig(loadConfig(root));
+}
+
+// The DAWs a MIDI pack writes import steps for (anything else gets the general steps).
+export const DAWS = {
+  ableton: 'Ableton Live', fl: 'FL Studio', logic: 'Logic Pro', reaper: 'REAPER', bitwig: 'Bitwig Studio',
+  cubase: 'Cubase', studioone: 'Studio One', garageband: 'GarageBand', protools: 'Pro Tools', other: 'Another DAW',
+};
+
+export function dawConfig(config) {
+  const id = DAWS[config.daw] ? config.daw : null;
+  return { id, name: id ? DAWS[id] : null };
+}
+
+export function saveDaw(root, id) {
+  const v = id === 'none' || id === '' ? null : id;
+  if (v !== null && v !== undefined && !DAWS[v]) throw new UserError(`which DAW? One of: ${Object.keys(DAWS).join(', ')} (or none)`);
+  saveConfig(root, { daw: v ?? undefined });
+  return dawConfig(loadConfig(root));
 }
 
 export function assetsConfig(config) {
@@ -583,6 +608,8 @@ export function sessionToolsEnv(root) {
   if (s.ok) env.MFX_STRUDEL = s.path;
   const c = chromeStatus(root);
   if (c.ok) env.MFX_CHROME = c.path;
+  const daw = dawConfig(config);
+  if (daw.id) env.MFX_DAW = daw.id;
   const b = blenderStatus(root);
   if (b.ok) Object.assign(env, { MFX_BLENDER: b.path }, addonsStatus(root).installed?.length ? { ...blenderEnv(root), MFX3D: join(REPO_ROOT, 'harness', 'skills', 'blender-3d') } : {});
   return env;
@@ -594,7 +621,7 @@ export const blenderDocsDir = (root) => join(toolsDir(root), 'blender-addons', '
 export function setupStatusSync(root) {
   const config = loadConfig(root);
   return { transitions: transitionsStatus(root), strudel: strudelStatus(root), chrome: chromeStatus(root), 'browser-harness': browserHarnessStatus(), blender: blenderStatus(root),
-    'blender-addons': addonsStatus(root), music: musicConfig(config), assets: assetsConfig(config) };
+    'blender-addons': addonsStatus(root), music: musicConfig(config), daw: dawConfig(config), assets: assetsConfig(config) };
 }
 
 // The 3D toolkits' own skills (from their repositories), when they're installed.

@@ -27,7 +27,7 @@ export const HELP = `${C.b('mortiflix')}: a motion design studio on your machine
   ${C.b('Getting started')}
   mortiflix init [--backend claude-code|anthropic-api|demo]   set up the studio (~/Mortiflix, or $MORTIFLIX_STUDIO)
   mortiflix setup                                              the walkthrough: Claude, transitions, narration, music, assets, 3D
-  mortiflix setup <claude|transitions|narration|music|assets|3d>  one part (mortiflix setup status: where things stand)
+  mortiflix setup <claude|transitions|narration|music|daw|assets|3d>  one part (mortiflix setup status: where things stand)
   mortiflix keys                                               add or change your keys (Anthropic, ElevenLabs, others)
   mortiflix doctor                                             check the tools a pipeline needs
   mortiflix demo                                               a full walk-through with placeholder work (free)
@@ -87,6 +87,7 @@ export const HELP = `${C.b('mortiflix')}: a motion design studio on your machine
   ${C.b('Without a terminal')} (scripts, Claude Code)
   mortiflix setup install <${setup.TOOLS.join('|')}>
   mortiflix setup music <strudel|none> [--midi|--no-midi]
+  mortiflix setup daw <${Object.keys(setup.DAWS).join('|')}|none>
   mortiflix setup assets <url>… | --clear
   mortiflix setup publish <uploadpost|postiz|none> [--url <your Postiz>] [--profile <Upload-Post profile>]`;
 
@@ -824,6 +825,15 @@ async function setupPart(root, id, st) {
     setup.saveMusic(root, { engine: 'strudel', midi });
     return console.log(`  ${C.green('✔')} Music: Strudel${midi ? ' + MIDI pack' : ''}.`);
   }
+  if (id === 'daw') {
+    const ids = Object.keys(setup.DAWS);
+    ids.forEach((d, i) => console.log(`  ${String(i + 1).padStart(2)}. ${setup.DAWS[d]}`));
+    console.log('   0. None: general steps for any DAW');
+    const v = (await prompterOnce(`  Which DAW do you finish music in? ${C.dim(`[Enter keeps ${st.daw.name || 'none'}]`)} `)).trim();
+    if (!v) return undefined;
+    const d = setup.saveDaw(root, v === '0' ? null : ids[Number(v) - 1] || v);
+    return console.log(`  ${C.green('✔')} ${d.id ? `${d.name}: every MIDI pack comes with its import steps.` : 'No DAW named: the import steps are general.'}`);
+  }
   if (id === 'assets') {
     const cur = setup.assetsConfig(loadConfig(root)).sites;
     if (cur.length) console.log(`  Your sites now: ${cur.map((x) => x.url).join(', ')}`);
@@ -902,6 +912,7 @@ async function showSetup(root) {
     v.engine === 'none' ? 'none' : v.engine === 'elevenlabs' ? `ElevenLabs: ${v.elevenlabs.voice_name || 'no voice chosen'} on ${v.elevenlabs.model_id}${voice.elevenKey(root) ? '' : ', key missing'}` : `this computer: ${st.comfyui.detail}`);
   row(st.transitions.ok, 'Transitions', st.transitions.ok ? `remotion-transitions: ${st.transitions.detail}` : 'library not installed (mortiflix setup transitions)');
   row(st.music.engine === 'none' ? null : st.strudel.ok && st.chrome.ok, 'Music', st.music.engine === 'none' ? 'none' : `Strudel: ${st.strudel.detail}; Chrome: ${st.chrome.ok ? 'found' : 'missing'}${st.music.midi ? '; MIDI pack on' : ''}`);
+  row(st.daw.id ? true : null, 'Your DAW', st.daw.name || 'not named: general import steps');
   row(st.assets.sites.length ? st['browser-harness'].ok : null, 'Assets', st.assets.sites.length ? `${st.assets.sites.map((x) => x.url).join(', ')} (browser-harness ${st['browser-harness'].ok ? st['browser-harness'].detail : 'missing'})` : 'no sites: sessions make every visual themselves');
   const pubCfg = st.publish;
   row(pubCfg.service === 'none' ? null : Boolean(pubCfg.key), 'Publishing', pubCfg.service === 'none' ? 'off: you post finals yourself'
@@ -948,6 +959,10 @@ async function setupCmd(root, [part, ...args], a) {
   if (part === 'music' && args.length) {
     const m = setup.saveMusic(root, { engine: args[0], midi: a.midi ? true : a['no-midi'] ? false : undefined });
     return console.log(`${C.green('✔')} Music: ${m.engine === 'none' ? 'none (music steps are skipped)' : `Strudel${m.midi ? ' + MIDI pack' : ''}`}.`);
+  }
+  if (part === 'daw' && args.length) {
+    const d = setup.saveDaw(root, args[0]);
+    return console.log(`${C.green('✔')} ${d.id ? `Your DAW: ${d.name}. Every MIDI pack comes with its import steps.` : 'No DAW named: the import steps are general.'}`);
   }
   if (part === 'assets' && (args.length || a.clear)) {
     setup.saveAssetSites(root, a.clear ? [] : args);

@@ -178,11 +178,16 @@ pad: cue(note("<[a3,c4,e4,g4] [a3,c4,e4,f4] [g3,c4,e4] [g3,b3,d4]>").velocity(.6
 hook: cue(note("<[e5 c5 a4 c5] [c5 a4 f5 a4] [e5 g5 e5 c5] [d5 b4 g4 b4]>").velocity("<.7 .85>").mask(lift)).midichan(3)
 drums: cue(note("[36 ~ ~ 36 38 ~ 36 ~], [42*8]").velocity(.9).mask(lift)).midichan(10)
 `);
-  const env = { ...process.env, MFX_STRUDEL: process.env.MFX_TEST_STRUDEL, MFX_CHROME: chrome.path };
+  const env = { ...process.env, MFX_STRUDEL: process.env.MFX_TEST_STRUDEL, MFX_CHROME: chrome.path, MFX_DAW: 'reaper' };
   const run = (...args) => spawnSync('node', [join(REPO, 'pipelines/_shared/skills/music/strudel.mjs'), ...args], { cwd: dir, env, encoding: 'utf8', timeout: 180_000 });
   let r = run('plan'); assert.equal(r.status, 0, r.stdout + r.stderr);
   r = run('check'); assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.ok(existsSync(join(dir, 'music/notes.json')) && existsSync(join(dir, 'out/music/midi.zip')));
+  // A clip per section, and the cue sheet's import steps written for the owner's DAW.
+  assert.ok(existsSync(join(dir, 'out/music/midi/sections/01-fog-on-the-water/fog-on-the-water-all.mid')));
+  assert.ok(existsSync(join(dir, 'out/music/midi/sections/02-the-lamp-turns/03-hook.mid')));
+  const sheet = readFileSync(join(dir, 'out/music/midi/CUE-SHEET.md'), 'utf8');
+  assert.match(sheet, /## Bringing it into REAPER/); assert.match(sheet, /Insert › Media file/);
   r = run('instruments'); assert.equal(r.status, 1); assert.match(r.stderr, /no music\/instruments\.json yet/);
   INST.parts[2].role = 'Hook';
   writeFileSync(join(dir, 'music/instruments.json'), JSON.stringify({ ...INST, parts: INST.parts.map((p) => (p.channel === 10 ? { ...p, kit: { ...p.kit } } : p)) }));

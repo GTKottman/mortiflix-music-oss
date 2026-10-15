@@ -782,6 +782,13 @@ async function setupSection() {
           h('label', { class: 'toggle' }, h('input', { type: 'checkbox', checked: st.music.midi, onchange: async (e) => { info = await api('/api/setup/music', { method: 'PUT', body: { midi: e.target.checked } }); draw(); } }),
             'Also deliver a MIDI pack (every part, the stems and a cue sheet) to remake the music in your own DAW'),
           toolRow('strudel'), toolRow('chrome')))),
+      field(part('daw').title, h('div', null, ...intro('daw'), (() => {
+        const dawNames = { ...info.daws, none: 'None' };
+        return choiceChips(Object.values(dawNames), st.daw.name || 'None', async (v) => {
+          const daw = Object.keys(dawNames).find((k) => dawNames[k] === v);
+          try { info = await api('/api/setup/daw', { method: 'PUT', body: { daw: daw === 'none' ? null : daw } }); draw(); } catch (e) { toast(e.message, true); }
+        });
+      })())),
       field(part('assets').title, h('div', null, ...intro('assets'),
         h('p', null, 'If you have a website you use for assets, list it here, one per line. Without one, you won\'t get stock assets: sessions make every visual themselves.'),
         h('textarea', { rows: 3, placeholder: 'https://…', value: sites, oninput: (e) => { sites = e.target.value; } }),
