@@ -16,6 +16,7 @@ export function canvasView(ui, id, mode = 'edit') {
   let tsel = null; // a transition node picked on the noodle graph: the Monitor shows the cut and the library
   let library = null;
   let fcInfo = null;
+  let selTimer = null;
   let rightTab = 'doing';
   const asked = h('div', { class: 'cv-body cv-questions' });
   const answers = {};
@@ -408,6 +409,32 @@ export function canvasView(ui, id, mode = 'edit') {
     const video = sub.items.find((it) => it.kind === 'video');
     const waiting = step.state === 'in_review' && step.version === sub.version;
     const editing = step.state === 'editing';
+    // What the owner clicked in FilmCraft, asked for every second while the project is open.
+    const selBox = h('div', { class: 'cv-fcsel' });
+    const drawSel = (r) => {
+      const s = r?.selected?.[0];
+      if (!r?.open) return fill(selBox, h('p', { class: 'help' }, r?.error ? `${r.error}.` : 'Open it in FilmCraft, then click a scene or a sound there.'));
+      if (!s) return fill(selBox, h('p', { class: 'help' }, 'In FilmCraft, click a scene or a sound: it shows here, and you can ask for a different version of it.'));
+      if (selBox.dataset.node === s.node && selBox.querySelector('textarea')) return;
+      selBox.dataset.node = s.node;
+      const node = graph?.nodes?.[s.node];
+      const box = h('textarea', { rows: 2, placeholder: `What should be different in ${s.label.split(' · ')[0]}?` });
+      fill(selBox,
+        h('div', { class: 'cv-label' }, `In FilmCraft you clicked: ${s.label}`),
+        node?.pending ? h('p', { class: 'cv-status-text' }, `Making a new version (${node.pending.id}): ${node.pending.text}`) : null,
+        box,
+        h('div', { class: 'cv-fix-end' }, h('button', { class: 'btn primary', onclick: async () => {
+          const text = box.value.trim(); if (!text) return ui.toast('Say what to change', true);
+          try { graph = await api(`/api/projects/${id}/canvas/nodes/${s.node}`, { method: 'POST', body: { action: 'fix', text } }); box.value = ''; ui.toast(`Asked for a new ${s.label.split(' · ')[0]}`); } catch (e) { ui.toast(e.message, true); }
+        } }, 'Make a different version')));
+    };
+    clearInterval(selTimer);
+    if (editing && fcInfo?.map) {
+      // Stops once this panel is gone (redrawn or left); the first call runs before it is on the page.
+      let first = true;
+      const poll = async () => { if (!first && !selBox.isConnected) return clearInterval(selTimer); first = false; drawSel(await api(`/api/projects/${id}/filmcraft/selection`).catch(() => null)); };
+      selTimer = setInterval(poll, 1000); poll();
+    }
     const job = fcInfo?.job;
     const map = fcInfo?.map;
     const fcBlock = () => {
@@ -419,7 +446,8 @@ export function canvasView(ui, id, mode = 'edit') {
         h('div', { class: 'cv-export-actions' }, h('button', { class: 'btn primary', onclick: async () => {
           try { await api(`/api/projects/${id}/filmcraft/open`, { method: 'POST' }); ui.toast('Opening FilmCraft'); } catch (e) { ui.toast(e.message, true); }
         } }, 'Open in FilmCraft')),
-        h('p', { class: 'help' }, `In FilmCraft, click a scene or a sound, then ask for a different version (coming next). The project file: ${map.fcproj}`));
+        selBox,
+        h('p', { class: 'help' }, `The project file: ${map.fcproj}`));
       return h('p', { class: 'cv-status-text' }, 'Making your FilmCraft project…');
     };
     const msg = h('div', { class: 'err' });
@@ -492,7 +520,8 @@ export function canvasView(ui, id, mode = 'edit') {
       const busy = playing && !playing.paused;
       await load();
       drawHead();
-      if (mode === 'import' || mode === 'export') return draw();
+      // Never redraw under the owner's typing.
+      if (mode === 'import' || mode === 'export') return root.contains(document.activeElement) && document.activeElement.matches('textarea, input') ? undefined : draw();
       drawBoard();
       drawScript();
       drawDoing();
@@ -505,6 +534,7 @@ export function canvasView(ui, id, mode = 'edit') {
     },
     leave() {
       clearTimeout(advance);
+      clearInterval(selTimer);
       document.removeEventListener('keydown', onKey);
       document.body.classList.remove('in-canvas');
     },

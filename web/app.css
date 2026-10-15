@@ -473,3 +473,4 @@ button.cv-tnode { cursor: pointer; font: inherit; color: inherit; }
 .cv-export-side { display: flex; flex-direction: column; gap: 10px; }
 .cv-export-actions { display: flex; gap: 10px; }
 @media (max-width: 900px) { .cv-export { grid-template-columns: 1fr; } .cv-export-stage { min-height: 56vw; } }
+.cv-fcsel { border-top: 1px solid var(--line); padding-top: 10px; } .cv-fcsel textarea { min-height: 52px; margin-top: 8px; }

@@ -4,6 +4,7 @@
 // out/filmcraft/map.json ties every clip back to its canvas piece: click a clip in FilmCraft, and the studio knows
 // which shot, line or cue it is.
 import { spawnSync, spawn } from 'node:child_process';
+import net from 'node:net';
 import { existsSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { projectPaths, loadProject } from './projects.mjs';
@@ -148,4 +149,52 @@ export function openInFilmcraft(root, id, { port = CONTROL_PORT } = {}) {
     spawn(argv[0], argv.slice(1), { detached: true, stdio: 'ignore' }).unref();
   }
   return { opened: map.fcproj, port };
+}
+
+// ---- the control channel: what the owner clicked in FilmCraft ----
+
+// One request on FilmCraft's control channel (JSON lines on 127.0.0.1, one reply per request).
+export function control(method, params = undefined, { port = CONTROL_PORT, timeoutMs = 8000 } = {}) {
+  return new Promise((resolve, reject) => {
+    const sock = net.connect({ host: '127.0.0.1', port });
+    let buf = '';
+    const timer = setTimeout(() => { sock.destroy(); reject(new Error('FilmCraft isn\'t answering (is it open, with its control channel on?)')); }, timeoutMs);
+    sock.on('connect', () => sock.write(`${JSON.stringify({ id: 1, method, ...(params ? { params } : {}) })}\n`));
+    sock.on('data', (d) => {
+      buf += d;
+      const nl = buf.indexOf('\n');
+      if (nl < 0) return;
+      clearTimeout(timer); sock.end();
+      let m; try { m = JSON.parse(buf.slice(0, nl)); } catch (e) { return reject(e); }
+      if (!m.ok) return reject(new Error(m.error || 'FilmCraft refused the request'));
+      resolve(m.result);
+    });
+    sock.on('error', (e) => { clearTimeout(timer); reject(new Error(e.code === 'ECONNREFUSED' ? 'FilmCraft isn\'t open (Open in FilmCraft)' : e.message)); });
+  });
+}
+
+// The clips selected in FilmCraft, each with the canvas piece it is: by clip id from map.json, else through the media
+// item (a clip that was cut with the razor or moved keeps its media item).
+export async function filmcraftSelection(root, id, opts = {}) {
+  const map = loadMap(root, id);
+  if (!map) return { open: false, selected: [] };
+  const ui = await control('ui.inspect', undefined, opts);
+  const ids = (ui.selection || []).map(Number).filter(Number.isFinite);
+  if (!ids.length) return { open: true, selected: [] };
+  const byClip = new Map(map.clips.map((c) => [c.clip, c]));
+  let itemOf = null;
+  const out = [];
+  for (const clip of ids) {
+    let c = byClip.get(clip);
+    if (!c) {
+      if (!itemOf) {
+        const seq = await control('engine.execute', { command: 'sequence.inspect' }, opts);
+        itemOf = new Map([...(seq.video || []), ...(seq.audio || [])].flatMap((t) => (t.items || []).map((x) => [x.clip, x.item])));
+      }
+      c = map.clips.find((x) => x.item === itemOf.get(clip));
+    }
+    // A clip and its linked sound are one piece.
+    if (c && !out.some((x) => x.node === c.node)) out.push({ clip, node: c.node, kind: c.kind, label: c.label, version: c.version });
+  }
+  return { open: true, selected: out };
 }

@@ -213,6 +213,10 @@ export async function startServer(root, { port = 4646, host = '127.0.0.1', runne
     if (sub === '/filmcraft' && method === 'GET') return send(res, 200, { job: fcJobs.get(id) || null, map: filmcraft.loadMap(root, id) });
     if (sub === '/filmcraft/make' && method === 'POST') { makeFilmcraft(id); return after({ started: true }); }
     if (sub === '/filmcraft/open' && method === 'POST') return after(filmcraft.openInFilmcraft(root, id));
+    if (sub === '/filmcraft/selection' && method === 'GET') {
+      try { return send(res, 200, await filmcraft.filmcraftSelection(root, id, { timeoutMs: 3000 })); }
+      catch (e) { return send(res, 200, { open: false, selected: [], error: e.message }); }
+    }
     if ((m = sub.match(/^\/questions\/([a-z0-9]+)$/)) && method === 'POST') {
       const { answer } = await json(req);
       return after(gates.answerQuestion(root, id, m[1], answer ?? null));
