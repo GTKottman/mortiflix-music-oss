@@ -474,3 +474,19 @@ button.cv-tnode { cursor: pointer; font: inherit; color: inherit; }
 .cv-export-actions { display: flex; gap: 10px; }
 @media (max-width: 900px) { .cv-export { grid-template-columns: 1fr; } .cv-export-stage { min-height: 56vw; } }
 .cv-fcsel { border-top: 1px solid var(--line); padding-top: 10px; } .cv-fcsel textarea { min-height: 52px; margin-top: 8px; }
+/* the Import tab: the idea and the project's skills file side by side */
+.cv-grid-two { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: 1fr; grid-template-areas: "skills one"; }
+.cv-p-skills { grid-area: skills; }
+.cv-grid-two > .cv-panel:last-child { grid-area: one; }
+.cv-skills h2 { margin: 12px 0 4px; }
+.cv-skill-list { list-style: none; margin: 0; padding: 0; }
+.cv-skill { border-bottom: 1px solid var(--line); padding: 6px 0; }
+.cv-skill-btn { display: flex; gap: 8px; align-items: center; background: none; border: 0; padding: 0; color: var(--ink); cursor: pointer; text-align: left; }
+.cv-skill-btn[disabled] { cursor: default; }
+.cv-skill-btn:not([disabled]):hover .cv-skill-name { text-decoration: underline; }
+.cv-skill-name { font-weight: 500; }
+.cv-skill-from { color: var(--faint); font-size: 11px; }
+.cv-skill-use { color: var(--muted); font-size: 11px; margin-top: 2px; }
+.cv-skill-fix { color: var(--warn); }
+.cv-skill-text { white-space: pre-wrap; font-size: 11px; background: var(--well); border: 1px solid var(--field-line); border-radius: var(--radius); padding: 10px; margin-top: 10px; max-height: 50vh; overflow: auto; }
+@media (max-width: 900px) { .cv-grid-two { grid-template-columns: 1fr; grid-template-rows: auto auto; grid-template-areas: "one" "skills"; } }

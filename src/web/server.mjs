@@ -22,6 +22,7 @@ import * as booth from '../booth.mjs';
 import * as music from '../music.mjs';
 import { canvasView, nodeAction } from '../canvas.mjs';
 import * as filmcraft from '../filmcraft.mjs';
+import { projectSkills, readSkillText } from '../skills.mjs';
 import * as pub from '../publish.mjs';
 import { costText } from '../usage.mjs';
 
@@ -209,6 +210,12 @@ export async function startServer(root, { port = 4646, host = '127.0.0.1', runne
       // Edit the video: the studio builds the FilmCraft project itself, right away (no session, no cost).
       if (out.verdict === 'edit') makeFilmcraft(id);
       return after(out);
+    }
+    // The project's skills file, as a list (fresh), and one skill's SKILL.md from the record.
+    if (sub === '/skills' && method === 'GET') return send(res, 200, projectSkills(root, id));
+    if ((m = sub.match(/^\/skills\/([a-z0-9_-]{1,64})$/)) && method === 'GET') {
+      const text = readSkillText(root, id, m[1]);
+      return text === null ? send(res, 404, { error: 'not found' }) : send(res, 200, { name: m[1], text });
     }
     if (sub === '/filmcraft' && method === 'GET') return send(res, 200, { job: fcJobs.get(id) || null, map: filmcraft.loadMap(root, id) });
     if (sub === '/filmcraft/make' && method === 'POST') { makeFilmcraft(id); return after({ started: true }); }

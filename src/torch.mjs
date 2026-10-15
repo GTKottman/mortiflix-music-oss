@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { REPO, paths } from './studio.mjs';
 import { projectPaths, loadProject, projectPipeline, readJournal, readEvents, listProjects } from './projects.mjs';
 import { openEdits, loadGraph } from './canvas.mjs';
+import { writeSkillsFile } from './skills.mjs';
 const { opening } = await import(join(REPO, 'pipelines', '_shared', 'skills', 'music', 'lib', 'variety.mjs'));
 import { stepView, stepChecks, submissions } from './gates.mjs';
 import { finishesOwnMaster } from './music.mjs';
@@ -37,6 +38,8 @@ export function prepareWorkdir(root, id) {
   const checklist = join(pp.pipeline, 'checklist.md');
   if (existsSync(checklist) && !existsSync(join(pp.work, 'checklist.md'))) copyFileSync(checklist, join(pp.work, 'checklist.md'));
   mkdirSync(join(pp.work, 'feedback'), { recursive: true });
+  // SKILLS.md: what this project has, from exactly what was just installed.
+  writeSkillsFile(root, id);
 }
 
 // The owner's setup choices, in plain words (from \`mortiflix setup\`).
@@ -186,7 +189,8 @@ reviews every reviewed step. This file is rewritten before every session: read i
 ## Where you are
 
 - **This folder** is the project's working folder: everything you make goes here.
-- **Pipeline:** ${pipeline.name} (pinned version \`${project.pipeline.hash}\`). Start with \`pipeline/PIPELINE.md\`; skills are in \`.claude/skills/\`.
+- **Pipeline:** ${pipeline.name} (pinned version \`${project.pipeline.hash}\`). Start with \`pipeline/PIPELINE.md\`.
+- **Skills and tools:** \`SKILLS.md\`: every skill, tool and MCP server this project has, and what isn't set up (with its fix). Read it after this file.
   \`pipeline/\` is refreshed every session: never edit it.
 - **The gate protocol:** \`.mortiflix/GATES.md\`. Read it before your first \`mfx\` command.
 - **Production checklist:** \`checklist.md\` (keep it current: it's how the next session resumes).

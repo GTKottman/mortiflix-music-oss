@@ -385,9 +385,36 @@ export function canvasView(ui, id, mode = 'edit') {
     if (at >= 0) sel = at; else sel = Math.min(sel, Math.max(0, pieces.length - 1));
   }
 
+  // Skills and tools: the project's SKILLS.md as rows; click a skill to read its SKILL.md.
+  function skillsPanel() {
+    const body = h('div', { class: 'cv-body cv-skills' }, h('div', { class: 'cv-empty' }, 'Loading…'));
+    api(`/api/projects/${id}/skills`).then((list) => {
+      const notSet = list.items.filter((x) => x.state !== 'ready').length;
+      const reader = h('pre', { class: 'cv-skill-text', hidden: true });
+      const row = (x) => h('li', { class: 'cv-skill' },
+        h('button', { class: 'cv-skill-btn', disabled: x.kind !== 'skill', onclick: async () => {
+          try { const r = await api(`/api/projects/${id}/skills/${x.name}`); reader.textContent = r.text; reader.hidden = false; reader.scrollIntoView({ block: 'nearest' }); } catch (e) { ui.toast(e.message, true); }
+        } },
+          h('span', { class: 'cv-skill-name' }, x.name),
+          h('span', { class: 'chip' }, x.kind === 'mcp' ? 'MCP' : x.kind),
+          h('span', { class: `chip ${x.state === 'ready' ? 'ok' : 'warn'}` }, x.state),
+          x.from ? h('span', { class: 'cv-skill-from' }, x.from === 'pipeline' ? 'pipeline (pinned)' : x.from) : null),
+        h('div', { class: 'cv-skill-use' }, x.use || x.where || '', x.fix ? h('span', { class: 'cv-skill-fix' }, ` Fix: ${x.fix}`) : null));
+      fill(body,
+        h('p', { class: 'help' }, `${list.items.length} skills, tools and servers · ${notSet ? `${notSet} not set up` : 'all set up'} · backend ${list.backend}. Sessions read this as SKILLS.md.`),
+        ['skill', 'tool', 'mcp'].map((k) => {
+          const xs = list.items.filter((x) => x.kind === k);
+          return xs.length ? [h('h2', null, k === 'skill' ? 'Skills' : k === 'tool' ? 'Tools' : 'MCP servers'), h('ul', { class: 'cv-skill-list' }, xs.map(row))] : null;
+        }),
+        reader);
+    }).catch((e) => fill(body, h('p', { class: 'err' }, e.message)));
+    return body;
+  }
+
   function drawImport() {
     const brief = Object.entries(d.intake?.answers || {}).filter(([, v]) => String(v).trim());
-    return h('div', { class: 'cv-grid cv-grid-one' },
+    return h('div', { class: 'cv-grid cv-grid-two' },
+      panel('Skills and tools', skillsPanel(), null, 'cv-p-skills'),
       panel('Idea', h('div', { class: 'cv-body' },
         h('dl', { class: 'cv-brief' }, h('dt', null, 'Name'), h('dd', null, d.title), h('dt', null, 'Preset'), h('dd', null, d.pipelineName),
           brief.map(([k, v]) => [h('dt', null, d.intakeQs.find((q) => q.id === k)?.label || k), h('dd', null, String(v))])))));
