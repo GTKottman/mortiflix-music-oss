@@ -16,6 +16,7 @@ export function canvasView(ui, id, mode = 'edit') {
   let advance = null;
 
   const monitor = h('div', { class: 'cv-body cv-monitor' });
+  const script = h('div', { class: 'cv-body cv-script' });
   const board = h('div', { class: 'cv-body cv-board' });
   const doing = h('div', { class: 'cv-body cv-doing' });
   const head = h('header', { class: 'cv-head' });
@@ -214,6 +215,38 @@ export function canvasView(ui, id, mode = 'edit') {
     log.scrollTop = log.scrollHeight;
   }
 
+  // The script area walks you through the script: every beat in order, in its colour, the playing one lit. Click a
+  // beat to play its shot; "Change the words" asks for a new version of just that beat.
+  function drawScript() {
+    const n = graph?.nodes || {};
+    const beats = (graph?.order?.beats || []).map((b) => n[b]).filter(Boolean);
+    if (!beats.length) return fill(script, h('div', { class: 'cv-empty' }, 'The script appears here, beat by beat, as soon as it is written.'));
+    const playing = pieces[sel]?.beatLabel?.toLowerCase() || null;
+    const shotOf = (bid) => pieces.findIndex((x) => x.id && n[x.id]?.beat === bid);
+    fill(script,
+      h('ol', { class: 'cv-beats' }, beats.map((b) => {
+        const k = shotOf(b.id);
+        const on = playing === b.id;
+        const pend = b.pending;
+        const box = h('textarea', { rows: 2, placeholder: 'What should these words say instead?' });
+        const row = h('div', { class: 'cv-fix', hidden: true }, box, h('div', { class: 'cv-fix-end' },
+          h('button', { class: 'btn', onclick: () => { row.hidden = true; } }, 'Cancel'),
+          h('button', { class: 'btn primary', onclick: async () => {
+            const text = box.value.trim(); if (!text) return ui.toast('Say what to change', true);
+            try { graph = await api(`/api/projects/${id}/canvas/nodes/${b.id}`, { method: 'POST', body: { action: 'fix', text } }); pieces = collect(); drawScript(); } catch (e) { ui.toast(e.message, true); }
+          } }, 'Send')));
+        return h('li', { class: `cv-beat-row${on ? ' on' : ''}${b.state === 'cut' ? ' st-cut' : ''}`, style: { borderLeftColor: b.colour?.chip || 'transparent' } },
+          h('button', { class: 'cv-beat-btn', onclick: () => { if (k >= 0) go(k, true); } },
+            h('span', { class: 'cv-beat-id' }, b.label, b.versions?.length > 1 ? h('span', { class: 'cv-beat-v' }, ` v${b.current}`) : null),
+            h('span', { class: 'cv-beat-words' }, b.title),
+            b.visual ? h('span', { class: 'cv-beat-visual' }, b.visual) : null),
+          pend ? h('div', { class: 'cv-status-text' }, `Rewriting (${pend.id}): ${pend.text}`) : on ? h('button', { class: 'btn link cv-beat-change', onclick: () => { row.hidden = false; box.focus(); } }, 'Change the words') : null,
+          row);
+      })),
+      h('div', { class: 'cv-walk' }, h('button', { class: 'btn', onclick: () => { keep = true; store.set(keepKey, true); draw(); go(Math.max(0, shotOf(beats[0].id)), true); } }, '▶ Walk through')));
+    script.querySelector('.cv-beat-row.on')?.scrollIntoView({ block: 'nearest' });
+  }
+
   function go(k, autoplay = false) {
     // Keep playing steps over shots the owner cut.
     if (autoplay) { const dir = k >= sel ? 1 : -1; while (pieces[k]?.state === 'cut' && k !== sel) k += dir; }
@@ -221,6 +254,7 @@ export function canvasView(ui, id, mode = 'edit') {
     sel = k;
     drawMonitor(autoplay);
     drawBoard();
+    drawScript();
   }
 
   async function load() {
@@ -250,6 +284,7 @@ export function canvasView(ui, id, mode = 'edit') {
     if (mode === 'import') return fill(root, head, drawImport());
     const keepBox = h('label', { class: 'cv-keep' }, h('input', { type: 'checkbox', checked: keep, onchange: (e) => { keep = e.target.checked; store.set(keepKey, keep); } }), 'Keep playing into the next piece');
     fill(root, head, h('div', { class: 'cv-grid' },
+      panel('Script', script, null, 'cv-p-script'),
       panel('Monitor', monitor, null, 'cv-p-monitor'),
       panel('What the AI is doing', doing, null, 'cv-p-doing'),
       h('section', { class: 'cv-panel cv-p-board' },
@@ -259,6 +294,7 @@ export function canvasView(ui, id, mode = 'edit') {
         board)));
     drawMonitor();
     drawBoard();
+    drawScript();
     drawDoing();
   }
 
@@ -283,6 +319,7 @@ export function canvasView(ui, id, mode = 'edit') {
       drawHead();
       if (mode === 'import') return draw();
       drawBoard();
+      drawScript();
       drawDoing();
       if (!busy) drawMonitor();
     },
