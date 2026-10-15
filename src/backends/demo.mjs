@@ -173,6 +173,14 @@ export async function run({ root, projectId, workdir, env, onActivity, signal, c
       writeFileSync(join(workdir, 'script', 'beats.json'), JSON.stringify(b, null, 2));
       return true;
     }
+    if (e.kind === 'transition') {
+      const bd = readJ('transitions/board.json');
+      const cut = bd.cuts.find((x) => x.id === e.node);
+      if (!cut) return `Demo: ${e.node} isn't in transitions/board.json.`;
+      cut.transition = (e.text.match(/"([^"]+)"/)?.[1] || e.text).slice(0, 80);
+      writeFileSync(join(workdir, 'transitions', 'board.json'), JSON.stringify(bd, null, 2));
+      return true;
+    }
     return `Demo: can't remake a ${e.kind} yet.`;
   }
 }

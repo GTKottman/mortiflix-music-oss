@@ -13,6 +13,8 @@ export function canvasView(ui, id, mode = 'edit') {
   let sel = 0;
   let keep = store.get(keepKey) ?? true;
   let boardView = store.get(`mfx-canvas-board-${id}`) || 'shots';
+  let tsel = null; // a transition node picked on the noodle graph: the Monitor shows the cut and the library
+  let library = null;
   let advance = null;
 
   const monitor = h('div', { class: 'cv-body cv-monitor' });
@@ -101,6 +103,7 @@ export function canvasView(ui, id, mode = 'edit') {
 
   function drawMonitor(autoplay = false) {
     clearTimeout(advance);
+    if (tsel) return drawTransition();
     const it = pieces[sel];
     if (!it) {
       return fill(monitor, h('div', { class: 'cv-empty' }, h('div', { class: 'big' }, 'Nothing to show yet'),
@@ -176,7 +179,8 @@ export function canvasView(ui, id, mode = 'edit') {
       const next = pieces[k + 1];
       if (next) {
         const t = cutBetween(it.id, next.id);
-        items.push(h('div', { class: 'cv-tnode', title: t ? `${t.label}: ${t.title}` : 'A cut (no transition chosen yet)' },
+        items.push(h('button', { class: `cv-tnode${tsel?.from === it.id ? ' on' : ''}${t?.pending ? ' st-generating' : ''}`, title: t ? `${t.label}: ${t.title}` : 'A cut (no transition chosen yet)',
+          onclick: () => { if (!t) return ui.toast('This cut has no transition node yet: it appears with the transition board', true); tsel = { id: t.id, from: it.id, to: next.id }; drawMonitor(); drawBoard(); } },
           h('span', { class: 'cv-tnode-kind' }, 'Transition'), h('span', { class: 'cv-tnode-name' }, t?.title || 'Cut'),
           h('span', { class: 'cv-sock in', 'aria-hidden': 'true' }), h('span', { class: 'cv-sock out', 'aria-hidden': 'true' })));
       }
@@ -247,7 +251,65 @@ export function canvasView(ui, id, mode = 'edit') {
     script.querySelector('.cv-beat-row.on')?.scrollIntoView({ block: 'nearest' });
   }
 
+  // A transition node: the cut between two shots. Pick one from the transition library (or say it in your own words);
+  // Preview plays the last seconds of the shot before into the first seconds of the one after, across the cut.
+  async function drawTransition() {
+    const n = graph?.nodes || {};
+    const t = n[tsel.id];
+    const a = pieces.find((x) => x.id === tsel.from);
+    const b = pieces.find((x) => x.id === tsel.to);
+    if (!library) library = await api('/api/transitions').catch(() => ({ installed: false, transitions: [], families: [] }));
+    let query = '';
+    let picked = null;
+    const list = h('div', { class: 'cv-tlist' });
+    const famName = (slug) => library.families.find((f) => f.slug === slug)?.name || slug;
+    const drawList = () => {
+      const q = query.toLowerCase();
+      const shown = library.transitions.filter((x) => !q || `${x.name} ${x.summary} ${x.uses.join(' ')} ${famName(x.family)}`.toLowerCase().includes(q));
+      fill(list, shown.length ? shown.map((x) => h('button', { class: `cv-titem${picked?.id === x.id ? ' on' : ''}`, onclick: () => { picked = x; drawList(); } },
+        h('span', { class: 'cv-tname' }, x.name, h('span', { class: 'cv-tfam' }, ` · ${famName(x.family)}`)), h('span', { class: 'cv-tsum' }, x.summary)))
+        : h('div', { class: 'cv-empty' }, library.installed ? 'Nothing matches.' : 'The transition library isn\'t installed (Settings › Setup › Transitions). Say what you want below.'));
+    };
+    const own = h('textarea', { rows: 2, placeholder: 'Or say it in your own words: "a whip pan to the right", "cut on the beat"…' });
+    const stage = h('div', { class: 'cv-stage cv-tstage' });
+    const preview = () => {
+      if (!a?.file || !b?.file || a.kind !== 'shot' || b.kind !== 'shot') return ui.toast('Preview needs both shots made (the animatic)', true);
+      const blend = !picked || picked.structure !== 'instant';
+      const va = h('video', { src: fileUrl(id, a.file), muted: false, playsinline: true });
+      const vb = h('video', { src: fileUrl(id, b.file), playsinline: true, class: 'cv-tb' });
+      fill(stage, va, vb);
+      const lead = Math.min(1.5, a.to - a.from);
+      va.addEventListener('loadedmetadata', () => { va.currentTime = a.to - lead; va.play().catch(() => {}); });
+      vb.addEventListener('loadedmetadata', () => { vb.currentTime = b.from; });
+      va.addEventListener('timeupdate', () => {
+        const left = a.to - va.currentTime;
+        if (blend && left < 0.5) { vb.style.opacity = String(1 - left / 0.5); if (vb.paused) vb.play().catch(() => {}); }
+        if (left <= 0.02) { va.pause(); vb.style.opacity = '1'; if (vb.paused) vb.play().catch(() => {}); }
+      });
+      vb.addEventListener('timeupdate', () => { if (vb.currentTime >= Math.min(b.to, b.from + 1.5)) vb.pause(); });
+    };
+    fill(monitor,
+      stage,
+      h('div', { class: 'cv-caption' },
+        h('span', { class: 'cv-label' }, `${t?.label || tsel.id.toUpperCase()} · the cut from ${tsel.from.toUpperCase()} to ${tsel.to.toUpperCase()}`),
+        h('span', { class: 'cv-meta' }, `Now: ${t?.title || 'Cut'}${t?.pending ? ` · changing (${t.pending.id})` : ''}`),
+        h('button', { class: 'btn', onclick: preview }, '▶ Preview across the cut')),
+      h('div', { class: 'cv-tpick' },
+        h('input', { type: 'text', placeholder: `Search ${library.transitions.length || ''} transitions: crossfade, match cut, push…`, oninput: (e) => { query = e.target.value; drawList(); } }),
+        list, own,
+        h('div', { class: 'cv-fix-end' }, h('button', { class: 'btn', onclick: () => { tsel = null; drawMonitor(); drawBoard(); } }, 'Back to the shot'),
+          h('button', { class: 'btn primary', disabled: !t, onclick: async () => {
+            const words = own.value.trim();
+            const text = picked ? `Use the "${picked.name}" transition (${picked.id})${words ? `: ${words}` : ''}` : words;
+            if (!text) return ui.toast('Pick a transition or say what you want', true);
+            try { graph = await api(`/api/projects/${id}/canvas/nodes/${tsel.id}`, { method: 'POST', body: { action: 'fix', text } }); pieces = collect(); drawTransition(); drawBoard(); } catch (e) { ui.toast(e.message, true); }
+          } }, 'Use this transition'))));
+    drawList();
+    if (a?.still) fill(stage, h('img', { src: fileUrl(id, a.still), alt: '' }));
+  }
+
   function go(k, autoplay = false) {
+    tsel = null;
     // Keep playing steps over shots the owner cut.
     if (autoplay) { const dir = k >= sel ? 1 : -1; while (pieces[k]?.state === 'cut' && k !== sel) k += dir; }
     if (k < 0 || k >= pieces.length) return;

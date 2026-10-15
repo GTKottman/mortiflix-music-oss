@@ -163,6 +163,14 @@ export async function startServer(root, { port = 4646, host = '127.0.0.1', runne
       const b = await json(req);
       return after(savePreset(root, m[1], { name: b.name, description: b.description, defaults: b.defaults || {}, replace: Boolean(b.replace) }));
     }
+    // The transition library (remotion-transitions), for picking a transition on the canvas.
+    if (p === '/transitions' && method === 'GET') {
+      const st = setup.transitionsStatus(root);
+      if (!st.ok) return send(res, 200, { installed: false, families: [], transitions: [] });
+      const cat = readJson(join(st.path, 'catalog.json'));
+      return send(res, 200, { installed: true, families: cat.families || [],
+        transitions: (cat.transitions || []).map((t) => ({ id: t.id, name: t.name, summary: t.summary, family: t.family, subfamily: t.subfamily, uses: t.uses || [], structure: t.facets?.structure || null })) });
+    }
     if (p === '/checks' && method === 'GET') return send(res, 200, readJson(paths(root).checks));
     if ((m = p.match(/^\/checks\/([a-z0-9-]+)$/)) && method === 'POST') {
       const { approve } = await json(req);

@@ -145,7 +145,7 @@ async function download(url, file, log) {
 
 export const TRANSITIONS_REPO = 'GTKottman/remotion-transitions';
 
-function transitionsStatus(root) {
+export function transitionsStatus(root) {
   const dir = join(toolsDir(root), 'remotion-transitions');
   const cat = join(dir, 'catalog.json');
   if (!existsSync(cat)) return { ok: false, detail: 'not installed' };
