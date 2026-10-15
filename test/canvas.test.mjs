@@ -197,3 +197,28 @@ test('filmcraft: the final as a FilmCraft project, every shot its own named clip
   assert.deepEqual(map.clips.filter((c) => c.kind === 'shot').map((c) => [c.node, c.start_sec, c.seconds]), [['s01', 0, 2], ['s02', 2, 2], ['s03', 4, 2], ['s04', 6, 2]]);
   assert.ok(map.clips.every((c) => Number.isInteger(c.clip) && Number.isInteger(c.item)));
 });
+
+test('filmcraft: the render out of FilmCraft is delivered only while the final is being edited', async (t) => {
+  const { deliverEdited } = await import('../src/gates.mjs');
+  const { loadProject, projectPaths: pp } = await import('../src/projects.mjs');
+  const root = tempStudio(t);
+  const p = createProject(root, { pipeline: 'logo-sting', title: 'Deliver' });
+  await addIntakeFile(root, p.id, { field: 'logo', name: 'logo.svg', buffer: Buffer.from('<svg/>') });
+  startProject(root, p.id);
+  const runner = new Runner(root);
+  runner.acquire();
+  t.after(() => runner.release());
+  await runner.loop();
+  const fake = join(pp(root, p.id).work, 'edited.mp4');
+  writeFileSync(fake, 'not really a video');
+  assert.throws(() => deliverEdited(root, p.id, fake), /isn't being edited/);
+  respond(root, p.id, 'directions', 1, { verdict: 'approve' });
+  await runner.loop();
+  respond(root, p.id, 'final', 1, { verdict: 'edit' });
+  const r = deliverEdited(root, p.id, fake);
+  assert.equal(r.delivered, 'reviews/final/edited-1.mp4');
+  const pr = loadProject(root, p.id);
+  assert.equal(pr.state, 'delivered');
+  assert.equal(pr.steps.final.delivered_from, 'filmcraft');
+  assert.equal(pr.deliverables[0].file, 'reviews/final/edited-1.mp4');
+});

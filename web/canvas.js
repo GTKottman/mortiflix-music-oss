@@ -406,7 +406,9 @@ export function canvasView(ui, id, mode = 'edit') {
     const f = finalOf();
     if (!f) return h('div', { class: 'cv-grid cv-grid-one' }, panel('Export', h('div', { class: 'cv-body' }, h('div', { class: 'cv-empty' }, h('div', { class: 'big' }, 'No final yet'), h('p', null, 'The final appears here once everything before it is approved.')))));
     const { step, sub } = f;
-    const video = sub.items.find((it) => it.kind === 'video');
+    // Once delivered from FilmCraft, the edited final is the one to show.
+    const edited = d.project.steps?.[step.key]?.delivered_from === 'filmcraft' ? (d.project.deliverables || []).find((x) => x.kind === 'video') : null;
+    const video = edited || sub.items.find((it) => it.kind === 'video');
     const waiting = step.state === 'in_review' && step.version === sub.version;
     const editing = step.state === 'editing';
     // What the owner clicked in FilmCraft, asked for every second while the project is open.
@@ -439,13 +441,18 @@ export function canvasView(ui, id, mode = 'edit') {
     const map = fcInfo?.map;
     const fcBlock = () => {
       if (job?.state === 'making') return h('p', { class: 'cv-status-text' }, `Making your FilmCraft project… ${job.log.at(-1) || ''}`);
-      if (job?.state === 'failed') return h('div', null, h('p', { class: 'err' }, `Couldn't make the FilmCraft project: ${job.error}`),
+      if (job?.state === 'rendering') return h('p', { class: 'cv-status-text' }, `Rendering the final from FilmCraft… ${job.log.at(-1) || ''}`);
+      if (job?.state === 'failed' && job.kind === 'make') return h('div', null, h('p', { class: 'err' }, `Couldn't make the FilmCraft project: ${job.error}`),
         h('button', { class: 'btn', onclick: async () => { await api(`/api/projects/${id}/filmcraft/make`, { method: 'POST' }); } }, 'Try again'));
       if (map) return h('div', { class: 'cv-fc' },
         h('p', { class: 'okmsg' }, `Your FilmCraft project is ready: ${map.clips.length} clips, every shot${map.clips.some((c) => c.kind === 'line') ? ', voice line' : ''}${map.clips.some((c) => c.kind === 'music') ? ' and the music' : ''} on its own.`),
         h('div', { class: 'cv-export-actions' }, h('button', { class: 'btn primary', onclick: async () => {
           try { await api(`/api/projects/${id}/filmcraft/open`, { method: 'POST' }); ui.toast('Opening FilmCraft'); } catch (e) { ui.toast(e.message, true); }
-        } }, 'Open in FilmCraft')),
+        } }, 'Open in FilmCraft'),
+          h('button', { class: 'btn', onclick: async () => {
+            try { await api(`/api/projects/${id}/filmcraft/render`, { method: 'POST' }); ui.toast('Rendering the final from FilmCraft'); } catch (e) { ui.toast(e.message, true); }
+          } }, 'Render the final and get the video')),
+        job?.state === 'failed' && job.error ? h('p', { class: 'err' }, job.error) : null,
         selBox,
         h('p', { class: 'help' }, `The project file: ${map.fcproj}`));
       return h('p', { class: 'cv-status-text' }, 'Making your FilmCraft project…');
@@ -458,8 +465,8 @@ export function canvasView(ui, id, mode = 'edit') {
     return h('div', { class: 'cv-grid cv-grid-one' }, panel('Export', h('div', { class: 'cv-body cv-export' },
       video ? h('div', { class: 'cv-stage cv-export-stage' }, h('video', { src: fileUrl(id, video.file), controls: true, preload: 'metadata', playsinline: true })) : null,
       h('div', { class: 'cv-export-side' },
-        h('div', { class: 'cv-label' }, `${step.name} v${sub.version}`),
-        sub.note ? h('p', { class: 'cv-says' }, sub.note) : null,
+        h('div', { class: 'cv-label' }, edited ? `${step.name}, edited in FilmCraft` : `${step.name} v${sub.version}`),
+        !edited && sub.note ? h('p', { class: 'cv-says' }, sub.note) : null,
         waiting ? h('div', null,
           h('p', { class: 'cv-q-text' }, 'Do you want the video, or do you want to edit the video?'),
           h('div', { class: 'cv-export-actions' },

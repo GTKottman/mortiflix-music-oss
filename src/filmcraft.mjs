@@ -241,3 +241,30 @@ export async function swapIntoFilmcraft(root, id, node, { log = () => {} } = {})
   log(`${n.label} v${n.current} is in FilmCraft (${via === 'app' ? 'the open app' : 'the project file'})`);
   return { swapped: true, via, node, version: n.current, item };
 }
+
+// ---- the big render: the edited timeline, out of FilmCraft ----
+
+export const RENDER_PRESET = 'Match Source – Adaptive High Bitrate';
+
+// Saves the open project (when FilmCraft is open), then exports the sequence with FilmCraft's own engine. Resolves with
+// the rendered file; `onLine` gets FilmCraft's progress lines.
+export async function renderFromFilmcraft(root, id, { onLine = () => {} } = {}) {
+  const fc = filmcraftCli(root);
+  const map = loadMap(root, id);
+  if (!map || !existsSync(map.fcproj)) throw new UserError('there is no FilmCraft project for this video yet');
+  try { await control('engine.execute', { command: 'file.save', params: {} }, { timeoutMs: 5000 }); onLine('Saved the open FilmCraft project'); } catch { /* not open: the file is current */ }
+  const project = loadProject(root, id);
+  const outDir = join(filmcraftPaths(root, id).dir, 'render');
+  mkdirSync(outDir, { recursive: true });
+  const out = join(outDir, `${project.title.replace(/[^\w .-]+/g, '').trim() || 'Mortiflix'} (edited).mp4`);
+  rmSync(out, { force: true });
+  await new Promise((resolve, reject) => {
+    const p = spawn(fc.cli, ['--project', map.fcproj, 'export', out, '--preset', RENDER_PRESET], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let tail = '';
+    const take = (d) => { tail = (tail + d).slice(-4000); for (const l of String(d).split(/\r?\n/).filter(Boolean)) onLine(l.slice(0, 300)); };
+    p.stdout.on('data', take); p.stderr.on('data', take);
+    p.on('error', reject);
+    p.on('close', (code) => (code === 0 && existsSync(out) ? resolve() : reject(new Error(`FilmCraft's export failed (${code}): ${tail.trim().split('\n').pop() || ''}`))));
+  });
+  return out;
+}

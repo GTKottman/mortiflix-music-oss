@@ -213,6 +213,7 @@ export async function startServer(root, { port = 4646, host = '127.0.0.1', runne
     if (sub === '/filmcraft' && method === 'GET') return send(res, 200, { job: fcJobs.get(id) || null, map: filmcraft.loadMap(root, id) });
     if (sub === '/filmcraft/make' && method === 'POST') { makeFilmcraft(id); return after({ started: true }); }
     if (sub === '/filmcraft/open' && method === 'POST') return after(filmcraft.openInFilmcraft(root, id));
+    if (sub === '/filmcraft/render' && method === 'POST') { renderFilmcraft(id); return after({ started: true }); }
     if (sub === '/filmcraft/selection' && method === 'GET') {
       try { return send(res, 200, await filmcraft.filmcraftSelection(root, id, { timeoutMs: 3000 })); }
       catch (e) { return send(res, 200, { open: false, selected: [], error: e.message }); }
@@ -296,7 +297,7 @@ export async function startServer(root, { port = 4646, host = '127.0.0.1', runne
   const fcJobs = new Map();
   function makeFilmcraft(id) {
     if (fcJobs.get(id)?.state === 'making') return;
-    const job = { state: 'making', log: [], started_at: new Date().toISOString() };
+    const job = { kind: 'make', state: 'making', log: [], started_at: new Date().toISOString() };
     fcJobs.set(id, job);
     changed();
     setImmediate(() => {
@@ -306,6 +307,18 @@ export async function startServer(root, { port = 4646, host = '127.0.0.1', runne
       } catch (e) { Object.assign(job, { state: 'failed', error: e.message }); }
       changed();
     });
+  }
+
+  // The big render out of FilmCraft, then the delivery.
+  function renderFilmcraft(id) {
+    if (fcJobs.get(id)?.state === 'rendering') return;
+    const job = { kind: 'render', state: 'rendering', log: [], started_at: new Date().toISOString() };
+    fcJobs.set(id, job);
+    changed();
+    filmcraft.renderFromFilmcraft(root, id, { onLine: (l) => { job.log.push(l); if (job.log.length > 200) job.log.shift(); } })
+      .then((file) => { const r = gates.deliverEdited(root, id, file); Object.assign(job, { state: 'delivered', file: r.delivered }); })
+      .catch((e) => Object.assign(job, { state: 'failed', error: e.message }))
+      .finally(() => changed());
   }
 
   // Files from a project's record (what was submitted, the deliverables). Range requests for video and audio.

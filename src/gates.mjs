@@ -476,3 +476,25 @@ export function feedbackFor(root, id, stepKey) {
 }
 
 const round = (v, d = 4) => Math.round(v * 10 ** d) / 10 ** d;
+
+// The final, rendered out of FilmCraft after the owner's edits: it becomes the delivery. The file is copied into the
+// project's record (reviews/<final>/edited-N.mp4), so it can't change after the fact.
+export function deliverEdited(root, id, file) {
+  const pp = projectPaths(root, id);
+  const pipeline = projectPipeline(root, id);
+  const step = pipeline.steps.find((s) => s.delivers) || refuse('this pipeline has no delivering step');
+  return update(root, id, (p) => {
+    if (p.steps[step.key]?.state !== 'editing') refuse(`${step.name} isn't being edited in FilmCraft`);
+    const dir = join(pp.reviews, step.key);
+    mkdirSync(dir, { recursive: true });
+    let n = 1;
+    while (existsSync(join(dir, `edited-${n}.mp4`))) n++;
+    copyFileSync(file, join(dir, `edited-${n}.mp4`));
+    const rel = `reviews/${step.key}/edited-${n}.mp4`;
+    p.steps[step.key] = { ...p.steps[step.key], state: 'approved', edit: undefined, delivered_from: 'filmcraft', decided_at: now() };
+    p.deliverables = [{ label: `${step.name} (edited in FilmCraft)`, kind: 'video', file: rel, size: statSync(file).size }];
+    settle(p, pipeline);
+    event(root, id, { event: 'DELIVERED_FROM_FILMCRAFT', actor: 'you', step: step.key, details: rel });
+    return { delivered: rel, project_state: p.state };
+  });
+}
