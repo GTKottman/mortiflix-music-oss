@@ -78,7 +78,11 @@ export function canvasView(ui, id, mode = 'edit') {
       h('div', { class: 'cv-status' },
         d.status ? h('span', { class: 'cv-live' }, d.running ? h('span', { class: 'pulse', 'aria-hidden': 'true' }) : null, h('span', null, d.status)) : null,
         turn ? (turn.review === 'questions' ? h('button', { class: 'btn primary', onclick: () => { rightTab = 'questions'; draw(); } }, `Your turn: ${turn.name}`)
-          : h('a', { class: 'btn primary', href: `#/p/${id}/review/${turn.key}` }, `Your turn: ${turn.name}`)) : null,
+          : turn.canvas ? [h('span', { class: 'cv-turn-hint' }, `${turn.name}: OK or cut each piece, or`),
+            h('button', { class: 'btn primary', onclick: async () => {
+              try { await api(`/api/projects/${id}/reviews/${turn.key}/${turn.version}`, { method: 'POST', body: { verdict: 'approve', notes: [], overall: 'Approved on the canvas.', answers: {} } }); ui.toast(`${turn.name} approved`); } catch (e) { ui.toast(e.message, true); }
+            } }, `Approve ${turn.name}`)]
+            : h('a', { class: 'btn primary', href: `#/p/${id}/review/${turn.key}` }, `Your turn: ${turn.name}`)) : null,
         h('a', { class: 'cv-out', href: `#/p/${id}` }, 'Project page')));
   }
 

@@ -91,6 +91,11 @@ it's rewritten, moved or cut, and a new beat takes the next free number):
 { "made_from": "out/animatic.mp4", "fps": 30, "scenes": [ { "key": "s01", "name": "The map wakes up", "from_frame": 0, "frames": 180, "beat": "b01" } ] }
 ```
 
+**Canvas steps run ahead.** A step the pipeline marks `"canvas"` (script, style frames, transitions, animatic in the
+explainer) doesn't stop you: once it's submitted, carry on with the next step while the owner reviews its pieces on the
+canvas. Their OKs, cuts and edit requests arrive as you go. A step marked `"waits_for_approval"` (the final build)
+starts only when every step before it is approved.
+
 **Edit requests.** The owner can click any piece on the canvas and ask for a different version. Those arrive as edit
 requests (`mfx edits`, and listed at the top of CLAUDE.md) and come before everything else: remake only that piece,
 write it where the canvas reads it (a shot remade alone: give its scene in `out/scenes.json` a `"file"` of its own),

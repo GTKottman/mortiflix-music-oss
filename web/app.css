@@ -466,3 +466,4 @@ button.cv-tnode { cursor: pointer; font: inherit; color: inherit; }
 .cv-q-note { color: var(--body); white-space: pre-wrap; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
 .cv-q-send { padding-top: 10px; }
 .cv-q-send textarea { min-height: 44px; }
+.cv-turn-hint { color: var(--muted); font-size: 11px; white-space: nowrap; }

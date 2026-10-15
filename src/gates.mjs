@@ -35,9 +35,13 @@ export function stepView(project, pipeline) {
   const byKey = Object.fromEntries(pipeline.steps.map((s) => [s.key, s]));
   // A skipped step counts as finished only once the steps it follows are: skipping never lets later work jump ahead.
   const finished = (k) => DONE.includes(stored[k]?.state) && (stored[k].state !== 'skipped' || (byKey[k]?.after || []).every(finished));
+  // A canvas step that is waiting for the owner lets the steps after it go ahead: the AI runs ahead while the owner
+  // reviews its pieces on the canvas. A step that waits for approval needs every step before it really approved.
+  const passed = (k) => finished(k) || (Boolean(byKey[k]?.canvas) && stored[k]?.state === 'in_review' && (byKey[k]?.after || []).every(passed));
+  const approvedChain = (k) => finished(k) && (byKey[k]?.after || []).every(approvedChain);
   return pipeline.steps.map((s) => {
     const rec = stored[s.key] || {};
-    const state = rec.state || (s.after.every(finished) ? 'ready' : 'blocked');
+    const state = rec.state || ((s.waits_for_approval ? s.after.every(approvedChain) : s.after.every(passed)) ? 'ready' : 'blocked');
     return { ...s, state, version: rec.version || 0, last_feedback: rec.last_feedback || null };
   });
 }

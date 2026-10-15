@@ -9,8 +9,8 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync, mkdirSync, copyFileSync, realpathSync, statSync } from 'node:fs';
 import { join, extname, dirname } from 'node:path';
-import { projectPaths, update, event, projectPipeline } from './projects.mjs';
-import { settle, GateError } from './gates.mjs';
+import { projectPaths, update, event, projectPipeline, loadProject } from './projects.mjs';
+import { settle, GateError, stepView, respond } from './gates.mjs';
 import { withLock, isInside } from './studio.mjs';
 
 // One FilmCraft label colour per beat, in order (crates/project Label::rgb / marker_rgb, v0.8.0). Their marker colours
@@ -237,8 +237,20 @@ export function nodeAction(root, id, nid, { action, text } = {}) {
     } else throw new CanvasError('action: ok, cut, clear or fix');
     writeFileSync(cp.owner, JSON.stringify(owner, null, 2));
     event(root, id, { event: action === 'clear' ? 'CANVAS_CLEARED' : action === 'ok' ? 'CANVAS_OK' : 'CANVAS_CUT', actor: 'you', details: node.label });
-    return { decision: owner.decisions[nid] || null };
+    return { decision: owner.decisions[nid] || null, approved: action === 'clear' ? null : approveWhenAllDecided(root, id, g, owner, node.kind) };
   });
+}
+
+// "If one is okay then it'll go to the next": when every piece of a canvas step waiting for the owner is OK or cut,
+// the step is approved, exactly as if the owner pressed Approve in the review room.
+function approveWhenAllDecided(root, id, g, owner, kind) {
+  const step = stepView(loadProject(root, id), projectPipeline(root, id)).find((s) => s.canvas === kind && s.state === 'in_review');
+  if (!step) return null;
+  const pieces = Object.values(g.nodes).filter((n) => n.kind === kind && !n.missing && !n.planned);
+  if (!pieces.length || !pieces.every((n) => ['ok', 'cut'].includes(owner.decisions[n.id]?.verdict))) return null;
+  const cut = pieces.filter((n) => owner.decisions[n.id].verdict === 'cut').map((n) => n.label);
+  respond(root, id, step.key, step.version, { verdict: 'approve', overall: cut.length ? `Approved on the canvas. Cut: ${cut.join(', ')}.` : 'Approved on the canvas: every piece OK.' });
+  return step.key;
 }
 
 // The session reports an edit: done only once its piece really has a new version (sync shows it), or failed.

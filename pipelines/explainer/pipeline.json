@@ -98,7 +98,8 @@
       ],
       "after": [
         "brief"
-      ]
+      ],
+      "canvas": "beat"
     },
     {
       "key": "style-frames",
@@ -110,7 +111,8 @@
       "after": [
         "brief"
       ],
-      "describe": "Three to five finished-quality stills that fix the look. Runs beside the script."
+      "describe": "Three to five finished-quality stills that fix the look. Runs beside the script.",
+      "canvas": "frame"
     },
     {
       "key": "transitions",
@@ -123,7 +125,8 @@
       "after": [
         "script",
         "style-frames"
-      ]
+      ],
+      "canvas": "transition"
     },
     {
       "key": "animatic",
@@ -136,7 +139,8 @@
       "after": [
         "transitions"
       ],
-      "describe": "Every beat timed to the narration with simple motion in the approved look. No music yet: the score is written to this timing next."
+      "describe": "Every beat timed to the narration with simple motion in the approved look. No music yet: the score is written to this timing next.",
+      "canvas": "shot"
     },
     {
       "key": "music",
@@ -162,7 +166,8 @@
       ],
       "after": [
         "music"
-      ]
+      ],
+      "waits_for_approval": true
     },
     {
       "key": "final",

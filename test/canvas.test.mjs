@@ -127,3 +127,31 @@ test('canvas: OK, Cut it and Fix; a fix starts a session that remakes only that 
   nodeAction(root, p.id, 's04', { action: 'clear' });
   assert.equal(canvasView(root, p.id).nodes.s04.state, 'ready');
 });
+
+test('canvas: the AI runs ahead through canvas steps; the build waits until all are approved; OK on every piece approves', async (t) => {
+  const { canvasView, nodeAction } = await import('../src/canvas.mjs');
+  const { loadProject } = await import('../src/projects.mjs');
+  const { stepView } = await import('../src/gates.mjs');
+  const { projectPipeline } = await import('../src/projects.mjs');
+  const root = tempStudio(t);
+  const p = createProject(root, { pipeline: 'explainer', title: 'Ahead', answers: { topic: 'tides' } });
+  startProject(root, p.id);
+  const runner = new Runner(root);
+  runner.acquire();
+  t.after(() => runner.release());
+  const states = () => Object.fromEntries(stepView(loadProject(root, p.id), projectPipeline(root, p.id)).map((s) => [s.key, s.state]));
+  await runner.loop();
+  respond(root, p.id, 'brief', 1, { verdict: 'approve' });
+  await runner.loop();
+  // One go: script, frames, transitions and the animatic all sent, and the music made ahead of any review.
+  assert.deepEqual(states(), { brief: 'approved', script: 'in_review', 'style-frames': 'in_review', transitions: 'in_review', animatic: 'in_review', music: 'in_review', build: 'blocked', final: 'blocked' });
+  respond(root, p.id, 'music', 1, { verdict: 'approve' });
+  await runner.loop();
+  assert.equal(states().build, 'blocked', 'the build waits for every canvas step');
+  // OK every frame: the style frames step approves itself.
+  for (const f of canvasView(root, p.id).order.frames) nodeAction(root, p.id, f, { action: 'ok' });
+  assert.equal(states()['style-frames'], 'approved');
+  for (const s of ['script', 'transitions', 'animatic']) respond(root, p.id, s, 1, { verdict: 'approve' });
+  await runner.loop();
+  assert.equal(states().final, 'in_review', 'all approved: the build ran and the final waits');
+});
