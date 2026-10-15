@@ -457,3 +457,12 @@ button.cv-tnode { cursor: pointer; font: inherit; color: inherit; }
 .cv-tpick { overflow: auto; }
 .cv-tpick textarea { min-height: 44px; flex: none; }
 .cv-tpick .cv-fix-end { flex: none; }
+/* questions corner */
+.cv-count { color: var(--accent); margin-left: 6px; }
+.cv-q { padding: 8px 0 12px; border-bottom: 1px solid var(--line); }
+.cv-q-text { color: var(--ink); margin-bottom: 2px; }
+.cv-q-default { color: var(--muted); font-size: 11px; margin-bottom: 8px; }
+.cv-q-default.need { color: var(--warn); }
+.cv-q-note { color: var(--body); white-space: pre-wrap; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.cv-q-send { padding-top: 10px; }
+.cv-q-send textarea { min-height: 44px; }

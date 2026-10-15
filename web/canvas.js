@@ -15,6 +15,10 @@ export function canvasView(ui, id, mode = 'edit') {
   let boardView = store.get(`mfx-canvas-board-${id}`) || 'shots';
   let tsel = null; // a transition node picked on the noodle graph: the Monitor shows the cut and the library
   let library = null;
+  let rightTab = 'doing';
+  const asked = h('div', { class: 'cv-body cv-questions' });
+  const answers = {};
+  let lastQ = 0;
   let advance = null;
 
   const monitor = h('div', { class: 'cv-body cv-monitor' });
@@ -73,7 +77,8 @@ export function canvasView(ui, id, mode = 'edit') {
         tab('export', 'Export', `#/p/${id}/canvas/export`, finalSub)),
       h('div', { class: 'cv-status' },
         d.status ? h('span', { class: 'cv-live' }, d.running ? h('span', { class: 'pulse', 'aria-hidden': 'true' }) : null, h('span', null, d.status)) : null,
-        turn ? h('a', { class: 'btn primary', href: `#/p/${id}/review/${turn.key}` }, `Your turn: ${turn.name}`) : null,
+        turn ? (turn.review === 'questions' ? h('button', { class: 'btn primary', onclick: () => { rightTab = 'questions'; draw(); } }, `Your turn: ${turn.name}`)
+          : h('a', { class: 'btn primary', href: `#/p/${id}/review/${turn.key}` }, `Your turn: ${turn.name}`)) : null,
         h('a', { class: 'cv-out', href: `#/p/${id}` }, 'Project page')));
   }
 
@@ -207,6 +212,46 @@ export function canvasView(ui, id, mode = 'edit') {
       svg.innerHTML = paths.join('');
       row.querySelector('.cv-node.on')?.scrollIntoView({ block: 'nearest', inline: 'center' });
     });
+  }
+
+  // The AI's questions, right in the canvas: the brief's (all at once, one Send) and any it asks mid-step.
+  function openQuestions() {
+    const brief = d.steps.find((s) => s.review === 'questions' && s.state === 'in_review');
+    const sub = brief ? d.submissions.filter((x) => x.step === brief.key).at(-1) : null;
+    const fromBrief = sub ? (sub.questions || []).map((q) => ({ ...q, from: 'brief' })) : [];
+    const mid = (d.project.questions || []).filter((q) => !q.answered_at).map((q) => ({ ...q, from: 'ask' }));
+    return { brief, sub, list: [...fromBrief, ...mid] };
+  }
+
+  function drawQuestions() {
+    const { brief, sub, list } = openQuestions();
+    if (!list.length) return fill(asked, h('div', { class: 'cv-empty' }, 'No questions right now. When the AI needs you to decide something, it asks here.'));
+    const row = (q) => {
+      const key = `${q.from}:${q.id}`;
+      const set = (v) => { answers[key] = v; };
+      const ctl = q.choices ? ui.customChips(q.choices, answers[key] ?? null, set)
+        : h('input', { type: 'text', value: answers[key] || '', placeholder: q.default ? `Your call: ${q.default}` : 'Your answer', oninput: (e) => set(e.target.value) });
+      return h('div', { class: 'cv-q' }, h('div', { class: 'cv-q-text' }, q.text),
+        q.default ? h('div', { class: 'cv-q-default' }, `Going with: ${q.default} unless you say otherwise`) : h('div', { class: 'cv-q-default need' }, 'Needs your answer'),
+        ctl,
+        q.from === 'ask' ? h('div', { class: 'cv-fix-end' }, h('button', { class: 'btn primary', onclick: async () => {
+          try { await api(`/api/projects/${id}/questions/${q.id}`, { method: 'POST', body: { answer: answers[key] || null } }); ui.toast('Answered'); } catch (e) { ui.toast(e.message, true); }
+        } }, 'Answer')) : null);
+    };
+    const briefQs = list.filter((q) => q.from === 'brief');
+    const wrong = h('textarea', { rows: 2, placeholder: 'Something wrong with the brief? Say what, and it is redone instead.' });
+    fill(asked,
+      brief && sub?.note ? h('div', { class: 'cv-q-note' }, sub.note) : null,
+      list.map(row),
+      briefQs.length ? h('div', { class: 'cv-q-send' }, wrong, h('div', { class: 'cv-fix-end' },
+        h('button', { class: 'btn', onclick: async () => {
+          if (!wrong.value.trim()) return ui.toast('Say what is wrong with the brief', true);
+          try { await api(`/api/projects/${id}/reviews/${brief.key}/${sub.version}`, { method: 'POST', body: { verdict: 'changes', notes: [], overall: wrong.value.trim(), answers: {} } }); ui.toast('Sent: the brief is redone'); } catch (e) { ui.toast(e.message, true); }
+        } }, 'Redo the brief'),
+        h('button', { class: 'btn primary', onclick: async () => {
+          const out = Object.fromEntries(briefQs.map((q) => [q.id, answers[`brief:${q.id}`]]).filter(([, v]) => v !== undefined && String(v).trim()));
+          try { await api(`/api/projects/${id}/reviews/${brief.key}/${sub.version}`, { method: 'POST', body: { verdict: 'approve', notes: [], overall: '', answers: out } }); ui.toast('Sent'); rightTab = 'doing'; } catch (e) { ui.toast(e.message, true); }
+        } }, 'Send the answers'))) : null);
   }
 
   function drawDoing() {
@@ -348,7 +393,12 @@ export function canvasView(ui, id, mode = 'edit') {
     fill(root, head, h('div', { class: 'cv-grid' },
       panel('Script', script, null, 'cv-p-script'),
       panel('Monitor', monitor, null, 'cv-p-monitor'),
-      panel('What the AI is doing', doing, null, 'cv-p-doing'),
+      h('section', { class: 'cv-panel cv-p-doing' },
+        h('div', { class: 'cv-tabs' },
+          h('button', { class: `cv-tab${rightTab === 'doing' ? ' on' : ''}`, onclick: () => { rightTab = 'doing'; draw(); } }, 'What the AI is doing'),
+          h('button', { class: `cv-tab${rightTab === 'questions' ? ' on' : ''}`, onclick: () => { rightTab = 'questions'; draw(); } }, 'Questions',
+            openQuestions().list.length ? h('span', { class: 'cv-count' }, ` ${openQuestions().list.length}`) : null)),
+        rightTab === 'questions' ? asked : doing),
       h('section', { class: 'cv-panel cv-p-board' },
         h('div', { class: 'cv-tabs' },
           ['shots', 'nodes'].map((v) => h('button', { class: `cv-tab${boardView === v ? ' on' : ''}`, onclick: () => { boardView = v; store.set(`mfx-canvas-board-${id}`, v); draw(); } }, v === 'shots' ? 'Shots' : 'Nodes')),
@@ -358,6 +408,7 @@ export function canvasView(ui, id, mode = 'edit') {
     drawBoard();
     drawScript();
     drawDoing();
+    drawQuestions();
   }
 
   const onKey = (e) => {
@@ -371,6 +422,8 @@ export function canvasView(ui, id, mode = 'edit') {
       await load();
       document.body.classList.add('in-canvas');
       document.addEventListener('keydown', onKey);
+      lastQ = openQuestions().list.length;
+      if (lastQ) rightTab = 'questions';
       draw();
       return root;
     },
@@ -383,6 +436,11 @@ export function canvasView(ui, id, mode = 'edit') {
       drawBoard();
       drawScript();
       drawDoing();
+      // The Questions tab's count changed: redraw the frame (not while a video plays). Otherwise only refresh the
+      // questions, and never under the owner's typing.
+      const qn = openQuestions().list.length;
+      if (qn !== lastQ && !busy) { lastQ = qn; draw(); return; }
+      if (!asked.contains(document.activeElement)) drawQuestions();
       if (!busy) drawMonitor();
     },
     leave() {
