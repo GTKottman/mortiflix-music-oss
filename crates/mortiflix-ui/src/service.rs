@@ -6,8 +6,9 @@
 //! or service is a calm state ([`ServiceStatus`]) with a Setup link, never an error dialog or crash.
 //!
 //! Where the service is: `MFX_SERVICE` (the `.mjs` file, or the mortiflix-oss folder), else
-//! `servicePath` in `<data dir>/mortiflix.json` (written by first-run setup). Node: `MFX_NODE`, else
-//! `nodePath` there, else `node` on the PATH.
+//! `servicePath` in `<data dir>/mortiflix.json` (written by first-run setup), else the copy a packaged
+//! install ships ([`bundled_dir`]). Node: `MFX_NODE`, else `nodePath` there, else the packaged Node,
+//! else `node` on the PATH.
 
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
@@ -105,6 +106,26 @@ impl ServiceSettings {
     }
 }
 
+/// The service folder, the Node runtime and the tools (`bin/`: ffmpeg, ffprobe, mortiflix-engine) inside
+/// a packaged install's bundle (see `packaging/mortiflix/README.md`).
+pub const BUNDLE_SERVICE: &str = "service";
+pub const BUNDLE_NODE: &str = if cfg!(windows) { "node/node.exe" } else { "node/bin/node" };
+pub const BUNDLE_TOOLS: &str = "bin";
+
+/// Where a packaged install keeps the Mortiflix service with its own Node, ffmpeg and sound engine:
+/// `MFX_BUNDLE`, else beside the binary: `mortiflix/` (Windows), `../lib/mortiflix-filmcraft/` (Linux,
+/// AppImage), `../Resources/mortiflix/` (macOS app). None = no bundle (a development build).
+pub fn bundled_dir() -> Option<PathBuf> {
+    let has_service = |d: &Path| d.join(BUNDLE_SERVICE).join(SERVICE_SCRIPT).is_file();
+    if let Some(d) = std::env::var_os("MFX_BUNDLE").filter(|v| !v.is_empty()).map(PathBuf::from) {
+        return has_service(&d).then_some(d);
+    }
+    let exe = std::env::current_exe().ok()?;
+    let dir = exe.parent()?;
+    let up = dir.parent().unwrap_or(dir);
+    [dir.join("mortiflix"), up.join("lib").join("mortiflix-filmcraft"), up.join("Resources").join("mortiflix")].into_iter().find(|d| has_service(d))
+}
+
 /// How to start the service.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ServiceConfig {
@@ -118,9 +139,16 @@ impl ServiceConfig {
     pub fn resolve(data_dir: Option<&Path>) -> Self {
         let settings = data_dir.map(ServiceSettings::load).unwrap_or_default();
         let env = |k: &str| std::env::var_os(k).filter(|v| !v.is_empty()).map(PathBuf::from);
-        let node =
-            env("MFX_NODE").or_else(|| (!settings.node_path.is_empty()).then(|| PathBuf::from(&settings.node_path))).unwrap_or_else(|| PathBuf::from("node"));
-        let script = env("MFX_SERVICE").or_else(|| (!settings.service_path.is_empty()).then(|| PathBuf::from(&settings.service_path))).map(|p| script_in(&p));
+        let bundle = bundled_dir();
+        let bundled_node = bundle.as_ref().map(|b| b.join(BUNDLE_NODE)).filter(|n| n.is_file());
+        let node = env("MFX_NODE")
+            .or_else(|| (!settings.node_path.is_empty()).then(|| PathBuf::from(&settings.node_path)))
+            .or(bundled_node)
+            .unwrap_or_else(|| PathBuf::from("node"));
+        let script = env("MFX_SERVICE")
+            .or_else(|| (!settings.service_path.is_empty()).then(|| PathBuf::from(&settings.service_path)))
+            .or_else(|| bundle.map(|b| b.join(BUNDLE_SERVICE)))
+            .map(|p| script_in(&p));
         Self { node, script }
     }
 }
@@ -402,6 +430,9 @@ fn run_child(config: &ServiceConfig, script: &Path, cmd_rx: &Receiver<Value>, ou
     if let Some(dir) = script.parent() {
         cmd.current_dir(dir);
     }
+    if let Some(bundle) = bundled_dir() {
+        bundle_env(&mut cmd, &bundle);
+    }
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt as _;
@@ -506,6 +537,25 @@ fn read_lines(r: impl std::io::Read, mut f: impl FnMut(&[u8])) {
     }
 }
 
+/// A packaged install's tools come first on the service's PATH (ffmpeg, ffprobe, node, npx), and the
+/// sound engine is named for it (`MFX_DAW_ENGINE`) unless the user set one.
+#[cfg(not(target_arch = "wasm32"))]
+fn bundle_env(cmd: &mut std::process::Command, bundle: &Path) {
+    let node_dir = bundle.join(BUNDLE_NODE).parent().map(Path::to_path_buf);
+    let mut dirs: Vec<PathBuf> = [Some(bundle.join(BUNDLE_TOOLS)), node_dir].into_iter().flatten().filter(|d| d.is_dir()).collect();
+    if let Some(path) = std::env::var_os("PATH") {
+        dirs.extend(std::env::split_paths(&path));
+    }
+    if let Ok(path) = std::env::join_paths(dirs) {
+        cmd.env("PATH", path);
+    }
+    cmd.env("MFX_BUNDLE", bundle);
+    let engine = bundle.join(BUNDLE_TOOLS).join(if cfg!(windows) { "mortiflix-engine.exe" } else { "mortiflix-engine" });
+    if engine.is_file() && std::env::var_os("MFX_DAW_ENGINE").is_none() {
+        cmd.env("MFX_DAW_ENGINE", engine);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -587,6 +637,19 @@ mod tests {
             let cfg = ServiceConfig::resolve(Some(&dir));
             assert_eq!(cfg.script, Some(dir.join(SERVICE_SCRIPT)));
         }
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn the_bundle_tools_come_first_on_the_service_path() {
+        let dir = std::env::temp_dir().join(format!("mfx-bundle-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join(BUNDLE_TOOLS)).unwrap();
+        let mut cmd = std::process::Command::new("node");
+        bundle_env(&mut cmd, &dir);
+        let env = |k: &str| cmd.get_envs().find(|(n, _)| *n == k).and_then(|(_, v)| v.map(PathBuf::from));
+        assert_eq!(env("MFX_BUNDLE"), Some(dir.clone()));
+        let path = env("PATH").unwrap();
+        assert_eq!(std::env::split_paths(&path).next(), Some(dir.join(BUNDLE_TOOLS)));
         std::fs::remove_dir_all(&dir).ok();
     }
 }
