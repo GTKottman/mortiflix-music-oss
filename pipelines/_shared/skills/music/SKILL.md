@@ -240,13 +240,21 @@ note that these are measurements, not listening.
 
 ### Mixing a video's music under the voice
 
-The music starts at `offset_sec`. Duck it under the speech and finish at the delivery loudness:
+The music starts at `offset_sec`. Duck it under the speech, then bring the mix to the delivery loudness in two
+passes. One pass (loudnorm with no measured values) always rides the level up and down and changes the mix; two passes
+turn it up by one fixed amount when the peaks allow it:
 
 ```
 ffmpeg -i voice/voice.wav -i <the music> -filter_complex \
  "[0:a]asplit=2[v1][v2];[1:a]adelay=600|600,volume=-4dB[m];[m][v1]sidechaincompress=threshold=0.03:ratio=8:attack=20:release=450[duck];\
-  [v2][duck]amix=inputs=2:normalize=0[mix];[mix]loudnorm=I=-14:TP=-1.5:LRA=11" -ar 48000 audio/mix.wav
+  [v2][duck]amix=inputs=2:normalize=0" -ar 48000 -c:a pcm_f32le audio/mix-pre.wav
+ffmpeg -i audio/mix-pre.wav -af loudnorm=I=-14:TP=-1.5:LRA=11:print_format=json -f null -     # read the measured values
+ffmpeg -i audio/mix-pre.wav -af loudnorm=I=-14:TP=-1.5:LRA=11:measured_I=..:measured_TP=..:measured_LRA=..:measured_thresh=..:offset=..:linear=true:print_format=json \
+ -ar 48000 -c:a pcm_s24le audio/mix.wav
 ```
+
+If the second pass prints `"normalization_type" : "dynamic"`, the level was ridden: the mix's peaks are too hot for the
+gain it needs. Lower the music (or the loudest voice peaks) in the first command and do both passes again.
 
 (`adelay` is `offset_sec` in milliseconds; `<the music>` is the owner's master when there is one, otherwise
 `out/music/score.wav`.) Music sits about 18 dB under the voice while it speaks and comes up in the gaps. Sound effects

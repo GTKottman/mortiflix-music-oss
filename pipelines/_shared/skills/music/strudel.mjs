@@ -216,10 +216,11 @@ try {
       const m = masterTo(file, 'out/music/master.wav');
       if (m.after.true_peak !== null && m.after.true_peak > TARGET.tp + 0.2) problems.push(`the master peaks at ${m.after.true_peak} dBTP (limit ${TARGET.tp}): lower the loudest parts and master again`);
       if (m.after.lufs !== null && Math.abs(m.after.lufs - TARGET.lufs) > 1) problems.push(`the master is ${m.after.lufs} LUFS (target ${TARGET.lufs} ± 1): the mix's peaks are holding it down; lower the loudest, peakiest parts`);
-      write(F.master, { ok: !problems.length, problems, target: TARGET, mix: { file, before: m.before, balance }, master: { wav: m.wav, mp3: m.mp3, ...m.after }, stems: stemReport });
+      write(F.master, { ok: !problems.length, problems, warnings: m.warnings, target: TARGET, mix: { file, before: m.before, balance }, master: { wav: m.wav, mp3: m.mp3, normalization: m.normalization, ...m.after }, stems: stemReport });
       console.log(`\nMix balance (measured): low end ${balance.lowPct}%, mud ${balance.mudPct}%, width ${balance.widthDb} dB`);
       for (const n of balance.notes) console.log(`! ${n}`);
       console.log(`Master: ${m.before.lufs} → ${m.after.lufs} LUFS, true peak ${m.after.true_peak} dBTP, ${m.after.seconds} s → ${m.wav}, ${m.mp3}`);
+      for (const w of m.warnings) console.log(`! ${w}`);
       if (problems.length) fail(problems, 'in the mix'); else console.log('✔ Mastered to the delivery level. These are measurements, not listening: listen to the master before you submit it.');
     }
   }
