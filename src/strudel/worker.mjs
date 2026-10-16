@@ -1,8 +1,11 @@
 // The Strudel evaluator process (doc 28 §2.1). The studio starts it with Node's permission model (read access to the
 // Strudel install and this folder only: no writes, no child processes, no network modules loaded) and talks to it over
 // stdin/stdout, one JSON line each way. It runs a pattern's text and answers with its notes in ticks.
-//   in:  { id, code, bars, tpb }
-//   out: { id, ok: true, notes: [{ t, len, key, vel, loc: [[start, end], …] }], problems: [...] } | { id, ok: false, error, line }
+//   in:  { id, code, bars, tpb }            → { id, ok: true, notes: [{ t, len, key, vel, block, loc: [[start, end], …] }], problems, cps }
+//   in:  { id, code, bars, mode: 'haps' }   → { id, ok: true, cps, haps: [{ begin, end, value, block, locations }] } (as headless Chrome gives them)
+//   either way, on failure                  → { id, ok: false, error, line }
+// The text runs as in the Strudel REPL: `$:` lines play together (`_$:` is muted), setcps / setcpm set the tempo, and
+// the drawing calls (.pianoroll(), .punchcard() …) do nothing, since nothing draws here.
 import './hooks.mjs';
 import { createInterface } from 'node:readline';
 import { join } from 'node:path';
@@ -25,16 +28,61 @@ const mini = await mod('mini');
 const tonal = await mod('tonal');
 const { transpiler } = await mod('transpiler');
 const noop = () => {};
-await core.evalScope(core, mini, tonal, { samples: noop, soundfont: noop, registerSound: noop, aliasBank: noop, initAudioOnFirstClick: noop });
+// The REPL's own globals, per run: the tempo and the `$:` lines.
+let cps = 0.5;
+let blocks = [];
+const setcps = (c) => { cps = Number(c); };
+await core.evalScope(core, mini, tonal, {
+  samples: noop, soundfont: noop, registerSound: noop, aliasBank: noop, initAudioOnFirstClick: noop, hush: noop,
+  setcps, setCps: setcps, setcpm: (m) => setcps(Number(m) / 60), setCpm: (m) => setcps(Number(m) / 60),
+});
+try { core.registerControl?.('drum'); } catch { /* already there */ }
+// Plain JS strings read as mini-notation too (note('c3 e3'), or a string a helper built), as the REPL sets it up.
+mini.miniAllStrings();
+// `$: x` is x.p('$'); `_$: x` is x.p('_$'). Each line is a block, numbered in order of the text.
+core.Pattern.prototype.p = function (id) {
+  const muted = typeof id === 'string' && (id.startsWith('_') || id.endsWith('_'));
+  blocks.push({ pattern: this, muted });
+  return this;
+};
+for (const m of ['pianoroll', 'punchcard', 'scope', 'tscope', 'fscope', 'spectrum', 'spiral', 'pitchwheel', 'wordfall', 'color', 'colour', 'markcss', 'draw']) {
+  for (const name of [m, `_${m}`]) if (!core.Pattern.prototype[name]) core.Pattern.prototype[name] = function () { return this; };
+}
+
+// Runs the text: { pattern (all blocks together), list: [{ pattern, block }] }.
+// `prelude`: plain JS run first, in the global scope, the way an app's page adds its own helpers before the score
+// (Mortiflix Music's voice() and guide()); `globals`: data those helpers read as window.<name>.
+globalThis.window = globalThis;
+// A prelude may replace a Strudel name (Mortiflix Music's voice() replaces the `voice` control): each run with one gets
+// the global scope back as it found it, so the next text sees plain Strudel.
+let saved = null;
+function restoreGlobals() {
+  if (!saved) return;
+  for (const k of Object.getOwnPropertyNames(globalThis)) if (!saved.has(k)) { try { delete globalThis[k]; } catch { /* fixed */ } }
+  for (const [k, d] of saved) { const now = Object.getOwnPropertyDescriptor(globalThis, k); if (!now || now.value !== d.value || now.get !== d.get) { try { Object.defineProperty(globalThis, k, d); } catch { /* fixed */ } } }
+  saved = null;
+}
+async function run(code, { prelude, globals } = {}) {
+  if (prelude || globals) saved = new Map(Object.getOwnPropertyNames(globalThis).map((k) => [k, Object.getOwnPropertyDescriptor(globalThis, k)]));
+  cps = 0.5;
+  blocks = [];
+  if (globals) Object.assign(globalThis, globals);
+  if (prelude) (0, eval)(String(prelude));
+  const { pattern } = await core.evaluate(String(code), transpiler);
+  const list = blocks.length ? blocks.map((b, i) => ({ ...b, block: i })).filter((b) => !b.muted) : (pattern ? [{ pattern, block: 0 }] : []);
+  if (!list.length || list.some((b) => typeof b.pattern?.queryArc !== 'function')) throw new Error('the text makes no pattern');
+  return list;
+}
 
 const frac = (f) => ({ s: Number(f.s ?? 1), n: Number(f.n), d: Number(f.d) });
 const r3 = (v) => Math.round(v * 1000) / 1000;
 
-function notesOf(pattern, bars, tpb) {
+function notesOf(list, bars, tpb) {
   const problems = [];
   const notes = [];
   const where = (b) => { const bar = Math.floor(b) + 1; return `bar ${bar}, beat ${Math.round(((b - bar + 1) * 4 + 1) * 100) / 100}`; };
-  for (const h of pattern.queryArc(0, bars)) {
+  const haps = list.flatMap(({ pattern, block }) => pattern.queryArc(0, bars, { _cps: cps }).map((h) => [h, block]));
+  for (const [h, block] of haps) {
     if (!h.hasOnset()) continue;
     if (notes.length >= MAX_NOTES) { problems.push(`more than ${MAX_NOTES} notes: the rest are left out`); break; }
     const v = h.value !== null && typeof h.value === 'object' ? h.value : { note: h.value };
@@ -50,6 +98,7 @@ function notesOf(pattern, bars, tpb) {
     notes.push({
       t, len: Math.max(1, Math.round(span.n / span.d * clip)), key: Math.round(Number(key)),
       vel: r3(Math.min(1, Math.max(0, Number(v.velocity ?? 0.8)))),
+      block,
       loc: (h.context?.locations || []).map((l) => [l.start, l.end]),
     });
   }
@@ -57,13 +106,31 @@ function notesOf(pattern, bars, tpb) {
   return { notes, problems };
 }
 
+// Every event that starts in [0, bars), with its value as plain data: what headless Chrome returns (lib/headless.mjs).
+const plain = (v) => JSON.parse(JSON.stringify(v, (k, x) => (typeof x === 'function' ? undefined : x)));
+function hapsOf(list, bars) {
+  const out = [];
+  for (const { pattern, block } of list) {
+    for (const h of pattern.queryArc(0, bars, { _cps: cps })) {
+      if (!h.hasOnset()) continue;
+      out.push({ begin: h.whole.begin.valueOf(), end: h.whole.end.valueOf(), value: plain(h.value), block, locations: (h.context?.locations || []).map((l) => l.start ?? l) });
+      if (out.length > MAX_NOTES * 5) throw new Error(`more than ${MAX_NOTES * 5} events`);
+    }
+  }
+  return out;
+}
+
 createInterface({ input: process.stdin }).on('line', async (line) => {
   let msg;
   try { msg = JSON.parse(line); } catch { return; }
   try {
-    const { pattern } = await core.evaluate(String(msg.code), transpiler);
-    if (!pattern || typeof pattern.queryArc !== 'function') throw new Error('the text makes no pattern');
-    out(JSON.stringify({ id: msg.id, ok: true, ...notesOf(pattern, msg.bars, msg.tpb) }) + '\n');
+    try {
+      const list = await run(msg.code, msg);
+      if (msg.mode === 'haps') out(JSON.stringify({ id: msg.id, ok: true, cps, haps: hapsOf(list, msg.bars) }) + '\n');
+      else out(JSON.stringify({ id: msg.id, ok: true, cps, ...notesOf(list, msg.bars, msg.tpb) }) + '\n');
+    } finally {
+      if (msg.prelude || msg.globals) restoreGlobals();
+    }
   } catch (e) {
     const lineNo = e.loc?.line ?? (String(e.stack).match(/<anonymous>:(\d+):/)?.[1] ? Number(RegExp.$1) : null);
     out(JSON.stringify({ id: msg.id, ok: false, error: String(e.message || e).split('\n')[0], line: lineNo }) + '\n');

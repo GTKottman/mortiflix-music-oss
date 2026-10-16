@@ -55,7 +55,10 @@ export function createEvaluator({ strudelDir, timeoutMs = 2000 } = {}) {
     child = null;
   }
 
-  async function run(code, { bars, tpb = 4 * PPQ }) {
+  // prelude / globals: an app's own helpers and their data, run before the text (see the worker).
+  // mode 'haps': the raw events with their values, as headless Chrome returns them. `ms` overrides the timeout (a whole
+  // song takes longer than one pattern).
+  async function run(code, { bars, tpb = 4 * PPQ, mode, ms = timeoutMs, prelude, globals }) {
     if (!child) start();
     await ready;
     const id = nextId++;
@@ -63,10 +66,10 @@ export function createEvaluator({ strudelDir, timeoutMs = 2000 } = {}) {
       const timer = setTimeout(() => {
         pending.delete(id);
         kill();
-        reject(new Error(`the pattern took longer than ${timeoutMs / 1000} s to run (an endless loop?)`));
-      }, timeoutMs);
+        reject(new Error(`the pattern took longer than ${ms / 1000} s to run (an endless loop?)`));
+      }, ms);
       pending.set(id, { resolve, reject, timer });
-      child.stdin.write(JSON.stringify({ id, code, bars, tpb }) + '\n');
+      child.stdin.write(JSON.stringify({ id, code, bars, tpb, mode, prelude, globals }) + '\n');
     });
   }
 

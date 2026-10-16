@@ -2,7 +2,7 @@
 // evaluator is locked down. Needs Strudel installed (MFX_STRUDEL, or the studio's tools/strudel); skipped otherwise.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { createStrudel } from '../src/strudel/edit.mjs';
@@ -122,4 +122,30 @@ test('the evaluator is locked down and survives an endless loop', { skip }, asyn
   await assert.rejects(ev.run('(() => { while (true) {} })() || note("c3")', { bars: 1 }), /longer than/);
   const r = await ev.run('note("c3 e3")', { bars: 1 });
   assert.deepEqual(r.notes.map((n) => n.key), [48, 52]);
+});
+
+test('Node reads a score the way the REPL in Chrome does (doc 28 M1): $: and labelled blocks, mute, setcpm, strings, drums', { skip }, async (t) => {
+  const ev = createEvaluator({ strudelDir: dir });
+  t.after(() => ev.close());
+  const fx = join(import.meta.dirname, 'fixtures', 'strudel-parity');
+  const chrome = JSON.parse(readFileSync(join(fx, 'chrome.json'), 'utf8'));
+  const r = await ev.run(readFileSync(join(fx, 'score.strudel.js'), 'utf8'), { bars: 5, mode: 'haps', ms: 20000 });
+  assert.ok(r.ok, r.error);
+  // the same events with the same values, in the same order Chrome's were saved
+  const got = r.haps.map((h) => ({ begin: h.begin, end: h.end, value: h.value })).sort((x, y) => x.begin - y.begin || JSON.stringify(x.value).localeCompare(JSON.stringify(y.value)));
+  assert.equal(r.cps, chrome.cps);
+  assert.deepEqual(got, chrome.haps);
+  // each $: line is its own block, numbered in text order; the muted one is left out
+  assert.deepEqual([...new Set(r.haps.map((h) => h.block))].sort(), [0, 1, 2, 3, 5]);
+});
+
+test('an app prelude and its data run before the score (Mortiflix Music voice() / guide())', { skip }, async (t) => {
+  const ev = createEvaluator({ strudelDir: dir });
+  t.after(() => ev.close());
+  const prelude = 'function guide(name) { return note(window.mfxLines[name]) }';
+  const r = await ev.run("$: guide('Lead').midichan(4)", { bars: 1, prelude, globals: { mfxLines: { Lead: 'c4 e4 g4' } } });
+  assert.ok(r.ok, r.error);
+  assert.deepEqual(r.notes.map((n) => n.key), [60, 64, 67]);
+  const bad = await ev.run("$: guide('Lead')", { bars: 1 });
+  assert.equal(bad.ok, false);
 });
