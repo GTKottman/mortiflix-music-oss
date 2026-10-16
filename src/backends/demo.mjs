@@ -8,6 +8,8 @@ import { join } from 'node:path';
 import { callStudio } from '../mfx.mjs';
 import { loadProject, projectPipeline } from '../projects.mjs';
 import { stepView } from '../gates.mjs';
+import { songFromNotes } from '../song-import.mjs';
+import { saveSong } from '../song-store.mjs';
 
 export const name = 'demo';
 
@@ -123,7 +125,9 @@ export async function run({ root, projectId, workdir, env, onActivity, signal, c
         mkdirSync(join(workdir, 'music'), { recursive: true });
         const bars = 2;
         writeFileSync(join(workdir, 'music', 'blueprint.json'), JSON.stringify({ title: project.title, bpm: 120, meter: '4/4', bars: BEATS.length * bars, scale: 'A:minor',
-          sections: BEATS.map(([words], i) => ({ id: `m0${i + 1}`, beat: `b0${i + 1}`, name: ['Arrival', 'Three ideas', 'Coming together', 'The close'][i], start_bar: i * bars + 1, end_bar: (i + 1) * bars, function: words, intensity: [3, 5, 7, 4][i] })) }, null, 2));
+          sections: BEATS.map(([words], i) => ({ id: `m0${i + 1}`, beat: `b0${i + 1}`, name: ['Arrival', 'Three ideas', 'Coming together', 'The close'][i], start_bar: i * bars + 1, end_bar: (i + 1) * bars, function: words, intensity: [3, 5, 7, 4][i] })),
+          roles: [{ channel: 2, name: 'Bass' }, { channel: 3, name: 'Keys' }, { channel: 10, name: 'Drums' }] }, null, 2));
+        writeDemoSong(root, projectId, workdir, project.title);
       }
       // The video's scenes, one per beat: the canvas cuts the shots out of it by these frames.
       if (step.review === 'video' && step.key !== 'music') {
@@ -196,3 +200,44 @@ export async function run({ root, projectId, workdir, env, onActivity, signal, c
 }
 
 const escapeXml = (s) => String(s).replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' }[c]));
+
+// The demo's music as a song (doc 18 S11): notes, instruments and the mini DAW's song files, so the song lane and the
+// Piano roll can be tried with no Claude, no Strudel and no sound engine. A minor, 120 BPM, four 2-bar sections.
+export function demoNotes(title = 'Demo') {
+  const roots = [45, 41, 48, 43];                      // A2 F2 C3 G2, one per section
+  const chords = [[57, 60, 64], [53, 57, 60], [55, 60, 64], [55, 59, 62]];
+  const bass = []; const keys = []; const drums = [];
+  for (let bar = 0; bar < 8; bar++) {
+    const sec = Math.floor(bar / 2);
+    const b = bar * 4;
+    for (const [beat, dur, up] of [[0, 1.5, 0], [1.5, 0.5, 0], [2, 1, 12], [3, 1, 7]]) bass.push({ pitch: roots[sec] + up, start: b + beat, dur, velocity: beat === 0 ? 0.9 : 0.7 });
+    for (const beat of [1, 3]) for (const k of chords[sec]) keys.push({ pitch: k, start: b + beat, dur: 0.5, velocity: 0.6 });
+    for (let e = 0; e < 8; e++) drums.push({ pitch: 42, start: b + e / 2, dur: 0.25, velocity: e % 2 ? 0.45 : 0.6 });
+    for (const beat of [0, 2]) drums.push({ pitch: 36, start: b + beat, dur: 0.25, velocity: 0.9 });
+    for (const beat of [1, 3]) drums.push({ pitch: 38, start: b + beat, dur: 0.25, velocity: 0.8 });
+  }
+  const sort = (ns) => ns.sort((a, b) => a.start - b.start || a.pitch - b.pitch);
+  return { title, bpm: 120, meter: '4/4', beats_per_bar: 4, bars: 8, tracks: [
+    { channel: 2, name: 'Bass', kind: 'pitched', notes: sort(bass) },
+    { channel: 3, name: 'Keys', kind: 'pitched', notes: sort(keys) },
+    { channel: 10, name: 'Drums', kind: 'drums', notes: sort(drums) },
+  ] };
+}
+
+export const DEMO_INSTRUMENTS = { concept: 'A plain demo kit.', parts: [
+  { channel: 2, role: 'Bass', sound: 'sawtooth', set: '.lpf(500)', gain: 0.7, pan: 0 },
+  { channel: 3, role: 'Keys', sound: 'triangle', set: '.release(.2)', gain: 0.45, pan: -0.2 },
+  { channel: 10, role: 'Drums', gain: 0.8, kit: { 36: { sound: 'sine', set: '.penv(24).decay(.2).sustain(0)' }, 38: { sound: 'pink', set: '.decay(.12).sustain(0)', gain: 0.6 }, 42: { sound: 'white', set: '.decay(.04).sustain(0)', gain: 0.5 } } },
+] };
+
+function writeDemoSong(root, projectId, workdir, title) {
+  const music = join(workdir, 'music');
+  const bp = JSON.parse(readFileSync(join(music, 'blueprint.json'), 'utf8'));
+  const notes = demoNotes(title);
+  writeFileSync(join(music, 'notes.json'), JSON.stringify(notes));
+  writeFileSync(join(music, 'instruments.json'), JSON.stringify(DEMO_INSTRUMENTS, null, 2));
+  const { song, text } = songFromNotes({ blueprint: bp, notes, instruments: DEMO_INSTRUMENTS });
+  // the song file is itself a score (setcpm, one part per channel): it stands in for the session's score
+  writeFileSync(join(music, 'score.strudel.js'), text);
+  saveSong(root, projectId, song, text);
+}

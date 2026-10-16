@@ -73,9 +73,9 @@ function dedupe(manifest) {
   return joined;
 }
 
-// in: { blueprint, notes (notes.json), instruments (instruments.json or null), evaluator, sources: { score, notes, blueprint } texts }
-// out: { song, text, warnings } — or throws with the differences when the file doesn't play the score exactly.
-export async function importScore({ blueprint: bp, notes: manifestIn, instruments = null, evaluator, sources = {} }) {
+// The song and its Strudel file from the score's notes, without running anything: the patterns' notes are the score's
+// (ticks from each section's start). importScore checks them against the file; the demo uses this as it is.
+export function songFromNotes({ blueprint: bp, notes: manifestIn, instruments = null, sources = {} }) {
   const warnings = [];
   const manifest = JSON.parse(JSON.stringify(manifestIn));
   const joined = dedupe(manifest);
@@ -93,48 +93,65 @@ export async function importScore({ blueprint: bp, notes: manifestIn, instrument
   const tracks = [...manifest.tracks].sort((a, b) => a.channel - b.channel);
   tracks.forEach((tr, i) => {
     const part = partOf(tr.channel);
-    const id = `ch${pad(tr.channel)}`;
     const drums = tr.channel === 10 || tr.kind === 'drums' || Boolean(part?.kit);
-    song.channels.push({ id, name: part?.role || roleOf(tr.channel)?.name || tr.name || `Channel ${tr.channel}`, role: part?.role || roleOf(tr.channel)?.name || null,
+    song.channels.push({ id: `ch${pad(tr.channel)}`, name: part?.role || roleOf(tr.channel)?.name || tr.name || `Channel ${tr.channel}`, role: part?.role || roleOf(tr.channel)?.name || null,
       colour: ROLE_COLOURS[i % ROLE_COLOURS.length], kind: drums ? 'drums' : 'instrument', midiChannel: tr.channel, instrument: null, insert: `mx${pad(tr.channel)}`,
       volDb: part?.gain ? +(20 * Math.log10(part.gain)).toFixed(2) : 0, pan: Number(part?.pan) || 0 });
     song.mixer.inserts.push({ id: `mx${pad(tr.channel)}`, n: tr.channel, name: song.channels.at(-1).name, plugins: [], volDb: 0, pan: 0, out: 'master' });
   });
 
-  // the Strudel file, written from the score's notes
   const rows = rowsFromManifest(manifest, sections, tpb);
+  const chan = (ch) => song.channels.find((c) => c.midiChannel === ch);
   const text = buildSongFile({
     title: song.title, bpm, meter, scale: bp.scale || null,
     sections: sections.map(({ id, name, bars }) => ({ id, name, bars })),
-    parts: tracks.map((tr) => ({ channel: tr.channel, name: song.channels.find((c) => c.midiChannel === tr.channel).name, drums: song.channels.find((c) => c.midiChannel === tr.channel).kind === 'drums', sound: partOf(tr.channel), rows: rows[tr.channel] })),
+    parts: tracks.map((tr) => ({ channel: tr.channel, name: chan(tr.channel).name, drums: chan(tr.channel).kind === 'drums', sound: partOf(tr.channel), rows: rows[tr.channel] })),
   });
-
-  // the notes, worked out from that file
-  const drumChannels = song.channels.filter((c) => c.kind === 'drums').map((c) => c.midiChannel);
-  const derived = await songNotes(evaluator, text, sections, { ticksPerBar: tpb, beatsPerBar: tpb / PPQ, drumChannels });
-  if (derived.problems.length) throw Object.assign(new Error(`the song file doesn't play the score: ${derived.problems.slice(0, 3).join('; ')}`), { problems: derived.problems, text });
 
   song.playlist.tracks.push({ id: 'r1', name: 'Music' }, { id: 'r2', name: 'Narration' }, { id: 'r3', name: 'Sound effects' }, { id: 'r4', name: 'Reference (Strudel)', mute: true });
   sections.forEach((sec, i) => {
     const notes = {};
-    for (const c of song.channels) { const ns = derived.parts[c.midiChannel]?.[sec.id] || []; if (ns.length) notes[c.id] = ns; }
+    for (const c of song.channels) {
+      const ns = (rows[c.midiChannel]?.[sec.id] || []).map(({ t, len, key, vel }) => ({ t, len, key, vel })).sort((a, b) => a.t - b.t || a.key - b.key || a.len - b.len);
+      if (ns.length) notes[c.id] = ns;
+    }
     song.patterns.push({ id: sec.id, name: sec.name, colour: null, bars: sec.bars, cue: sec.id, notes });
     song.playlist.items.push({ id: `i${String(i + 1).padStart(3, '0')}`, kind: 'pattern', ref: sec.id, track: 'r1', at: { tick: sec.startTick }, len: sec.bars * tpb });
     song.markers.push({ id: `k${pad(i + 1)}`, tick: sec.startTick, name: sec.name, kind: 'section', from: 'blueprint' });
   });
   (bp.hits || []).forEach((h, i) => song.markers.push({ id: `h${pad(i + 1)}`, tick: Math.round((((h.bar - 1) * tpb / PPQ) + ((h.beat ?? 1) - 1)) * PPQ), name: h.what || 'hit', kind: 'hit', sec: h.t_sec, from: 'blueprint' }));
-  // identical sections: offered as "edit both"
-  for (let i = 0; i < song.patterns.length; i++) for (let j = 0; j < i; j++) {
-    const [a, b] = [song.patterns[i], song.patterns[j]];
-    if (!b.sameAs && a.bars === b.bars && Object.keys(a.notes).length && JSON.stringify(a.notes) === JSON.stringify(b.notes)) { a.sameAs = b.id; break; }
-  }
+  markSameAs(song);
   // each pattern (section × part) remembers the hash of the text its notes came from (doc 28 §1.4)
   const parsed = parseSongFile(text);
   song.strudel.regions = {};
   for (const b of parsed.blocks) b.rows.forEach((r, i) => { song.strudel.regions[`${sections[i].id}.ch${pad(b.channel)}`] = { sha: sha(r.text).slice(0, 16) }; });
   song.strudel.sha = sha(text);
   song.source = { score: 'music/score.strudel.js', scoreSha: sources.score ? sha(sources.score) : null, notesSha: sources.notes ? sha(sources.notes) : null, blueprintSha: sources.blueprint ? sha(sources.blueprint) : null, importedAt: new Date().toISOString() };
+  return { song, text, warnings, manifest, sections, tpb };
+}
 
+// Identical sections: offered as "edit both".
+function markSameAs(song) {
+  for (const p of song.patterns) delete p.sameAs;
+  for (let i = 0; i < song.patterns.length; i++) for (let j = 0; j < i; j++) {
+    const [a, b] = [song.patterns[i], song.patterns[j]];
+    if (!b.sameAs && a.bars === b.bars && Object.keys(a.notes).length && JSON.stringify(a.notes) === JSON.stringify(b.notes)) { a.sameAs = b.id; break; }
+  }
+}
+
+// in: { blueprint, notes (notes.json), instruments (instruments.json or null), evaluator, sources: { score, notes, blueprint } texts }
+// out: { song, text, warnings }, or throws with the differences when the file doesn't play the score exactly.
+// The patterns' notes are worked out from the Strudel file, not copied.
+export async function importScore({ evaluator, ...input }) {
+  const { song, text, warnings, manifest, sections, tpb } = songFromNotes(input);
+  const drumChannels = song.channels.filter((c) => c.kind === 'drums').map((c) => c.midiChannel);
+  const derived = await songNotes(evaluator, text, sections, { ticksPerBar: tpb, beatsPerBar: tpb / PPQ, drumChannels });
+  if (derived.problems.length) throw Object.assign(new Error(`the song file doesn't play the score: ${derived.problems.slice(0, 3).join('; ')}`), { problems: derived.problems, text });
+  for (const p of song.patterns) {
+    p.notes = {};
+    for (const c of song.channels) { const ns = derived.parts[c.midiChannel]?.[p.id] || []; if (ns.length) p.notes[c.id] = ns; }
+  }
+  markSameAs(song);
   // exactness: the file plays the score note for note
   const diff = compareManifests(manifest, toManifest(song));
   if (diff.length) throw Object.assign(new Error(`the song doesn't play the score exactly:\n  ${diff.join('\n  ')}`), { problems: diff, text });

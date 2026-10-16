@@ -95,3 +95,34 @@ test('mortiflix music <project> --song writes song.json and song.strudel.js; a b
   assert.throws(() => saveSong(root, p.id, song), /can't be saved: .*"key" 200 is over 127/);
   assert.equal(loadSong(root, p.id).song.rev, 1, 'the file on disk is unchanged');
 });
+
+test('the demo backend writes a song (S11): the browser can try the song lane with no Claude, no Strudel, no engine', async (t) => {
+  const { tempStudio } = await import('./helpers.mjs');
+  const { createProject, startProject } = await import('../src/projects.mjs');
+  const { respond } = await import('../src/gates.mjs');
+  const { Runner } = await import('../src/runner.mjs');
+  const { loadSong } = await import('../src/song-store.mjs');
+  const root = tempStudio(t);
+  const p = createProject(root, { pipeline: 'explainer', title: 'Demo song', answers: { topic: 'tides' } });
+  startProject(root, p.id);
+  const runner = new Runner(root);
+  runner.acquire();
+  t.after(() => runner.release());
+  await runner.loop();
+  respond(root, p.id, 'brief', 1, { verdict: 'approve' });
+  await runner.loop();
+  const { song, text } = loadSong(root, p.id);
+  assert.deepEqual(checkSong(song), []);
+  assert.deepEqual(song.patterns.map((x) => [x.id, x.bars]), [['m01', 2], ['m02', 2], ['m03', 2], ['m04', 2]]);
+  assert.deepEqual(song.channels.map((c) => c.name), ['Bass', 'Keys', 'Drums']);
+  assert.match(text, /\$: arrange\(/);
+  // with Strudel installed, the file plays exactly the song's notes
+  if (dir) {
+    const ev = createEvaluator({ strudelDir: dir });
+    t.after(() => ev.close());
+    const got = await songNotes(ev, text, song.patterns.map((x) => ({ id: x.id, bars: x.bars })));
+    assert.deepEqual(got.problems, []);
+    const full = (ns) => (ns || []).map((n) => ({ vel: 0.8, ...n }));   // the file leaves defaults out
+    for (const pat of song.patterns) for (const c of song.channels) assert.deepEqual(full(got.parts[c.midiChannel][pat.id]), full(pat.notes[c.id]), `${pat.id} ${c.id}`);
+  }
+});
