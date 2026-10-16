@@ -3,6 +3,7 @@
 
 import { canvasView } from './canvas.js';
 import { midiStrudelView } from './midistrudel.js';
+import { songLane } from './songlane.js';
 
 const $app = document.getElementById('app');
 const $status = document.getElementById('top-status');
@@ -149,7 +150,7 @@ async function loadStudio() {
 // ---------- the canvas (web/canvas.js) ----------
 
 async function openCanvas(id, mode) {
-  const cv = canvasView({ h, fill, api, fileUrl, clock, store, icon, appendLog, toast, customChips, musicPanel, studio: () => studio }, id, mode || 'edit');
+  const cv = canvasView({ h, fill, api, fileUrl, clock, store, icon, appendLog, toast, customChips, musicPanel, songLane, studio: () => studio }, id, mode || 'edit');
   mount(await cv.show());
   current.refresh = () => cv.refresh();
   leaveView = () => cv.leave();

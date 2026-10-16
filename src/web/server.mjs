@@ -20,6 +20,7 @@ import * as setup from '../setup.mjs';
 import * as craft from '../craft.mjs';
 import * as booth from '../booth.mjs';
 import * as music from '../music.mjs';
+import { songView } from '../song-store.mjs';
 import { canvasView, nodeAction } from '../canvas.mjs';
 import * as filmcraft from '../filmcraft.mjs';
 import { projectSkills, readSkillText } from '../skills.mjs';
@@ -300,6 +301,7 @@ export async function startServer(root, { port = 4646, host = '127.0.0.1', runne
   // master (raw audio body; a paused project resumes when it was waiting for it), and playing the imported master.
   async function musicApi(req, res, id, sub, method, after, url) {
     if (sub === '/music' && method === 'GET') return send(res, 200, music.musicStatus(root, id));
+    if (sub === '/music/song' && method === 'GET') return send(res, 200, songView(root, id) || { draft: true, song: null });
     if (sub === '/music/midi.zip' && method === 'GET') {
       const zip = music.midiPack(root, id);
       const p = loadProject(root, id);

@@ -6,7 +6,7 @@ import { projectPaths } from './projects.mjs';
 import { withLock, UserError } from './studio.mjs';
 import { toolsDir } from './setup.mjs';
 import { checkSong, writeSong, readSong } from './song.mjs';
-import { importScore } from './song-import.mjs';
+import { importScore, songFromNotes } from './song-import.mjs';
 import { createEvaluator } from './strudel/evaluator.mjs';
 
 export function songPaths(root, id) {
@@ -57,4 +57,18 @@ export async function importProjectSong(root, id, { evaluator = null } = {}) {
     const rev = saveSong(root, id, r.song, r.text);
     return { ...r, rev, paths: sp };
   } finally { if (!evaluator) ev.close(); }
+}
+
+// What the song lane draws (doc 19 §6): the song, or before the first import a draft made from the blueprint and the
+// score's notes (read-only, no Strudel needed). null when there is no score yet.
+export function songView(root, id) {
+  const saved = loadSong(root, id);
+  if (saved) return { draft: false, song: saved.song };
+  const sp = songPaths(root, id);
+  if (!existsSync(sp.blueprint) || !existsSync(sp.notes)) return null;
+  try {
+    const rd = (f) => JSON.parse(readFileSync(f, 'utf8'));
+    const { song } = songFromNotes({ blueprint: rd(sp.blueprint), notes: rd(sp.notes), instruments: existsSync(sp.instruments) ? rd(sp.instruments) : null });
+    return { draft: true, song };
+  } catch (e) { return { draft: true, song: null, error: e.message }; }
 }

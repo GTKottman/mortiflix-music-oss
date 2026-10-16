@@ -265,18 +265,15 @@ export function canvasView(ui, id, mode = 'edit') {
   // the session's own to-do list, the files it made this session, a few counters, then everything it did.
   // The music: the score's sections in their beats' colours (bars, what each does, how intense), and the MIDI pack:
   // every part on its own channel, a clip per section, and the import steps for the owner's DAW (REAPER…).
+  // The Music tab: the song lane under the shots (doc 19), read-only; the MIDI pack below it.
+  let lane = null;
   async function drawMusic() {
-    const n = graph?.nodes || {};
-    const cues = (graph?.order?.cues || []).map((c) => n[c]).filter(Boolean);
-    const ms = await api(`/api/projects/${id}/music`).catch(() => null);
+    const [ms, sv] = await Promise.all([api(`/api/projects/${id}/music`).catch(() => null), api(`/api/projects/${id}/music/song`).catch(() => null)]);
     if (boardView !== 'music') return;
+    lane?.lane?.stop();
+    lane = sv?.song ? ui.songLane({ h, song: sv.song, graph, draft: sv.draft }) : null;
     fill(board, h('div', { class: 'cv-music' },
-      cues.length ? h('ol', { class: 'cv-cues' }, cues.map((c) => h('li', { class: 'cv-cue', style: { background: c.colour?.hex || 'var(--clip-audio)' } },
-        h('span', { class: 'cv-node-beat', style: { background: c.colour?.chip || 'transparent' } }, n[c.beat]?.label || c.label),
-        h('span', { class: 'cv-cue-name' }, c.title),
-        h('span', { class: 'cv-cue-bars' }, c.bars ? `bars ${c.bars[0]}–${c.bars[1]}` : ''),
-        c.intensity !== null && c.intensity !== undefined ? h('span', { class: 'cv-cue-int', title: `intensity ${c.intensity}/10` }, h('i', { style: { width: `${c.intensity * 10}%` } })) : null)))
-        : h('div', { class: 'cv-empty' }, 'The music\'s sections appear here once it is planned (after the animatic).'),
+      lane || h('div', { class: 'cv-empty' }, sv?.error ? `The music couldn't be drawn: ${sv.error}` : 'The music appears here under the shots once the score passes its check.'),
       ms?.midi?.length ? ui.musicPanel(id, ms) : h('p', { class: 'help' }, 'When the score passes its check, its MIDI pack shows here: every part on its own channel, a clip per section, and the steps to bring it into your DAW (Settings › Your DAW).')));
   }
 
@@ -551,7 +548,7 @@ export function canvasView(ui, id, mode = 'edit') {
     if (mode === 'import') return fill(root, head, drawImport());
     if (mode === 'export') return fill(root, head, drawExport());
     const keepBox = h('label', { class: 'cv-keep' }, h('input', { type: 'checkbox', checked: keep, onchange: (e) => { keep = e.target.checked; store.set(keepKey, keep); } }), 'Keep playing into the next piece');
-    fill(root, head, h('div', { class: 'cv-grid' },
+    fill(root, head, h('div', { class: `cv-grid${boardView === 'music' ? ' cv-board-music' : ''}` },
       panel('Script', script, null, 'cv-p-script'),
       panel('Monitor', monitor, null, 'cv-p-monitor'),
       h('section', { class: 'cv-panel cv-p-doing' },

@@ -550,3 +550,11 @@ button.cv-tnode { cursor: pointer; font: inherit; color: inherit; }
 .ms-error.on { display: block; }
 .ms-error.warn { color: var(--muted); }
 @media (max-width: 900px) { .ms-grid { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); } .ms-hint, .ms-tools .ms-label:last-child { display: none; } }
+
+/* The song lane (doc 19, mockup A): the Music tab gets a taller board (doc 25 U1: 400 px at 2560 × 1440). */
+.cv-grid.cv-board-music { grid-template-rows: minmax(0, 1fr) clamp(236px, 28vh, 400px); }
+.sl { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.sl-wrap { width: 100%; min-width: 0; overflow: hidden; }
+.sl-canvas { display: block; }
+.sl-note { font-size: 11px; color: var(--faint); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

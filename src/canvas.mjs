@@ -186,6 +186,8 @@ export function syncCanvas(root, id) {
     const graph = {
       format: 'mortiflix.canvas', version: 1, project: id, rev: (prev.rev || 0) + 1, built_at: new Date().toISOString(),
       order: { beats: order('beat'), shots: order('shot'), frames: order('frame'), lines: order('line'), cues: order('cue'), transitions: order('transition') },
+      // the video's frame rate (from the scenes), for the music's one-frame rule on cuts
+      fps: scenes?.fps ? Number(scenes.fps) : null,
       colours, nodes, problems,
     };
     writeFileSync(cp.graph, JSON.stringify(graph, null, 2));
