@@ -11,6 +11,9 @@ const BLOCK_HEAD = 24;
 const MAX_ROWS = 6;         // more parts fold into the last row as "+N more parts"
 const VOICE = 18;
 const CUTS = 16;
+const NODES = 118;          // the shot nodes row (mockup A)
+const NODE_MIN = 72;        // narrowest node; narrower shots show only their number and beat colour
+const MAX_PPS = 600;        // most zoomed in: px per second
 
 const css = (el, name, fallback) => getComputedStyle(el).getPropertyValue(name).trim() || fallback;
 
@@ -56,7 +59,8 @@ export function cutMarks(song, shots, fps = 30) {
   });
 }
 
-export function songLane({ h, song, graph, draft = false }) {
+// shotNode(shot, { compact }) builds a shot's node (the canvas's own look); transitionOf(fromId, toId) names the cut.
+export function songLane({ h, song, graph, draft = false, shotNode = null, transitionOf = () => null }) {
   const ax = timeAxis(song);
   const shots = shotTimes(graph);
   const fps = graph?.fps || 30;
@@ -91,16 +95,49 @@ export function songLane({ h, song, graph, draft = false }) {
   const H = cutsY + CUTS + 4;
 
   const canvas = h('canvas', { class: 'sl-canvas', role: 'img', 'aria-label': `The music under the shots: ${sections.length} sections, ${playing.length} parts, ${Math.round(lastBar - 1)} bars` });
-  const wrap = h('div', { class: 'sl-wrap' }, canvas);
+  const nodeRow = h('div', { class: 'sl-nodes', style: { height: `${shots.length ? NODES : 0}px` } });
+  const spacer = h('div', { class: 'sl-spacer' });
+  const scroller = h('div', { class: 'sl-scroll' }, spacer, nodeRow, canvas);
   const list = h('ol', { class: 'sr-only' }, sections.map((s) => h('li', null, `${s.id.toUpperCase()} ${s.name}: bars ${s.startBar}–${s.startBar + s.bars - 1}${s.under ? `, under ${s.under}` : ''}`)));
   const el = h('div', { class: 'sl' },
     draft ? h('div', { class: 'sl-note' }, 'From the score. The song is made when the music is imported (mortiflix music <project> --song).') : null,
-    wrap, list);
+    scroller, list);
+  // zoom: px per second; 0 = fit the whole song (video mode starts there)
+  let pps = 0;
+  const fitPps = () => (Math.max(320, scroller.clientWidth || 900) - LABELS - 12) / end;
+  const worldW = () => LABELS + end * pps + 12;
+
+  function placeNodes() {
+    // the label column covers nodes scrolled under it, as the canvas does for the parts
+    nodeRow.replaceChildren(h('span', { class: 'sl-mask', style: { width: `${LABELS - 2}px` } }));
+    if (!shotNode) return;
+    const x = (sec) => LABELS + sec * pps;
+    shots.forEach((s, i) => {
+      const w = (s.to - s.from) * pps - 4;
+      const compact = w < NODE_MIN;
+      const node = shotNode(s, { compact });
+      node.classList.add('sl-node');
+      if (compact) node.classList.add('compact');
+      Object.assign(node.style, { left: `${x(s.from) + 2}px`, width: `${Math.max(compact ? 28 : NODE_MIN, w)}px` });
+      nodeRow.append(node);
+      const next = shots[i + 1];
+      if (next) {
+        const t = transitionOf(s.id, next.id);
+        nodeRow.append(h('span', { class: 'sl-cut', title: t ? `${t.label}: ${t.title}` : 'Cut', style: { left: `${x(next.from) - 1}px` } }));
+      }
+    });
+  }
 
   function draw() {
-    const width = Math.max(320, wrap.clientWidth || 900);
-    const pps = (width - LABELS - 12) / end;      // fit the whole song
-    const x = (sec) => LABELS + sec * pps;
+    if (!pps) pps = fitPps();
+    pps = Math.max(fitPps(), Math.min(MAX_PPS, pps));
+    const view = Math.max(320, scroller.clientWidth || 900);
+    spacer.style.width = `${worldW()}px`;
+    nodeRow.style.width = `${worldW()}px`;
+    placeNodes();
+    const left = scroller.scrollLeft;
+    const width = view;
+    const x = (sec) => LABELS + sec * pps - left;
     const dpr = window.devicePixelRatio || 1;
     canvas.width = Math.round(width * dpr); canvas.height = Math.round(H * dpr);
     canvas.style.width = `${width}px`; canvas.style.height = `${H}px`;
@@ -112,17 +149,19 @@ export function songLane({ h, song, graph, draft = false }) {
     const line = css(el, '--line', '#303030');
     const warn = css(el, '--warn', '#f0f04f');
     const bad = css(el, '--bad', '#dc513d');
+    const panelBg = css(el, '--bg', '#1d1d1d');
     const font = (px, weight = 400) => `${weight} ${px}px Inter, system-ui, sans-serif`;
+    const visible = (a, b) => b >= -2 && a <= width + 2;
     g.textBaseline = 'middle';
 
     // the bar ruler: a number every bar, or every 2 / 4 / 8 when bars are narrow
     g.font = font(10);
-    g.fillStyle = faint;
-    g.fillText('Bar', 0, RULER / 2);
     const barPx = (ax.barSec(2) - ax.barSec(1)) * pps;
     const every = [1, 2, 4, 8, 16, 32].find((k) => barPx * k >= 22) || 64;
     for (let b = 1; b <= lastBar; b++) {
       const bx = Math.round(x(ax.barSec(b))) + 0.5;
+      if (bx < LABELS - 2 || bx > width + 30) continue;
+      g.fillStyle = faint;
       g.strokeStyle = line;
       g.beginPath(); g.moveTo(bx, b % every === 1 || every === 1 ? 0 : RULER - 5); g.lineTo(bx, RULER); g.stroke();
       if ((b - 1) % every === 0 && b < lastBar) g.fillText(String(b), bx + 3, RULER / 2);
@@ -132,6 +171,7 @@ export function songLane({ h, song, graph, draft = false }) {
     const top = RULER + 4;
     for (const s of sections) {
       const x0 = x(s.from) + 1; const x1 = x(s.to) - 2;
+      if (!visible(x0, x1)) continue;
       g.fillStyle = s.colour?.hex || '#3a3a3a';
       roundRect(g, x0, top, x1 - x0, blockH, 4); g.fill();
       g.save(); g.beginPath(); g.rect(x0, top, x1 - x0, blockH); g.clip();
@@ -158,6 +198,7 @@ export function songLane({ h, song, graph, draft = false }) {
           const span = Math.max(1, hi - lo);
           for (const n of s.notes[c.id] || []) {
             const nx = x(ax.tickSec(s.startTick + n.t));
+            if (nx > width) break;
             const nw = Math.max(1.5, (ax.tickSec(s.startTick + n.t + n.len) - ax.tickSec(s.startTick + n.t)) * pps - 0.5);
             const ny = ry + 3 + (1 - (n.key - lo) / span) * (ROW - 8);
             g.fillRect(nx, ny, nw, 2);
@@ -166,16 +207,17 @@ export function songLane({ h, song, graph, draft = false }) {
       });
       g.restore();
     }
-    // part names on the left
+    // the label column stays put while the lane scrolls under it
+    g.fillStyle = panelBg; g.fillRect(0, 0, LABELS - 2, H);
+    g.font = font(10); g.fillStyle = faint; g.fillText('Bar', 0, RULER / 2);
     g.font = font(11); g.fillStyle = muted;
     shown.forEach((c, r) => g.fillText(ellipsis(g, c.name, LABELS - 6), 0, top + BLOCK_HEAD + r * (ROW + ROW_GAP) + ROW / 2));
     if (folded.length) g.fillText(`+${folded.length} more`, 0, top + BLOCK_HEAD + shown.length * (ROW + ROW_GAP) + ROW / 2);
 
     // narration: one thin row
-    g.fillStyle = muted; g.font = font(11);
-    g.fillText('Voice', 0, voiceY + VOICE / 2);
     for (const l of lines) {
       const lx = x(l.start_sec); const lw = Math.max(3, (l.end_sec - l.start_sec) * pps - 1);
+      if (!visible(lx, lx + lw)) continue;
       g.fillStyle = css(el, '--clip-audio', '#2f6f4f');
       roundRect(g, lx, voiceY, lw, VOICE, 3); g.fill();
       g.fillStyle = '#fff'; g.font = font(10);
@@ -187,6 +229,7 @@ export function songLane({ h, song, graph, draft = false }) {
     g.setLineDash([3, 3]);
     for (const c of cuts) {
       const cx = Math.round(x(c.at)) + 0.5;
+      if (cx < LABELS || cx > width) continue;
       const colour = c.kind === 'hit' ? warn : c.kind === 'miss' ? bad : faint;
       g.strokeStyle = colour; g.lineWidth = c.kind === 'cut' ? 1 : 2;
       g.beginPath(); g.moveTo(cx, top); g.lineTo(cx, cutsY + CUTS); g.stroke();
@@ -194,11 +237,27 @@ export function songLane({ h, song, graph, draft = false }) {
       g.fillText(c.text, cx + 4, cutsY + CUTS / 2);
     }
     g.setLineDash([]); g.lineWidth = 1;
+    g.fillStyle = panelBg; g.fillRect(0, voiceY - 2, LABELS - 2, VOICE + 4);
+    g.fillStyle = muted; g.font = font(11); g.fillText('Voice', 0, voiceY + VOICE / 2);
   }
 
+  // Ctrl + wheel zooms around the mouse; plain wheel scrolls the board; Shift + wheel scrolls sideways.
+  scroller.addEventListener('wheel', (e) => {
+    if (!e.ctrlKey) return;
+    e.preventDefault();
+    const r = scroller.getBoundingClientRect();
+    const mx = e.clientX - r.left;
+    const at = (scroller.scrollLeft + mx - LABELS) / pps;      // the second under the mouse
+    pps = Math.max(fitPps(), Math.min(MAX_PPS, pps * Math.exp(-e.deltaY * 0.0015)));
+    spacer.style.width = `${worldW()}px`;
+    scroller.scrollLeft = Math.max(0, LABELS + at * pps - mx);
+    draw();
+  }, { passive: false });
+  scroller.addEventListener('scroll', () => requestAnimationFrame(draw));
+
   const ro = new ResizeObserver(() => draw());
-  ro.observe(wrap);
-  el.lane = { draw, sections, cuts, shots, end, stop: () => ro.disconnect() };
+  ro.observe(scroller);
+  el.lane = { draw, sections, cuts, shots, end, stop: () => ro.disconnect(), zoom: (v) => { pps = v; draw(); }, get pps() { return pps; }, x: (sec) => LABELS + sec * pps };
   return el;
 }
 

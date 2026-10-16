@@ -554,7 +554,17 @@ button.cv-tnode { cursor: pointer; font: inherit; color: inherit; }
 /* The song lane (doc 19, mockup A): the Music tab gets a taller board (doc 25 U1: 400 px at 2560 × 1440). */
 .cv-grid.cv-board-music { grid-template-rows: minmax(0, 1fr) clamp(236px, 28vh, 400px); }
 .sl { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.sl-wrap { width: 100%; min-width: 0; overflow: hidden; }
-.sl-canvas { display: block; }
+.sl-scroll { position: relative; width: 100%; min-width: 0; overflow-x: auto; overflow-y: hidden; }
+.sl-spacer { height: 0; }
+.sl-nodes { position: relative; }
+.sl-canvas { display: block; position: sticky; left: 0; }
+/* shot nodes on the lane's time axis: the Nodes board's look, sized by their seconds */
+.sl-node.cv-node { position: absolute; top: 0; height: 112px; overflow: hidden; }
+.sl-node .cv-node-still { height: 64px; }
+.sl-node .cv-node-state, .sl-node .cv-sock { display: none; }
+.sl-node.compact .cv-node-still, .sl-node.compact .cv-node-title { display: none; }
+.sl-node.compact .cv-node-head { height: 100%; flex-direction: column; justify-content: center; padding: 0; }
+.sl-mask { position: sticky; left: 0; top: 0; display: block; height: 100%; background: var(--bg); z-index: 2; }
+.sl-cut { position: absolute; top: 10px; height: 92px; width: 2px; background: var(--muted); border-radius: 1px; }
 .sl-note { font-size: 11px; color: var(--faint); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

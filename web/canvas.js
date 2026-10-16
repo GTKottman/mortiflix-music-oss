@@ -271,7 +271,20 @@ export function canvasView(ui, id, mode = 'edit') {
     const [ms, sv] = await Promise.all([api(`/api/projects/${id}/music`).catch(() => null), api(`/api/projects/${id}/music/song`).catch(() => null)]);
     if (boardView !== 'music') return;
     lane?.lane?.stop();
-    lane = sv?.song ? ui.songLane({ h, song: sv.song, graph, draft: sv.draft }) : null;
+    const n = graph?.nodes || {};
+    // the same node as the Nodes board, for each shot in the edit; clicking one selects it like there
+    const shotNode = (shot, { compact }) => {
+      const k = pieces.findIndex((it) => it.id === shot.id);
+      const it = pieces[k] || {};
+      const s = n[shot.id] || {};
+      return h('button', { class: `cv-node${k === sel ? ' on' : ''}`, title: `${s.label || shot.id} · ${s.title || ''}`, onclick: () => { if (k >= 0) go(k, true); } },
+        h('span', { class: 'cv-node-head', style: { background: it.colour?.hex || s.colour?.hex || 'var(--clip-video)' } },
+          h('span', { class: 'cv-node-beat', style: { background: it.colour?.chip || s.colour?.chip || 'transparent' } }, compact ? (s.label || shot.id).replace(/^S0?/, '') : it.beatLabel || ''), compact ? null : h('span', null, s.label || shot.id)),
+        h('span', { class: 'cv-node-still' }, it.still ? h('img', { src: fileUrl(id, it.still), alt: '', loading: 'lazy' }) : h('span', { class: 'cv-kind' }, 'Shot')),
+        h('span', { class: 'cv-node-title' }, s.title || it.label || ''));
+    };
+    const transitionOf = (a, b) => Object.values(n).find((x) => x.kind === 'transition' && !x.missing && x.from === a && x.to === b) || null;
+    lane = sv?.song ? ui.songLane({ h, song: sv.song, graph, draft: sv.draft, shotNode, transitionOf }) : null;
     fill(board, h('div', { class: 'cv-music' },
       lane || h('div', { class: 'cv-empty' }, sv?.error ? `The music couldn't be drawn: ${sv.error}` : 'The music appears here under the shots once the score passes its check.'),
       ms?.midi?.length ? ui.musicPanel(id, ms) : h('p', { class: 'help' }, 'When the score passes its check, its MIDI pack shows here: every part on its own channel, a clip per section, and the steps to bring it into your DAW (Settings › Your DAW).')));
