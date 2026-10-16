@@ -25,20 +25,86 @@ export class RenderQueue {
     return this.view(job);
   }
 
+  // A render the desktop app runs itself (a FilmCraft export): it takes its turn in the same queue, so two heavy renders
+  // never run at once. The app starts when the job turns 'running', reports progress, and says when it finished.
+  addExternal({ projectId = null, label, kind = 'export' }) {
+    const id = this.next++;
+    const job = { id, projectId, sessionId: null, label: String(label || 'Export').slice(0, 120), kind: String(kind).slice(0, 40), external: true, state: 'waiting', log: join(this.logDir, `render-${id}.log`), waiters: [] };
+    this.jobs.set(id, job);
+    this.order.push(id);
+    this.pump();
+    if (job.state === 'waiting') this.onChange(job);
+    return this.view(job);
+  }
+
+  external(id) {
+    const job = this.jobs.get(Number(id));
+    if (!job || !job.external) throw new Error(`no app render ${id}`);
+    return job;
+  }
+
+  report(id, { done = null, total = null, phase = 'rendering' } = {}) {
+    const job = this.external(id);
+    if (job.state !== 'running') throw new Error(`render ${id} is ${job.state}`);
+    if (Number.isFinite(done) && Number.isFinite(total) && total > 0) job.progress = { phase: String(phase).slice(0, 40), done: Math.max(0, Math.min(done, total)), total };
+    if (Date.now() - (job.shownAt || 0) > 250) { job.shownAt = Date.now(); this.onChange(job); }
+    return this.view(job);
+  }
+
+  finish(id, { ok, file = null, error = null } = {}) {
+    const job = this.external(id);
+    if (!['running', 'waiting'].includes(job.state)) throw new Error(`render ${id} is already ${job.state}`);
+    job.state = ok ? 'done' : 'failed';
+    job.exitCode = ok ? 0 : 1;
+    job.file = file ? String(file) : null;
+    job.error = error ? String(error).slice(0, 2000) : null;
+    job.endedAt = new Date().toISOString();
+    for (const w of job.waiters.splice(0)) w();
+    this.onChange(job);
+    this.pump();
+    return this.view(job);
+  }
+
+  // Stop one render: a waiting one never starts, a running command is stopped, an app render is told to stop.
+  cancel(id) {
+    const job = this.jobs.get(Number(id));
+    if (!job) throw new Error(`no render ${id}`);
+    if (!['waiting', 'running'].includes(job.state)) return this.view(job);
+    if (job.state === 'running' && job.proc) { job.cancelled = true; try { process.kill(-job.proc.pid, 'SIGTERM'); } catch { /* already gone */ } return this.view(job); }
+    // 'failed' (with cancelled), so every waiter that loops until done or failed stops.
+    job.state = 'failed';
+    job.cancelled = true;
+    job.exitCode = -1;
+    job.endedAt = new Date().toISOString();
+    for (const w of job.waiters.splice(0)) w();
+    this.onChange(job);
+    this.pump();
+    return this.view(job);
+  }
+
+  list() {
+    return this.order.map((i) => this.view(this.jobs.get(i)));
+  }
+
   ahead(job) {
     return this.order.filter((i) => i !== job.id && this.jobs.get(i).state === 'running').length
       + this.order.slice(0, this.order.indexOf(job.id)).filter((i) => this.jobs.get(i).state === 'waiting').length;
   }
 
   view(job) {
-    const tail = existsSync(job.log) ? readFileSync(job.log, 'utf8').slice(-3000) : '';
+    const tail = !job.external && existsSync(job.log) ? readFileSync(job.log, 'utf8').slice(-3000) : '';
     return {
       id: job.id,
       label: job.label,
       state: job.state,
+      project: job.projectId ?? null,
+      ...(job.external ? { external: true, kind: job.kind } : {}),
+      ...(job.file ? { file: job.file } : {}),
+      ...(job.error ? { error: job.error } : {}),
+      ...(job.cancelled ? { cancelled: true } : {}),
       ...(job.state === 'waiting' ? { renders_ahead: this.ahead(job) } : {}),
       ...(job.exitCode !== undefined ? { exit_code: job.exitCode } : {}),
-      ...(['done', 'failed'].includes(job.state) ? { output_tail: tail } : {}),
+      ...(['done', 'failed'].includes(job.state) && !job.external ? { output_tail: tail } : {}),
       ...(job.state === 'running' && job.progress ? { progress: { ...job.progress,
         ...(job.progress.total ? { percent: Math.round((job.progress.done / job.progress.total) * 100) } : {}),
         // Time left from the rate so far.
@@ -72,6 +138,7 @@ export class RenderQueue {
     const job = this.jobs.get(id);
     job.state = 'running';
     job.startedAt = new Date().toISOString();
+    if (job.external) { this.onChange(job); return; }
     const out = createWriteStream(job.log);
     out.write(`$ ${job.argv.join(' ')}\n`);
     const p = spawn(job.argv[0], job.argv.slice(1), { cwd: job.cwd, env: job.env, stdio: ['ignore', 'pipe', 'pipe'], detached: true });

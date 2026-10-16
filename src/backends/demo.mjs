@@ -134,6 +134,13 @@ export async function run({ root, projectId, workdir, env, onActivity, signal, c
       if (step.review === 'video' && step.key !== 'music') {
         writeFileSync(join(workdir, 'out', 'scenes.json'), JSON.stringify({ made_from: `out/${step.key}-v${version}/${file}`, fps: FPS,
           scenes: BEATS.map(([words], i) => ({ key: `s0${i + 1}`, name: words.replace(/\.$/, ''), from_frame: i * BEAT_SEC * FPS, frames: BEAT_SEC * FPS, beat: `b0${i + 1}` })) }, null, 2));
+        // The narration: one line per beat with its time, so the voice lane and the canvas have lines (quiet tones).
+        if (step.key === 'animatic') writeDemoVoice(workdir);
+      }
+      // The score as mixed, for the music lane and the FilmCraft hand-off (quiet).
+      if (step.key === 'music') {
+        mkdirSync(join(workdir, 'out', 'music'), { recursive: true });
+        spawnSync('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', `sine=frequency=220:duration=${sec}`, '-af', 'volume=0.08', '-ar', '48000', join(workdir, 'out', 'music', 'score.wav')]);
       }
     }
 
@@ -157,6 +164,25 @@ export async function run({ root, projectId, workdir, env, onActivity, signal, c
     const dir = join(workdir, 'edits', e.id);
     mkdirSync(dir, { recursive: true });
     const readJ = (rel) => JSON.parse(readFileSync(join(workdir, rel), 'utf8'));
+    if (e.kind === 'shot' && ['insert', 'duplicate'].includes(e.op)) {
+      if (!hasFfmpeg || !existsSync(join(workdir, 'out', 'scenes.json'))) return 'Demo: needs ffmpeg and the animatic to add a shot.';
+      const sc = readJ('out/scenes.json');
+      if (sc.scenes.some((x) => x.key === e.node)) return true;
+      const file = `edits/${e.id}/${e.node}.mp4`;
+      const job = await mfx('render', { label: `${e.label} (${e.id})`, argv: ['ffmpeg', '-y', '-loglevel', 'error', '-f', 'lavfi', '-i', `testsrc=size=1280x720:rate=${FPS}:duration=${BEAT_SEC}`, '-pix_fmt', 'yuv420p', '-c:v', 'libx264', '-bf', '0', join(workdir, file)], cwd: workdir });
+      let r = job;
+      while (!['done', 'failed'].includes(r.state)) r = await mfx('render-wait', { id: job.id, seconds: 30 });
+      if (r.state === 'failed') return `Demo: the render failed: ${r.output_tail}`;
+      sc.scenes.push({ key: e.node, name: `New shot (${e.op})`, from_frame: 0, frames: BEAT_SEC * FPS, beat: e.beat || null, file });
+      writeFileSync(join(workdir, 'out', 'scenes.json'), JSON.stringify(sc, null, 2));
+      return true;
+    }
+    if (e.kind === 'line') {
+      if (!hasFfmpeg) return 'Demo: needs ffmpeg to remake a line.';
+      const n = Number(String(e.id).replace(/\D/g, '')) || 1;
+      spawnSync('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', `sine=frequency=${300 + 40 * n}:duration=1.5`, '-af', 'volume=0.08', '-ar', '48000', join(workdir, 'voice', 'clips', `${e.node}.wav`)]);
+      return true;
+    }
     if (e.kind === 'shot') {
       if (!hasFfmpeg || !existsSync(join(workdir, 'out', 'scenes.json'))) return 'Demo: needs ffmpeg and the animatic to remake a shot.';
       const sc = readJ('out/scenes.json');
@@ -223,6 +249,15 @@ export async function run({ root, projectId, workdir, env, onActivity, signal, c
     }
     return `Demo: can't remake a ${e.kind} yet.`;
   }
+}
+
+// One quiet narration line per beat (b01-1 …), timed to its shot, with a placeholder clip each.
+function writeDemoVoice(workdir) {
+  mkdirSync(join(workdir, 'voice', 'clips'), { recursive: true });
+  const lines = BEATS.map(([words], i) => ({ id: `b0${i + 1}-1`, script: words }));
+  writeFileSync(join(workdir, 'voice', 'lines.json'), JSON.stringify(lines, null, 2));
+  writeFileSync(join(workdir, 'voice', 'timing.json'), JSON.stringify({ lines: lines.map((l, i) => ({ id: l.id, start: i * BEAT_SEC + 0.2, end: i * BEAT_SEC + 1.7 })) }, null, 2));
+  lines.forEach((l, i) => spawnSync('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', `sine=frequency=${300 + 20 * i}:duration=1.5`, '-af', 'volume=0.08', '-ar', '48000', join(workdir, 'voice', 'clips', `${l.id}.wav`)]));
 }
 
 const escapeXml = (s) => String(s).replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' }[c]));

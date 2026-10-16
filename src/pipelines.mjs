@@ -19,6 +19,8 @@ export const WORK_KINDS = ['script', 'stills', 'motion', 'audio', 'music', 'rese
 // A step with "when" runs only if the studio and the brief want it (otherwise it's skipped when the project starts).
 export const STEP_CONDITIONS = ['music'];
 export const CANVAS_KINDS = ['beat', 'frame', 'transition', 'shot'];
+// The Mortiflix FilmCraft stages a step can be shown under (`stage` on a step; otherwise worked out from its key).
+export const STAGE_KEYS = ['script', 'look', 'shots', 'voiceMusic', 'filmcraft', 'render'];
 const KEY = /^[a-z0-9][a-z0-9_-]{0,47}$/;
 
 export function builtInDir() {
@@ -75,6 +77,9 @@ export function validatePipeline(def, dir) {
     for (const w of s.work || []) need(WORK_KINDS.includes(w), `step "${s.key}": work "${w}" must be one of ${WORK_KINDS.join(', ')}`);
     if (s.when !== undefined) need(STEP_CONDITIONS.includes(s.when), `step "${s.key}": "when" must be one of ${STEP_CONDITIONS.join(', ')}`);
     if (s.canvas !== undefined) need(CANVAS_KINDS.includes(s.canvas), `step "${s.key}": "canvas" must be one of ${CANVAS_KINDS.join(', ')}`);
+    if (s.off !== undefined) need(typeof s.off === 'boolean', `step "${s.key}": "off" must be true or false`);
+    if (s.off === true) need(!s.delivers, `step "${s.key}": the delivering step always runs`);
+    if (s.stage !== undefined) need(STAGE_KEYS.includes(s.stage), `step "${s.key}": "stage" must be one of ${STAGE_KEYS.join(', ')}`);
   }
   for (const s of steps) for (const a of s.after || []) need(keys.has(a), `step "${s.key}" runs after unknown step "${a}"`);
   if (errors.length === 0 && hasCycle(steps)) errors.push('the steps wait on each other in a loop');
@@ -130,6 +135,9 @@ function normalize(def, dir) {
     ...(s.canvas ? { canvas: s.canvas } : {}),
     // This step waits until every step before it is approved (the final render waits for the owner's OK).
     ...(s.waits_for_approval ? { waits_for_approval: true } : {}),
+    // A preset can turn a step off: it is skipped when the project starts (the AI still decides that part).
+    ...(s.off ? { off: true } : {}),
+    ...(s.stage ? { stage: s.stage } : {}),
   }));
   const last = steps[steps.length - 1];
   if (!steps.some((s) => s.delivers) && last.review !== 'internal') last.delivers = true;
@@ -143,6 +151,12 @@ function normalize(def, dir) {
     status_lines: def.status_lines || {},
     checks: def.checks || [],
     shared_skills: def.shared_skills || [],
+    // What a preset carries beyond its intake defaults (the preset creator, doc 31): the look, the voice and the
+    // music theme, and the preset it was copied from.
+    ...(def.look ? { look: def.look } : {}),
+    ...(def.voice ? { voice: def.voice } : {}),
+    ...(def.music_theme ? { music_theme: def.music_theme } : {}),
+    ...(def.based_on ? { based_on: def.based_on } : {}),
     hash: dir ? hashDir(dir, (def.shared_skills || []).map((n) => sharedSkillDir(dir, n)).filter(Boolean)) : null,
   };
 }

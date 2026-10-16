@@ -321,6 +321,26 @@ export function finishEdit(root, id, eid, { ok, note = '', via = null } = {}) {
 
 export const openEdits = (root, id) => openOf(loadEdits(root, id));
 
+// An edit request for a piece that doesn't exist yet (a duplicated or inserted shot, doc 35): its node is the new id,
+// at version 0, so it is done once a session writes that piece (finishEdit's "has a new version" rule).
+export function requestNewPiece(root, id, { node, kind, label, beat = null, op, after = null, text }) {
+  if (!/^[a-z][a-z0-9-]{1,23}$/.test(String(node || ''))) throw new CanvasError(`bad piece id ${node}`);
+  const words = String(text || '').trim().slice(0, 4000);
+  if (!words) throw new CanvasError('say what the new piece is');
+  const cp = canvasPaths(root, id);
+  mkdirSync(cp.dir, { recursive: true });
+  return withLock(cp.lock, () => {
+    const all = loadEdits(root, id);
+    const edit = { id: `E${String(all.length + 1).padStart(3, '0')}`, node, kind, label: label || node.toUpperCase(), beat, op, ...(after ? { after } : {}),
+      text: words, from_version: 0, state: 'requested', at: new Date().toISOString() };
+    all.push(edit);
+    writeFileSync(cp.edits, JSON.stringify({ edits: all }, null, 2));
+    syncEditCount(root, id, all);
+    event(root, id, { event: 'EDIT_REQUESTED', actor: 'you', details: `${edit.id} new ${edit.label} (${op}${after ? ` after ${after.toUpperCase()}` : ''}): ${words.slice(0, 200)}` });
+    return edit;
+  });
+}
+
 // The Fix fast path (doc 28 §4) holds an edit as 'fast' while it tries, so no session starts for it; it goes back to
 // 'requested' (with what was tried) when the fast path gives up.
 export function setEditState(root, id, eid, state, extra = {}) {
