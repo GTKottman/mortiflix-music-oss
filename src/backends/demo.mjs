@@ -126,7 +126,8 @@ export async function run({ root, projectId, workdir, env, onActivity, signal, c
         const bars = 2;
         writeFileSync(join(workdir, 'music', 'blueprint.json'), JSON.stringify({ title: project.title, bpm: 120, meter: '4/4', bars: BEATS.length * bars, scale: 'A:minor',
           sections: BEATS.map(([words], i) => ({ id: `m0${i + 1}`, beat: `b0${i + 1}`, name: ['Arrival', 'Three ideas', 'Coming together', 'The close'][i], start_bar: i * bars + 1, end_bar: (i + 1) * bars, function: words, intensity: [3, 5, 7, 4][i] })),
-          roles: [{ channel: 2, name: 'Bass' }, { channel: 3, name: 'Keys' }, { channel: 10, name: 'Drums' }] }, null, 2));
+          roles: [{ channel: 2, name: 'Bass', harmony: 'bass' }, { channel: 3, name: 'Keys', harmony: 'chords' }, { channel: 10, name: 'Drums', harmony: 'drums' }],
+          chart: [{ bars: [1, 8], chords: ['Am', 'Am', 'F', 'F', 'C', 'C', 'G', 'G'] }] }, null, 2));
         writeDemoSong(root, projectId, workdir, project.title);
       }
       // The video's scenes, one per beat: the canvas cuts the shots out of it by these frames.

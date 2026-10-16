@@ -62,3 +62,14 @@ test('the sync rule: play at 1 under 10 ms, nudge 0.95–1.05 up to 120 ms, seek
   assert.deepEqual(syncAction(-2), { seek: true });
   for (let e = -0.12; e <= 0.12; e += 0.001) { const r = syncAction(e).rate; assert.ok(r >= 0.95 && r <= 1.05); }
 });
+
+test('Piano roll: the scale\'s rows and the range shown (the part\'s notes ± 2, at least 2 octaves)', async () => {
+  const { scaleClasses, keyRange } = await import('../web/pianoroll.js');
+  assert.deepEqual([...scaleClasses({ root: 'D', mode: 'dorian' })].sort((a, b) => a - b), [0, 2, 4, 5, 7, 9, 11]);
+  assert.deepEqual([...scaleClasses({ root: 'A', mode: 'minor' })].sort((a, b) => a - b), [0, 2, 4, 5, 7, 9, 11]);
+  assert.deepEqual([...scaleClasses({ root: 'E', mode: 'phrygian' })].sort((a, b) => a - b), [0, 2, 4, 5, 7, 9, 11]);
+  assert.equal(scaleClasses(null), null);
+  const [lo, hi] = keyRange([{ key: 40 }, { key: 43 }]);
+  assert.ok(hi - lo >= 24 && lo <= 38 && hi >= 45, `${lo}–${hi}`);
+  assert.deepEqual(keyRange([{ key: 30 }, { key: 70 }]), [28, 72]);
+});

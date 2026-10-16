@@ -600,3 +600,27 @@ a.cv-crumb:hover { color: var(--ink); text-decoration: underline; }
 .sl-plus:hover { background: var(--accent); border-color: var(--accent); }
 .sl-end { color: var(--warn); }
 .sl-end:empty { display: none; }
+/* screen B (doc 28 §5.1): the section's rows on the left, its Strudel on the right */
+.sb { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 8px; min-height: 0; }
+.sb-code { overflow: auto; border-left: 1px solid var(--line); padding-left: 8px; min-width: 0; }
+.sb-part + .sb-part { margin-top: 8px; }
+.sb-part-head { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+.sb-pre, .pr-code { margin: 2px 0 0; font: 11px/1.45 ui-monospace, "JetBrains Mono", monospace; color: var(--body); white-space: pre; overflow-x: auto; }
+/* the Piano roll (doc 20 §1.2): Channel Rack column, keyboard + notes, Strudel pane */
+.pr { display: grid; grid-template-columns: 150px minmax(0, 1fr) 300px; gap: 6px; height: clamp(200px, 22vh, 300px); min-height: 0; }
+.pr-rack { list-style: none; margin: 0; padding: 0; overflow-y: auto; }
+.pr-part { width: 100%; display: flex; align-items: center; gap: 6px; padding: 3px 6px; background: none; border: 0; border-radius: var(--radius); color: var(--body); font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
+.pr-part:hover { background: var(--hover); }
+.pr-part.on { background: var(--raise); color: var(--ink); }
+.pr-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; display: inline-block; }
+.pr-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pr-ms b { display: inline-block; width: 14px; text-align: center; font-size: 10px; color: var(--faint); border: 1px solid var(--line); border-radius: 2px; margin-left: 2px; }
+.pr-ms b.on { color: var(--ink); background: var(--accent); }
+.pr-grid { position: relative; min-width: 0; min-height: 0; }
+.pr-canvas { display: block; position: absolute; inset: 0; }
+.pr-playhead { position: absolute; top: 0; bottom: 0; left: 0; width: 2px; margin-left: -1px; background: var(--accent); pointer-events: none; display: none; }
+.pr-pane { min-width: 0; display: flex; flex-direction: column; border-left: 1px solid var(--line); padding-left: 8px; }
+.pr-pane-head { font-size: 11px; color: var(--muted); margin-bottom: 2px; }
+.pr-code { flex: 1; overflow: auto; }
+.pr-line.on { background: rgba(47, 107, 223, .18); }
+.pr-ln { display: inline-block; width: 22px; color: var(--faint); user-select: none; }

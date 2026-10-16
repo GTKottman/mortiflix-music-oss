@@ -5,6 +5,7 @@ import { canvasView } from './canvas.js';
 import { midiStrudelView } from './midistrudel.js';
 import { songLane } from './songlane.js';
 import { createTransport } from './transport.js';
+import { pianoRoll } from './pianoroll.js';
 
 const $app = document.getElementById('app');
 const $status = document.getElementById('top-status');
@@ -158,7 +159,7 @@ async function loadStudio() {
 // ---------- the canvas (web/canvas.js) ----------
 
 async function openCanvas(id, mode, query) {
-  const cv = canvasView({ h, fill, api, fileUrl, clock, store, icon, appendLog, toast, customChips, musicPanel, songLane, createTransport, studio: () => studio }, id, mode || 'edit');
+  const cv = canvasView({ h, fill, api, fileUrl, clock, store, icon, appendLog, toast, customChips, musicPanel, songLane, createTransport, pianoRoll, studio: () => studio }, id, mode || 'edit');
   mount(await cv.show(query || ''));
   current.canvas = cv;
   current.refresh = () => cv.refresh();

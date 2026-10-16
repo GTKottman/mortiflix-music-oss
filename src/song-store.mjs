@@ -9,6 +9,7 @@ import { toolsDir } from './setup.mjs';
 import { checkSong, writeSong, readSong } from './song.mjs';
 import { importScore, songFromNotes } from './song-import.mjs';
 import { createEvaluator } from './strudel/evaluator.mjs';
+import { parseSongFile } from './strudel/songfile.mjs';
 
 export function songPaths(root, id) {
   const music = join(projectPaths(root, id).work, 'music');
@@ -65,13 +66,13 @@ export async function importProjectSong(root, id, { evaluator = null } = {}) {
 // score's notes (read-only, no Strudel needed). null when there is no score yet.
 export function songView(root, id) {
   const saved = loadSong(root, id);
-  if (saved) return { draft: false, song: saved.song };
+  if (saved) return { draft: false, song: saved.song, ...extras(root, id, saved) };
   const sp = songPaths(root, id);
   if (!existsSync(sp.blueprint) || !existsSync(sp.notes)) return null;
   try {
     const rd = (f) => JSON.parse(readFileSync(f, 'utf8'));
-    const { song } = songFromNotes({ blueprint: rd(sp.blueprint), notes: rd(sp.notes), instruments: existsSync(sp.instruments) ? rd(sp.instruments) : null });
-    return { draft: true, song };
+    const { song, text } = songFromNotes({ blueprint: rd(sp.blueprint), notes: rd(sp.notes), instruments: existsSync(sp.instruments) ? rd(sp.instruments) : null });
+    return { draft: true, song, ...extras(root, id, { song, text }) };
   } catch (e) { return { draft: true, song: null, error: e.message }; }
 }
 
@@ -117,4 +118,24 @@ export function goBackTo(root, id, v) {
   if (existsSync(meta)) atomic(join(sp.music, 'daw', 'notes-meta.json'), readFileSync(meta, 'utf8'));
   saveSong(root, id, old, text);
   return makeVersion(root, id, { by: 'hand', why: `went back to v${entry.v}` });
+}
+
+// What the music screens show beside the notes: each part's Strudel row per section (screen B, the Piano roll's pane),
+// the chord chart (the Piano roll's chord row) and the muted notes (drawn hollow).
+function extras(root, id, { song, text }) {
+  const sp = songPaths(root, id);
+  const rows = {};
+  if (text) {
+    const order = (song.playlist?.items || []).filter((i) => i.kind === 'pattern').sort((a, b) => a.at.tick - b.at.tick).map((i) => i.ref);
+    for (const b of parseSongFile(text).blocks) {
+      const ch = song.channels.find((c) => c.midiChannel === b.channel);
+      if (!ch) continue;
+      b.rows.forEach((r, i) => { if (order[i]) (rows[order[i]] ||= {})[ch.id] = r.text; });
+    }
+  }
+  let chart = null;
+  try { chart = JSON.parse(readFileSync(sp.blueprint, 'utf8')).chart || null; } catch { chart = null; }
+  let muted = [];
+  try { muted = JSON.parse(readFileSync(join(sp.music, 'daw', 'notes-meta.json'), 'utf8')).muted || []; } catch { muted = []; }
+  return { rows, chart, muted };
 }

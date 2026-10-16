@@ -64,7 +64,9 @@ export function cutMarks(song, shots, fps = 30) {
 // onOpen(sectionId, channelId | null) is called on a double-click on a section block or one of its part rows.
 // onSeek(sec) is called on a click on the bar ruler (video seconds).
 // onSelect({ section, from, to, part } | null) reports the selected bars (song bars, 1-based, inside one section).
-export function songLane({ h, song, graph, draft = false, shotNode = null, transitionOf = () => null, focus = null, onOpen = null, onSeek = null, onSelect = null }) {
+// rowHeight: a part's row (28 px in the song lane; screen B draws them at 40 px).
+export function songLane({ h, song, graph, draft = false, shotNode = null, transitionOf = () => null, focus = null, onOpen = null, onSeek = null, onSelect = null, rowHeight = null }) {
+  const ROWH = rowHeight || ROW;
   const ax = timeAxis(song);
   const shots = shotTimes(graph);
   const fps = graph?.fps || 30;
@@ -96,7 +98,7 @@ export function songLane({ h, song, graph, draft = false, shotNode = null, trans
     const keys = song.patterns.flatMap((p) => (p.notes?.[c.id] || []).map((n) => n.key));
     return [c.id, [Math.min(...keys), Math.max(...keys)]];
   }));
-  const blockH = BLOCK_HEAD + rows * (ROW + ROW_GAP) + 4;
+  const blockH = BLOCK_HEAD + rows * (ROWH + ROW_GAP) + 4;
   const voiceY = RULER + 4 + blockH + 6;
   const cutsY = voiceY + VOICE + 4;
   const H = cutsY + CUTS + 4;
@@ -212,9 +214,9 @@ export function songLane({ h, song, graph, draft = false, shotNode = null, trans
       // notes, small: x by time, y by pitch within the part's own range
       const rowsOf = [...shown.map((c) => [c]), ...(folded.length ? [folded] : [])];
       rowsOf.forEach((chs, r) => {
-        const ry = top + BLOCK_HEAD + r * (ROW + ROW_GAP);
+        const ry = top + BLOCK_HEAD + r * (ROWH + ROW_GAP);
         g.fillStyle = 'rgba(0,0,0,.18)';
-        g.fillRect(x0, ry, x1 - x0, ROW);
+        g.fillRect(x0, ry, x1 - x0, ROWH);
         g.fillStyle = 'rgba(255,255,255,.85)';
         for (const c of chs) {
           const [lo, hi] = range.get(c.id);
@@ -223,7 +225,7 @@ export function songLane({ h, song, graph, draft = false, shotNode = null, trans
             const nx = x(ax.tickSec(s.startTick + n.t));
             if (nx > width) break;
             const nw = Math.max(1.5, (ax.tickSec(s.startTick + n.t + n.len) - ax.tickSec(s.startTick + n.t)) * pps - 0.5);
-            const ny = ry + 3 + (1 - (n.key - lo) / span) * (ROW - 8);
+            const ny = ry + 3 + (1 - (n.key - lo) / span) * (ROWH - 8);
             g.fillRect(nx, ny, nw, 2);
           }
         }
@@ -236,8 +238,8 @@ export function songLane({ h, song, graph, draft = false, shotNode = null, trans
       if (s0) {
         const xa = x(ax.barSec(sel.from)); const xb = x(ax.barSec(sel.to + 1));
         const r = sel.part ? shown.findIndex((c) => c.id === sel.part) : -1;
-        const y0 = r >= 0 ? top + BLOCK_HEAD + r * (ROW + ROW_GAP) - 2 : top - 3;
-        const hgt = r >= 0 ? ROW + 4 : blockH + 6;
+        const y0 = r >= 0 ? top + BLOCK_HEAD + r * (ROWH + ROW_GAP) - 2 : top - 3;
+        const hgt = r >= 0 ? ROWH + 4 : blockH + 6;
         g.fillStyle = 'rgba(255,255,255,.08)'; g.fillRect(xa, y0, xb - xa, hgt);
         g.strokeStyle = css(el, '--selected', '#ebebeb'); g.lineWidth = 2;
         g.strokeRect(xa + 1, y0 + 1, xb - xa - 2, hgt - 2); g.lineWidth = 1;
@@ -247,8 +249,8 @@ export function songLane({ h, song, graph, draft = false, shotNode = null, trans
     g.fillStyle = panelBg; g.fillRect(0, 0, LABELS - 2, H);
     g.font = font(10); g.fillStyle = faint; g.fillText('Bar', 0, RULER / 2);
     g.font = font(11); g.fillStyle = muted;
-    shown.forEach((c, r) => g.fillText(ellipsis(g, c.name, LABELS - 6), 0, top + BLOCK_HEAD + r * (ROW + ROW_GAP) + ROW / 2));
-    if (folded.length) g.fillText(`+${folded.length} more`, 0, top + BLOCK_HEAD + shown.length * (ROW + ROW_GAP) + ROW / 2);
+    shown.forEach((c, r) => g.fillText(ellipsis(g, c.name, LABELS - 6), 0, top + BLOCK_HEAD + r * (ROWH + ROW_GAP) + ROWH / 2));
+    if (folded.length) g.fillText(`+${folded.length} more`, 0, top + BLOCK_HEAD + shown.length * (ROWH + ROW_GAP) + ROWH / 2);
 
     // narration: one thin row
     for (const l of lines) {
@@ -314,7 +316,7 @@ export function songLane({ h, song, graph, draft = false, shotNode = null, trans
     const top = RULER + 4;
     if (my <= RULER + 2) return { kind: 'ruler', bar, sec, section: s };
     if (my < top || my > top + blockH) return null;
-    const row = Math.floor((my - top - BLOCK_HEAD) / (ROW + ROW_GAP));
+    const row = Math.floor((my - top - BLOCK_HEAD) / (ROWH + ROW_GAP));
     return { kind: 'row', bar, sec, section: s, part: row >= 0 && row < shown.length ? shown[row].id : null };
   }
   function setSel(next, { quiet = false } = {}) {
@@ -345,7 +347,14 @@ export function songLane({ h, song, graph, draft = false, shotNode = null, trans
     const next = { ...sel, from: Math.min(dragFrom.bar, b), to: Math.max(dragFrom.bar, b) };
     if (next.from !== sel.from || next.to !== sel.to) { sel = next; draw(); }
   });
-  canvas.addEventListener('pointerup', () => { if (dragFrom) { dragFrom = null; onSelect?.(sel ? { ...sel } : null); } });
+  // the popup waits a moment: a double-click (going into the section) must not land on it
+  let popTimer = null;
+  canvas.addEventListener('pointerup', () => {
+    if (!dragFrom) return;
+    dragFrom = null;
+    clearTimeout(popTimer);
+    popTimer = setTimeout(() => onSelect?.(sel ? { ...sel } : null), 250);
+  });
 
   let headAt = null;
   function setPlayhead(sec) {
@@ -357,6 +366,7 @@ export function songLane({ h, song, graph, draft = false, shotNode = null, trans
 
   // double-click: which section block, and which part row inside it
   canvas.addEventListener('dblclick', (e) => {
+    clearTimeout(popTimer);
     if (!onOpen) return;
     const r = canvas.getBoundingClientRect();
     const mx = e.clientX - r.left; const my = e.clientY - r.top;
@@ -365,7 +375,7 @@ export function songLane({ h, song, graph, draft = false, shotNode = null, trans
     const s = sections.find((x) => sec >= x.from && sec < x.to);
     const top = RULER + 4;
     if (!s || my < top || my > top + blockH) return;
-    const row = Math.floor((my - top - BLOCK_HEAD) / (ROW + ROW_GAP));
+    const row = Math.floor((my - top - BLOCK_HEAD) / (ROWH + ROW_GAP));
     const part = row >= 0 && row < shown.length ? shown[row].id : null;
     onOpen(s.id, part);
   });

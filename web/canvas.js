@@ -273,6 +273,7 @@ export function canvasView(ui, id, mode = 'edit') {
   // The Music tab: the song lane under the shots (doc 19), read-only; the MIDI pack below it.
   let lane = null;
   let tp = null;            // the transport: the last render plays, the Monitor follows (doc 19 §4)
+  let roll = null;          // the Piano roll, at a part's level
   let monitorBusy = false;
   async function drawMusic() {
     const [ms, sv] = await Promise.all([api(`/api/projects/${id}/music`).catch(() => null), api(`/api/projects/${id}/music/song`).catch(() => null)]);
@@ -295,11 +296,22 @@ export function canvasView(ui, id, mode = 'edit') {
     drawCrumbs(song);
     // the same song, shots and level as on screen: keep the lane (its zoom and scroll) as it is
     const key = JSON.stringify([song?.rev, sv?.draft, graph?.rev, level, ms?.midi?.length]);
-    if (lane && lane.dataset.key === key && board.contains(lane)) return;
+    if (board.contains(roll || lane) && (roll || lane)?.dataset.key === key) return;
     const focus = level.section && song?.patterns.some((p) => p.id === level.section) ? level : null;
-    lane = song ? ui.songLane({ h, song, graph, draft: sv.draft, shotNode, transitionOf, focus, onOpen: (sec, part) => openLevel(sec, part), onSeek: (t) => tp?.seek(t), onSelect: (sel) => barPopup(sel, song, sv.draft) }) : null;
+    const atPart = focus?.part && song.channels.some((c) => c.id === focus.part);
+    // screen A (the song) and screen B (a section, rows at 40 px) are the lane; the Piano roll uses its timing
+    lane = song ? ui.songLane({ h, song, graph, draft: sv.draft, shotNode, transitionOf, focus: focus ? { section: focus.section } : null, rowHeight: focus ? 40 : null,
+      onOpen: (sec, part) => openLevel(sec, part), onSeek: (t) => tp?.seek(t), onSelect: (sel) => barPopup(sel, song, sv.draft) }) : null;
     if (lane) lane.dataset.key = key;
     if (lane && !sv.draft) lane.lane.onPlus = (sectionId, atBar) => plusMenu(sectionId, atBar, song);
+    const info = focus ? lane.lane.sections.find((x) => x.id === focus.section) : null;
+    roll?.roll?.stop(); roll = null;
+    if (atPart) {
+      roll = ui.pianoRoll({ h, view: sv, at: focus, cuts: lane.lane.cuts, ax: lane.lane.ax, sectionInfo: info,
+        onPick: (part) => openLevel(focus.section, part),
+        onOpenPart: (part) => ui.toast(`${song.channels.find((c) => c.id === part)?.name}'s instrument and effects open here once the sound engine and plugins are in (it plays its Strudel sound for now)`) });
+      roll.dataset.key = key;
+    }
     // the transport: the last render (the canvas's music node) is the clock without the sound engine
     tp?.destroy(); tp = null;
     const mus = n.music && !n.music.missing ? n.music.versions?.find((v) => v.v === n.music.current) : null;
@@ -315,6 +327,7 @@ export function canvasView(ui, id, mode = 'edit') {
       tp = ui.createTransport({ h, audioUrl: fileUrl(id, mus.file), shots: shotsSrc, fps: graph?.fps || 30,
         onTime: (t) => {
           lane.lane.setPlayhead(t);
+          roll?.roll.setPlayhead(t);
           const barF = Math.max(0, (t - (song.offsetSec || 0)) / (ax.barSec(2) - ax.barSec(1)));
           const beatsPerBar = ax.tpb / (song.ppq || 960);
           pos.textContent = `bar ${Math.floor(barF) + 1}.${Math.floor((barF % 1) * beatsPerBar) + 1} · ${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart(4, '0')}`;
@@ -324,19 +337,24 @@ export function canvasView(ui, id, mode = 'edit') {
           if (playing) fill(monitor, tp.stage, h('div', { class: 'cv-caption' }, h('span', { class: 'cv-cap-name' }, 'The cut, with the music')));
           else if (monitor.contains(tp.stage) && !monitorBusy) drawMonitor();
         } });
-      lane.lane.setPlayhead(0);
+      lane.lane.setPlayhead(focus ? info.from : 0);
       lane.transport = tp;   // its frame-error log is read by the sync test
       bar = h('div', { class: 'tp-bar' }, btn, pos, h('span', { class: 'tp-note' }, 'Playing the last render: install the sound engine to hear edits at once (Settings › Setup)'));
     }
-    const channel = focus?.part ? song.channels.find((c) => c.id === focus.part) : null;
+    // screen B: the section's Strudel beside its rows (doc 28 §5.1), read-only for now
+    const strudelColumn = () => h('div', { class: 'sb-code', 'aria-label': `The Strudel of ${focus.section}` },
+      song.channels.filter((c) => sv.rows?.[focus.section]?.[c.id] !== undefined).map((c) => h('section', { class: 'sb-part' },
+        h('div', { class: 'sb-part-head' }, h('i', { class: 'pr-dot', style: { background: c.colour || 'var(--muted)' } }), `${c.name}`),
+        h('pre', { class: 'sb-pre' }, sv.rows[focus.section][c.id]))));
     fill(board, h('div', { class: 'cv-music' },
       bar,
-      lane || h('div', { class: 'cv-empty' }, sv?.error ? `The music couldn't be drawn: ${sv.error}` : 'The music appears here under the shots once the score passes its check.'),
-      // levels 2 and 3 for now: the section (or part) on its own; the Piano roll and the part's instrument come later
-      focus ? h('p', { class: 'help' }, channel
-        ? `${channel.name}: ${channel.instrument ? channel.instrument.name : 'plays its Strudel sound (no instrument chosen yet)'}. Right-click empty space or press Alt+← to go back.`
-        : 'Double-click a part to open it. Right-click empty space or press Alt+← to go back.')
-        : ms?.midi?.length ? ui.musicPanel(id, ms) : h('p', { class: 'help' }, 'When the score passes its check, its MIDI pack shows here: every part on its own channel, a clip per section, and the steps to bring it into your DAW (Settings › Your DAW). Double-click a section to open it.')));
+      !song ? h('div', { class: 'cv-empty' }, sv?.error ? `The music couldn't be drawn: ${sv.error}` : 'The music appears here under the shots once the score passes its check.')
+        : atPart ? roll
+          : focus ? h('div', { class: 'sb' }, lane, strudelColumn())
+            : lane,
+      atPart ? null
+        : focus ? h('p', { class: 'help' }, 'Double-click a part to open its notes. Right-click empty space or press Alt+← to go back.')
+          : ms?.midi?.length ? ui.musicPanel(id, ms) : h('p', { class: 'help' }, 'When the score passes its check, its MIDI pack shows here: every part on its own channel, a clip per section, and the steps to bring it into your DAW (Settings › Your DAW). Double-click a section to open it.')));
   }
 
   // The verdict popup on selected bars (doc 19 §2, mockup A): OK locks them as approved; Fix sends an edit request on
