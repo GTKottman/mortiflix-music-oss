@@ -1,6 +1,7 @@
 // Where a project's song lives and how it's saved (doc 18 §1): music/song.json and music/song.strudel.js, written only
 // by the studio, atomically (temp file + rename) under one lock, and only when checkSong passes.
 import { existsSync, readFileSync, writeFileSync, renameSync, mkdirSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join, dirname } from 'node:path';
 import { projectPaths } from './projects.mjs';
 import { withLock, UserError } from './studio.mjs';
@@ -55,7 +56,8 @@ export async function importProjectSong(root, id, { evaluator = null } = {}) {
     const r = await importScore({ blueprint: JSON.parse(rd(sp.blueprint)), notes: JSON.parse(rd(sp.notes)), instruments: rd(sp.instruments) ? JSON.parse(rd(sp.instruments)) : null,
       evaluator: ev, sources: { score: rd(sp.score), notes: rd(sp.notes), blueprint: rd(sp.blueprint) } });
     const rev = saveSong(root, id, r.song, r.text);
-    return { ...r, rev, paths: sp };
+    const version = makeVersion(root, id, { by: 'import', why: 'imported from the checked score' });
+    return { ...r, rev, version, paths: sp };
   } finally { if (!evaluator) ev.close(); }
 }
 
@@ -71,4 +73,48 @@ export function songView(root, id) {
     const { song } = songFromNotes({ blueprint: rd(sp.blueprint), notes: rd(sp.notes), instruments: existsSync(sp.instruments) ? rd(sp.instruments) : null });
     return { draft: true, song };
   } catch (e) { return { draft: true, song: null, error: e.message }; }
+}
+
+// ---- versions (doc 18 §8): a full copy of song.json and song.strudel.js (and notes-meta.json) per version, a line in
+// music/daw/versions/index.json each. Blobs are shared by hash, never copied. Going back makes a new version equal to
+// the old one: history is never rewritten.
+
+const vname = (v) => `v${String(v).padStart(4, '0')}`;
+
+export function listVersions(root, id) {
+  const f = join(songPaths(root, id).versions, 'index.json');
+  return existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : [];
+}
+
+// by: import | ai | hand | ok | render; why: plain words; edit: the edit request id, if any.
+export function makeVersion(root, id, { by, why = '', edit = null } = {}) {
+  const sp = songPaths(root, id);
+  if (!existsSync(sp.song)) throw new UserError('no song yet');
+  return withLock(sp.lock, () => {
+    mkdirSync(sp.versions, { recursive: true });
+    const list = listVersions(root, id);
+    const v = (list.at(-1)?.v || 0) + 1;
+    const songText = readFileSync(sp.song, 'utf8');
+    atomic(join(sp.versions, `${vname(v)}.json`), songText);
+    if (existsSync(sp.strudel)) atomic(join(sp.versions, `${vname(v)}.strudel.js`), readFileSync(sp.strudel, 'utf8'));
+    const meta = join(sp.music, 'daw', 'notes-meta.json');
+    if (existsSync(meta)) atomic(join(sp.versions, `${vname(v)}.notes-meta.json`), readFileSync(meta, 'utf8'));
+    const entry = { v, rev: readSong(songText).rev, at: new Date().toISOString(), by, why, edit, sha: createHash('sha256').update(songText).digest('hex').slice(0, 16) };
+    list.push(entry);
+    atomic(join(sp.versions, 'index.json'), JSON.stringify(list, null, 1) + '\n');
+    return entry;
+  });
+}
+
+// Back to version v: its files become the song again (rev goes on counting), and that is a new version.
+export function goBackTo(root, id, v) {
+  const sp = songPaths(root, id);
+  const entry = listVersions(root, id).find((x) => x.v === Number(v));
+  if (!entry) throw new UserError(`there is no version ${v}`);
+  const old = readSong(readFileSync(join(sp.versions, `${vname(entry.v)}.json`), 'utf8'));
+  const text = existsSync(join(sp.versions, `${vname(entry.v)}.strudel.js`)) ? readFileSync(join(sp.versions, `${vname(entry.v)}.strudel.js`), 'utf8') : undefined;
+  const meta = join(sp.versions, `${vname(entry.v)}.notes-meta.json`);
+  if (existsSync(meta)) atomic(join(sp.music, 'daw', 'notes-meta.json'), readFileSync(meta, 'utf8'));
+  saveSong(root, id, old, text);
+  return makeVersion(root, id, { by: 'hand', why: `went back to v${entry.v}` });
 }

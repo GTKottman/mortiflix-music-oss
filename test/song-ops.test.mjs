@@ -104,3 +104,30 @@ test('undo gives the text back byte for byte and removes the lock; a bad batch c
   await assert.rejects(applyOps(root, id, [{ op: 'channel.set', id: 'ch02', fields: { name: 'X' } }, { op: 'note.set', pattern: 'm01', channel: 'ch02', ids: ['1:2:3'], fields: { key: 1 } }]), /has no note 1:2:3/);
   assert.equal(loadSong(root, id).song.channels[0].name, 'Bass', 'nothing of the failed batch was saved');
 });
+
+test('versions: the import is v1; going back makes a new version equal to the old one; blobs are not copied', { skip }, async (t) => {
+  const { root, id, sp } = await songProject(t);
+  const { listVersions, makeVersion, goBackTo } = await import('../src/song-store.mjs');
+  const { readdirSync, mkdirSync, writeFileSync } = await import('node:fs');
+  assert.deepEqual(listVersions(root, id).map((v) => [v.v, v.by]), [[1, 'import']]);
+  const v1text = readFileSync(sp.strudel, 'utf8');
+  const v1song = loadSong(root, id).song;
+  mkdirSync(sp.blobs, { recursive: true });
+  writeFileSync(join(sp.blobs, 'ab'.repeat(32) + '.bin'), 'state');
+  for (let k = 0; k < 3; k++) {
+    const s = loadSong(root, id).song;
+    const n = s.patterns[0].notes.ch02[0];
+    await applyOps(root, id, [{ op: 'note.set', pattern: 'm01', channel: 'ch02', ids: [noteName(n)], fields: { key: n.key + 1 } }]);
+    makeVersion(root, id, { by: 'hand', why: `edit ${k + 1}` });
+  }
+  assert.deepEqual(listVersions(root, id).map((v) => v.v), [1, 2, 3, 4]);
+  const back = goBackTo(root, id, 1);
+  assert.equal(back.v, 5);
+  assert.equal(back.why, 'went back to v1');
+  assert.equal(readFileSync(sp.strudel, 'utf8'), v1text);
+  const now = loadSong(root, id).song;
+  assert.deepEqual(now.patterns, v1song.patterns);
+  assert.ok(now.rev > v1song.rev, 'rev keeps counting');
+  assert.deepEqual(readdirSync(sp.versions).filter((f) => f.endsWith('.bin')), [], 'blobs stay shared');
+  assert.equal(readdirSync(sp.blobs).length, 1);
+});
