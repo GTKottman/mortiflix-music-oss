@@ -58,6 +58,7 @@ namespace
     // Denormals: Tracktion's device callback and graph workers already flush them (checked in its source:
     // DeviceManager::audioDeviceIOCallbackWithContext, NodePlayerThreadPools::runThread).
     void applyDefaults() { te::setDefaultPanLaw (te::PanLaw3dBCenter); }
+    void ourPlugins (te::Engine& engine) { mfx::registerOurPlugins (engine); }
     void trackPanLaw (te::AudioTrack& t) { t.getVolumePlugin()->setPanLaw (te::PanLaw3dBCenter); }
 
     juce::DynamicObject::Ptr versions()
@@ -97,6 +98,7 @@ namespace
     int selftest()
     {
         te::Engine engine { "mortiflix-engine", std::make_unique<HeadlessUI>(), std::make_unique<NoDeviceBehaviour>() };
+        ourPlugins (engine);
         applyDefaults();
         engine.getPluginManager().createBuiltInType<te::ToneGeneratorPlugin>();
         auto centre = renderTone (engine, 0.0f);
@@ -158,6 +160,7 @@ namespace
         outDir.createDirectory();
 
         te::Engine engine { "mortiflix-engine", std::make_unique<HeadlessUI>(), std::make_unique<RenderBehaviour> (threads) };
+        ourPlugins (engine);
         applyDefaults();
         auto built = mfx::buildSong (engine, song);
         auto& edit = *built.edit;
@@ -169,7 +172,10 @@ namespace
         p.bitDepth = 32;
         p.sampleRateForAudio = rate;
         p.blockSizeForAudio = block;
-        p.time = te::TimeRange (te::TimePosition(), edit.getLength());
+        // the whole song, or a window of it in samples (doc 15 Q2: one bar of a 2-hour song), "toSample" exclusive
+        const juce::int64 from = (juce::int64) settings.getProperty ("fromSample", 0);
+        const juce::int64 to = settings.hasProperty ("toSample") ? (juce::int64) settings["toSample"] : (juce::int64) std::llround (edit.getLength().inSeconds() * rate);
+        p.time = te::TimeRange (te::TimePosition::fromSamples (from, rate), te::TimePosition::fromSamples (to, rate));
         // every track (Tracktion's renderToFile renders nothing when this is empty, whatever its comment says)
         auto all = te::getAllTracks (edit);
         for (int i = 0; i < all.size(); ++i) p.tracksToDo.setBit (i);
@@ -208,6 +214,8 @@ namespace
         used->setProperty ("realTime", false);
         used->setProperty ("tracktionDither", false);
         used->setProperty ("panLaw", "-3 dB centre");
+        used->setProperty ("fromSample", from);
+        used->setProperty ("toSample", to);
         report->setProperty ("settings", juce::var (used));
         juce::Array<juce::var> plugins;
         for (auto* pl : te::getAllPlugins (edit, false))
@@ -333,6 +341,7 @@ namespace
         Server()
         {
             applyDefaults();
+            ourPlugins (engine);
             engine.getPluginManager().createBuiltInType<te::ToneGeneratorPlugin>();
             proto = std::make_unique<mfx::Protocol> (protoFd, [this] (const juce::String& cmd, const juce::var& args) { return handle (cmd, args); });
             proto->onEnd = [] { juce::MessageManager::getInstance()->stopDispatchLoop(); };

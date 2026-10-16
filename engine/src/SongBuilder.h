@@ -4,6 +4,7 @@
 // its Strudel sound comes with doc 28 M13 (v48).
 #pragma once
 #include <JuceHeader.h>
+#include "TestPlugins.h"
 
 namespace mfx
 {
@@ -88,7 +89,7 @@ namespace mfx
             t->getVolumePlugin()->setPan ((float) (double) c.getProperty ("pan", 0.0));
             t->setMute ((bool) c.getProperty ("mute", false));
             t->setSolo ((bool) c.getProperty ("solo", false));
-            if (c["instrument"].isVoid() || c["instrument"].isUndefined() || ! c["instrument"].isObject())
+            if (! c["instrument"].isObject() || ! insertBuiltinInstrument (*t, c["instrument"]))
                 defaultInstrument (*t, c["kind"].toString() == "drums");
             trackOf[c["id"].toString()] = t;
             ++out.tracks;
