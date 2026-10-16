@@ -6,6 +6,7 @@ import { createInterface } from 'node:readline';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync, realpathSync } from 'node:fs';
+import { notesFromHaps } from './derive.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const PPQ = 960;
@@ -58,7 +59,7 @@ export function createEvaluator({ strudelDir, timeoutMs = 2000 } = {}) {
   // prelude / globals: an app's own helpers and their data, run before the text (see the worker).
   // mode 'haps': the raw events with their values, as headless Chrome returns them. `ms` overrides the timeout (a whole
   // song takes longer than one pattern).
-  async function run(code, { bars, tpb = 4 * PPQ, mode, ms = timeoutMs, prelude, globals }) {
+  async function run(code, { bars, tpb = 4 * PPQ, mode, ms = timeoutMs, prelude, globals, drums = false }) {
     if (!child) start();
     await ready;
     const id = nextId++;
@@ -68,7 +69,13 @@ export function createEvaluator({ strudelDir, timeoutMs = 2000 } = {}) {
         kill();
         reject(new Error(`the pattern took longer than ${ms / 1000} s to run (an endless loop?)`));
       }, ms);
-      pending.set(id, { resolve, reject, timer });
+      // the notes, by derive.mjs's rule, unless the raw events were asked for
+      const answer = (msg) => {
+        if (!msg.ok || mode === 'haps') return resolve(msg);
+        const d = notesFromHaps(msg.haps, { ticksPerBar: tpb, bars, drums });
+        resolve({ id: msg.id, ok: true, cps: msg.cps, notes: d.notes, problems: d.problems, hints: d.hints });
+      };
+      pending.set(id, { resolve: answer, reject, timer });
       child.stdin.write(JSON.stringify({ id, code, bars, tpb, mode, prelude, globals }) + '\n');
     });
   }

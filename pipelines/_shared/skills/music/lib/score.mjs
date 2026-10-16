@@ -56,7 +56,8 @@ export function hapsToChannels({ haps, cps, beatsPerCycle = 4, names = {} }) {
       continue;
     }
     if (pitch < 0 || pitch > 127) { problems.push(`pitch ${pitch} on channel ${channel} ${at} (MIDI pitch must be 0-127)`); continue; }
-    const dur = (h.end - h.begin) * beatsPerCycle * clamp(Number(v.legato ?? 1) || 1, 0.05, 8);
+    // .legato(x) is stored by Strudel as `clip` (doc 28 §2.2): read clip first
+    const dur = (h.end - h.begin) * beatsPerCycle * clamp(Number(v.clip ?? v.legato ?? 1) || 1, 0.05, 8);
     if (!(dur > 0)) continue;
     if (!tracks.has(channel)) tracks.set(channel, { channel, name: names[channel] || `CH${String(channel).padStart(2, '0')}`, kind: channel === 10 ? 'drums' : 'pitched', notes: [], sounds: new Set() });
     if (v.s) tracks.get(channel).sounds.add(String(v.s));
