@@ -9,6 +9,26 @@ if(NOT EXISTS "${TE_DIR}/modules/juce/CMakeLists.txt")
   message(FATAL_ERROR "No tracktion_engine at ${TE_DIR} (with modules/juce): fetch the commits in deps.json")
 endif()
 
+# Our fixes to the pinned checkout (patches/*.patch, in name order), applied once: a patch that is already in is left
+# alone, one that fits neither way stops the build.
+find_package(Git REQUIRED)
+file(GLOB TE_PATCHES "${CMAKE_CURRENT_SOURCE_DIR}/patches/*.patch")
+list(SORT TE_PATCHES)
+foreach(patch IN LISTS TE_PATCHES)
+  get_filename_component(patch_name "${patch}" NAME)
+  execute_process(COMMAND "${GIT_EXECUTABLE}" apply --check --reverse "${patch}" WORKING_DIRECTORY "${TE_DIR}"
+                  RESULT_VARIABLE already OUTPUT_QUIET ERROR_QUIET)
+  if(already EQUAL 0)
+    message(STATUS "patch ${patch_name}: already applied")
+  else()
+    execute_process(COMMAND "${GIT_EXECUTABLE}" apply "${patch}" WORKING_DIRECTORY "${TE_DIR}" RESULT_VARIABLE failed ERROR_VARIABLE why)
+    if(NOT failed EQUAL 0)
+      message(FATAL_ERROR "patch ${patch_name} doesn't fit the tracktion_engine checkout at ${TE_DIR}: ${why}")
+    endif()
+    message(STATUS "patch ${patch_name}: applied")
+  endif()
+endforeach()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_subdirectory("${TE_DIR}/modules/juce" juce)
