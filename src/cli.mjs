@@ -27,8 +27,8 @@ export const HELP = `${C.b('mortiflix')}: a motion design studio on your machine
 
   ${C.b('Getting started')}
   mortiflix init [--backend claude-code|anthropic-api|demo]   set up the studio (~/Mortiflix, or $MORTIFLIX_STUDIO)
-  mortiflix setup                                              the walkthrough: Claude, transitions, narration, music, your DAW, assets, 3D, Craft apps
-  mortiflix setup <claude|transitions|narration|music|daw|assets|publish|3d|craft>  one part (mortiflix setup status: where things stand)
+  mortiflix setup                                              the walkthrough: Claude, transitions, narration, music, your DAW, sound engine, assets, 3D, Craft apps
+  mortiflix setup <claude|transitions|narration|music|daw|daw-engine|assets|publish|3d|craft>  one part (mortiflix setup status: where things stand)
   mortiflix keys                                               add or change your keys (Anthropic, ElevenLabs, others)
   mortiflix doctor                                             check the tools a pipeline needs
   mortiflix demo                                               a full walk-through with placeholder work (free)
@@ -765,13 +765,13 @@ function partHeader(part, i) {
 }
 
 // Installs one tool after saying what it is, where it goes and how big it is.
-async function offerInstall(root, id, { ask = true } = {}) {
+async function offerInstall(root, id, { ask = true, build = false } = {}) {
   const info = setup.TOOL_INFO[id];
   console.log(`  ${C.b(info.name)}: ${info.what}. Goes to ${info.where} (${info.size}).`);
   if (ask && !(await confirm('  Install it now?', true))) { console.log(C.dim('  Skipped.')); return false; }
   const started = Date.now();
   try {
-    const r = await setup.installTool(root, id, { log: (l) => console.log(C.dim(`    ${l}`)) });
+    const r = await setup.installTool(root, id, { build, log: (l) => console.log(C.dim(`    ${l}`)) });
     console.log(`  ${r.problems ? C.acc('●') : C.green('✔')} ${info.name}: ${r.detail || 'installed'}${r.problems ? ` (${r.problems})` : ''} ${C.dim(`${Math.round((Date.now() - started) / 1000)} s`)}`);
     return true;
   } catch (e) {
@@ -845,6 +845,14 @@ async function setupPart(root, id, st) {
     if (!v) return undefined;
     const d = setup.saveDaw(root, v === '0' ? null : ids[Number(v) - 1] || v);
     return console.log(`  ${C.green('✔')} ${d.id ? `${d.name}: every MIDI pack comes with its import steps.` : 'No DAW named: the import steps are general.'}`);
+  }
+  if (id === 'daw-engine') {
+    const e = st['daw-engine'];
+    console.log(`  ${mark(e.ok)} Sound engine: ${e.detail}${e.path ? ` (${e.path})` : ''}`);
+    if (e.ok) return undefined;
+    const missing = setup.engineBuildMissing();
+    if (missing.length) return console.log(C.dim(`  To build it, first: sudo pacman -S --needed ${missing.join(' ')} (then mortiflix setup daw-engine --build)`));
+    return offerInstall(root, 'daw-engine', { build: true });
   }
   if (id === 'assets') {
     const cur = setup.assetsConfig(loadConfig(root)).sites;
@@ -984,6 +992,7 @@ async function showSetup(root) {
   row(st.transitions.ok, 'Transitions', st.transitions.ok ? `remotion-transitions: ${st.transitions.detail}` : 'library not installed (mortiflix setup transitions)');
   row(st.music.engine === 'none' ? null : st.strudel.ok && st.chrome.ok, 'Music', st.music.engine === 'none' ? 'none' : `Strudel: ${st.strudel.detail}; Chrome: ${st.chrome.ok ? 'found' : 'missing'}${st.music.midi ? '; MIDI pack on' : ''}`);
   row(st.daw.id ? true : null, 'Your DAW', st.daw.name || 'not named: general import steps');
+  row(st['daw-engine'].path ? st['daw-engine'].ok : null, 'Sound engine', st['daw-engine'].ok ? st['daw-engine'].detail : `${st['daw-engine'].detail}: mortiflix setup daw-engine --build`);
   row(st.assets.sites.length ? st['browser-harness'].ok : null, 'Assets', st.assets.sites.length ? `${st.assets.sites.map((x) => x.url).join(', ')} (browser-harness ${st['browser-harness'].ok ? st['browser-harness'].detail : 'missing'})` : 'no sites: sessions make every visual themselves');
   const pubCfg = st.publish;
   row(pubCfg.service === 'none' ? null : Boolean(pubCfg.key), 'Publishing', pubCfg.service === 'none' ? 'off: you post finals yourself'
@@ -1028,6 +1037,7 @@ async function setupCmd(root, [part, ...args], a) {
     for (const id of args) await offerInstall(root, id, { ask: false });
     return undefined;
   }
+  if (part === 'daw-engine' && a.build) { if (!(await offerInstall(root, 'daw-engine', { ask: false, build: true }))) process.exitCode = 1; return undefined; }
   if (part === 'music' && args.length) {
     const m = setup.saveMusic(root, { engine: args[0], midi: a.midi ? true : a['no-midi'] ? false : undefined });
     return console.log(`${C.green('✔')} Music: ${m.engine === 'none' ? 'none (music steps are skipped)' : `Strudel${m.midi ? ' + MIDI pack' : ''}`}.`);

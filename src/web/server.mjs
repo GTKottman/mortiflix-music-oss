@@ -204,7 +204,8 @@ export async function startServer(root, { port = 4646, host = '127.0.0.1', runne
       if ([...installs.values()].some((j) => j.state === 'running')) throw new BadRequest('another install is running: wait for it to finish');
       const job = { state: 'running', log: [], started_at: new Date().toISOString() };
       installs.set(tool, job);
-      setup.installTool(root, tool, { log: (l) => { job.log.push(l); if (job.log.length > 400) job.log.splice(0, job.log.length - 400); } })
+      // the sound engine has no release build yet: the page builds it from source
+      setup.installTool(root, tool, { build: tool === 'daw-engine', log: (l) => { job.log.push(l); if (job.log.length > 400) job.log.splice(0, job.log.length - 400); } })
         .then((r) => { job.state = 'done'; job.result = r; }, (e) => { job.state = 'failed'; job.error = e.message; })
         .finally(() => changed());
       return send(res, 202, { tool, state: job.state });

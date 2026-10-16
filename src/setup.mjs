@@ -10,12 +10,14 @@
 //   blender         Blender, for 3D work
 //   blender-addons  the 3D toolkits (MoBlend, Nova FX, Camera, Animate, Math, Circuits, Camera Flight), installed into
 //                   the studio's own Blender profile (tools/blender-profile), never into your personal Blender setup
+//   daw-engine      the mini DAW's sound engine (mortiflix-engine: JUCE + Tracktion Engine), built from the pinned source
+//                   commits with --build (release downloads come later)
 //   craft           the Craft apps (EffectCraft, PhotoCraft, VectorCraft, …: open-source remakes of the Adobe apps), their
 //                   official builds, checked against their SHA256SUMS, each with its own MCP server (src/craft.mjs)
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, writeFileSync, readFileSync, rmSync, createWriteStream, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, writeFileSync, readFileSync, rmSync, createWriteStream, statSync, copyFileSync, chmodSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { homedir, platform, arch, tmpdir } from 'node:os';
+import { homedir, platform, arch, tmpdir, availableParallelism } from 'node:os';
 import { Readable } from 'node:stream';
 import { pipeline as streamPipeline } from 'node:stream/promises';
 import { loadConfig, saveConfig, UserError } from './studio.mjs';
@@ -67,6 +69,13 @@ export const PARTS = [
     title: 'Your DAW',
     why: 'The MIDI pack is made to be finished in a DAW. Name yours and every MIDI pack comes with the steps to bring it in there: the tempo, bar 1, one track per channel, the markers.',
     needs: 'Nothing to install. Optional: without one, the steps are written for any DAW.',
+  },
+  {
+    id: 'daw-engine',
+    title: 'Sound engine (DAW mode)',
+    why: 'Plays and mixes the music with your own VST3 plugins, right in the canvas.',
+    needs: 'The Mortiflix sound engine (about 27 MB), built here from its pinned source (JUCE + Tracktion Engine, about 400 MB of source and build files, a few minutes). Linux: PipeWire with pipewire-jack, or JACK.',
+    tools: ['daw-engine'],
   },
   {
     id: 'assets',
@@ -227,6 +236,27 @@ async function comfyStatus(root) {
   return { ok: false, detail: 'not installed' };
 }
 
+// The sound engine: installed, its --version, and its self-test (1 s of a tone rendered into memory, no sound device).
+// Read again only when the file changes.
+export const dawEngineBin = (root) => join(toolsDir(root), 'daw-engine', `mortiflix-engine${EXE}`);
+const engineChecks = new Map();
+export function dawEngineStatus(root) {
+  const bin = dawEngineBin(root);
+  if (!existsSync(bin)) return { ok: false, detail: 'not installed', path: null };
+  const m = statSync(bin).mtimeMs;
+  const hit = engineChecks.get(bin);
+  if (hit?.m === m) return hit.st;
+  const v = spawnSync(bin, ['--version'], { encoding: 'utf8', timeout: 20_000 });
+  let ver = null;
+  try { ver = JSON.parse(v.stdout.trim().split('\n').pop()); } catch { ver = null; }
+  const t = spawnSync(bin, ['--selftest'], { encoding: 'utf8', timeout: 60_000 });
+  const st = !ver ? { ok: false, detail: 'installed but it doesn\'t start', path: bin }
+    : t.status !== 0 ? { ok: false, detail: `${ver.version}: its self-test failed`, path: bin, version: ver }
+      : { ok: true, detail: `${ver.version} (Tracktion ${ver.tracktion_engine.slice(0, 7)}, ${ver.juce_version}), self-test passed`, path: bin, version: ver };
+  engineChecks.set(bin, { m, st });
+  return st;
+}
+
 // Everything at once, for the walkthrough, doctor, the web page and the session brief.
 export async function setupStatus(root) {
   const config = loadConfig(root);
@@ -239,6 +269,7 @@ export async function setupStatus(root) {
     blender: blenderStatus(root),
     'blender-addons': addonsStatus(root),
     craft: craft.craftStatus(root),
+    'daw-engine': dawEngineStatus(root),
     music: musicConfig(config),
     daw: dawConfig(config),
     assets: assetsConfig(config),
@@ -629,8 +660,65 @@ export function openBlender(root, args = []) {
   return b.path;
 }
 
+// The sound engine from source (doc 16 §9): the pinned tracktion_engine commit and its JUCE submodule (engine/deps.json)
+// into a machine-wide cache, CMake + Ninja, then the binary is copied into the studio. It never installs system
+// packages: missing ones are named with the pacman line. Our patches (engine/patches) are applied by the CMake step.
+export const ENGINE_DEPS_DIR = () => process.env.MFX_ENGINE_DEPS || join(homedir(), '.cache', 'mortiflix', 'engine-deps');
+export const ENGINE_BUILD_DIR = () => process.env.MFX_ENGINE_BUILD || join(homedir(), '.cache', 'mortiflix', 'engine-build');
+const ENGINE_TOOLS = { cmake: 'cmake', ninja: 'ninja', git: 'git', 'c++': 'gcc', 'pkg-config': 'pkgconf' };
+const ENGINE_LIBS = { alsa: 'alsa-lib', jack: 'pipewire-jack', freetype2: 'freetype2', fontconfig: 'fontconfig', x11: 'libx11', xcomposite: 'libxcomposite',
+  xext: 'libxext', xcursor: 'libxcursor', xinerama: 'libxinerama', xrandr: 'libxrandr', xrender: 'libxrender', xi: 'libxi' };
+
+export function engineBuildMissing() {
+  const missing = Object.entries(ENGINE_TOOLS).filter(([bin]) => !which(bin)).map(([, pkg]) => pkg);
+  if (which('pkg-config')) missing.push(...Object.entries(ENGINE_LIBS).filter(([lib]) => spawnSync('pkg-config', ['--exists', lib]).status !== 0).map(([, pkg]) => pkg));
+  return missing;
+}
+
+const gitHead = (dir) => { const r = spawnSync('git', ['-C', dir, 'rev-parse', 'HEAD'], { encoding: 'utf8' }); return r.status === 0 ? r.stdout.trim() : null; };
+
+async function installDawEngine(root, log, { build = false } = {}) {
+  if (!build) throw new UserError('there is no release build of the sound engine yet: build it here with mortiflix setup daw-engine --build');
+  if (OS !== 'linux') throw new UserError('building the sound engine works on Linux for now (Windows and macOS come later)');
+  const missing = engineBuildMissing();
+  if (missing.length) throw new UserError(`building the sound engine needs: ${missing.join(', ')}. On Arch: sudo pacman -S --needed ${missing.join(' ')}`);
+  const deps = JSON.parse(readFileSync(join(REPO_ROOT, 'engine', 'deps.json'), 'utf8'));
+  const te = join(ENGINE_DEPS_DIR(), 'tracktion_engine');
+  if (!existsSync(join(te, '.git'))) {
+    mkdirSync(dirname(te), { recursive: true });
+    await run('git', ['clone', '--filter=blob:none', '--no-checkout', deps.tracktion_engine.url, te], { log });
+  }
+  if (gitHead(te) !== deps.tracktion_engine.commit || !existsSync(join(te, 'modules'))) {   // a fresh clone has no files yet
+    await run('git', ['-C', te, 'fetch', '--filter=blob:none', 'origin', deps.tracktion_engine.commit], { log });
+    await run('git', ['-C', te, '-c', 'advice.detachedHead=false', 'checkout', '--force', '--detach', deps.tracktion_engine.commit], { log });
+  }
+  const juce = join(te, 'modules', 'juce');
+  if (gitHead(juce) !== deps.juce.commit) {
+    // tracktion_engine names JUCE by an SSH address (git@github.com:…), which needs a GitHub key: the https one instead
+    await run('git', ['-C', te, 'submodule', 'init', 'modules/juce'], { log });
+    await run('git', ['-C', te, 'config', 'submodule.modules/juce.url', deps.juce.url], { log });
+    await run('git', ['-C', te, 'submodule', 'update', '--init', '--filter=blob:none', 'modules/juce'], { log });
+  }
+  if (gitHead(juce) !== deps.juce.commit) throw new Error(`JUCE in ${juce} is at ${gitHead(juce)}, not the pinned ${deps.juce.commit}`);
+  const out = ENGINE_BUILD_DIR();
+  await run('cmake', ['-S', join(REPO_ROOT, 'engine'), '-B', out, '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release', `-DTE_DIR=${te}`], { log });
+  // Each JUCE / Tracktion file takes 1-2 GB to compile: 4 at a time at most.
+  await run('ninja', ['-C', out, `-j${Math.max(1, Math.min(4, availableParallelism()))}`, 'mortiflix-engine'], { log });
+  const built = join(out, 'mortiflix-engine_artefacts', 'Release', `mortiflix-engine${EXE}`);
+  if (!existsSync(built)) throw new Error(`the build finished but ${built} isn't there`);
+  const bin = dawEngineBin(root);
+  mkdirSync(dirname(bin), { recursive: true });
+  rmSync(bin, { force: true });   // never copy through a link someone left here
+  copyFileSync(built, bin);
+  chmodSync(bin, 0o755);
+  log(`Copied to ${bin}`);
+  const st = dawEngineStatus(root);
+  if (!st.ok) throw new Error(`the engine was built but ${st.detail}`);
+  return st;
+}
+
 const INSTALLERS = { transitions: installTransitions, strudel: installStrudel, chrome: installChrome, 'browser-harness': installBrowserHarness, blender: installBlender, 'blender-addons': installAddons, comfyui: installComfy,
-  craft: (root, log) => craft.installCraft(root, { log }) };
+  'daw-engine': installDawEngine, craft: (root, log) => craft.installCraft(root, { log }) };
 export const TOOLS = Object.keys(INSTALLERS);
 
 export const TOOL_INFO = {
@@ -641,14 +729,15 @@ export const TOOL_INFO = {
   comfyui: { name: 'ComfyUI + TTS Audio Suite', what: 'ComfyUI and diodiogod/TTS-Audio-Suite from GitHub, PyTorch with CUDA, in their own Python environment; the Qwen3-TTS models download on first use', where: 'tools/ComfyUI', size: '~10 GB with the models' },
   blender: { name: 'Blender', what: 'the newest official build from download.blender.org (your own Blender is reused if you have one)', where: 'tools/blender', size: '~350 MB' },
   craft: { name: 'The Craft apps', what: `the official builds of the apps you picked, from github.com/${craft.OWNER}, each checked against its release's SHA256SUMS and started once as an MCP server`, where: 'tools/craft', size: '15-80 MB each' },
+  'daw-engine': { name: 'Sound engine', what: 'mortiflix-engine (this repository\'s engine/, AGPL-3.0) built from the pinned Tracktion Engine (GPL-3.0) and JUCE (AGPL-3.0) commits with CMake and Ninja', where: 'tools/daw-engine (source and build files in ~/.cache/mortiflix)', size: '~27 MB (+ ~400 MB cache)' },
   'blender-addons': { name: 'The 3D toolkits', what: 'MoBlend, Camera, Animate, Math, Circuits and Camera Flight from their GitHub repositories, and Nova FX from this repository, installed into the studio\'s own Blender profile', where: 'tools/blender-profile', size: '~15 MB' },
 };
 
-export async function installTool(root, id, { log = () => {} } = {}) {
+export async function installTool(root, id, { log = () => {}, build = false } = {}) {
   const fn = INSTALLERS[id];
   if (!fn) throw new UserError(`unknown tool "${id}" (${TOOLS.join(', ')})`);
   mkdirSync(toolsDir(root), { recursive: true });
-  return fn(root, log);
+  return fn(root, log, { build });
 }
 
 // ---- what a session gets ----

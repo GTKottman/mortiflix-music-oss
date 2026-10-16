@@ -942,6 +942,7 @@ async function setupSection() {
           try { info = await api('/api/setup/daw', { method: 'PUT', body: { daw: daw === 'none' ? null : daw } }); draw(); } catch (e) { toast(e.message, true); }
         });
       })())),
+      field(part('daw-engine').title, h('div', null, ...intro('daw-engine'), toolRow('daw-engine'))),
       field(part('assets').title, h('div', null, ...intro('assets'),
         h('p', null, 'If you have a website you use for assets, list it here, one per line. Without one, you won\'t get stock assets: sessions make every visual themselves.'),
         h('textarea', { rows: 3, placeholder: 'https://…', value: sites, oninput: (e) => { sites = e.target.value; } }),
