@@ -135,7 +135,7 @@ fn main() -> eframe::Result {
         // Before eframe creates the wgpu instance (e.g. no OpenGL on Windows, see graphics.rs).
         graphics::apply(&mut options, graphics.mode(), backend_override);
         let app_created = Arc::new(AtomicBool::new(false));
-        let result = eframe::run_native("FilmCraft", options, app_creator(launch.clone(), graphics.clone(), Arc::clone(&app_created)));
+        let result = eframe::run_native("Mortiflix FilmCraft", options, app_creator(launch.clone(), graphics.clone(), Arc::clone(&app_created)));
         let app_created = app_created.load(Ordering::Relaxed);
         match &result {
             // wgpu reported the failure (no adapter, device creation failed) before the app
@@ -167,7 +167,7 @@ fn main() -> eframe::Result {
 fn native_options(agent: bool) -> eframe::NativeOptions {
     eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_title("FilmCraft")
+            .with_title("Mortiflix FilmCraft")
             .with_inner_size([1600.0, 980.0])
             .with_min_inner_size([900.0, 560.0])
             .with_drag_and_drop(true)
@@ -252,6 +252,11 @@ fn app_creator(launch: Launch, graphics: graphics::GraphicsStart, created: Arc<A
             app.dialog = None;
         }
         app.integrated_titlebar = cfg!(target_os = "macos");
+        // Mortiflix FilmCraft: the stage bar and the Mortiflix service (MFX_SERVICE or first-run setup)
+        app.mfx.core.activate();
+        app.mfx.core.start_service(filmcraft_mortiflix_ui::ServiceConfig::resolve(data_dir.clone().or_else(default_data_dir).as_deref()));
+        let stage = app.mfx.core.state.stage;
+        filmcraft_ui_egui::mortiflix::apply_stage(&mut app, stage);
         if let Some(rs) = cc.wgpu_render_state.clone()
             && std::env::var_os("FILMCRAFT_CPU_COMPOSITE").is_none()
         {

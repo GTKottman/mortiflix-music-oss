@@ -1,0 +1,16 @@
+[package]
+name = "filmcraft-mortiflix-ui"
+description = "Mortiflix FilmCraft: the Mortiflix stages (stage bar, chat, nodes, preview, voice & music) as egui panels, and the Mortiflix service supervisor"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+egui = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+log = { workspace = true }

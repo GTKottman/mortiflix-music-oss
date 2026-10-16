@@ -46,6 +46,7 @@ pub mod i18n;
 pub mod icons;
 pub mod links;
 pub mod menus;
+pub mod mortiflix;
 pub mod native_dialogs;
 pub mod panels;
 pub mod perf;
@@ -273,6 +274,8 @@ pub(crate) const EXPORT_SAVE_DIALOGS: [(&str, &str, &str); 7] = [
 
 pub struct FilmcraftApp {
     pub session: Session,
+    /// Mortiflix FilmCraft: stages, the Mortiflix panels and the service (off until activated).
+    pub mfx: mortiflix::Host,
     pub ui: UiState,
     pub tokens: Tokens,
     pub frames: Arc<FrameServer>,
@@ -539,6 +542,7 @@ impl FilmcraftApp {
         let language = i18n::Language::parse(&session.prefs.general.interface_language).unwrap_or_default();
         Self {
             session,
+            mfx: Default::default(),
             ui: UiState { language, ..UiState::default() },
             tokens: Tokens::for_kind(ThemeKind::Dark),
             frames,
@@ -1723,6 +1727,7 @@ impl FilmcraftApp {
         panels::metadata::follow_selection(self);
         self.frames.set_context(&ctx);
         self.session.poll_persistence();
+        mortiflix::frame_begin(self, &ctx);
         panels::trim_monitor::advance(self, &ctx);
         if self.session.persistence.is_some() && self.session.is_dirty() {
             // Keep polling the auto-save worker (status, "also save the project" results).
@@ -1737,10 +1742,13 @@ impl FilmcraftApp {
                 filmcraft_engine::Event::OpenSequence(_) => {
                     // show the sequence with its own view (or fitted, the first time)
                     self.timeline_view_of = None;
-                    if !self.ui.floating.iter().any(|group| group.panels.contains(&PanelKind::Timeline)) {
-                        self.ui.dock.restore_timeline();
+                    // Mortiflix stages 1-4 own the layout: the Timeline shows from stage 5 on
+                    if !mortiflix::hides_mode_tabs(self) {
+                        if !self.ui.floating.iter().any(|group| group.panels.contains(&PanelKind::Timeline)) {
+                            self.ui.dock.restore_timeline();
+                        }
+                        let _ = self.apply_dock(craft_ui::docking::Action::Activate { panel: PanelKind::Timeline });
                     }
-                    let _ = self.apply_dock(craft_ui::docking::Action::Activate { panel: PanelKind::Timeline });
                 }
                 filmcraft_engine::Event::OpenSource(_) => {
                     let _ = self.apply_dock(craft_ui::docking::Action::Activate { panel: PanelKind::Source });
@@ -1782,8 +1790,14 @@ impl FilmcraftApp {
         if self.ui.show_header {
             header::show(self, ui, header);
         }
+        // Mortiflix FilmCraft: the stage bar under the header (doc 30)
+        let bar_h = mortiflix::bar_height(self);
+        if bar_h > 0.0 {
+            mortiflix::stage_bar(self, ui, egui::Rect::from_min_size(egui::pos2(full.min.x, header.max.y), egui::vec2(full.width(), bar_h)));
+        }
         let status_h = if self.ui.show_status_bar { 20.0 } else { 0.0 };
-        let body = egui::Rect::from_min_max(egui::pos2(full.min.x + 1.0, header.max.y + 1.0), egui::pos2(full.max.x - 1.0, full.max.y - status_h - 2.0));
+        let body =
+            egui::Rect::from_min_max(egui::pos2(full.min.x + 1.0, header.max.y + bar_h + 1.0), egui::pos2(full.max.x - 1.0, full.max.y - status_h - 2.0));
         match self.ui.mode {
             state::Mode::Edit => self.dock_area(ui, body),
             state::Mode::Import => panels::import_mode::show(self, ui, body),
@@ -1792,6 +1806,7 @@ impl FilmcraftApp {
         // the Timeline has had its chance to place a file drop this frame; anything left stays a bin import
         self.pending_timeline_drop = None;
         panels::dialogs::show(self, &ctx);
+        mortiflix::dialogs(self, &ctx);
         if !self.ui.show_status_bar {
             // no bar to draw the job in, but a finished preview render still plays
             self.watch_jobs(ui.ctx());

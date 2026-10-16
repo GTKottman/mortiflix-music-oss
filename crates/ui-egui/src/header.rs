@@ -36,8 +36,14 @@ pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
         app.ui.mode = Mode::Import;
     }
     x = home.max.x + 16.0;
-    // Mode tabs (14 pt; active = primary text with a 2 pt underline under the label)
-    for (m, label, shown) in [(Mode::Import, "Import", tl!("Import")), (Mode::Edit, "Edit", tl!("Edit")), (Mode::Export, "Export", tl!("Export"))] {
+    // Mode tabs (14 pt; active = primary text with a 2 pt underline under the label); Mortiflix
+    // FilmCraft shows them only on stages 5-6 (doc 30)
+    let tabs: &[(Mode, &str, &str)] = if crate::mortiflix::hides_mode_tabs(app) {
+        &[]
+    } else {
+        &[(Mode::Import, "Import", tl!("Import")), (Mode::Edit, "Edit", tl!("Edit")), (Mode::Export, "Export", tl!("Export"))]
+    };
+    for &(m, label, shown) in tabs {
         let active = app.ui.mode == m;
         let galley = p.layout_no_wrap(shown.to_string(), Tokens::ui(14.0), if active { t.tab_text_active } else { t.tab_text });
         let r = Rect::from_min_size(pos2(x - 6.0, rect.min.y + 6.0), vec2(galley.size().x + 12.0, rect.height() - 12.0));

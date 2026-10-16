@@ -40,10 +40,16 @@ pub enum PanelKind {
     ReferenceMonitor,
     Timecode,
     ProjectNotes,
+    // Mortiflix FilmCraft (drawn by `filmcraft-mortiflix-ui`, see `crate::mortiflix`)
+    MfxChat,
+    MfxPreview,
+    MfxNodes,
+    MfxStage,
+    MfxAssets,
 }
 
 impl PanelKind {
-    pub const ALL: [PanelKind; 28] = [
+    pub const ALL: [PanelKind; 33] = [
         PanelKind::Project,
         PanelKind::MediaBrowser,
         PanelKind::Libraries,
@@ -72,6 +78,11 @@ impl PanelKind {
         PanelKind::ReferenceMonitor,
         PanelKind::Timecode,
         PanelKind::ProjectNotes,
+        PanelKind::MfxChat,
+        PanelKind::MfxPreview,
+        PanelKind::MfxNodes,
+        PanelKind::MfxStage,
+        PanelKind::MfxAssets,
     ];
     pub fn title(self) -> &'static str {
         match self {
@@ -103,6 +114,11 @@ impl PanelKind {
             PanelKind::ReferenceMonitor => "Reference Monitor",
             PanelKind::Timecode => "Timecode",
             PanelKind::ProjectNotes => "Project Notes",
+            PanelKind::MfxChat => "Mortiflix Chat",
+            PanelKind::MfxPreview => "Mortiflix Preview",
+            PanelKind::MfxNodes => "Mortiflix Nodes",
+            PanelKind::MfxStage => "Mortiflix Stage",
+            PanelKind::MfxAssets => "Mortiflix Assets",
         }
     }
     pub fn id(self) -> String {
@@ -357,6 +373,13 @@ pub fn workspace(name: &str) -> DockNode {
                 hsplit(Ratio(0.3), tabs(&[Project, MediaBrowser, Libraries], 0), bottom_editing()),
             ),
             tabs(&[EssentialGraphics, Properties], 0),
+        ),
+        // Mortiflix FilmCraft stages 1-4 (doc 40): chat left, preview and the stage's own panel,
+        // the node area along the bottom.
+        "Mortiflix" => vsplit(
+            Ratio(0.64),
+            hsplit(FixedA(400.0), tabs(&[MfxChat, MfxAssets], 0), hsplit(Ratio(0.58), tabs(&[MfxPreview], 0), tabs(&[MfxStage], 0))),
+            tabs(&[MfxNodes], 0),
         ),
         "All Panels" => vsplit(
             Ratio(0.5),

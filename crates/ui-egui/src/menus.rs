@@ -258,6 +258,9 @@ pub fn invoke(app: &mut FilmcraftApp, ctx: &egui::Context, id: &str, mut params:
         app.show_panel(p);
         return Ok(Value::Null);
     }
+    if let Some(r) = crate::mortiflix::route(app, id, &params) {
+        return r;
+    }
     if let Some(r) = crate::panels::workspaces::route(app, id, &params) {
         return r;
     }
@@ -673,7 +676,7 @@ pub struct MenuItem {
     pub checked: Option<bool>,
 }
 
-pub const MENUS: [&str; 9] = ["File", "Edit", "Clip", "Sequence", "Markers", "Graphics and Titles", "View", "Window", "Help"];
+pub const MENUS: [&str; 10] = ["File", "Edit", "Clip", "Sequence", "Markers", "Graphics and Titles", "Stages", "View", "Window", "Help"];
 
 /// Labels only the native macOS app menu shows, with no command in the menu tree behind them: the
 /// Settings submenu and the predefined Hide, Hide Others and Quit items. They are translated through
@@ -705,6 +708,7 @@ pub fn menu_items(app: &FilmcraftApp) -> Vec<MenuItem> {
         }
     }
     crate::panels::workspaces::menu(app, &mut v);
+    crate::mortiflix::menu(app, &mut v);
     open_recent(&mut v, &app.session, |n| app.ui.language.tr(n).to_string());
     v
 }
@@ -762,7 +766,7 @@ pub fn menu_items_for(session: &filmcraft_engine::Session) -> Vec<MenuItem> {
             checked: None,
         });
     }
-    for c in UI_COMMANDS.iter().chain(crate::panels::keyboard::COMMANDS) {
+    for c in UI_COMMANDS.iter().chain(crate::panels::keyboard::COMMANDS).chain(crate::mortiflix::COMMANDS) {
         if c.menu.is_empty() {
             continue;
         }
@@ -871,8 +875,12 @@ fn shifted_key(k: egui::Key) -> Option<egui::Key> {
 /// rebound and resolved alongside engine commands (the `shortcuts.` commands).
 pub fn external_commands() -> Vec<filmcraft_engine::shortcuts::CommandInfo> {
     use filmcraft_engine::shortcuts::CommandInfo;
-    let mut v: Vec<CommandInfo> =
-        UI_COMMANDS.iter().chain(crate::panels::keyboard::COMMANDS).map(|c| CommandInfo::new(c.id, c.label, c.menu, c.shortcut)).collect();
+    let mut v: Vec<CommandInfo> = UI_COMMANDS
+        .iter()
+        .chain(crate::panels::keyboard::COMMANDS)
+        .chain(crate::mortiflix::COMMANDS)
+        .map(|c| CommandInfo::new(c.id, c.label, c.menu, c.shortcut))
+        .collect();
     for p in PanelKind::ALL {
         v.push(CommandInfo::new(&panel_command_id(p), p.title(), &["Window"], p.window_shortcut()));
     }

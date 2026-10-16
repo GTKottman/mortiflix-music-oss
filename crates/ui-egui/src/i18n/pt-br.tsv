@@ -3578,3 +3578,16 @@
 
 # The native macOS application menu (Settings…).
 	Settings	Preferências
+# Mortiflix FilmCraft: Stages menu and panels
+	Back	Voltar
+	Next	Avançar
+	Script	Roteiro
+	Shots	Tomadas
+	Voice & music	Voz e música
+	FilmCraft	FilmCraft
+	Render	Renderizar
+	Mortiflix Chat	Chat do Mortiflix
+	Mortiflix Preview	Pré-visualização do Mortiflix
+	Mortiflix Nodes	Nós do Mortiflix
+	Mortiflix Stage	Etapa do Mortiflix
+	Mortiflix Assets	Recursos do Mortiflix

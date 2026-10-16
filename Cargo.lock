@@ -1684,6 +1684,7 @@ dependencies = [
  "filmcraft-engine",
  "filmcraft-export",
  "filmcraft-gpu",
+ "filmcraft-mortiflix-ui",
  "filmcraft-platform",
  "filmcraft-project",
  "filmcraft-render",
@@ -2122,6 +2123,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "filmcraft-mortiflix-ui"
+version = "0.8.0"
+dependencies = [
+ "egui",
+ "log",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "filmcraft-mpa"
 version = "0.8.0"
 dependencies = [
@@ -2334,6 +2345,7 @@ dependencies = [
  "filmcraft-gpu",
  "filmcraft-interchange",
  "filmcraft-media",
+ "filmcraft-mortiflix-ui",
  "filmcraft-platform",
  "filmcraft-project",
  "filmcraft-render",

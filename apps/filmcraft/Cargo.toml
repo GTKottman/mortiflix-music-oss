@@ -25,6 +25,7 @@ filmcraft-render = { workspace = true }
 filmcraft-time = { workspace = true }
 filmcraft-gpu = { workspace = true }
 filmcraft-ui-egui = { workspace = true }
+filmcraft-mortiflix-ui = { workspace = true }
 filmcraft-platform = { workspace = true }
 egui = { workspace = true }
 eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit", "wayland", "x11"] }
