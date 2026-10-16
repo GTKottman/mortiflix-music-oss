@@ -4,7 +4,7 @@
 // its Strudel sound comes with doc 28 M13 (v48).
 #pragma once
 #include <JuceHeader.h>
-#include "TestPlugins.h"
+#include "OurPlugins.h"
 
 namespace mfx
 {
@@ -91,6 +91,23 @@ namespace mfx
             t->setSolo ((bool) c.getProperty ("solo", false));
             if (! c["instrument"].isObject() || ! insertBuiltinInstrument (*t, c["instrument"]))
                 defaultInstrument (*t, c["kind"].toString() == "drums");
+            // its mixer insert (doc 18 §3.5): built-in effects before the fader, then the track delay (doc 22 §4)
+            if (auto* ins = findById (song["mixer"]["inserts"], c["insert"].toString()))
+            {
+                if (auto* fx = (*ins)["plugins"].getArray())
+                    for (auto& entry : *fx)
+                        if (auto plugin = createBuiltin (edit, entry))
+                            t->pluginList.insertPlugin (plugin, t->pluginList.indexOf (t->getVolumePlugin()), nullptr);
+                const int d = (int) std::lround ((double) ins->getProperty ("delayMs", 0.0) * (double) song.getProperty ("sampleRate", 48000.0) / 1000.0);
+                if (d != 0)
+                {
+                    auto v = juce::var (new juce::DynamicObject());
+                    v.getDynamicObject()->setProperty ("kind", "builtin");
+                    v.getDynamicObject()->setProperty ("name", DelayPlugin::xmlTypeName);
+                    v.getDynamicObject()->setProperty (d > 0 ? "delaySamples" : "reportSamples", std::abs (d));
+                    t->pluginList.insertPlugin (createBuiltin (edit, v), -1, nullptr);
+                }
+            }
             trackOf[c["id"].toString()] = t;
             ++out.tracks;
         }

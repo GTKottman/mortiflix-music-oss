@@ -1,8 +1,10 @@
 // The engine's timing (doc 15 A6) against renders of songs made here, whose every click the test computes on its own:
 //   Q2  positions: a 2-hour song with a tempo change at bar 500; bar 3000's notes land on their exact samples
 //   Q6  sample-accurate notes: 1/32 notes with a 7-tick swing at 97 BPM, each on its own sample, at blocks 64 and 1024
+//   Q7  delay compensation: a plugin that delays 512 samples and says so, beside a dry copy turned upside down: silence
+//   Q8  track delay: +10 ms moves a channel's clicks 480 samples later than the others, −10 ms 480 earlier
 //   Q28 block-size independence: the same song at blocks 64, 512 and 1024 is byte-identical
-// The click instrument (engine/src/TestPlugins.h) writes one sample per note-on, so an onset is a non-zero sample.
+// The click instrument (engine/src/OurPlugins.h) writes one sample per note-on, so an onset is a non-zero sample.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -19,10 +21,12 @@ const RATE = 48000;
 const BAR = 3840;   // ticks in a 4/4 bar at 960 per beat
 
 // A song of click channels; `parts` is [{ at: tick, notes: { channelId: [{ t, len, key, vel }] } }].
-function clickSong({ tempo, channels = ['c1'], parts }) {
+// `inserts` gives a channel's mixer insert: { c2: { plugins: [...], delayMs } }.
+function clickSong({ tempo, channels = ['c1'], parts, inserts = {} }) {
   const song = emptySong({ title: 'Timing', bpm: tempo[0].bpm });
   song.tempo = tempo;
-  song.channels = channels.map((id, i) => ({ id, name: id, kind: 'instrument', midiChannel: i + 1, instrument: { kind: 'builtin', name: 'mfx-click' }, volDb: 0, pan: 0 }));
+  song.channels = channels.map((id, i) => ({ id, name: id, kind: 'instrument', midiChannel: i + 1, instrument: { kind: 'builtin', name: 'mfx-click' }, insert: `mx-${id}`, volDb: 0, pan: 0 }));
+  song.mixer.inserts = channels.map((id, i) => ({ id: `mx-${id}`, n: i + 1, name: id, plugins: [], volDb: 0, pan: 0, out: 'master', ...inserts[id] }));
   song.patterns = parts.map((p, i) => ({ id: `m${i}`, name: `m${i}`, bars: 1, notes: p.notes }));
   song.playlist.items = parts.map((p, i) => ({ id: `i${i}`, kind: 'pattern', ref: `m${i}`, track: 'r1', at: { tick: p.at }, len: BAR }));
   return song;
@@ -89,4 +93,36 @@ test('Q28: an internal-only song (4OSC parts and clicks) at blocks 64, 512 and 1
     const shas = [64, 512, 1024].map((blockSize) => render(t, song, { blockSize }).sha);
     assert.equal(new Set(shas).size, 1, `renders differ: ${shas.map((s) => s.slice(0, 8)).join(' ')}`);
   });
+});
+
+const delay = (o) => ({ kind: 'builtin', name: 'mfx-delay', ...o });
+const beats = (n, vel = 1) => Array.from({ length: n }, (_, k) => ({ t: 960 + k * 700 + 13, len: 60, key: 60, vel }));
+
+test('Q7: a plugin that delays 512 samples and reports it, beside a dry copy turned upside down, nulls to silence', { skip }, (t) => {
+  const tempo = [{ tick: 0, bpm: 97, shape: 'jump' }];
+  const parts = [{ at: 0, notes: { a: beats(4), b: beats(4) } }];
+  const song = (report) => clickSong({ tempo, channels: ['a', 'b'], parts, inserts: { a: { plugins: [delay({ delaySamples: 512, reportSamples: report })] }, b: { plugins: [delay({ gain: -1 })] } } });
+  const want = beats(4).map((n) => sampleAt(secondsAt(tempo, n.t)));
+  // the test can fail: without the report, the delayed copy doesn't line up
+  const unreported = clicksIn(render(t, song(0), {}).wav);
+  assert.deepEqual(unreported, [...want, ...want.map((s) => s + 512)].sort((x, y) => x - y), 'unreported: dry clicks, then the delayed ones 512 later');
+  const { wav } = render(t, song(512), {});
+  assert.deepEqual(clicksIn(wav), [], 'compensated: every sample is 0');
+  // and the delayed channel alone still plays on the song's own samples (the render takes the latency out)
+  const alone = clickSong({ tempo, channels: ['a'], parts: [{ at: 0, notes: { a: beats(4) } }], inserts: { a: { plugins: [delay({ delaySamples: 512, reportSamples: 512 })] } } });
+  assert.deepEqual(clicksIn(render(t, alone, {}).wav), want);
+});
+
+test('Q8: track delay +10 ms puts a channel 480 samples after the others, -10 ms 480 before', { skip }, (t) => {
+  const tempo = [{ tick: 0, bpm: 97, shape: 'jump' }];
+  const parts = [{ at: 0, notes: { ref: beats(4, 1), moved: beats(4, 0.5) } }];
+  const want = beats(4).map((n) => sampleAt(secondsAt(tempo, n.t)));
+  for (const [ms, shift] of [[10, 480], [-10, -480]]) {
+    const { wav } = render(t, clickSong({ tempo, channels: ['ref', 'moved'], parts, inserts: { moved: { delayMs: ms } } }), {});
+    const c = wav.channels[0];
+    const loud = clicksIn(wav).filter((i) => c[i] > 0.5);
+    const soft = clicksIn(wav).filter((i) => c[i] < 0.5);
+    assert.deepEqual(loud, want, `${ms} ms: the other channel stays on the song's samples`);
+    assert.deepEqual(soft.map((s, k) => s - loud[k]), [shift, shift, shift, shift], `${ms} ms`);
+  }
 });
