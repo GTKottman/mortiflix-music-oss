@@ -2,7 +2,7 @@
 // silent engine's PID and starts it again (restoring the song), giving up after 3 crashes, and a clean quit.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createEngineSupervisor } from '../src/daw-engine.mjs';
@@ -43,6 +43,30 @@ test('a silent engine: its PID is killed after the heartbeat, it starts again an
   assert.throws(() => process.kill(first, 0), 'the first engine was killed by its PID');
   await until(() => restored.length >= 1);
   assert.ok(readFileSync(join(dir, 'n'), 'utf8').length >= 2, 'started twice');
+});
+
+test('killed while playing: it comes back on the same device with the same song, at the last heard place, playing (doc 16 E6)', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'mfx-eng-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const calls = join(dir, 'calls');
+  const e = createEngineSupervisor({ bin: process.execPath, args: [FAKE], env: { ...process.env, FAKE_CALLS: calls }, backoffMs: [30] });
+  t.after(() => e.stop({ graceMs: 200 }));
+  await e.start();
+  await e.call('device.set', { backend: 'JACK', rate: 48000, block: 1024 });
+  await e.call('song.load', { path: '/x/song.json' });
+  await e.call('clock.subscribe', {});
+  await e.call('transport.seek', { seconds: 12.5 });
+  await e.call('transport.play', {});
+  writeFileSync(calls, '');
+  const first = e.pid;
+  process.kill(first, 'SIGKILL');
+  await until(() => e.pid !== first && e.state === 'running' && readFileSync(calls, 'utf8').includes('transport.play'), 5000);
+  assert.deepEqual(readFileSync(calls, 'utf8').trim().split('\n').map((l) => JSON.parse(l)), [
+    { cmd: 'device.set', args: { backend: 'JACK', rate: 48000, block: 1024 } },
+    { cmd: 'song.load', args: { path: '/x/song.json', atSeconds: 12.5 } },
+    { cmd: 'clock.subscribe', args: {} },
+    { cmd: 'transport.play', args: {} },
+  ]);
 });
 
 test('three crashes inside a minute: it stays stopped, with its last log lines', async (t) => {
@@ -143,4 +167,31 @@ test('the real engine builds a song from song.json: every note, every part, its 
   assert.ok(Math.abs(r.seconds - 8 * 4 * 60 / 96) < 0.6, `${r.seconds} s for 8 bars at 96 BPM (plus a ringing note)`);
   await assert.rejects(e.call('transport.play', {}), /no sound device open/);
   await assert.rejects(e.call('song.load', { path: join(dir, 'missing.json') }), /no song file/);
+});
+
+test('the real engine killed by its PID comes back with the song at the same place (doc 16 E6)', { skip: !REAL && 'the engine is not built on this machine' }, async (t) => {
+  const { songFromNotes } = await import('../src/song-import.mjs');
+  const { writeSong } = await import('../src/song.mjs');
+  const fx = join(import.meta.dirname, 'fixtures', 'songs', 'four');
+  const { song } = songFromNotes({ blueprint: JSON.parse(readFileSync(join(fx, 'blueprint.json'), 'utf8')), notes: JSON.parse(readFileSync(join(fx, 'notes.json'), 'utf8')), instruments: null });
+  const dir = mkdtempSync(join(tmpdir(), 'mfx-eng-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  writeFileSync(join(dir, 'song.json'), writeSong(song));
+  const e = createEngineSupervisor({ bin: REAL, args: ['--serve'], backoffMs: [100] });
+  t.after(() => e.stop());
+  let clock = null;
+  e.on('clock', (m) => { clock = { ...m, pid: e.pid }; });
+  await e.start();
+  await e.call('song.load', { path: join(dir, 'song.json'), atSeconds: 3.5 }, { timeout: 60000 });
+  await e.call('clock.subscribe', {});
+  await until(() => clock?.pid === e.pid);
+  assert.ok(Math.abs(clock.seconds - 3.5) < 0.001, `the clock says ${clock.seconds} s`);
+  const first = e.pid;
+  process.kill(first, 'SIGKILL');
+  await until(() => e.pid !== first && e.state === 'running', 10000);
+  clock = null;
+  await until(() => clock?.pid === e.pid, 10000);
+  assert.ok(Math.abs(clock.seconds - 3.5) < 0.001, `back at ${clock.seconds} s`);
+  assert.equal(clock.bar, 2, '3.5 s at 96 BPM is in bar 2');
+  assert.equal(e.place.song, join(dir, 'song.json'));
 });

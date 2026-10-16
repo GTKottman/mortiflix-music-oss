@@ -35,6 +35,10 @@ export function createEngineSupervisor({
   let stopping = false;
   const tail = [];                // the last 20 lines of the engine's log
   let lastFailure = null;
+  // Where the engine was, so a restarted one comes back the same (doc 16 §7): the device it had open, the song file,
+  // the last heard position and whether it was playing.
+  const place = { device: null, song: null, clock: false, seconds: 0, playing: false };
+  const heard = (c) => { if (c && typeof c.seconds === 'number') { place.seconds = c.seconds; place.playing = !!c.playing; } };
 
   const setState = (s, extra = {}) => { state = s; ev.emit('state', { state: s, pid, ...extra }); };
   function log(line) {
@@ -68,6 +72,7 @@ export function createEngineSupervisor({
         return;
       }
       if (msg.ev) {
+        if (msg.ev === 'clock') heard(msg);
         if (msg.ev === 'log') log(`[${msg.level || 'info'}] ${msg.text}`);
         ev.emit('event', msg);
         ev.emit(msg.ev, msg);
@@ -126,6 +131,7 @@ export function createEngineSupervisor({
       if (stopping || child) return;
       try {
         await start();
+        await comeBack();
         if (restore) await restore(api);
       } catch (e) { log(`restart failed: ${e.message}`); }
     }, wait);
@@ -138,7 +144,23 @@ export function createEngineSupervisor({
       const t = setTimeout(() => { pending.delete(id); reject(new Error(`the sound engine didn't answer ${cmd} within ${timeout / 1000} s`)); }, timeout);
       pending.set(id, { resolve, reject, timer: t });
       child.stdin.write(JSON.stringify({ id, cmd, args }) + '\n');
+    }).then((result) => {
+      if (cmd === 'device.set') place.device = args;
+      if (cmd === 'song.load' || cmd === 'song.patch') { place.song = args.path || place.song; if (cmd === 'song.load') { place.seconds = Number(args.atSeconds) || 0; place.playing = false; } }
+      if (cmd === 'clock.subscribe') place.clock = true;
+      if (cmd.startsWith('transport.')) heard(result);
+      return result;
     });
+  }
+
+  // After a restart: the same device, the song at the last heard position, the clock, and playing again if it was.
+  async function comeBack() {
+    const { device, song, clock, seconds, playing } = place;
+    if (device) await call('device.set', device, { timeout: 15000 });
+    if (song) await call('song.load', { path: song, atSeconds: seconds }, { timeout: 120000 });
+    if (clock) await call('clock.subscribe', {});
+    if (song && device && playing) await call('transport.play', {});
+    log(`came back${song ? ` with ${song} at ${seconds.toFixed(3)} s${playing ? ', playing' : ''}` : ''}`);
   }
 
   // Asks it to quit, then kills its PID if it hasn't after `graceMs`.
@@ -159,7 +181,7 @@ export function createEngineSupervisor({
 
   const api = {
     start, stop, call, reset, on: (name, fn) => { ev.on(name, fn); return () => ev.off(name, fn); },
-    get state() { return state; }, get pid() { return pid; }, get log() { return [...tail]; }, get failure() { return lastFailure; },
+    get state() { return state; }, get pid() { return pid; }, get log() { return [...tail]; }, get failure() { return lastFailure; }, get place() { return { ...place }; },
   };
   return api;
 }
