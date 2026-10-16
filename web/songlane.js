@@ -60,7 +60,9 @@ export function cutMarks(song, shots, fps = 30) {
 }
 
 // shotNode(shot, { compact }) builds a shot's node (the canvas's own look); transitionOf(fromId, toId) names the cut.
-export function songLane({ h, song, graph, draft = false, shotNode = null, transitionOf = () => null }) {
+// focus: { section, part } shows one section (and one part) fitted to the width (levels 2 and 3, doc 25 §2).
+// onOpen(sectionId, channelId | null) is called on a double-click on a section block or one of its part rows.
+export function songLane({ h, song, graph, draft = false, shotNode = null, transitionOf = () => null, focus = null, onOpen = null }) {
   const ax = timeAxis(song);
   const shots = shotTimes(graph);
   const fps = graph?.fps || 30;
@@ -77,11 +79,14 @@ export function songLane({ h, song, graph, draft = false, shotNode = null, trans
     return { id: p.id || i.ref, name: p.name || '', startTick: i.at.tick, startBar, bars, from, to, notes: p.notes || {}, under: under?.label || null, colour: cueNode(p.id)?.colour || null };
   });
   const lastBar = sections.length ? sections.at(-1).startBar + sections.at(-1).bars : 1;
+  const focused = focus?.section ? sections.find((x) => x.id === focus.section) : null;
   const lines = (graph?.order?.lines || []).map((l) => graph.nodes[l]).filter((l) => l && l.start_sec !== null && l.start_sec !== undefined && l.state !== 'cut');
-  const end = Math.max(ax.barSec(lastBar), shots.at(-1)?.to || 0, ...lines.map((l) => l.end_sec || 0), 1);
+  // the time range on screen: the whole song, or the focused section
+  const t0 = focused ? focused.from : 0;
+  const end = focused ? focused.to - focused.from : Math.max(ax.barSec(lastBar), shots.at(-1)?.to || 0, ...lines.map((l) => l.end_sec || 0), 1);
 
   // parts that play anywhere, in channel order; up to MAX_ROWS rows, the rest folded
-  const playing = song.channels.filter((c) => song.patterns.some((p) => p.notes?.[c.id]?.length));
+  const playing = song.channels.filter((c) => song.patterns.some((p) => p.notes?.[c.id]?.length)).filter((c) => !focus?.part || c.id === focus.part);
   const shown = playing.length > MAX_ROWS ? playing.slice(0, MAX_ROWS - 1) : playing;
   const folded = playing.length > MAX_ROWS ? playing.slice(MAX_ROWS - 1) : [];
   const rows = shown.length + (folded.length ? 1 : 0);
@@ -111,7 +116,7 @@ export function songLane({ h, song, graph, draft = false, shotNode = null, trans
     // the label column covers nodes scrolled under it, as the canvas does for the parts
     nodeRow.replaceChildren(h('span', { class: 'sl-mask', style: { width: `${LABELS - 2}px` } }));
     if (!shotNode) return;
-    const x = (sec) => LABELS + sec * pps;
+    const x = (sec) => LABELS + (sec - t0) * pps;
     shots.forEach((s, i) => {
       const w = (s.to - s.from) * pps - 4;
       const compact = w < NODE_MIN;
@@ -137,7 +142,7 @@ export function songLane({ h, song, graph, draft = false, shotNode = null, trans
     placeNodes();
     const left = scroller.scrollLeft;
     const width = view;
-    const x = (sec) => LABELS + sec * pps - left;
+    const x = (sec) => LABELS + (sec - t0) * pps - left;
     const dpr = window.devicePixelRatio || 1;
     canvas.width = Math.round(width * dpr); canvas.height = Math.round(H * dpr);
     canvas.style.width = `${width}px`; canvas.style.height = `${H}px`;
@@ -158,7 +163,7 @@ export function songLane({ h, song, graph, draft = false, shotNode = null, trans
     g.font = font(10);
     const barPx = (ax.barSec(2) - ax.barSec(1)) * pps;
     const every = [1, 2, 4, 8, 16, 32].find((k) => barPx * k >= 22) || 64;
-    for (let b = 1; b <= lastBar; b++) {
+    for (let b = focused ? focused.startBar : 1; b <= (focused ? focused.startBar + focused.bars : lastBar); b++) {
       const bx = Math.round(x(ax.barSec(b))) + 0.5;
       if (bx < LABELS - 2 || bx > width + 30) continue;
       g.fillStyle = faint;
@@ -171,7 +176,7 @@ export function songLane({ h, song, graph, draft = false, shotNode = null, trans
     const top = RULER + 4;
     for (const s of sections) {
       const x0 = x(s.from) + 1; const x1 = x(s.to) - 2;
-      if (!visible(x0, x1)) continue;
+      if (!visible(x0, x1) || (focused && s !== focused)) continue;
       g.fillStyle = s.colour?.hex || '#3a3a3a';
       roundRect(g, x0, top, x1 - x0, blockH, 4); g.fill();
       g.save(); g.beginPath(); g.rect(x0, top, x1 - x0, blockH); g.clip();
@@ -247,7 +252,7 @@ export function songLane({ h, song, graph, draft = false, shotNode = null, trans
     e.preventDefault();
     const r = scroller.getBoundingClientRect();
     const mx = e.clientX - r.left;
-    const at = (scroller.scrollLeft + mx - LABELS) / pps;      // the second under the mouse
+    const at = (scroller.scrollLeft + mx - LABELS) / pps;      // the second under the mouse (from the range's start)
     pps = Math.max(fitPps(), Math.min(MAX_PPS, pps * Math.exp(-e.deltaY * 0.0015)));
     spacer.style.width = `${worldW()}px`;
     scroller.scrollLeft = Math.max(0, LABELS + at * pps - mx);
@@ -255,9 +260,24 @@ export function songLane({ h, song, graph, draft = false, shotNode = null, trans
   }, { passive: false });
   scroller.addEventListener('scroll', () => requestAnimationFrame(draw));
 
+  // double-click: which section block, and which part row inside it
+  canvas.addEventListener('dblclick', (e) => {
+    if (!onOpen) return;
+    const r = canvas.getBoundingClientRect();
+    const mx = e.clientX - r.left; const my = e.clientY - r.top;
+    if (mx < LABELS) return;
+    const sec = t0 + (mx + scroller.scrollLeft - LABELS) / pps;
+    const s = sections.find((x) => sec >= x.from && sec < x.to);
+    const top = RULER + 4;
+    if (!s || my < top || my > top + blockH) return;
+    const row = Math.floor((my - top - BLOCK_HEAD) / (ROW + ROW_GAP));
+    const part = row >= 0 && row < shown.length ? shown[row].id : null;
+    onOpen(s.id, part);
+  });
+
   const ro = new ResizeObserver(() => draw());
   ro.observe(scroller);
-  el.lane = { draw, sections, cuts, shots, end, stop: () => ro.disconnect(), zoom: (v) => { pps = v; draw(); }, get pps() { return pps; }, x: (sec) => LABELS + sec * pps };
+  el.lane = { draw, sections, cuts, shots, end, stop: () => ro.disconnect(), zoom: (v) => { pps = v; draw(); }, get pps() { return pps; }, x: (sec) => LABELS + (sec - t0) * pps, focused };
   return el;
 }
 

@@ -568,3 +568,9 @@ button.cv-tnode { cursor: pointer; font: inherit; color: inherit; }
 .sl-cut { position: absolute; top: 10px; height: 92px; width: 2px; background: var(--muted); border-radius: 1px; }
 .sl-note { font-size: 11px; color: var(--faint); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.cv-crumbs { display: flex; align-items: center; gap: 6px; margin-left: 16px; font-size: 13px; color: var(--muted); min-width: 0; }
+.cv-crumbs:empty { display: none; }
+.cv-crumb { color: var(--muted); text-decoration: none; white-space: nowrap; }
+a.cv-crumb:hover { color: var(--ink); text-decoration: underline; }
+.cv-crumb.on { color: var(--ink); }
+.cv-crumb-sep { color: var(--faint); }

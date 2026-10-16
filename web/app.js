@@ -77,7 +77,7 @@ const routes = [
   [/^p\/([a-z0-9-]+)$/, projectView, 'studio'],
   [/^p\/([a-z0-9-]+)\/review\/([a-z0-9_-]+)(?:\/(\d+))?$/, reviewView, 'studio'],
   [/^p\/([a-z0-9-]+)\/booth$/, boothView, 'studio'],
-  [/^p\/([a-z0-9-]+)\/canvas(?:\/(import|export))?$/, openCanvas, 'studio'],
+  [/^p\/([a-z0-9-]+)\/canvas(?:\/(import|export))?(?:\?(.*))?$/, openCanvas, 'studio'],
   [/^midi-strudel$/, openMidiStrudel, 'midi'],
   [/^pipelines$/, pipelinesView, 'pipelines'],
   [/^settings$/, settingsView, 'settings'],
@@ -88,6 +88,13 @@ async function render() {
   const hit = routes.find(([re]) => re.test(path));
   const [re, view, nav] = hit || routes[0];
   for (const a of document.querySelectorAll('[data-nav]')) a.classList.toggle('on', a.dataset.nav === nav);
+  // Inside the same project's canvas, only the level changed (doc 25 §2.4): route there, never rebuild (the video plays on).
+  const args = path.match(re)?.slice(1) || [];
+  if (view === openCanvas && current?.canvas && current.args[0] === args[0] && current.args[1] === args[1]) {
+    current.args = args;
+    return current.canvas.route(args[2] || '');
+  }
+  window.scrollTo(0, 0);
   if (leaveView) { try { leaveView(); } catch { /* already closed */ } leaveView = null; }
   current = { name: view.name, refresh: null, args: path.match(re)?.slice(1) || [] };
   // The review room is wider; the header widens with it so both keep one left edge.
@@ -113,7 +120,7 @@ function mount(...kids) {
   fill($app, ...kids);
 }
 
-window.addEventListener('hashchange', () => { window.scrollTo(0, 0); render(); });
+window.addEventListener('hashchange', () => render());
 
 // ---------- live updates ----------
 
@@ -149,9 +156,10 @@ async function loadStudio() {
 
 // ---------- the canvas (web/canvas.js) ----------
 
-async function openCanvas(id, mode) {
+async function openCanvas(id, mode, query) {
   const cv = canvasView({ h, fill, api, fileUrl, clock, store, icon, appendLog, toast, customChips, musicPanel, songLane, studio: () => studio }, id, mode || 'edit');
-  mount(await cv.show());
+  mount(await cv.show(query || ''));
+  current.canvas = cv;
   current.refresh = () => cv.refresh();
   leaveView = () => cv.leave();
 }

@@ -13,6 +13,9 @@ export function canvasView(ui, id, mode = 'edit') {
   let sel = 0;
   let keep = store.get(keepKey) ?? true;
   let boardView = store.get(`mfx-canvas-board-${id}`) || 'shots';
+  // The music level (doc 25 §2): the song, a section (?music=m02) or a part in it (?music=m02/ch02). Each level is
+  // its own address, so the browser's Back / Forward and the mouse's back button move between them.
+  let level = { section: null, part: null };
   let tsel = null; // a transition node picked on the noodle graph: the Monitor shows the cut and the library
   let library = null;
   let fcInfo = null;
@@ -26,6 +29,7 @@ export function canvasView(ui, id, mode = 'edit') {
   const monitor = h('div', { class: 'cv-body cv-monitor' });
   const script = h('div', { class: 'cv-body cv-script' });
   const board = h('div', { class: 'cv-body cv-board' });
+  const crumbs = h('nav', { class: 'cv-crumbs', 'aria-label': 'Where you are in the music' });
   const doing = h('div', { class: 'cv-body cv-doing' });
   const head = h('header', { class: 'cv-head' });
   const root = h('div', { class: 'canvas' });
@@ -284,11 +288,58 @@ export function canvasView(ui, id, mode = 'edit') {
         h('span', { class: 'cv-node-title' }, s.title || it.label || ''));
     };
     const transitionOf = (a, b) => Object.values(n).find((x) => x.kind === 'transition' && !x.missing && x.from === a && x.to === b) || null;
-    lane = sv?.song ? ui.songLane({ h, song: sv.song, graph, draft: sv.draft, shotNode, transitionOf }) : null;
+    const song = sv?.song || null;
+    drawCrumbs(song);
+    // the same song, shots and level as on screen: keep the lane (its zoom and scroll) as it is
+    const key = JSON.stringify([song?.rev, sv?.draft, graph?.rev, level, ms?.midi?.length]);
+    if (lane && lane.dataset.key === key && board.contains(lane)) return;
+    const focus = level.section && song?.patterns.some((p) => p.id === level.section) ? level : null;
+    lane = song ? ui.songLane({ h, song, graph, draft: sv.draft, shotNode, transitionOf, focus, onOpen: (sec, part) => openLevel(sec, part) }) : null;
+    if (lane) lane.dataset.key = key;
+    const channel = focus?.part ? song.channels.find((c) => c.id === focus.part) : null;
     fill(board, h('div', { class: 'cv-music' },
       lane || h('div', { class: 'cv-empty' }, sv?.error ? `The music couldn't be drawn: ${sv.error}` : 'The music appears here under the shots once the score passes its check.'),
-      ms?.midi?.length ? ui.musicPanel(id, ms) : h('p', { class: 'help' }, 'When the score passes its check, its MIDI pack shows here: every part on its own channel, a clip per section, and the steps to bring it into your DAW (Settings › Your DAW).')));
+      // levels 2 and 3 for now: the section (or part) on its own; the Piano roll and the part's instrument come later
+      focus ? h('p', { class: 'help' }, channel
+        ? `${channel.name}: ${channel.instrument ? channel.instrument.name : 'plays its Strudel sound (no instrument chosen yet)'}. Right-click empty space or press Alt+← to go back.`
+        : 'Double-click a part to open it. Right-click empty space or press Alt+← to go back.')
+        : ms?.midi?.length ? ui.musicPanel(id, ms) : h('p', { class: 'help' }, 'When the score passes its check, its MIDI pack shows here: every part on its own channel, a clip per section, and the steps to bring it into your DAW (Settings › Your DAW). Double-click a section to open it.')));
   }
+
+  // Song › m02 The bet › Bass: each earlier crumb goes back to its level.
+  function drawCrumbs(song) {
+    if (boardView !== 'music') return fill(crumbs);
+    const sec = level.section ? song?.patterns.find((p) => p.id === level.section) : null;
+    const ch = level.part ? song?.channels.find((c) => c.id === level.part) : null;
+    const items = [['Song', base()]];
+    if (sec) items.push([`${sec.id} ${sec.name || ''}`.trim(), `${base()}?music=${sec.id}`]);
+    if (sec && ch) items.push([ch.name, `${base()}?music=${sec.id}/${ch.id}`]);
+    fill(crumbs, items.map(([label, href], i) => [i ? h('span', { class: 'cv-crumb-sep', 'aria-hidden': 'true' }, '›') : null,
+      i === items.length - 1 ? h('span', { class: 'cv-crumb on', 'aria-current': 'page' }, label) : h('a', { class: 'cv-crumb', href }, label)]));
+  }
+  const base = () => `#/p/${id}/canvas`;
+  function openLevel(section, part) { location.hash = `${base()}?music=${section}${part ? `/${part}` : ''}`.slice(1); }
+  // Back is a navigation, never an edit: the browser's own history.
+  const back = () => { if (level.section) history.back(); };
+  const parseLevel = (q) => {
+    const m = new URLSearchParams(q || '').get('music')?.match(/^(m\d{2,3}|p\d{2,3})(?:\/(ch\d{2,}))?$/);
+    return { section: m?.[1] || null, part: m?.[2] || null };
+  };
+  // A level change redraws the board only: the Monitor (and its video) is left alone.
+  function syncBoardChrome() {
+    root.querySelector('.cv-grid')?.classList.toggle('cv-board-music', boardView === 'music');
+    for (const b of root.querySelectorAll('.cv-p-board .cv-tab')) b.classList.toggle('on', b.textContent === { shots: 'Shots', nodes: 'Nodes', music: 'Music' }[boardView]);
+  }
+  // Right-click on empty space goes back a level (press and release within 4 px; a drag is never a back).
+  let rightDown = null;
+  board.addEventListener('mousedown', (e) => { if (e.button === 2) rightDown = [e.clientX, e.clientY]; });
+  board.addEventListener('contextmenu', (e) => {
+    if (!level.section || e.target.closest('button, a, input, textarea, select')) return;
+    const moved = rightDown ? Math.hypot(e.clientX - rightDown[0], e.clientY - rightDown[1]) : 0;
+    rightDown = null;
+    e.preventDefault();
+    if (moved <= 4) back();
+  });
 
   function drawDoing() {
     const acts = d.activity || [];
@@ -573,7 +624,7 @@ export function canvasView(ui, id, mode = 'edit') {
       h('section', { class: 'cv-panel cv-p-board' },
         h('div', { class: 'cv-tabs' },
           ['shots', 'nodes', 'music'].map((v) => h('button', { class: `cv-tab${boardView === v ? ' on' : ''}`, onclick: () => { boardView = v; store.set(`mfx-canvas-board-${id}`, v); draw(); } }, { shots: 'Shots', nodes: 'Nodes', music: 'Music' }[v])),
-          keepBox),
+          crumbs, keepBox),
         board)));
     drawMonitor();
     drawBoard();
@@ -584,12 +635,21 @@ export function canvasView(ui, id, mode = 'edit') {
 
   const onKey = (e) => {
     if (e.target.closest('input, textarea, select')) return;
+    // Alt+← / Alt+→: back and forward between music levels (doc 25 §2.3); the arrows alone step through the shots
+    if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+      if (e.key === 'ArrowLeft' && !level.section) return;   // at the song: the browser's own Back leaves the canvas
+      e.preventDefault();
+      return e.key === 'ArrowLeft' ? back() : history.forward();
+    }
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
     if (e.key === 'ArrowRight') go(sel + 1, true);
     else if (e.key === 'ArrowLeft') go(sel - 1, true);
   };
 
   return {
-    async show() {
+    async show(query = '') {
+      level = parseLevel(query);
+      if (level.section) boardView = 'music';
       await load();
       document.body.classList.add('in-canvas');
       document.addEventListener('keydown', onKey);
@@ -614,6 +674,13 @@ export function canvasView(ui, id, mode = 'edit') {
       if (qn !== lastQ && !busy) { lastQ = qn; draw(); return; }
       if (!asked.contains(document.activeElement)) drawQuestions();
       if (!busy) drawMonitor();
+    },
+    // The address changed inside this canvas (a level, Back, Forward): no rebuild.
+    route(query = '') {
+      const was = JSON.stringify(level);
+      level = parseLevel(query);
+      if (level.section && boardView !== 'music') { boardView = 'music'; syncBoardChrome(); }
+      if (JSON.stringify(level) !== was) drawBoard();
     },
     leave() {
       clearTimeout(advance);
