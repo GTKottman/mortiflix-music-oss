@@ -516,3 +516,37 @@ button.cv-tnode { cursor: pointer; font: inherit; color: inherit; }
 .cv-cue-int { display: block; height: 4px; margin: 2px 6px 0; background: rgba(0, 0, 0, 0.35); }
 .cv-cue-int i { display: block; height: 100%; background: var(--clip-text); }
 .cv-music .state-line, .cv-music section { padding: 6px 0; border-top: 0; }
+
+/* ---------- MIDI ⇄ Strudel (web/midistrudel.js): notes left, Strudel right, on the canvas's black gutters ---------- */
+.ms .cv-head { gap: 18px; }
+.ms-tools { display: flex; align-items: center; gap: 14px; flex: none; }
+.ms .ms-tools > .ms-select { width: 230px; }
+.ms .ms-tools label .ms-select { width: 110px; }
+.ms .ms-tools .ms-num { width: 56px; }
+.ms-label { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
+.ms-select, .ms-num { flex: none; height: 24px; background: var(--well); color: var(--body); border: 1px solid var(--field-line); border-radius: var(--radius); font: inherit; font-size: 12px; padding: 0 6px; }
+.ms-num { width: 52px; }
+.ms-status { margin-left: auto; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ms-status.bad { color: var(--bad); }
+.ms-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr); gap: 2px; background: #000; padding-top: 2px; }
+.ms-hint { margin-left: auto; color: var(--faint); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ms-left, .ms-right { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.ms-roll-wrap { flex: 1; min-height: 0; overflow: auto; background: #151515; }
+.ms-roll { display: block; touch-action: none; }
+.ms-info { height: 24px; flex: 0 0 24px; padding: 0 10px; display: flex; align-items: center; color: var(--muted); font-size: 12px; border-top: 1px solid var(--line); }
+.ms-editor { flex: 1; min-height: 0; display: flex; background: var(--well); }
+.ms-gutter, .ms-paint, .ms-text { margin: 0; font-family: "JetBrains Mono", monospace; font-size: 12px; line-height: 18px; padding: 8px 10px; tab-size: 2; }
+.ms-gutter { flex: 0 0 auto; min-width: 3ch; text-align: right; color: var(--faint); overflow: hidden; border-right: 1px solid var(--line); user-select: none; }
+.ms-code { position: relative; flex: 1; min-width: 0; }
+.ms-paint, .ms-text { position: absolute; inset: 0; white-space: pre; overflow: auto; }
+.ms-paint { color: var(--body); pointer-events: none; overflow: hidden; }
+.ms-text { color: transparent; caret-color: var(--ink); background: transparent; border: 0; resize: none; outline: none; }
+.ms-text::selection { background: rgba(87, 148, 236, 0.35); color: transparent; }
+.ms-paint .ln { display: block; min-height: 18px; }
+.ms-paint .ln.flash { background: rgba(45, 157, 120, 0.28); transition: background 0.4s; }
+.ms-paint .ln.err { text-decoration: underline wavy var(--bad); }
+.ms-paint mark.hot { background: rgba(87, 148, 236, 0.45); color: var(--accent-ink); border-radius: 2px; }
+.ms-error { display: none; padding: 6px 10px; font-size: 12px; color: var(--bad); border-top: 1px solid var(--line); }
+.ms-error.on { display: block; }
+.ms-error.warn { color: var(--muted); }
+@media (max-width: 900px) { .ms-grid { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); } .ms-hint, .ms-tools .ms-label:last-child { display: none; } }

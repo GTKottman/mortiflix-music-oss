@@ -2,6 +2,7 @@
 // Everything the studio or a session wrote is inserted as text, never as HTML.
 
 import { canvasView } from './canvas.js';
+import { midiStrudelView } from './midistrudel.js';
 
 const $app = document.getElementById('app');
 const $status = document.getElementById('top-status');
@@ -76,6 +77,7 @@ const routes = [
   [/^p\/([a-z0-9-]+)\/review\/([a-z0-9_-]+)(?:\/(\d+))?$/, reviewView, 'studio'],
   [/^p\/([a-z0-9-]+)\/booth$/, boothView, 'studio'],
   [/^p\/([a-z0-9-]+)\/canvas(?:\/(import|export))?$/, openCanvas, 'studio'],
+  [/^midi-strudel$/, openMidiStrudel, 'midi'],
   [/^pipelines$/, pipelinesView, 'pipelines'],
   [/^settings$/, settingsView, 'settings'],
 ];
@@ -151,6 +153,14 @@ async function openCanvas(id, mode) {
   mount(await cv.show());
   current.refresh = () => cv.refresh();
   leaveView = () => cv.leave();
+}
+
+// ---------- MIDI ⇄ Strudel (web/midistrudel.js) ----------
+
+function openMidiStrudel() {
+  const v = midiStrudelView({ h, api, store });
+  mount(v.show());
+  leaveView = () => v.leave();
 }
 
 // ---------- the studio (home) ----------

@@ -25,6 +25,7 @@ import * as filmcraft from '../filmcraft.mjs';
 import { projectSkills, readSkillText } from '../skills.mjs';
 import * as pub from '../publish.mjs';
 import { costText } from '../usage.mjs';
+import { createStrudel } from '../strudel/edit.mjs';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
@@ -52,6 +53,7 @@ export async function startServer(root, { port = 4646, host = '127.0.0.1', runne
   const changed = () => { clearTimeout(changeTimer); changeTimer = setTimeout(() => broadcast('change', {}), 120); };
   runner.on('change', changed);
   runner.on('activity', (a) => broadcast('activity', a));
+  let strudel = null; // the Strudel evaluator process, started on first use (MIDI ⇄ Strudel)
 
   const server = createServer((req, res) => {
     handle(req, res).catch((e) => {
@@ -113,6 +115,24 @@ export async function startServer(root, { port = 4646, host = '127.0.0.1', runne
       saveConfig(root, patch);
       if ('api_key' in body) writeSecret(root, 'anthropic_api_key', body.api_key ? String(body.api_key).trim() : null);
       return after(studioInfo(root, runner));
+    }
+    // MIDI ⇄ Strudel (doc 28): run a pattern's text into notes; turn wanted notes into the smallest text change.
+    if ((m = p.match(/^\/strudel\/(notes|edit)$/)) && method === 'POST') {
+      const body = await json(req);
+      const bars = Math.round(Number(body.bars));
+      if (!(bars >= 1 && bars <= 512)) throw new BadRequest('bars: 1 to 512');
+      if (typeof body.code !== 'string' || body.code.length > 200_000) throw new BadRequest('code: the pattern text');
+      strudel ||= createStrudel({ strudelDir: join(setup.toolsDir(root), 'strudel') });
+      try {
+        if (m[1] === 'notes') return send(res, 200, await strudel.notes(body.code, { bars }));
+        if (!Array.isArray(body.notes) || body.notes.length > 20_000) throw new BadRequest('notes: a list');
+        const notes = body.notes.map((n) => ({ t: Math.round(Number(n.t)), len: Math.max(1, Math.round(Number(n.len))), key: Math.min(127, Math.max(0, Math.round(Number(n.key)))), vel: Math.round(Math.min(1, Math.max(0, Number(n.vel ?? 0.8))) * 1000) / 1000 }));
+        if (notes.some((n) => !Number.isFinite(n.t) || !Number.isFinite(n.len) || !Number.isFinite(n.key) || !Number.isFinite(n.vel))) throw new BadRequest('notes: t, len, key, vel numbers');
+        return send(res, 200, await strudel.edit(body.code, notes, { bars }));
+      } catch (e) {
+        if (e instanceof BadRequest) throw e;
+        return send(res, 400, { error: e.message, line: e.line ?? null });
+      }
     }
     if (p.startsWith('/voice')) return voiceApi(root, req, res, url, p, method, after);
     // Setup: what each part is for, where it stands, and installing a tool (one at a time, log kept for the page).
@@ -397,6 +417,7 @@ export async function startServer(root, { port = 4646, host = '127.0.0.1', runne
   }
   const close = async () => {
     for (const c of clients) c.end();
+    strudel?.close();
     if (withRunner) { await runner.stop(); await loop; runner.release(); }
     await new Promise((ok) => server.close(ok));
   };
