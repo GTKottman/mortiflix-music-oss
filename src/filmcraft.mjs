@@ -43,7 +43,9 @@ function prepVideo(src, dest, { from = null, to = null, audio = true } = {}) {
   args.push(dest);
   run('ffmpeg', args, `preparing ${dest}`);
 }
-const prepAudio = (src, dest) => run('ffmpeg', ['-y', '-loglevel', 'error', '-i', src, '-ar', '48000', '-c:a', 'pcm_s16le', dest], `preparing ${dest}`);
+// Voice and music go in as 24-bit WAV (FilmCraft reads it through Symphonia): 16-bit would round away 8 bits of the
+// float mix with no dither (doc 15 §3). Anything not at 48 kHz is resampled once, by soxr at its best precision.
+export const prepAudio = (src, dest) => run('ffmpeg', ['-y', '-loglevel', 'error', '-i', src, '-af', 'aresample=48000:resampler=soxr:precision=28', '-c:a', 'pcm_s24le', dest], `preparing ${dest}`);
 
 export function makeFilmcraftProject(root, id, { log = () => {} } = {}) {
   const fc = filmcraftCli(root);
