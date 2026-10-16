@@ -1,8 +1,9 @@
 // mfx: the command a session uses to talk to the studio. It only works inside a session (the runner sets
 // MFX_SOCKET and MFX_TOKEN). See harness/GATES.md for the protocol.
 import { request } from 'node:http';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { resolve, join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 const USAGE = `mfx: talk to the Mortiflix studio from inside a session
 
@@ -25,6 +26,14 @@ const USAGE = `mfx: talk to the Mortiflix studio from inside a session
   mfx propose-check --work stills,motion --title "..." --how "..." [--example "..."]
   mfx propose-check --same-as <check-id>
   mfx files                             files handed over with the brief
+  mfx song                              the song in short: sections, parts, locks, open bar edits
+  mfx song show m02 [--part ch02] [--bars 3-4]    the notes as a table (bars and beats inside the section)
+  mfx song strudel [m02] [--part ch02]  the rows of song.strudel.js, exactly
+  mfx song strudel m02 ch02 --bars 3-4 --file bars.strudel.js [--edit E012]   put Strudel in those bars
+  mfx song notes m02 ch02 --bars 3-4 --file notes.json [--edit E012]        replace that part's notes there
+  mfx song ops <ops.json> [--edit E012] a batch of song operations, all or nothing
+  mfx song import                       the song from the checked score (music/notes.json)
+  mfx song version "why"                a named version of the song
 
 Full protocol: .mortiflix/GATES.md`;
 
@@ -101,6 +110,7 @@ export async function main(argv, env = process.env, cwd = process.cwd()) {
     case 'needs-you': return call('needs-you', { text: need(f._.join(' '), '"what you need"') });
     case 'propose-check': return call('propose-check', { title: f.title, how: f.how, example: f.example, work: f.work, same_as: f['same-as'] });
     case 'files': return call('files', {});
+    case 'song': return songCmd(f, call, need, env, cwd);
     case 'canvas': return call('canvas-sync', {});
     case 'edits': return call('edits', {});
     case 'edit': {
@@ -114,6 +124,33 @@ export async function main(argv, env = process.env, cwd = process.cwd()) {
       return undefined;
     default:
       throw new Error(`unknown command "${cmd}"\n\n${USAGE}`);
+  }
+}
+
+// The song's rev as this session last read it: every write is based on it, so an owner's change in between is caught.
+const revFile = (env) => join(tmpdir(), `mfx-song-rev-${String(env.MFX_TOKEN || 'x').slice(0, 16)}`);
+const remember = (env, out) => { try { if (out && Number.isInteger(out.rev)) writeFileSync(revFile(env), String(out.rev)); } catch { /* best effort */ } return out; };
+const lastRev = (env) => { try { return Number(readFileSync(revFile(env), 'utf8')); } catch { return null; } };
+const barsOf = (v, need) => { const m = String(need(v, '--bars 3-4')).match(/^(\d+)(?:-(\d+))?$/); if (!m) throw new Error('--bars looks like 3-4 (inside the section)'); return [Number(m[1]), Number(m[2] || m[1])]; };
+
+async function songCmd(f, call, need, env, cwd) {
+  const [sub, a, b] = f._;
+  const edit = typeof f.edit === 'string' ? f.edit : null;
+  const part = typeof f.part === 'string' ? f.part : null;
+  switch (sub) {
+    case undefined: return remember(env, await call('song', {}));
+    case 'show': return remember(env, await call('song-show', { section: need(a, '<section>'), part, bars: f.bars ? barsOf(f.bars, need) : null }));
+    case 'strudel':
+      if (b) return remember(env, await call('song-strudel-put', { section: a, part: b, bars: barsOf(f.bars, need), code: readFileSync(resolve(cwd, need(f.file, '--file <bars.strudel.js>')), 'utf8'), edit, rev: lastRev(env) }));
+      return remember(env, await call('song-strudel', { section: a || null, part }));
+    case 'notes': {
+      const notes = readJsonFile(need(f.file, '--file <notes.json>'), cwd);
+      return remember(env, await call('song-notes', { section: need(a, '<section>'), part: need(b, '<part>'), bars: barsOf(f.bars, need), notes: Array.isArray(notes) ? notes : notes.notes, edit, rev: lastRev(env) }));
+    }
+    case 'ops': { const ops = readJsonFile(need(a, '<ops.json>'), cwd); return remember(env, await call('song-ops', { ops: Array.isArray(ops) ? ops : ops.ops, edit, rev: lastRev(env) })); }
+    case 'import': return remember(env, await call('song-import', {}));
+    case 'version': return call('song-version', { why: f._.slice(1).join(' ') });
+    default: throw new Error(`mfx song [show|strudel|notes|ops|import|version] …\n\n${USAGE}`);
   }
 }
 

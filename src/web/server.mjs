@@ -259,7 +259,7 @@ export async function startServer(root, { port = 4646, host = '127.0.0.1', runne
     if (sub === '/canvas' && method === 'GET') return send(res, 200, canvasView(root, id));
     if ((m = sub.match(/^\/canvas\/nodes\/([a-z0-9-]{2,24})$/)) && method === 'POST') {
       const b = await json(req);
-      nodeAction(root, id, m[1], { action: b.action, text: b.text });
+      nodeAction(root, id, m[1], { action: b.action, text: b.text, bars: b.bars ?? null, part: b.part ?? null, write: Boolean(b.write) });
       return after(canvasView(root, id));
     }
     return send(res, 404, { error: 'not found' });

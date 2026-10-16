@@ -111,12 +111,6 @@ export async function applyOps(root, id, ops, { ladder = null } = {}) {
           if (!Number.isInteger(n.len) || n.len < 1) throw new UserError('a note needs a length of at least 1 tick');
         }
       }
-      const bars = wanted ? changedBars(old, wanted, tpb) : null;
-      if (op.by !== 'hand') {
-        const scope = { pattern, channel, ...(bars?.length ? { fromTick: bars[0] * tpb, toTick: (bars.at(-1) + 1) * tpb } : {}) };
-        const hit = blockingLocks(song, op, scope);
-        if (hit.length) { refused.push({ op, why: hit.map((l) => lockWords(song, l)).join('; ') }); continue; }
-      }
       let notes;
       const lad = ladder || ladderFor(root);
       if (wanted) {
@@ -126,10 +120,17 @@ export async function applyOps(root, id, ops, { ladder = null } = {}) {
         notes = (await lad.notes(after, { bars: p.bars, tpb })).notes;
       }
       notes = notes.map(({ t, len, key, vel, fine }) => ({ t, len, key, vel, ...(fine ? { fine } : {}) }));
-      const touched = bars || changedBars(old, notes, tpb);
+      // locks are checked against the bars that really change
+      const touched = changedBars(old, notes, tpb);
+      if (op.by !== 'hand' && touched.length) {
+        const hit = blockingLocks(song, op, { pattern, channel, fromTick: touched[0] * tpb, toTick: (touched.at(-1) + 1) * tpb });
+        if (hit.length) { refused.push({ op, why: hit.map((l) => lockWords(song, l)).join('; ') }); continue; }
+      }
       text = setRow(text, c.midiChannel, row, after);
+      // the row as it now stands in the file (new lines are indented under it): what undo must find there
+      after = parseSongFile(text).blocks.find((b) => b.channel === c.midiChannel).rows[row].text;
       if (notes.length) p.notes[channel] = notes; else delete p.notes[channel];
-      song.strudel.regions[`${pattern}.${channel}`] = { sha: sha16(after) };
+      song.strudel.regions[`${pattern}.${channel}`] = { sha: sha16(after), rev, by: op.undo ? 'hand' : op.by };
       inverse.unshift({ op: 'strudel.set', region: `${pattern}.${channel}`, before: after, after: before, by: 'hand', undo: true });
       if (op.by === 'hand' && !op.undo && touched.length) {
         const { added, removed } = addHandLock(song, pattern, channel, touched[0] * tpb, (touched.at(-1) + 1) * tpb, rev);

@@ -219,6 +219,7 @@ const readOr = (f, dflt) => { try { return JSON.parse(readFileSync(f, 'utf8')); 
 
 export function loadOwner(root, id) { return readOr(canvasPaths(root, id).owner, { decisions: {} }); }
 export function loadEdits(root, id) { return readOr(canvasPaths(root, id).edits, { edits: [] }).edits; }
+export const readEdits = loadEdits;
 const openOf = (edits) => edits.filter((e) => ['requested', 'working'].includes(e.state));
 
 // The graph as the canvas shows it: every node with the owner's decision and any edit on it, and its state.
@@ -239,7 +240,8 @@ export function canvasView(root, id) {
 
 // OK, Cut it (and taking either back) are the owner's decisions; Fix makes an edit request that starts a session at
 // once, so the AI remakes that one piece while the owner keeps going.
-export function nodeAction(root, id, nid, { action, text } = {}) {
+// A Fix on a section can name bars inside it (1-based, [from, to]) and a part (channel id): doc 26 §3.
+export function nodeAction(root, id, nid, { action, text, bars = null, part = null, write = false } = {}) {
   const g = syncCanvas(root, id);
   const node = g.nodes[nid];
   if (!node) throw new CanvasError(`no piece ${nid} on this canvas`);
@@ -252,7 +254,13 @@ export function nodeAction(root, id, nid, { action, text } = {}) {
       const words = String(text || '').trim().slice(0, 4000);
       if (!words) throw new CanvasError('say what to change');
       const all = loadEdits(root, id);
-      const edit = { id: `E${String(all.length + 1).padStart(3, '0')}`, node: nid, kind: node.kind, label: node.label, beat: node.beat || null, text: words, from_version: node.current, state: 'requested', at: new Date().toISOString() };
+      if (bars !== null) {
+        const len = node.bars ? node.bars[1] - node.bars[0] + 1 : Infinity;
+        if (node.kind !== 'cue' || !Array.isArray(bars) || bars.length !== 2 || !bars.every(Number.isInteger) || bars[0] < 1 || bars[1] < bars[0] || bars[1] > len) throw new CanvasError(`bars must be [from, to] inside ${node.label} (1–${len})`);
+      }
+      if (part !== null && !/^ch\d{2,}$/.test(String(part))) throw new CanvasError('part must be a channel id like ch02');
+      const edit = { id: `E${String(all.length + 1).padStart(3, '0')}`, node: nid, kind: node.kind, label: node.label, beat: node.beat || null,
+        ...(bars ? { bars } : {}), ...(part ? { part } : {}), ...(write ? { write: true } : {}), text: words, from_version: node.current, state: 'requested', at: new Date().toISOString() };
       all.push(edit);
       writeFileSync(cp.edits, JSON.stringify({ edits: all }, null, 2));
       delete owner.decisions[nid];

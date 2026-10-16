@@ -11,6 +11,8 @@ import { projectPipeline, loadProject, update, now } from './projects.mjs';
 import { appendTaste } from './torch.mjs';
 import { syncCanvas, openEdits, finishEdit } from './canvas.mjs';
 import { isInside, loadConfig } from './studio.mjs';
+import * as songAi from './song-ai.mjs';
+import { makeVersion } from './song-store.mjs';
 
 export async function openBridge({ root, projectId, sessionId, workdir, renders, sessionEnv }) {
   const token = randomBytes(24).toString('hex');
@@ -35,6 +37,15 @@ export async function openBridge({ root, projectId, sessionId, workdir, renders,
     'edits': () => openEdits(root, projectId),
     'edit-done': ({ edit, note }) => finishEdit(root, projectId, edit, { ok: true, note }),
     'edit-fail': ({ edit, note }) => finishEdit(root, projectId, edit, { ok: false, note }),
+    // the song (doc 26 §2): reads give the rev a write must be based on; writes are by: 'ai' (locks hold)
+    'song': () => songAi.songSummary(root, projectId),
+    'song-show': (a) => songAi.songShow(root, projectId, a),
+    'song-strudel': (a) => songAi.songStrudel(root, projectId, a),
+    'song-strudel-put': (a) => songAi.songWriteStrudel(root, projectId, a),
+    'song-notes': (a) => songAi.songWriteNotes(root, projectId, a),
+    'song-ops': (a) => songAi.songWriteOps(root, projectId, a),
+    'song-import': () => songAi.songImport(root, projectId),
+    'song-version': ({ why }) => makeVersion(root, projectId, { by: 'ai', why: String(why || '').slice(0, 300) }),
     'render': ({ label, argv, cwd }) => {
       const dir = cwd ? realpathSync(cwd) : work;
       if (!isInside(work, dir)) throw new gates.GateError('renders run inside the project folder');

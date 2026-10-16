@@ -30,7 +30,9 @@ export function createStrudel({ strudelDir, timeoutMs } = {}) {
     return { notes: r.notes, problems: r.problems };
   }
 
-  async function edit(code, wanted, { bars, tpb = 4 * PPQ }) {
+  // fill: { from, to, code } puts that Strudel in bars from–to (1-based) as written, the rest of the text kept: the
+  // arrangement step only, with the given code as the hard-coded section (a session's own bars, doc 26 §2).
+  async function edit(code, wanted, { bars, tpb = 4 * PPQ, fill = null }) {
     const t0 = performance.now();
     const text = code.trim();
     const target = sortNotes(strip(wanted));
@@ -40,6 +42,14 @@ export function createStrudel({ strudelDir, timeoutMs } = {}) {
     const check = async (c) => { try { const r = await notes(c, { bars, tpb }); return sameNotes(r.notes, target) ? r : null; } catch { return null; } };
     const done = (level, c, r, extra = {}) => ({ level, code: c, notes: r.notes, problems: r.problems, ms: Math.round((performance.now() - t0) * 10) / 10, ...extra });
 
+    if (fill) {
+      const changed = [];
+      for (let b = fill.from - 1; b < fill.to; b++) changed.push(b);
+      const c = arrangement(text, target, changed, { bars, tpb, fill });
+      const r = await check(c.code);
+      if (r) return done('arrangement', c.code, r, { from: c.from, to: c.to });
+      throw new Error('those bars, put in place, don\'t play the notes they make on their own');
+    }
     // 1. bar lines
     let canonical = null;
     try { canonical = notesToStrudel(old, opts); } catch { canonical = null; }
@@ -98,7 +108,7 @@ function sectionsOf(music, bars) {
   }) };
 }
 
-function arrangement(code, target, changed, { bars, tpb }) {
+function arrangement(code, target, changed, { bars, tpb, fill = null }) {
   const { head, expr } = lastStatement(code);
   const { music, sound } = splitSound(expr);
   const prior = sectionsOf(music, bars);
@@ -127,7 +137,8 @@ function arrangement(code, target, changed, { bars, tpb }) {
     else if (!dirty.has(label[b])) sections.push(`[${len}, ${kept.get(label[b])}]`);
     else {
       const slice = target.filter((n) => n.t >= b * tpb && n.t < (e + 1) * tpb).map((n) => ({ ...n, t: n.t - b * tpb }));
-      sections.push(`[${len}, ${notesToIdiomatic(slice, { bars: len, ticksPerBar: tpb })}]`);
+      const given = fill && b === fill.from - 1 && e === fill.to - 1 ? fill.code : null;
+      sections.push(`[${len}, ${given ?? notesToIdiomatic(slice, { bars: len, ticksPerBar: tpb })}]`);
     }
     b = e + 1;
   }
