@@ -26,6 +26,10 @@ export function loadSong(root, id) {
   return { song: readSong(readFileSync(sp.song, 'utf8')), text: existsSync(sp.strudel) ? readFileSync(sp.strudel, 'utf8') : null };
 }
 
+// Who wants to know when a song is saved (the sound engine reloads it: song.patch).
+const savedListeners = new Set();
+export function onSongSaved(fn) { savedListeners.add(fn); return () => savedListeners.delete(fn); }
+
 // Saves both files; the song's rev goes up by one. Refuses a song that fails its check.
 export function saveSong(root, id, song, text) {
   const sp = songPaths(root, id);
@@ -37,6 +41,7 @@ export function saveSong(root, id, song, text) {
     song.rev = prev + 1;
     if (text !== undefined) atomic(sp.strudel, text);
     atomic(sp.song, writeSong(song));
+    for (const fn of savedListeners) { try { fn(root, id, song.rev); } catch { /* a listener never stops a save */ } }
     return song.rev;
   });
 }

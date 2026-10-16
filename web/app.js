@@ -4,7 +4,7 @@
 import { canvasView } from './canvas.js';
 import { midiStrudelView } from './midistrudel.js';
 import { songLane } from './songlane.js';
-import { createTransport } from './transport.js';
+import { createTransport, engineSource, audioSource } from './transport.js';
 import { pianoRoll } from './pianoroll.js';
 
 const $app = document.getElementById('app');
@@ -127,8 +127,18 @@ window.addEventListener('hashchange', () => render());
 // ---------- live updates ----------
 
 let refreshTimer = null;
+// Live events the views listen to (the sound engine's clock and state).
+const serverListeners = new Map();
+function onServerEvent(type, fn) {
+  if (!serverListeners.has(type)) serverListeners.set(type, new Set());
+  serverListeners.get(type).add(fn);
+  return () => serverListeners.get(type)?.delete(fn);
+}
 function connect() {
   const es = new EventSource('/api/events');
+  for (const type of ['daw-clock', 'daw-state']) {
+    es.addEventListener(type, (e) => { let m; try { m = JSON.parse(e.data); } catch { return; } for (const fn of serverListeners.get(type) || []) fn(m); });
+  }
   es.addEventListener('change', () => {
     clearTimeout(refreshTimer);
     refreshTimer = setTimeout(async () => {
@@ -159,7 +169,7 @@ async function loadStudio() {
 // ---------- the canvas (web/canvas.js) ----------
 
 async function openCanvas(id, mode, query) {
-  const cv = canvasView({ h, fill, api, fileUrl, clock, store, icon, appendLog, toast, customChips, musicPanel, songLane, createTransport, pianoRoll, studio: () => studio }, id, mode || 'edit');
+  const cv = canvasView({ h, fill, api, fileUrl, clock, store, icon, appendLog, toast, customChips, musicPanel, songLane, createTransport, engineSource, audioSource, onServerEvent, pianoRoll, studio: () => studio }, id, mode || 'edit');
   mount(await cv.show(query || ''));
   current.canvas = cv;
   current.refresh = () => cv.refresh();

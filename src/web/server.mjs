@@ -20,7 +20,8 @@ import * as setup from '../setup.mjs';
 import * as craft from '../craft.mjs';
 import * as booth from '../booth.mjs';
 import * as music from '../music.mjs';
-import { songView } from '../song-store.mjs';
+import { songView, songPaths, onSongSaved } from '../song-store.mjs';
+import { engineFor, enginePaths, BROWSER_COMMANDS } from '../daw-engine.mjs';
 import { applyOps } from '../song-ops.mjs';
 import { runFastFix } from '../song-fix.mjs';
 import { canvasView, nodeAction } from '../canvas.mjs';
@@ -57,6 +58,36 @@ export async function startServer(root, { port = 4646, host = '127.0.0.1', runne
   runner.on('change', changed);
   runner.on('activity', (a) => broadcast('activity', a));
   let strudel = null; // the Strudel evaluator process, started on first use (MIDI ⇄ Strudel)
+  // The sound engine (doc 16): started the first time the music plays, never at serve; one per studio.
+  let daw = null;
+  let dawProject = null;
+  let dawDevice = null;
+  const dawEngine = () => {
+    if (daw) return daw;
+    daw = engineFor(root);
+    daw.on('clock', (m) => broadcast('daw-clock', { ...m, project: dawProject }));
+    daw.on('state', (st) => broadcast('daw-state', { state: st.state, failure: st.failure || null, log: st.log || null }));
+    daw.on('xrun', (m) => broadcast('daw-state', { state: daw.state, xruns: m.count }));
+    return daw;
+  };
+  async function dawStart(id) {
+    const e = dawEngine();
+    if (e.state !== 'running') { await e.start(); dawDevice = null; dawProject = null; }
+    if (!dawDevice) {
+      // PipeWire through JACK first, then ALSA (doc 16 §8)
+      for (const backend of ['JACK', 'ALSA']) { try { dawDevice = await e.call('device.set', { backend, rate: 48000, block: 1024 }, { timeout: 15000 }); break; } catch { dawDevice = null; } }
+      if (!dawDevice) throw new Error('the sound engine found no output (JACK or ALSA)');
+    }
+    if (dawProject !== id) {
+      const loaded = await e.call('song.load', { path: songPaths(root, id).song }, { timeout: 120000 });
+      dawProject = id;
+      await e.call('clock.subscribe', {});
+      return { device: dawDevice, song: loaded };
+    }
+    return { device: dawDevice };
+  }
+  // a saved song change is heard at once: the engine rebuilds it, keeping its place
+  onSongSaved((r, id) => { if (r === root && daw?.state === 'running' && dawProject === id) daw.call('song.patch', { path: songPaths(root, id).song }, { timeout: 120000 }).catch(() => {}); });
 
   const server = createServer((req, res) => {
     handle(req, res).catch((e) => {
@@ -86,6 +117,15 @@ export async function startServer(root, { port = 4646, host = '127.0.0.1', runne
     const p = url.pathname;
     let m;
     if (p === '/api/events') return events(req, res);
+    // the sound engine: whether it's installed and how it is; start it for a project; transport and test tone
+    if (p === '/api/daw' && req.method === 'GET') return send(res, 200, { available: existsSync(process.env.MFX_DAW_ENGINE || enginePaths(root).bin), state: daw?.state || 'stopped', project: dawProject, device: dawDevice, log: daw?.log || [] });
+    if (p === '/api/daw/start' && req.method === 'POST') { const b = await json(req); return send(res, 200, await dawStart(String(b.project || ''))); }
+    if (p === '/api/daw/command' && req.method === 'POST') {
+      const b = await json(req);
+      if (!BROWSER_COMMANDS.has(b.cmd)) return send(res, 403, { error: `the browser can't send ${b.cmd}` });
+      if (!daw || daw.state !== 'running') return send(res, 409, { error: 'the sound engine isn\'t running' });
+      return send(res, 200, await daw.call(b.cmd, b.args || {}));
+    }
     if (p.startsWith('/api/')) return api(req, res, url);
     if ((m = p.match(/^\/files\/([a-z0-9-]+)\/(.+)$/))) return media(req, res, m[1], decodeURIComponent(m[2]), url.searchParams.has('download'));
     return staticFile(res, p);
@@ -431,6 +471,7 @@ export async function startServer(root, { port = 4646, host = '127.0.0.1', runne
   const close = async () => {
     for (const c of clients) c.end();
     strudel?.close();
+    await daw?.stop();
     if (withRunner) { await runner.stop(); await loop; runner.release(); }
     await new Promise((ok) => server.close(ok));
   };

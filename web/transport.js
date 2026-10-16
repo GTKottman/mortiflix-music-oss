@@ -35,12 +35,75 @@ export function audioClock(audio) {
   };
 }
 
-const LEAD = 1.0;          // seconds before a cut that the next shot is readied (a seek can take that long)
-
-export function createTransport({ h, audioUrl, shots, fps = 30, onTime = () => {}, onState = () => {} }) {
-  const frame = 1 / fps;
+// The clock the picture follows: the last render (an <audio> element) when there's no sound engine.
+export function audioSource(h, audioUrl) {
   const audio = h('audio', { src: audioUrl, preload: 'auto' });
   const clock = audioClock(audio);
+  const ended = new Set();
+  audio.addEventListener('ended', () => ended.forEach((f) => f()));
+  return {
+    kind: 'render',
+    get playing() { return !audio.paused; },
+    now: () => clock.now(),
+    position: () => audio.currentTime,
+    async play(at = null) { if (at !== null) audio.currentTime = Math.max(0, at); clock.reset(); await audio.play(); },
+    stop() { audio.pause(); },
+    seek(t) { audio.currentTime = Math.max(0, t); clock.reset(); },
+    onEnded: (f) => ended.add(f),
+    destroy() { audio.pause(); audio.removeAttribute('src'); },
+    audio,
+  };
+}
+
+// The sound engine's clock (doc 19 §4): its clock events say which song second the listener hears; the smallest
+// (arrival − heard) of the last 2 s is the least-delayed reading, and between events "now" runs on from it. The song's
+// bar 1 is offsetSec into the video; avOffsetMs moves the picture for screens and speakers with their own delay.
+export function engineSource({ api, project, offsetSec = 0, avOffsetMs = () => 0, subscribe }) {
+  let samples = [];
+  let playing = false;
+  let last = 0;
+  let started = false;
+  const ended = new Set();
+  const unsub = subscribe('daw-clock', (m) => {
+    if (m.project && m.project !== project) return;
+    const t = performance.now();
+    if (Boolean(m.playing) !== playing) samples = [];
+    playing = Boolean(m.playing);
+    last = Number(m.seconds) || 0;
+    if (playing) {
+      samples.push([t, t - last * 1000]);
+      while (samples.length > 1 && samples[0][0] < t - 2000) samples.shift();
+    }
+  });
+  const songNow = () => {
+    if (!playing || !samples.length) return last;
+    const off = Math.min(...samples.map((x) => x[1]));
+    return Math.max(0, (performance.now() - off) / 1000);
+  };
+  const cmd = (name, args = {}) => api('/api/daw/command', { method: 'POST', body: { cmd: name, args } });
+  const ensure = async () => { if (!started) { await api('/api/daw/start', { method: 'POST', body: { project } }); started = true; } };
+  return {
+    kind: 'engine',
+    get playing() { return playing; },
+    now: () => songNow() + offsetSec + avOffsetMs() / 1000,
+    position: () => songNow() + offsetSec,
+    async play(at = null) { await ensure(); samples = []; await cmd('transport.play', at === null ? {} : { seconds: Math.max(0, at - offsetSec) }); playing = true; },
+    async stop() { await cmd('transport.stop').catch(() => {}); playing = false; },
+    async seek(t) { await ensure(); samples = []; await cmd('transport.seek', { seconds: Math.max(0, t - offsetSec) }); last = Math.max(0, t - offsetSec); },
+    onEnded: (f) => ended.add(f),
+    destroy() { unsub(); },
+  };
+}
+
+const LEAD = 1.0;          // seconds before a cut that the next shot is readied (a seek can take that long)
+
+// shots: [{ id, from, to, src, srcFrom }] on the video's time axis. source: audioSource or engineSource (audioUrl: the
+// last render, for an audio source made here).
+export function createTransport({ h, audioUrl = null, source = null, shots, fps = 30, onTime = () => {}, onState = () => {} }) {
+  const frame = 1 / fps;
+  const src = source || audioSource(h, audioUrl);
+  const audio = src.audio || null;
+  const clock = { now: () => src.now() };
   const vids = [0, 1].map(() => h('video', { class: 'tp-video', muted: true, playsinline: true, preload: 'auto' }));
   for (const v of vids) { v.muted = true; }
   const stage = h('div', { class: 'tp-stage' }, ...vids);
@@ -74,7 +137,7 @@ export function createTransport({ h, audioUrl, shots, fps = 30, onTime = () => {
     if (!v.requestVideoFrameCallback) return;
     v.requestVideoFrameCallback((now, meta) => {
       const s = shots[v.__shot];
-      if (!audio.paused && s && !v.paused && (v.__shot === shotIdx || v.__shot === shotIdx + 1)) {
+      if (src.playing && s && !v.paused && (v.__shot === shotIdx || v.__shot === shotIdx + 1)) {
         const pictureAt = s.from + (meta.mediaTime + frame / 2 - s.srcFrom);
         const heardAt = clock.now() + (meta.expectedDisplayTime - performance.now()) / 1000;
         const error = pictureAt - heardAt;
@@ -84,7 +147,8 @@ export function createTransport({ h, audioUrl, shots, fps = 30, onTime = () => {
           trace.push([heardAt, error, v.playbackRate, shotIdx]);
           if (stats.length > 4000) { stats.shift(); trace.shift(); }
         }
-        const act = syncAction(error, frame / 4);
+        // the frame on screen covers its whole duration: inside half a frame, it is the right picture (no chasing)
+        const act = syncAction(error, frame / 2);
         // a rate change restarts the browser's own timing, so it's only made when it matters (> 0.003 apart)
         if (act.seek) load(v, v.__shot, heardAt + 0.05);
         else if (Math.abs(v.playbackRate - act.rate) > 0.003 || (act.rate === 1 && v.playbackRate !== 1)) v.playbackRate = act.rate;
@@ -119,42 +183,38 @@ export function createTransport({ h, audioUrl, shots, fps = 30, onTime = () => {
       v.playbackRate = 1;
       if (next.srcFrom - lead >= 0) { load(v, shotIdx + 1, t); v.play().catch(() => {}); } else { load(v, shotIdx + 1, next.from); v.pause(); }
     }
-    if (!audio.paused) raf = requestAnimationFrame(tick);
+    if (src.playing) raf = requestAnimationFrame(tick);
   }
 
   async function play(from = null) {
-    if (from !== null) audio.currentTime = Math.max(0, from);
-    clock.reset();
-    shotIdx = -1;
     stats.length = 0; trace.length = 0;
-    const t = audio.currentTime;
+    const t = from !== null ? from : src.position();
     const i = Math.max(0, shotAt(t));
     load(vids[active], i, t);
     vids[active].classList.add('on');
     shotIdx = i;
     await vids[active].play().catch(() => {});   // the picture first: it takes longer to start than the sound
-    await audio.play();
+    await src.play(from);
     onState(true);
     raf = requestAnimationFrame(tick);
   }
-  function stop() {
-    audio.pause();
+  async function stop() {
+    await src.stop();
     cancelAnimationFrame(raf);
     for (const v of vids) { v.pause(); v.playbackRate = 1; }
     onState(false);
-    onTime(audio.currentTime);
+    onTime(src.position());
   }
-  function seek(t) {
-    const playing = !audio.paused;
-    audio.currentTime = Math.max(0, t);
-    clock.reset();
+  async function seek(t) {
+    const playing = src.playing;
+    await src.seek(t);
     const i = Math.max(0, shotAt(t));
     shotIdx = -1;
     load(vids[active], i, t);
     onTime(t);
-    if (playing) { shotIdx = -1; tick(); }
+    if (playing) tick();
   }
-  audio.addEventListener('ended', () => stop());
+  src.onEnded(() => stop());
 
-  return { stage, audio, play, stop, seek, get playing() { return !audio.paused; }, now: () => clock.now(), stats, trace, destroy() { stop(); audio.removeAttribute('src'); for (const v of vids) v.removeAttribute('src'); } };
+  return { stage, audio, source: src, play, stop, seek, get playing() { return src.playing; }, now: () => src.now(), stats, trace, destroy() { cancelAnimationFrame(raf); if (src.playing) src.stop(); src.destroy(); for (const v of vids) { v.pause(); v.removeAttribute('src'); } } };
 }

@@ -315,8 +315,11 @@ export function canvasView(ui, id, mode = 'edit') {
     // the transport: the last render (the canvas's music node) is the clock without the sound engine
     tp?.destroy(); tp = null;
     const mus = n.music && !n.music.missing ? n.music.versions?.find((v) => v.v === n.music.current) : null;
+    // the sound engine when it's installed (it plays the song itself, edits heard at once), else the last render
+    const daw = await api('/api/daw').catch(() => null);
+    const useEngine = Boolean(daw?.available) && !sv.draft;
     let bar = null;
-    if (lane && mus?.file) {
+    if (lane && (useEngine || mus?.file)) {
       const shotsSrc = lane.lane.shots.map((s) => {
         const v = (n[s.id]?.versions || []).find((x) => x.v === n[s.id].current) || {};
         return { ...s, src: fileUrl(id, v.file), srcFrom: v.from_sec || 0 };
@@ -324,7 +327,12 @@ export function canvasView(ui, id, mode = 'edit') {
       const pos = h('span', { class: 'tp-pos' }, 'bar 1.1 · 0:00.0');
       const btn = h('button', { class: 'btn', onclick: () => (tp.playing ? tp.stop() : tp.play()) }, '▶ Play');
       const ax = lane.lane.ax;
-      tp = ui.createTransport({ h, audioUrl: fileUrl(id, mus.file), shots: shotsSrc, fps: graph?.fps || 30,
+      const avKey = 'mfx-av-offset';
+      const avOffset = () => { try { return Number(store.get(avKey)) || 0; } catch { return 0; } };
+      const source = useEngine
+        ? ui.engineSource({ api, project: id, offsetSec: song.offsetSec || 0, avOffsetMs: avOffset, subscribe: ui.onServerEvent })
+        : ui.audioSource(h, fileUrl(id, mus.file));
+      tp = ui.createTransport({ h, source, shots: shotsSrc, fps: graph?.fps || 30,
         onTime: (t) => {
           lane.lane.setPlayhead(t);
           roll?.roll.setPlayhead(t);
@@ -339,7 +347,13 @@ export function canvasView(ui, id, mode = 'edit') {
         } });
       lane.lane.setPlayhead(focus ? info.from : 0);
       lane.transport = tp;   // its frame-error log is read by the sync test
-      bar = h('div', { class: 'tp-bar' }, btn, pos, h('span', { class: 'tp-note' }, 'Playing the last render: install the sound engine to hear edits at once (Settings › Setup)'));
+      // the picture's offset against the sound, per viewer (screens and speakers have their own delay; doc 19 §4)
+      const av = h('input', { type: 'range', min: -200, max: 200, step: 5, value: avOffset(), class: 'tp-av', 'aria-label': 'Picture offset against the sound, in milliseconds',
+        oninput: () => { try { store.set(avKey, Number(av.value)); } catch { /* per viewer only */ } avLabel.textContent = `${av.value > 0 ? '+' : ''}${av.value} ms`; } });
+      const avLabel = h('span', { class: 'tp-av-label' }, `${avOffset() > 0 ? '+' : ''}${avOffset()} ms`);
+      bar = h('div', { class: 'tp-bar' }, btn, pos,
+        h('span', { class: 'tp-note' }, useEngine ? 'The sound engine plays the song: edits are heard on the next pass' : 'Playing the last render: install the sound engine to hear edits at once (Settings › Setup)'),
+        useEngine ? h('label', { class: 'tp-av-wrap', title: 'Move the picture earlier (−) or later (+) if it looks out of step with the sound' }, 'Picture', av, avLabel) : null);
     }
     // screen B: the section's Strudel beside its rows (doc 28 §5.1), read-only for now
     const strudelColumn = () => h('div', { class: 'sb-code', 'aria-label': `The Strudel of ${focus.section}` },

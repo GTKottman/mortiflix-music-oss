@@ -7,6 +7,7 @@
 #include <JuceHeader.h>
 #include <iostream>
 #include "Protocol.h"
+#include "SongBuilder.h"
 
 namespace te = tracktion;
 
@@ -147,10 +148,21 @@ namespace
         auto& adm = dm.deviceManager;
         const auto backend = args.getProperty ("backend", "JACK").toString();
         if (adm.getCurrentAudioDevice() == nullptr) dm.initialise (0, 2);
+        // Tracktion rescans MIDI devices every 4 s by default; a change (even the system's "Midi Through" port appearing)
+        // reallocates playback and stops the transport mid-song. MIDI hardware is scanned on purpose when it's wanted.
+        dm.setMidiDeviceScanIntervalSeconds (0);
         adm.setCurrentAudioDeviceType (backend, true);
         if (adm.getCurrentAudioDeviceType() != backend) throw std::runtime_error (("no " + backend + " backend here").toStdString());
         auto setup = adm.getAudioDeviceSetup();
+        // the named output, or the system's default one (never whatever an earlier run left in Tracktion's settings)
         if (args.hasProperty ("name") && args["name"].toString().isNotEmpty()) setup.outputDeviceName = args["name"].toString();
+        else if (auto* type = adm.getCurrentDeviceTypeObject())
+        {
+            type->scanForDevices();
+            const auto names = type->getDeviceNames (false);
+            const int def = type->getDefaultDeviceIndex (false);
+            if (def >= 0 && def < names.size()) setup.outputDeviceName = names[def];
+        }
         setup.sampleRate = (double) args.getProperty ("rate", 48000);
         setup.bufferSize = (int) args.getProperty ("block", 1024);
         setup.useDefaultInputChannels = false;
@@ -170,7 +182,18 @@ namespace
         te::Engine engine { "mortiflix-engine", std::make_unique<HeadlessUI>(), std::make_unique<NoDeviceBehaviour>() };
         std::unique_ptr<mfx::Protocol> proto;
         std::unique_ptr<te::Edit> toneEdit;
+        std::unique_ptr<te::Edit> songEdit;
+        juce::String songPath;
         int lastXruns = 0;
+
+        // the clock (doc 16 §5): 30 a second while playing, 2 when stopped
+        struct Clock : juce::Timer
+        {
+            Server& s;
+            explicit Clock (Server& o) : s (o) {}
+            void timerCallback() override { s.tick(); }
+        } clock { *this };
+        bool wasPlaying = false;
 
         Server()
         {
@@ -201,6 +224,10 @@ namespace
                 return st;
             }
             if (cmd == "engine.tone") return tone (args);
+            if (cmd == "song.load") return songLoad (args, false);
+            if (cmd == "song.patch") return songLoad (args, true);
+            if (cmd == "transport.play" || cmd == "transport.stop" || cmd == "transport.seek") return transport (cmd, args);
+            if (cmd == "clock.subscribe") { clock.startTimerHz (2); return juce::var (new juce::DynamicObject()); }
             throw std::runtime_error (("unknown command " + cmd).toStdString());
         }
 
@@ -244,6 +271,88 @@ namespace
             return juce::var (o);
         }
 
+        // The song file → an Edit on the open device. song.patch rebuilds it from the file again (the studio wrote the
+        // change there first), keeping where it was and whether it was playing.
+        juce::var songLoad (const juce::var& args, bool keepPlace)
+        {
+            const auto path = args.getProperty ("path", songPath).toString();
+            juce::File f (path);
+            if (! f.existsAsFile()) throw std::runtime_error (("no song file at " + path).toStdString());
+            auto song = juce::JSON::parse (f);
+            if (! song.isObject()) throw std::runtime_error ("the song file isn't JSON");
+            double at = (double) args.getProperty ("atSeconds", 0.0);
+            bool play = false;
+            if (keepPlace && songEdit != nullptr) { at = songEdit->getTransport().getPosition().inSeconds(); play = songEdit->getTransport().isPlaying(); }
+            const auto t0 = juce::Time::getMillisecondCounterHiRes();
+            if (songEdit != nullptr) songEdit->getTransport().stop (false, true);
+            songEdit.reset();
+            auto built = mfx::buildSong (engine, song);
+            songEdit = std::move (built.edit);
+            songPath = path;
+            auto& tc = songEdit->getTransport();
+            if (engine.getDeviceManager().deviceManager.getCurrentAudioDevice() != nullptr) tc.ensureContextAllocated();
+            tc.setPosition (te::TimePosition::fromSeconds (at));
+            if (play) tc.play (false);
+            clock.startTimerHz (play ? 30 : 2);
+            auto o = new juce::DynamicObject();
+            o->setProperty ("tracks", built.tracks);
+            o->setProperty ("clips", built.clips);
+            o->setProperty ("notes", built.notes);
+            o->setProperty ("seconds", built.seconds);
+            o->setProperty ("ms", juce::Time::getMillisecondCounterHiRes() - t0);
+            return juce::var (o);
+        }
+
+        juce::var transport (const juce::String& cmd, const juce::var& args)
+        {
+            if (songEdit == nullptr) throw std::runtime_error ("no song loaded");
+            if (engine.getDeviceManager().deviceManager.getCurrentAudioDevice() == nullptr) throw std::runtime_error ("no sound device open: device.set first");
+            auto& tc = songEdit->getTransport();
+            tc.ensureContextAllocated();
+            if (args.hasProperty ("seconds")) tc.setPosition (te::TimePosition::fromSeconds ((double) args["seconds"]));
+            if (cmd == "transport.play") { tc.play (false); clock.startTimerHz (30); }
+            if (cmd == "transport.stop") { tc.stop (false, false); clock.startTimerHz (2); }
+            tick();
+            return clockState();
+        }
+
+        // Where the listener is now: the transport minus what the device still has to play out.
+        juce::var clockState()
+        {
+            auto o = new juce::DynamicObject();
+            if (songEdit == nullptr) return juce::var (o);
+            auto& tc = songEdit->getTransport();
+            auto* dev = engine.getDeviceManager().deviceManager.getCurrentAudioDevice();
+            const double rate = dev ? dev->getCurrentSampleRate() : 48000.0;
+            const int latency = dev ? dev->getOutputLatencyInSamples() : 0;
+            const double pos = tc.getPosition().inSeconds();
+            const double heard = tc.isPlaying() ? juce::jmax (0.0, pos - latency / rate) : pos;
+            auto bb = songEdit->tempoSequence.toBarsAndBeats (te::TimePosition::fromSeconds (heard));
+            o->setProperty ("playing", tc.isPlaying());
+            o->setProperty ("seconds", heard);
+            o->setProperty ("sample", (juce::int64) std::llround (heard * rate));
+            o->setProperty ("rate", rate);
+            o->setProperty ("outLatency", latency);
+            o->setProperty ("bar", bb.bars + 1);
+            o->setProperty ("beat", bb.beats.inBeats() + 1.0);
+            o->setProperty ("monoNs", (juce::int64) (juce::Time::getHighResolutionTicks() * 1.0e9 / (double) juce::Time::getHighResolutionTicksPerSecond()));
+            return juce::var (o);
+        }
+
+        void tick()
+        {
+            auto st = clockState();
+            const bool playing = (bool) st["playing"];
+            if (playing != wasPlaying)
+            {
+                clock.startTimerHz (playing ? 30 : 2);
+                std::cerr << "transport " << (playing ? "started" : "stopped") << " at " << (double) st["seconds"]
+                          << " s; edit length " << (songEdit ? songEdit->getLength().inSeconds() : -1.0) << " s" << std::endl;
+            }
+            wasPlaying = playing;
+            proto->event ("clock", st.getDynamicObject());
+        }
+
         // xruns, as they happen
         void timerCallback() override
         {
@@ -267,8 +376,11 @@ namespace
         juce::MessageManager::getInstance()->runDispatchLoop();
         server->proto->stop();
         server->stopTimer();
+        server->clock.stopTimer();
         if (server->toneEdit) server->toneEdit->getTransport().stop (false, true);
+        if (server->songEdit) server->songEdit->getTransport().stop (false, true);
         server->toneEdit.reset();
+        server->songEdit.reset();
         server.reset();
         return 0;
     }

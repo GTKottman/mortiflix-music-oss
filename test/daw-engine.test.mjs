@@ -124,3 +124,23 @@ test('sound out: a tone through JACK (PipeWire) and ALSA reaches the output at i
     await e.stop();
   }
 });
+
+test('the real engine builds a song from song.json: every note, every part, its length (doc 16 E4)', { skip: !REAL && 'the engine is not built on this machine' }, async (t) => {
+  const { songFromNotes } = await import('../src/song-import.mjs');
+  const { writeSong } = await import('../src/song.mjs');
+  const { writeFileSync, readFileSync: rf } = await import('node:fs');
+  const fx = join(import.meta.dirname, 'fixtures', 'songs', 'four');
+  const { song } = songFromNotes({ blueprint: JSON.parse(rf(join(fx, 'blueprint.json'), 'utf8')), notes: JSON.parse(rf(join(fx, 'notes.json'), 'utf8')), instruments: null });
+  const dir = mkdtempSync(join(tmpdir(), 'mfx-eng-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  writeFileSync(join(dir, 'song.json'), writeSong(song));
+  const e = createEngineSupervisor({ bin: REAL, args: ['--serve'] });
+  t.after(() => e.stop());
+  await e.start();
+  const r = await e.call('song.load', { path: join(dir, 'song.json') }, { timeout: 60000 });
+  const notes = song.patterns.reduce((s, p) => s + Object.values(p.notes).reduce((a, ns) => a + ns.length, 0), 0);
+  assert.deepEqual([r.tracks, r.notes], [3, notes]);
+  assert.ok(Math.abs(r.seconds - 8 * 4 * 60 / 96) < 0.6, `${r.seconds} s for 8 bars at 96 BPM (plus a ringing note)`);
+  await assert.rejects(e.call('transport.play', {}), /no sound device open/);
+  await assert.rejects(e.call('song.load', { path: join(dir, 'missing.json') }), /no song file/);
+});
