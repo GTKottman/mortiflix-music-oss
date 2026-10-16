@@ -72,6 +72,7 @@ export const HELP = `${C.b('mortiflix')}: a motion design studio on your machine
   mortiflix music [<project>]                                  where its music stands: the MIDI pack, your master, the music sheet
   mortiflix music <project> --midi <file.zip>                  save the MIDI pack (every channel, the arrangement, the cue sheet)
   mortiflix music <project> --import <file>                    your own master, made from the MIDI pack in your DAW (exported from bar 1)
+  mortiflix music <project> --song                             the mini DAW's song from the checked score (music/song.json + song.strudel.js)
 
   ${C.b('3D')}
   mortiflix blender [file.blend]                               open the studio's Blender, with its toolkits and Camera Flight
@@ -1121,6 +1122,16 @@ async function musicCmd(root, rest, a) {
   if (typeof a.midi === 'string') {
     writeFileSync(a.midi, music.midiPack(root, id));
     return console.log(`${C.green('✔')} ${a.midi}: every channel, the whole arrangement, the cue sheet (tempo, sections and hits are markers)`);
+  }
+  if (a.song) {
+    const { importProjectSong } = await import('./song-store.mjs');
+    const r = await importProjectSong(root, id);
+    const notes = r.song.patterns.reduce((s, p) => s + Object.values(p.notes).reduce((x, ns) => x + ns.length, 0), 0);
+    for (const w of r.warnings) console.log(`  ${C.acc('!')} ${w}`);
+    console.log(`${C.green('✔')} Song: ${r.song.patterns.length} sections × ${r.song.channels.length} parts, ${notes} notes, the same as the score note for note.`);
+    console.log(`  ${r.paths.strudel} (plain Strudel: paste it into the Strudel REPL and it plays)`);
+    console.log(`  ${r.paths.song} (rev ${r.rev})`);
+    return;
   }
   if (typeof a.import === 'string') {
     const r = await music.importMaster(root, id, { file: a.import });

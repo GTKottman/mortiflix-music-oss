@@ -17,11 +17,12 @@ export function keyText(key, { drums = false, flats = false } = {}) {
   return `${(flats ? FLAT : SHARP)[key % 12]}${Math.floor(key / 12) - 1}`;
 }
 
-// The smallest-digit decimal that turns `slot` ticks back into exactly `len` ticks.
+// The smallest-digit decimal that turns `slot` ticks back into exactly `len` ticks. It must land well inside the tick
+// (within 0.4), not on a .5 boundary: Strudel's times are floats, and 903 × 0.5 = 451.5 can come back as 451.49999.
 function clipText(len, slot) {
   for (let d = 1; d <= 8; d++) {
     const s = (len / slot).toFixed(d);
-    if (Math.round(slot * Number(s)) === len) return String(Number(s));
+    if (Math.abs(slot * Number(s) - len) < 0.4) return String(Number(s));
   }
   throw new Error(`no clip for ${len}/${slot}`);
 }

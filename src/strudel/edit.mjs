@@ -8,6 +8,7 @@
 // Every result is run and its notes must equal the wanted notes, or the next step is tried.
 import { createEvaluator, PPQ } from './evaluator.mjs';
 import { notesToStrudel, notesToIdiomatic, keyText, sortNotes, strip, sameNotes } from './notes.mjs';
+import { lastStatement, splitSound, commaParts } from './text.mjs';
 
 const NOTE_RE = /^([a-gA-G])([#bsf]*)(-?\d+)?$/;
 const CH = { c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11 };
@@ -73,69 +74,6 @@ export function createStrudel({ strudelDir, timeoutMs } = {}) {
 // Strudel's arrange(), at that spot; the original plays the bars around them. arrange() starts every section from the
 // pattern's own beginning, so a section after an edit carries the original on with .early(<bars before it>). Sound-only
 // methods at the end (.s, .lpf, .room…) stay outside arrange(), so the hard-coded bars sound the same.
-const SOUND = new Set(('s sound bank gain postgain pan orbit lpf lpq hpf hpq bpf bpq cutoff resonance hcutoff hresonance bandf ' +
-  'bandq ftype lpenv hpenv bpenv lpattack lpdecay lpsustain lprelease hpattack hpdecay hpsustain hprelease room roomsize size ' +
-  'roomfade roomlp roomdim dry delay delaytime delayfeedback delayfb attack decay sustain release adsr att dec sus rel shape ' +
-  'distort crush coarse vowel phaser phaserdepth phasercenter phasersweep chorus tremolo tremolodepth tremolosync vib vibmod ' +
-  'fm fmh fmi fmenv fmattack fmdecay fmsustain fmrelease compressor speed begin end loop cut color punchcard pianoroll scope ' +
-  'spectrum analyze _punchcard _pianoroll _scope _spectrum').split(' '));
-
-// Walks the text outside strings and comments, calling visit(i, ch, depth) for every code character.
-function walk(code, visit) {
-  let depth = 0;
-  for (let i = 0; i < code.length; i++) {
-    const ch = code[i];
-    if (ch === '"' || ch === "'" || ch === '`') {
-      let j = i + 1;
-      while (j < code.length && code[j] !== ch) j += code[j] === '\\' ? 2 : 1;
-      i = j;
-      continue;
-    }
-    if (ch === '/' && code[i + 1] === '/') { while (i < code.length && code[i] !== '\n') i++; i--; continue; }
-    if (ch === '/' && code[i + 1] === '*') { const j = code.indexOf('*/', i + 2); i = j < 0 ? code.length : j + 1; continue; }
-    if ('([{'.includes(ch)) depth++;
-    if (')]}'.includes(ch)) depth--;
-    if (visit(i, ch, depth) === false) return;
-  }
-}
-
-// { head, expr }: the last statement (the one that makes the music) and the lines before it.
-function lastStatement(code) {
-  let cut = 0;
-  walk(code, (i, ch, depth) => {
-    if (depth !== 0) return;
-    if (ch === ';') cut = i + 1;
-    if (ch === '\n') { const rest = code.slice(i + 1).match(/^\s*(\S)/); if (rest && rest[1] !== '.' && !/[=+\-*/,(&|?:]\s*$/.test(code.slice(0, i))) cut = i + 1; }
-  });
-  return { head: code.slice(0, cut), expr: code.slice(cut).trim() };
-}
-
-// Splits "X.s(…).lpf(…)" into the music X and its sound-only ending.
-function splitSound(expr) {
-  const calls = [];   // [dot, end] of each top-level .name(…)
-  let open = null;
-  walk(expr, (i, ch, depth) => {
-    if (ch === '.' && depth === 0) { const m = expr.slice(i).match(/^\.\s*([A-Za-z_$][\w$]*)\s*\(/); if (m) open = { dot: i, name: m[1] }; }
-    if (ch === ')' && depth === 0 && open) { calls.push({ ...open, end: i + 1 }); open = null; }
-  });
-  let at = expr.length;
-  for (let k = calls.length - 1; k >= 0; k--) {
-    const c = calls[k];
-    if (!SOUND.has(c.name) || expr.slice(c.end, at).trim()) break;
-    at = c.dot;
-  }
-  return { music: expr.slice(0, at).trimEnd(), sound: expr.slice(at) };
-}
-
-// Top-level comma-separated parts of a text.
-function commaParts(text) {
-  const parts = [];
-  let from = 0;
-  walk(text, (i, ch, depth) => { if (ch === ',' && depth === 0) { parts.push(text.slice(from, i).trim()); from = i + 1; } });
-  parts.push(text.slice(from).trim());
-  return parts.filter(Boolean);
-}
-
 // An earlier edit's arrange(): [{ len, offset }] for the original's sections, [{ len, text }] for hard-coded ones.
 function sectionsOf(music, bars) {
   const m = music.match(/^arrange\(([\s\S]*)\)$/);
