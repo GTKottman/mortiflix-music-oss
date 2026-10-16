@@ -107,7 +107,8 @@ export function setRow(text, channel, row, music) {
   const b = blocks.find((x) => x.channel === channel);
   if (!b || !b.rows[row]) throw new Error(`there is no row ${row + 1} in part ch${channel}`);
   const r = b.rows[row];
-  const indented = music.replace(/\n/g, '\n    ');
+  // lines of new music are indented under the row; lines already indented (text read from the file) stay as they are
+  const indented = music.split('\n').map((l, i) => (i && !/^ {4}/.test(l) ? `    ${l}` : l)).join('\n');
   return text.slice(0, r.start) + indented + text.slice(r.end);
 }
 
