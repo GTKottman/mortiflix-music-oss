@@ -49,6 +49,7 @@ target_link_libraries(mortiflix-engine PRIVATE
   juce::juce_audio_devices
   juce::juce_audio_processors
   juce::juce_audio_utils
+  juce::juce_cryptography
   juce::juce_recommended_config_flags)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")

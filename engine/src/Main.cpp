@@ -3,6 +3,9 @@
 //   --version    one JSON line: this engine's version and the pinned Tracktion Engine and JUCE commits
 //   --selftest   renders 1 s of a 1 kHz test tone through a Tracktion Edit into memory (no sound device) and checks it
 //   --serve      the studio protocol on stdin / stdout (doc 16 §4)
+//   --render <song.json> --settings <render.json> --out <dir>
+//                a one-shot offline render (doc 24 §1): 48 kHz 32-bit float, master plugins on, our settings always,
+//                faster than real time; writes mix-f32.wav and render-report.json
 // Whatever JUCE, Tracktion or a plugin prints goes to stderr: stdout carries only our JSON.
 #include <JuceHeader.h>
 #include <iostream>
@@ -17,6 +20,14 @@ namespace
     struct NoDeviceBehaviour : te::EngineBehaviour
     {
         bool autoInitialiseDeviceManager() override { return false; }
+    };
+
+    // A render's thread count (doc 24 §1: the same file at 1 or 8 threads).
+    struct RenderBehaviour : NoDeviceBehaviour
+    {
+        explicit RenderBehaviour (int t) : threads (juce::jmax (1, t)) {}
+        int getNumberOfCPUsToUseForAudio() override { return threads; }
+        int threads;
     };
 
     // Jobs that show a progress bar in a GUI (renders) run here on their own thread while the message loop turns.
@@ -104,6 +115,130 @@ namespace
         o->setProperty ("hard_left_peak", left.peak);
         emit (juce::var (o));
         return rendered && panLaw ? 0 : 1;
+    }
+
+    // ---- the offline render (doc 24 §1, doc 16 E5) ----
+    juce::String sha256Of (const juce::File& f)
+    {
+        juce::FileInputStream in (f);
+        return in.openedOk() ? juce::SHA256 (in).toHexString() : juce::String();
+    }
+
+    bool stripMetadata (const juce::File& f, double rate)
+    {
+        juce::AudioFormatManager fm;
+        fm.registerBasicFormats();
+        auto reader = std::unique_ptr<juce::AudioFormatReader> (fm.createReaderFor (f));
+        if (reader == nullptr) return false;
+        juce::AudioBuffer<float> buf ((int) reader->numChannels, (int) reader->lengthInSamples);
+        reader->read (&buf, 0, buf.getNumSamples(), 0, true, true);
+        reader.reset();
+        auto tmp = f.getSiblingFile (f.getFileName() + ".tmp");
+        {
+            auto out = std::unique_ptr<juce::OutputStream> (tmp.createOutputStream().release());
+            juce::WavAudioFormat wav;
+            auto opts = juce::AudioFormatWriterOptions{}.withSampleRate (rate).withNumChannels (buf.getNumChannels())
+                                                         .withBitsPerSample (32).withSampleFormat (juce::AudioFormatWriterOptions::SampleFormat::floatingPoint);
+            auto writer = wav.createWriterFor (out, opts);
+            if (writer == nullptr) return false;
+            writer->writeFromAudioSampleBuffer (buf, 0, buf.getNumSamples());
+        }
+        return tmp.moveFileTo (f);
+    }
+
+    int renderSong (const juce::String& songPath, const juce::String& settingsPath, const juce::String& outPath)
+    {
+        juce::File songFile (songPath), outDir (outPath);
+        auto song = juce::JSON::parse (songFile);
+        auto settings = settingsPath.isNotEmpty() ? juce::JSON::parse (juce::File (settingsPath)) : juce::var (new juce::DynamicObject());
+        if (! song.isObject()) { std::cerr << "the song file isn't JSON: " << songPath << std::endl; return 2; }
+        const int threads = (int) settings.getProperty ("threads", 8);
+        const int block = (int) settings.getProperty ("blockSize", 512);
+        const double rate = (double) settings.getProperty ("rate", 48000);
+        outDir.createDirectory();
+
+        te::Engine engine { "mortiflix-engine", std::make_unique<HeadlessUI>(), std::make_unique<RenderBehaviour> (threads) };
+        applyDefaults();
+        auto built = mfx::buildSong (engine, song);
+        auto& edit = *built.edit;
+
+        // our settings, never Tracktion's defaults (16-bit, 44.1 kHz, no master plugins)
+        te::Renderer::Parameters p (edit);
+        p.destFile = outDir.getChildFile ("mix-f32.wav");
+        p.audioFormat = engine.getAudioFileFormatManager().getWavFormat();
+        p.bitDepth = 32;
+        p.sampleRateForAudio = rate;
+        p.blockSizeForAudio = block;
+        p.time = te::TimeRange (te::TimePosition(), edit.getLength());
+        // every track (Tracktion's renderToFile renders nothing when this is empty, whatever its comment says)
+        auto all = te::getAllTracks (edit);
+        for (int i = 0; i < all.size(); ++i) p.tracksToDo.setBit (i);
+        p.usePlugins = true;
+        p.useMasterPlugins = true;
+        p.realTimeRender = false;
+        p.ditheringEnabled = false;
+        p.canRenderInMono = false;
+        p.checkNodesForAudio = false;   // a silent song still renders (to silence)
+        p.destFile.deleteFile();
+        const auto t0 = juce::Time::getMillisecondCounterHiRes();
+        auto written = te::Renderer::renderToFile ("render", p);
+        // Tracktion writes a Broadcast WAV chunk with the render's date and time: the same song and settings must give
+        // the same file, so it is written again, plain (no metadata), samples untouched
+        if (written.existsAsFile()) stripMetadata (written, rate);
+        const double ms = juce::Time::getMillisecondCounterHiRes() - t0;
+
+        // what was really written
+        juce::int64 frames = 0; int channels = 0; int bits = 0; bool isFloat = false; double fileRate = 0;
+        {
+            juce::AudioFormatManager fm;
+            fm.registerBasicFormats();
+            if (auto r = std::unique_ptr<juce::AudioFormatReader> (fm.createReaderFor (p.destFile)))
+            { frames = r->lengthInSamples; channels = (int) r->numChannels; bits = (int) r->bitsPerSample; isFloat = r->usesFloatingPointData; fileRate = r->sampleRate; }
+        }
+        auto report = new juce::DynamicObject();
+        auto ver = versions();
+        report->setProperty ("engine", juce::var (ver.get()));
+        auto used = new juce::DynamicObject();
+        used->setProperty ("rate", rate);
+        used->setProperty ("bits", 32);
+        used->setProperty ("float", true);
+        used->setProperty ("blockSize", block);
+        used->setProperty ("threads", threads);
+        used->setProperty ("masterPlugins", true);
+        used->setProperty ("realTime", false);
+        used->setProperty ("tracktionDither", false);
+        used->setProperty ("panLaw", "-3 dB centre");
+        report->setProperty ("settings", juce::var (used));
+        juce::Array<juce::var> plugins;
+        for (auto* pl : te::getAllPlugins (edit, false))
+        {
+            auto o = new juce::DynamicObject();
+            o->setProperty ("name", pl->getName());
+            o->setProperty ("type", pl->getPluginType());
+            plugins.add (juce::var (o));
+        }
+        report->setProperty ("plugins", plugins);
+        report->setProperty ("tracks", built.tracks);
+        report->setProperty ("notes", built.notes);
+        report->setProperty ("seconds", edit.getLength().inSeconds());
+        report->setProperty ("frames", frames);
+        auto file = new juce::DynamicObject();
+        file->setProperty ("name", p.destFile.getFileName());
+        file->setProperty ("rate", fileRate);
+        file->setProperty ("channels", channels);
+        file->setProperty ("bits", bits);
+        file->setProperty ("float", isFloat);
+        file->setProperty ("sha256", sha256Of (p.destFile));
+        juce::Array<juce::var> files;
+        files.add (juce::var (file));
+        report->setProperty ("files", files);
+        report->setProperty ("ms", ms);
+        const bool ok = written.existsAsFile() && frames > 0 && isFloat && (int) fileRate == (int) rate;
+        report->setProperty ("ok", ok);
+        const juce::var reportVar (report);   // one owner: a second var (report) would hold a freed object
+        outDir.getChildFile ("render-report.json").replaceWithText (json (reportVar));
+        emit (reportVar);
+        return ok ? 0 : 1;
     }
 
     // ---- sound out (doc 16 E3) ----
@@ -396,6 +531,11 @@ int main (int argc, char* argv[])
     if (args.contains ("--version")) return version();
     if (args.contains ("--selftest")) return selftest();
     if (args.contains ("--serve")) return serve();
-    std::cerr << "mortiflix-engine: --version | --selftest | --serve" << std::endl;
+    if (args.contains ("--render"))
+    {
+        auto after = [&] (const char* flag) { const int i = args.indexOf (flag); return i >= 0 && i + 1 < args.size() ? args[i + 1] : juce::String(); };
+        return renderSong (after ("--render"), after ("--settings"), after ("--out"));
+    }
+    std::cerr << "mortiflix-engine: --version | --selftest | --serve | --render <song.json> --settings <render.json> --out <dir>" << std::endl;
     return 2;
 }
