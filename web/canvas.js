@@ -299,6 +299,7 @@ export function canvasView(ui, id, mode = 'edit') {
     const focus = level.section && song?.patterns.some((p) => p.id === level.section) ? level : null;
     lane = song ? ui.songLane({ h, song, graph, draft: sv.draft, shotNode, transitionOf, focus, onOpen: (sec, part) => openLevel(sec, part), onSeek: (t) => tp?.seek(t), onSelect: (sel) => barPopup(sel, song, sv.draft) }) : null;
     if (lane) lane.dataset.key = key;
+    if (lane && !sv.draft) lane.lane.onPlus = (sectionId, atBar) => plusMenu(sectionId, atBar, song);
     // the transport: the last render (the canvas's music node) is the clock without the sound engine
     tp?.destroy(); tp = null;
     const mus = n.music && !n.music.missing ? n.music.versions?.find((v) => v.v === n.music.current) : null;
@@ -370,15 +371,60 @@ export function canvasView(ui, id, mode = 'edit') {
         close();
       } catch (e) { fill(msg, e.message); }
     };
+    // Cut it, Repeat, Mute a part: the owner's own edits, at once (heard after the next render until the engine)
+    const songOps = async (ops, said) => {
+      if (draft) return fill(msg, 'Import the song first (mortiflix music <project> --song).');
+      try { await api(`/api/projects/${id}/music/song/ops`, { method: 'POST', body: { ops } }); ui.toast(said); close(); drawBoard(); } catch (e) { fill(msg, e.message); }
+    };
+    const playing = song.channels.filter((c) => Object.keys(pat.notes || {}).includes(c.id));
+    const mutePart = h('select', { class: 'sl-pop-select', 'aria-label': 'Part to mute' }, playing.map((c) => h('option', { value: c.id, selected: c.id === sel.part }, c.name)));
     popup = h('div', { class: 'sl-pop', role: 'dialog', 'aria-label': 'Selected bars' },
       h('div', { class: 'sl-pop-title' }, `${bars} · ${pat.id.toUpperCase()} ${pat.name || ''}${at.under ? ` · under ${at.under}` : ''}${ch ? ` · ${ch.name}` : ''}`),
-      h('div', { class: 'sl-pop-row' }, h('button', { class: 'btn', onclick: ok }, 'OK'), h('span', { class: 'sl-pop-hint' }, 'or say what to fix:')),
+      h('div', { class: 'sl-pop-row' },
+        h('button', { class: 'btn', onclick: ok }, 'OK'),
+        h('button', { class: 'btn', onclick: () => songOps([{ op: 'section.time', section: sel.section, kind: 'cut', from: inFrom, to: inTo }], `${bars} cut: the music after them moved up`) }, 'Cut it'),
+        h('button', { class: 'btn', onclick: () => songOps([{ op: 'section.time', section: sel.section, kind: 'repeat', from: inFrom, to: inTo }], `${bars} repeated: the music after them moved on`) }, 'Repeat'),
+        h('span', { class: 'sl-pop-mute' }, h('button', { class: 'btn', onclick: () => songOps([{ op: 'note.mute', pattern: sel.section, channel: mutePart.value, bars: [inFrom, inTo] }], `${song.channels.find((c) => c.id === mutePart.value)?.name} muted in ${bars.toLowerCase()}`) }, 'Mute'), mutePart)),
+      h('div', { class: 'sl-pop-hint' }, 'or say what to fix:'),
       words,
       msg,
       h('div', { class: 'sl-pop-row end' }, h('button', { class: 'btn', onclick: close }, 'Cancel'), h('button', { class: 'btn primary', onclick: send }, 'Fix')));
     words.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) send(); if (e.key === 'Escape') close(); });
     const left = Math.max(8, Math.min(lane.clientWidth - 338, lane.lane.x(lane.lane.ax.barSec(sel.from)) - lane.querySelector('.sl-scroll').scrollLeft));
     popup.style.left = `${left}px`;
+    lane.append(popup);
+  }
+
+  // + on a section boundary (doc 19 §2): add 1 / 2 / 4 / 8 bars, empty, repeating the bars before, or written by the AI
+  // (empty bars plus a Fix for them, which the fast path answers).
+  function plusMenu(sectionId, atBar, song) {
+    popup?.remove(); popup = null;
+    const pat = song.patterns.find((p) => p.id === sectionId);
+    const count = h('select', { class: 'sl-pop-select', 'aria-label': 'How many bars' }, [1, 2, 4, 8].map((n) => h('option', { value: n, selected: n === 2 }, `${n} bar${n > 1 ? 's' : ''}`)));
+    const how = h('select', { class: 'sl-pop-select', 'aria-label': 'What goes in them' }, h('option', { value: 'empty' }, 'Empty'), h('option', { value: 'repeat' }, 'Repeat the bars before'), h('option', { value: 'ai' }, 'Let the AI write them'));
+    const msg = h('div', { class: 'sl-pop-msg', role: 'status' });
+    const close = () => { popup?.remove(); popup = null; };
+    const add = async () => {
+      const n = Number(count.value);
+      const at = atBar;   // inside the section, 1-based: where the new bars start
+      try {
+        if (how.value === 'repeat') {
+          const from = Math.max(1, at - n);
+          await api(`/api/projects/${id}/music/song/ops`, { method: 'POST', body: { ops: [{ op: 'section.time', section: sectionId, kind: 'repeat', from, to: at - 1 }] } });
+        } else {
+          await api(`/api/projects/${id}/music/song/ops`, { method: 'POST', body: { ops: [{ op: 'section.time', section: sectionId, kind: 'add', at, n }] } });
+          if (how.value === 'ai') await api(`/api/projects/${id}/canvas/nodes/${sectionId}`, { method: 'POST', body: { action: 'fix', text: 'write these new bars: lead on from the bars before into what comes next', bars: [at, at + n - 1], write: true } });
+        }
+        ui.toast(`${n} bar${n > 1 ? 's' : ''} added to ${sectionId.toUpperCase()}`);
+        close(); drawBoard();
+      } catch (e) { fill(msg, e.message); }
+    };
+    popup = h('div', { class: 'sl-pop', role: 'dialog', 'aria-label': 'Add bars' },
+      h('div', { class: 'sl-pop-title' }, `Add bars at the end of ${pat.id.toUpperCase()} ${pat.name || ''}`),
+      h('div', { class: 'sl-pop-row' }, count, how), msg,
+      h('div', { class: 'sl-pop-row end' }, h('button', { class: 'btn', onclick: close }, 'Cancel'), h('button', { class: 'btn primary', onclick: add }, 'Add')));
+    const s0 = lane.lane.sections.find((x) => x.id === sectionId);
+    popup.style.left = `${Math.max(8, Math.min(lane.clientWidth - 338, lane.lane.x(s0.to) - lane.querySelector('.sl-scroll').scrollLeft - 300))}px`;
     lane.append(popup);
   }
 

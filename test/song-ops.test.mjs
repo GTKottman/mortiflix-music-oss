@@ -153,3 +153,66 @@ test('the canvas reads its cues from the song: a note edit in m02 makes cue m02 
   assert.equal(g.nodes.m02.missing, true);
   assert.deepEqual(g.order.cues, ['m01']);
 });
+
+test('Cut it, Repeat, + bars: every part\'s row in plain Strudel, later sections move, undo gives the same song', { skip }, async (t) => {
+  const { root, id, sp } = await songProject(t);
+  const start = loadSong(root, id);
+  // Cut it on song bars 7–8 = bars 3–4 of m02: m02 becomes 2 bars, nothing after it in this song
+  await applyOps(root, id, [{ op: 'section.time', section: 'm02', kind: 'cut', from: 3, to: 4 }]);
+  let s = loadSong(root, id);
+  assert.equal(s.song.patterns[1].bars, 2);
+  assert.equal(s.song.playlist.items.find((i) => i.ref === 'm02').len, 2 * 3840);
+  assert.ok(Object.values(s.song.patterns[1].notes).flat().every((n) => n.t < 2 * 3840), 'no notes left in the cut bars');
+  assert.match(s.text, /\[2, /);
+  assert.match(s.text, /m02 · The bet · bars 5–6/);
+  assert.doesNotMatch(s.text, /mfx/);
+  await textMatchesNotes(t, root, id);
+  await undo(root, id);
+  s = loadSong(root, id);
+  assert.equal(s.text, start.text, 'undo: the text byte for byte');
+  assert.deepEqual(s.song.patterns, start.song.patterns);
+  assert.deepEqual(s.song.playlist, start.song.playlist);
+  // Repeat bars 1–2 of m01: m01 becomes 6 bars, m02 moves 2 bars later, the copy plays the same notes
+  await applyOps(root, id, [{ op: 'section.time', section: 'm01', kind: 'repeat', from: 1, to: 2 }]);
+  s = loadSong(root, id);
+  assert.equal(s.song.patterns[0].bars, 6);
+  assert.equal(s.song.playlist.items.find((i) => i.ref === 'm02').at.tick, 6 * 3840);
+  const bass = s.song.patterns[0].notes.ch02;
+  const first = bass.filter((n) => n.t < 2 * 3840).map((n) => [n.t, n.key]);
+  const copy = bass.filter((n) => n.t >= 2 * 3840 && n.t < 4 * 3840).map((n) => [n.t - 2 * 3840, n.key]);
+  assert.deepEqual(copy, first);
+  assert.match(s.text, /\.early\(/);
+  assert.match(s.text, /m02 · The bet · bars 7–10/, 'the later section\'s comment moved');
+  assert.ok(s.song.locks.some((l) => l.scope.pattern === 'm01' && l.scope.fromTick === 2 * 3840 && l.scope.toTick === 4 * 3840), 'the copy is locked as a hand edit');
+  await textMatchesNotes(t, root, id);
+  await undo(root, id);
+  assert.equal(readFileSync(sp.strudel, 'utf8'), start.text);
+  // + 2 empty bars at the end of m02
+  await applyOps(root, id, [{ op: 'section.time', section: 'm02', kind: 'add', at: 5, n: 2 }]);
+  s = loadSong(root, id);
+  assert.equal(s.song.patterns[1].bars, 6);
+  assert.match(s.text, /\[2, silence\]/);
+  await textMatchesNotes(t, root, id);
+});
+
+test('Mute a part: the notes stop playing (out of the text) but are kept, and come back', { skip }, async (t) => {
+  const { root, id, sp } = await songProject(t);
+  const start = loadSong(root, id);
+  const keysBar2 = start.song.patterns[0].notes.ch03.filter((n) => n.t >= 3840 && n.t < 7680);
+  await applyOps(root, id, [{ op: 'note.mute', pattern: 'm01', channel: 'ch03', bars: [2, 2] }]);
+  let s = loadSong(root, id);
+  assert.ok(!s.song.patterns[0].notes.ch03.some((n) => n.t >= 3840 && n.t < 7680), 'they don\'t play');
+  const meta = JSON.parse(readFileSync(join(sp.music, 'daw', 'notes-meta.json'), 'utf8'));
+  assert.equal(meta.muted.length, keysBar2.length, 'they are kept');
+  assert.ok(s.song.locks.some((l) => l.scope.channel === 'ch03'), 'a hand lock');
+  await textMatchesNotes(t, root, id);
+  await applyOps(root, id, [{ op: 'note.unmute', pattern: 'm01', channel: 'ch03', bars: [2, 2] }]);
+  s = loadSong(root, id);
+  assert.deepEqual(s.song.patterns[0].notes.ch03.filter((n) => n.t >= 3840 && n.t < 7680).map((n) => [n.t, n.key]), keysBar2.map((n) => [n.t, n.key]));
+  assert.equal(JSON.parse(readFileSync(join(sp.music, 'daw', 'notes-meta.json'), 'utf8')).muted.length, 0);
+  // undo the unmute, then the mute: back to the start, the kept list empty again
+  await undo(root, id); await undo(root, id);
+  s = loadSong(root, id);
+  assert.equal(s.text, start.text);
+  assert.equal(JSON.parse(readFileSync(join(sp.music, 'daw', 'notes-meta.json'), 'utf8')).muted.length, 0);
+});

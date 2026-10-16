@@ -106,15 +106,29 @@ export function songLane({ h, song, graph, draft = false, shotNode = null, trans
   const spacer = h('div', { class: 'sl-spacer' });
   // the playhead: its own layer, moved every frame without redrawing the notes
   const playhead = h('div', { class: 'sl-playhead', 'aria-hidden': 'true' });
-  const scroller = h('div', { class: 'sl-scroll' }, spacer, nodeRow, canvas, playhead);
+  const pluses = h('div', { class: 'sl-pluses' });
+  const scroller = h('div', { class: 'sl-scroll' }, spacer, nodeRow, canvas, playhead, pluses);
   const list = h('ol', { class: 'sr-only' }, sections.map((s) => h('li', null, `${s.id.toUpperCase()} ${s.name}: bars ${s.startBar}–${s.startBar + s.bars - 1}${s.under ? `, under ${s.under}` : ''}`)));
+  const endNote = h('div', { class: 'sl-note sl-end' });
   const el = h('div', { class: 'sl' },
     draft ? h('div', { class: 'sl-note' }, 'From the score. The song is made when the music is imported (mortiflix music <project> --song).') : null,
-    scroller, list);
+    scroller, endNote, list);
   // zoom: px per second; 0 = fit the whole song (video mode starts there)
   let pps = 0;
   const fitPps = () => (Math.max(320, scroller.clientWidth || 900) - LABELS - 12) / end;
   const worldW = () => LABELS + end * pps + 12;
+
+  // + at every section's end (doc 19 §2): DOM buttons on the lane's time axis, under the blocks
+  function placePluses() {
+    pluses.replaceChildren();
+    if (!el.lane?.onPlus) return;
+    for (const s of sections) {
+      if (focused && s !== focused) continue;
+      const b = h('button', { class: 'sl-plus', title: `Add bars at the end of ${s.id.toUpperCase()}`, 'aria-label': `Add bars at the end of ${s.id.toUpperCase()} ${s.name}`, onclick: () => el.lane.onPlus(s.id, s.bars + 1) }, '+');
+      b.style.left = `${LABELS + (s.to - t0) * pps - 9}px`;
+      pluses.append(b);
+    }
+  }
 
   function placeNodes() {
     // the label column covers nodes scrolled under it, as the canvas does for the parts
@@ -262,6 +276,11 @@ export function songLane({ h, song, graph, draft = false, shotNode = null, trans
     g.fillStyle = panelBg; g.fillRect(0, voiceY - 2, LABELS - 2, VOICE + 4);
     g.fillStyle = muted; g.font = font(11); g.fillText('Voice', 0, voiceY + VOICE / 2);
     playhead.style.height = `${(shots.length ? NODES : 0) + H}px`;
+    pluses.style.top = `${(shots.length ? NODES : 0) + cutsY - 2}px`;
+    placePluses();
+    // the music now ends before the video: how much (after Cut it)
+    const musicEnd = ax.barSec(lastBar); const videoEnd = shots.at(-1)?.to || 0;
+    endNote.textContent = !focused && videoEnd - musicEnd > 0.05 ? `The music ends ${(videoEnd - musicEnd).toFixed(1)} s before the video` : '';
     if (headAt !== null) setPlayhead(headAt);
   }
 

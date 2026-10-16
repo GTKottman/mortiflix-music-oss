@@ -593,3 +593,10 @@ a.cv-crumb:hover { color: var(--ink); text-decoration: underline; }
 .sl-pop-text:focus { border-color: var(--accent); outline: none; }
 .sl-pop-msg { color: var(--bad); font-size: 12px; }
 .sl-pop-msg:empty { display: none; }
+.sl-pop-select { background: var(--well); border: 1px solid var(--field-line); border-radius: var(--radius); color: var(--body); font: inherit; font-size: 12px; height: var(--control-h); }
+.sl-pop-mute { display: inline-flex; gap: 4px; align-items: center; }
+.sl-pluses { position: absolute; left: 0; height: 0; z-index: 2; }
+.sl-plus { position: absolute; top: 0; width: 18px; height: 18px; padding: 0; line-height: 16px; text-align: center; border-radius: 9px; border: 1px solid #474747; background: var(--raise); color: var(--ink); font-size: 13px; cursor: pointer; }
+.sl-plus:hover { background: var(--accent); border-color: var(--accent); }
+.sl-end { color: var(--warn); }
+.sl-end:empty { display: none; }

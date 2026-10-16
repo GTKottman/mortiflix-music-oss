@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { loadSong, saveSong, songPaths, strudelDirOf } from './song-store.mjs';
 import { ticksPerBar, sectionLayout } from './song.mjs';
-import { parseSongFile, setRow } from './strudel/songfile.mjs';
+import { parseSongFile, setRow, replaceRow, renumberRows, retimeMusic } from './strudel/songfile.mjs';
 import { createStrudel } from './strudel/edit.mjs';
 import { UserError } from './studio.mjs';
 
@@ -66,7 +66,8 @@ function changedBars(a, b, tpb) {
 
 // Applies a batch. Returns { rev, applied: [ops], refused: [{ op, why }], inverse: [ops] }.
 // Lock refusals refuse only that op ("the rest goes through"); any other error refuses the whole batch.
-export async function applyOps(root, id, ops, { ladder = null } = {}) {
+export async function applyOps(root, id, opsIn, { ladder = null } = {}) {
+  let ops = opsIn;
   const loaded = loadSong(root, id);
   if (!loaded) throw new UserError('no song yet: import the score first (mortiflix music <project> --song)');
   const song = clone(loaded.song);
@@ -75,14 +76,29 @@ export async function applyOps(root, id, ops, { ladder = null } = {}) {
   const layout = sectionLayout(song);
   const rowOf = (pattern) => layout.findIndex((x) => x.id === pattern);
   const applied = []; const refused = []; const inverse = [];
+  let pendingMeta = null;   // music/daw/notes-meta.json while a batch mutes or unmutes notes
   const rev = song.rev + 1;
 
-  for (const op0 of ops) {
+  ops = [...ops];
+  for (let oi = 0; oi < ops.length; oi++) {
+    const op0 = ops[oi];
     const op = { by: 'hand', ...op0 };
     if (!['hand', 'ai', 'import'].includes(op.by)) throw new UserError(`"by" must be hand, ai or import (got ${op.by})`);
 
     // ---- notes: through the ladder into the row's text ----
-    if (['note.add', 'note.set', 'note.del', 'strudel.set'].includes(op.op)) {
+    // the kept list of muted notes, on its own (undo of a mute or unmute; the text is put back by its own step)
+    if (op.op === 'meta.drop' || op.op === 'meta.add') {
+      const metaFile = join(songPaths(root, id).music, 'daw', 'notes-meta.json');
+      const meta = pendingMeta ?? (existsSync(metaFile) ? JSON.parse(readFileSync(metaFile, 'utf8')) : { muted: [] });
+      pendingMeta = meta;
+      const k = (n) => `${n.t}|${n.key}|${n.len}`;
+      const these = new Set(op.notes.map(k));
+      if (op.op === 'meta.drop') meta.muted = meta.muted.filter((m) => !(m.pattern === op.pattern && m.channel === op.channel && these.has(k(m.note))));
+      else meta.muted.push(...op.notes.map((n) => ({ pattern: op.pattern, channel: op.channel, note: n })));
+      applied.push(op);
+      continue;
+    }
+    if (['note.add', 'note.set', 'note.del', 'note.replace', 'strudel.set'].includes(op.op)) {
       const [pattern, channel] = op.op === 'strudel.set' ? String(op.region || '').split('.') : [op.pattern, op.channel];
       const p = song.patterns.find((x) => x.id === pattern);
       const c = song.channels.find((x) => x.id === channel);
@@ -100,6 +116,7 @@ export async function applyOps(root, id, ops, { ladder = null } = {}) {
       } else {
         const byName = new Map(old.map((n) => [noteName(n), n]));
         if (op.op === 'note.add') wanted = [...old, ...(op.notes || []).map((n) => ({ t: n.t, len: n.len, key: n.key, vel: n.vel ?? 0.8 }))];
+        if (op.op === 'note.replace') wanted = (op.notes || []).map((n) => ({ t: n.t, len: n.len, key: n.key, vel: n.vel ?? 0.8 }));
         if (op.op === 'note.del') { for (const nm of op.ids || []) if (!byName.has(nm)) throw new UserError(`${pattern} ${c.name} has no note ${nm}`); wanted = old.filter((n) => !(op.ids || []).includes(noteName(n))); }
         if (op.op === 'note.set') {
           for (const nm of op.ids || []) if (!byName.has(nm)) throw new UserError(`${pattern} ${c.name} has no note ${nm}`);
@@ -137,6 +154,109 @@ export async function applyOps(root, id, ops, { ladder = null } = {}) {
         inverse.unshift({ op: 'lock.restore', remove: added.id, put: removed, undo: true });
       }
       applied.push({ ...op, region: `${pattern}.${channel}`, before, after });
+      continue;
+    }
+
+    // ---- a section's bars: Cut it, Repeat, + bars (doc 19 §2): every part's row, in plain Strudel ----
+    if (op.op === 'section.time') {
+      const p = song.patterns.find((x) => x.id === op.section);
+      if (!p) throw new UserError(`there is no section ${op.section}`);
+      const len = p.bars;
+      const { kind } = op;
+      const from = Number(op.from); const to = Number(op.to ?? op.from); const n = Number(op.n); const at = Number(op.at);
+      if (kind === 'cut' || kind === 'repeat') {
+        if (!(Number.isInteger(from) && Number.isInteger(to) && from >= 1 && to >= from && to <= len)) throw new UserError(`bars ${from}–${to} aren't inside ${op.section} (1–${len})`);
+        if (kind === 'cut' && to - from + 1 >= len) throw new UserError(`that would cut all of ${op.section}: remove the section instead`);
+      } else if (kind === 'add') {
+        if (!(Number.isInteger(n) && n >= 1 && n <= 64 && Number.isInteger(at) && at >= 1 && at <= len + 1)) throw new UserError('add needs n (1–64) bars at a bar inside the section (or one past its end)');
+      } else throw new UserError('kind must be cut, repeat or add');
+      if (op.by !== 'hand') {
+        const hit = blockingLocks(song, op, { pattern: op.section });
+        if (hit.length) { refused.push({ op, why: hit.map((l) => lockWords(song, l)).join('; ') }); continue; }
+      }
+      inverse.unshift({ op: 'song.restore', text, fields: clone({ patterns: song.patterns, playlist: song.playlist, markers: song.markers, locks: song.locks, strudel: song.strudel }), by: 'hand', undo: true });
+      const delta = kind === 'cut' ? -(to - from + 1) : kind === 'repeat' ? to - from + 1 : n;
+      const newLen = len + delta;
+      const row = rowOf(op.section);
+      const startTick = layout[row].startTick;
+      const lad = ladder || ladderFor(root);
+      // each part's row: rewritten, then its notes read from the new text
+      for (const blk of parseSongFile(text).blocks) {
+        const c = song.channels.find((x) => x.midiChannel === blk.channel);
+        const music = retimeMusic(blk.rows[row].text, len, { kind, from, to, n, at });
+        text = replaceRow(text, blk.channel, row, newLen, music);
+        if (!c) continue;
+        const notes = music === 'silence' ? [] : (await lad.notes(music, { bars: newLen, tpb })).notes.map(({ t, len: l, key, vel, fine }) => ({ t, len: l, key, vel, ...(fine ? { fine } : {}) }));
+        if (notes.length) p.notes[c.id] = notes; else delete p.notes[c.id];
+        song.strudel.regions[`${op.section}.${c.id}`] = { sha: sha16(music), rev, by: op.by };
+      }
+      p.bars = newLen;
+      // the playlist ripples: this section's length, everything after it moves
+      for (const it of song.playlist.items) {
+        if (it.kind === 'pattern' && it.ref === op.section) it.len = newLen * tpb;
+        else if (it.at?.tick !== undefined && it.at.tick > startTick) it.at.tick += delta * tpb;
+      }
+      // markers after the change move with the music; locks inside a cut go, later ones move
+      const edge = startTick + (kind === 'add' ? (at - 1) : kind === 'repeat' ? to : (to)) * tpb;
+      for (const m of song.markers) {
+        if (m.tick >= edge) m.tick += delta * tpb;
+        else if (kind === 'cut' && m.tick >= startTick + (from - 1) * tpb) m.tick = startTick + (from - 1) * tpb;
+      }
+      const localEdge = edge - startTick;
+      song.locks = song.locks.filter((l) => {
+        if (l.scope.pattern !== op.section || l.scope.fromTick === undefined) return true;
+        if (kind === 'cut' && l.scope.fromTick >= (from - 1) * tpb && l.scope.toTick <= to * tpb) return false;
+        if (l.scope.fromTick >= localEdge) { l.scope.fromTick += delta * tpb; l.scope.toTick += delta * tpb; }
+        return true;
+      });
+      const sections = sectionLayout(song).map((x) => ({ id: x.id, name: song.patterns.find((q) => q.id === x.id)?.name, bars: x.bars }));
+      text = renumberRows(text, sections);
+      // the bars the owner made (a repeat's copy, added bars) are locked as hand edits; a cut leaves nothing to lock
+      if (op.by === 'hand' && kind !== 'cut') {
+        const [na, nb] = kind === 'repeat' ? [to, to + (to - from + 1)] : [at - 1, at - 1 + n];
+        for (const c of song.channels) addHandLock(song, op.section, c.id, na * tpb, nb * tpb, rev);
+      }
+      applied.push(op);
+      continue;
+    }
+    if (op.op === 'song.restore') {
+      text = op.text;
+      Object.assign(song, clone(op.fields));
+      applied.push({ op: 'song.restore' });
+      continue;
+    }
+
+    // ---- Mute a part: those notes stop playing (they leave the text) but are kept, to come back (doc 18 §3.2) ----
+    if (op.op === 'note.mute' || op.op === 'note.unmute') {
+      const p = song.patterns.find((x) => x.id === op.pattern);
+      const c = song.channels.find((x) => x.id === op.channel);
+      if (!p || !c) throw new UserError(`there is no pattern ${op.pattern} with channel ${op.channel}`);
+      const metaFile = join(songPaths(root, id).music, 'daw', 'notes-meta.json');
+      const meta = pendingMeta ?? (existsSync(metaFile) ? JSON.parse(readFileSync(metaFile, 'utf8')) : { muted: [] });
+      pendingMeta = meta;
+      const tpbL = tpb;
+      let target;
+      if (op.op === 'note.mute') {
+        const [a, b] = op.bars;
+        const inBars = (n) => n.t >= (a - 1) * tpbL && n.t < b * tpbL;
+        const old = (p.notes[c.id] || []).map((n) => ({ ...n, vel: n.vel ?? 0.8 }));
+        const muting = old.filter(inBars);
+        if (!muting.length) { applied.push(op); continue; }
+        meta.muted.push(...muting.map((n) => ({ pattern: op.pattern, channel: c.id, note: n })));
+        target = old.filter((n) => !inBars(n));
+        inverse.unshift({ op: 'meta.drop', pattern: op.pattern, channel: c.id, notes: muting, undo: true });
+      } else {
+        const back = op.notes || meta.muted.filter((m) => m.pattern === op.pattern && m.channel === c.id && (!op.bars || (m.note.t >= (op.bars[0] - 1) * tpbL && m.note.t < op.bars[1] * tpbL))).map((m) => m.note);
+        const key = (n) => `${n.t}|${n.key}|${n.len}`;
+        const backKeys = new Set(back.map(key));
+        meta.muted = meta.muted.filter((m) => !(m.pattern === op.pattern && m.channel === c.id && backKeys.has(key(m.note))));
+        target = [...(p.notes[c.id] || []).map((n) => ({ ...n, vel: n.vel ?? 0.8 })), ...back];
+        inverse.unshift({ op: 'meta.add', pattern: op.pattern, channel: c.id, notes: back, undo: true });
+      }
+      // the text change goes through the ladder like any note edit
+      // the notes leave (or come back to) the text through the ladder: a hand edit, so it locks its bars
+      ops.splice(oi + 1, 0, { op: 'note.replace', pattern: op.pattern, channel: c.id, notes: target, by: op.by, undo: Boolean(op.undo) });
+      applied.push(op);
       continue;
     }
 
@@ -208,6 +328,7 @@ export async function applyOps(root, id, ops, { ladder = null } = {}) {
 
   if (!applied.length) return { rev: song.rev, applied, refused, inverse: [] };
   const saved = saveSong(root, id, song, text);
+  if (pendingMeta) { const f = join(songPaths(root, id).music, 'daw', 'notes-meta.json'); mkdirSync(join(songPaths(root, id).music, 'daw'), { recursive: true }); writeFileSync(f, JSON.stringify(pendingMeta, null, 1) + '\n'); }
   // the undo log: one line per batch, newest last
   const sp = songPaths(root, id);
   mkdirSync(join(sp.music, 'daw'), { recursive: true });

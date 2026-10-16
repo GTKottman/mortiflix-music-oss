@@ -154,3 +154,54 @@ export async function songNotes(evaluator, text, sections, { ticksPerBar = 3840,
   }
   return { parts, problems };
 }
+
+// Replaces a whole row: [bars, music] (the music indented under it, like setRow).
+export function replaceRow(text, channel, row, bars, music) {
+  const { blocks } = parseSongFile(text);
+  const b = blocks.find((x) => x.channel === channel);
+  if (!b || !b.rows[row]) throw new Error(`there is no row ${row + 1} in part ch${channel}`);
+  const r = b.rows[row];
+  const indented = music.split('\n').map((l, i) => (i && !/^ {4}/.test(l) ? `    ${l}` : l)).join('\n');
+  return text.slice(0, r.rowStart) + `[${bars}, ${indented}]` + text.slice(r.rowEnd);
+}
+
+// Writes the row comments again from the sections (ids, names, song bars), in every part: a section that changed
+// length moves the bars of every section after it.
+export function renumberRows(text, sections) {
+  let out = text;
+  const blocks = parseSongFile(out).blocks.sort((a, b) => b.start - a.start);
+  for (const blk of blocks) {
+    let bar = sections.reduce((s, x) => s + x.bars, 1);
+    for (let i = blk.rows.length - 1; i >= 0; i--) {
+      const r = blk.rows[i];
+      const sec = sections[i];
+      if (!sec) continue;
+      bar -= sec.bars;
+      const lineEnd = out.indexOf('\n', r.rowEnd);
+      const tail = out.slice(r.rowEnd, lineEnd < 0 ? out.length : lineEnd);
+      const comma = tail.match(/^\s*,/) ? ',' : '';
+      const comment = `   // ${sec.id} · ${sec.name || ''} · ${sec.bars === 1 ? `bar ${bar}` : `bars ${bar}–${bar + sec.bars - 1}`}`;
+      out = out.slice(0, r.rowEnd) + comma + comment + out.slice(lineEnd < 0 ? out.length : lineEnd);
+    }
+  }
+  return out;
+}
+
+// A row's music with bars cut, repeated or added, in plain Strudel: arrange() of the music and the music carried on
+// with .early(n) (arrange starts every row at its own bar 1). Bars are 1-based inside the section; len is its length.
+//   cut a–b:    [a-1, X], [len-b, X.early(b)]
+//   repeat a–b: [b, X], [b-a+1, X.early(a-1)], [len-b, X.early(b)]
+//   add n at p: [p-1, X], [n, silence], [len-p+1, X.early(p-1)]
+export function retimeMusic(music, len, { kind, from, to, n, at }) {
+  if (music.trim() === 'silence') return 'silence';
+  const X = music.includes('\n') ? music : music;
+  const early = (k) => (k ? `${X}.early(${k})` : X);
+  const rows = [];
+  if (kind === 'cut') { rows.push([from - 1, early(0)], [len - to, early(to)]); }
+  else if (kind === 'repeat') { rows.push([to, early(0)], [to - from + 1, early(from - 1)], [len - to, early(to)]); }
+  else if (kind === 'add') { rows.push([at - 1, early(0)], [n, 'silence'], [len - at + 1, early(at - 1)]); }
+  else throw new Error(`kind must be cut, repeat or add (got ${kind})`);
+  const kept = rows.filter(([k]) => k > 0);
+  if (kept.length === 1 && kept[0][1] === X) return X;
+  return `arrange(\n  ${kept.map(([k, m]) => `[${k}, ${m}]`).join(',\n  ')}\n)`;
+}

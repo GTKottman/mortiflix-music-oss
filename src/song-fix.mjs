@@ -21,8 +21,13 @@ export function demoAsk(root, id) {
       const p = song.patterns.find((q) => q.id === x.section);
       const c = song.channels.find((q) => q.id === x.part);
       const [a, b] = x.bars;
-      let ns = (p.notes[x.part] || []).filter((n) => n.t >= (a - 1) * tpb && n.t < b * tpb).map((n) => ({ ...n, vel: n.vel ?? 0.8, t: n.t - (a - 1) * tpb }));
-      if (c.kind === 'drums' || retry) ns = ns.filter((_, i) => i % 2 === 0);
+      const take = (from, to) => (p.notes[x.part] || []).filter((n) => n.t >= (from - 1) * tpb && n.t < to * tpb).map((n) => ({ ...n, vel: n.vel ?? 0.8, t: n.t - (from - 1) * tpb }));
+      let ns = take(a, b);
+      if (!ns.length && a > 1) {
+        // new empty bars ("Let the AI write them"): the bars just before, played again
+        const k = b - a + 1;
+        ns = take(Math.max(1, a - k), a - 1).filter((n) => n.t < k * tpb);
+      } else if (c.kind === 'drums' || retry) ns = ns.filter((_, i) => i % 2 === 0);
       else ns = ns.map((n) => ({ ...n, key: Math.min(127, n.key + 12) }));
       const code = ns.length ? notesToIdiomatic(ns, { bars: b - a + 1, ticksPerBar: tpb, drums: c.kind === 'drums' }) : 'silence';
       return `// begin ${x.section} ${x.part} bars ${a}-${b}\n${code}\n// end ${x.section} ${x.part}`;
