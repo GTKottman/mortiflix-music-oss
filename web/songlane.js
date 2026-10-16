@@ -62,7 +62,8 @@ export function cutMarks(song, shots, fps = 30) {
 // shotNode(shot, { compact }) builds a shot's node (the canvas's own look); transitionOf(fromId, toId) names the cut.
 // focus: { section, part } shows one section (and one part) fitted to the width (levels 2 and 3, doc 25 §2).
 // onOpen(sectionId, channelId | null) is called on a double-click on a section block or one of its part rows.
-export function songLane({ h, song, graph, draft = false, shotNode = null, transitionOf = () => null, focus = null, onOpen = null }) {
+// onSeek(sec) is called on a click on the bar ruler (video seconds).
+export function songLane({ h, song, graph, draft = false, shotNode = null, transitionOf = () => null, focus = null, onOpen = null, onSeek = null }) {
   const ax = timeAxis(song);
   const shots = shotTimes(graph);
   const fps = graph?.fps || 30;
@@ -102,7 +103,9 @@ export function songLane({ h, song, graph, draft = false, shotNode = null, trans
   const canvas = h('canvas', { class: 'sl-canvas', role: 'img', 'aria-label': `The music under the shots: ${sections.length} sections, ${playing.length} parts, ${Math.round(lastBar - 1)} bars` });
   const nodeRow = h('div', { class: 'sl-nodes', style: { height: `${shots.length ? NODES : 0}px` } });
   const spacer = h('div', { class: 'sl-spacer' });
-  const scroller = h('div', { class: 'sl-scroll' }, spacer, nodeRow, canvas);
+  // the playhead: its own layer, moved every frame without redrawing the notes
+  const playhead = h('div', { class: 'sl-playhead', 'aria-hidden': 'true' });
+  const scroller = h('div', { class: 'sl-scroll' }, spacer, nodeRow, canvas, playhead);
   const list = h('ol', { class: 'sr-only' }, sections.map((s) => h('li', null, `${s.id.toUpperCase()} ${s.name}: bars ${s.startBar}–${s.startBar + s.bars - 1}${s.under ? `, under ${s.under}` : ''}`)));
   const el = h('div', { class: 'sl' },
     draft ? h('div', { class: 'sl-note' }, 'From the score. The song is made when the music is imported (mortiflix music <project> --song).') : null,
@@ -244,6 +247,8 @@ export function songLane({ h, song, graph, draft = false, shotNode = null, trans
     g.setLineDash([]); g.lineWidth = 1;
     g.fillStyle = panelBg; g.fillRect(0, voiceY - 2, LABELS - 2, VOICE + 4);
     g.fillStyle = muted; g.font = font(11); g.fillText('Voice', 0, voiceY + VOICE / 2);
+    playhead.style.height = `${(shots.length ? NODES : 0) + H}px`;
+    if (headAt !== null) setPlayhead(headAt);
   }
 
   // Ctrl + wheel zooms around the mouse; plain wheel scrolls the board; Shift + wheel scrolls sideways.
@@ -259,6 +264,22 @@ export function songLane({ h, song, graph, draft = false, shotNode = null, trans
     draw();
   }, { passive: false });
   scroller.addEventListener('scroll', () => requestAnimationFrame(draw));
+
+  // a click on the bar ruler moves the playhead there
+  canvas.addEventListener('click', (e) => {
+    if (!onSeek) return;
+    const r = canvas.getBoundingClientRect();
+    const mx = e.clientX - r.left; const my = e.clientY - r.top;
+    if (mx < LABELS || my > RULER + 2) return;
+    onSeek(Math.max(0, t0 + (mx + scroller.scrollLeft - LABELS) / pps));
+  });
+  let headAt = null;
+  function setPlayhead(sec) {
+    headAt = sec;
+    if (sec === null || sec < t0 || sec > t0 + end) { playhead.style.display = 'none'; return; }
+    playhead.style.display = 'block';
+    playhead.style.transform = `translateX(${LABELS + (sec - t0) * pps}px)`;
+  }
 
   // double-click: which section block, and which part row inside it
   canvas.addEventListener('dblclick', (e) => {
@@ -277,7 +298,7 @@ export function songLane({ h, song, graph, draft = false, shotNode = null, trans
 
   const ro = new ResizeObserver(() => draw());
   ro.observe(scroller);
-  el.lane = { draw, sections, cuts, shots, end, stop: () => ro.disconnect(), zoom: (v) => { pps = v; draw(); }, get pps() { return pps; }, x: (sec) => LABELS + (sec - t0) * pps, focused };
+  el.lane = { draw, sections, cuts, shots, end, stop: () => ro.disconnect(), zoom: (v) => { pps = v; draw(); }, get pps() { return pps; }, x: (sec) => LABELS + (sec - t0) * pps, focused, setPlayhead, ax };
   return el;
 }
 

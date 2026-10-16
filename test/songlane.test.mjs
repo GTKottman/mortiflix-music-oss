@@ -49,3 +49,16 @@ test('GET /music/song: a draft from the score before the import, the song after'
   assert.deepEqual(draft.song.patterns.map((x) => x.id), ['m01', 'm02']);
   assert.equal(draft.song.patterns[0].notes.ch02.length, 13);
 });
+
+test('the sync rule: play at 1 under 10 ms, nudge 0.95–1.05 up to 120 ms, seek beyond', async () => {
+  const { syncAction } = await import('../web/transport.js');
+  assert.deepEqual(syncAction(0.004), { rate: 1 });
+  assert.deepEqual(syncAction(-0.009), { rate: 1 });
+  assert.ok(Math.abs(syncAction(0.05).rate - 0.95) < 1e-9, 'picture 50 ms ahead: slow to 0.95');
+  assert.ok(Math.abs(syncAction(-0.02).rate - 1.02) < 1e-9, 'picture 20 ms behind: speed to 1.02');
+  assert.equal(syncAction(0.1).rate, 0.95);
+  assert.equal(syncAction(-0.12).rate, 1.05);
+  assert.deepEqual(syncAction(0.121), { seek: true });
+  assert.deepEqual(syncAction(-2), { seek: true });
+  for (let e = -0.12; e <= 0.12; e += 0.001) { const r = syncAction(e).rate; assert.ok(r >= 0.95 && r <= 1.05); }
+});

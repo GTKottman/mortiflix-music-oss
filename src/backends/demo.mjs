@@ -240,4 +240,7 @@ function writeDemoSong(root, projectId, workdir, title) {
   // the song file is itself a score (setcpm, one part per channel): it stands in for the session's score
   writeFileSync(join(music, 'score.strudel.js'), text);
   saveSong(root, projectId, song, text);
+  // the "last render": a click on every beat (120 BPM, 8 bars), so playing the cut with the music can be checked by ear
+  mkdirSync(join(workdir, 'out', 'music'), { recursive: true });
+  spawnSync('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', "aevalsrc='0.5*sin(2*PI*(if(lt(mod(t,2),0.5),1500,1000))*t)*exp(-40*mod(t,0.5))':s=48000:d=16", '-ac', '2', join(workdir, 'out', 'music', 'score.wav')]);
 }

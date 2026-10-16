@@ -118,6 +118,7 @@ export function canvasView(ui, id, mode = 'edit') {
 
   function drawMonitor(autoplay = false) {
     clearTimeout(advance);
+    if (tp?.playing) { monitorBusy = true; tp.stop(); monitorBusy = false; }
     if (tsel) return drawTransition();
     const it = pieces[sel];
     if (!it) {
@@ -271,6 +272,8 @@ export function canvasView(ui, id, mode = 'edit') {
   // every part on its own channel, a clip per section, and the import steps for the owner's DAW (REAPER…).
   // The Music tab: the song lane under the shots (doc 19), read-only; the MIDI pack below it.
   let lane = null;
+  let tp = null;            // the transport: the last render plays, the Monitor follows (doc 19 §4)
+  let monitorBusy = false;
   async function drawMusic() {
     const [ms, sv] = await Promise.all([api(`/api/projects/${id}/music`).catch(() => null), api(`/api/projects/${id}/music/song`).catch(() => null)]);
     if (boardView !== 'music') return;
@@ -294,10 +297,39 @@ export function canvasView(ui, id, mode = 'edit') {
     const key = JSON.stringify([song?.rev, sv?.draft, graph?.rev, level, ms?.midi?.length]);
     if (lane && lane.dataset.key === key && board.contains(lane)) return;
     const focus = level.section && song?.patterns.some((p) => p.id === level.section) ? level : null;
-    lane = song ? ui.songLane({ h, song, graph, draft: sv.draft, shotNode, transitionOf, focus, onOpen: (sec, part) => openLevel(sec, part) }) : null;
+    lane = song ? ui.songLane({ h, song, graph, draft: sv.draft, shotNode, transitionOf, focus, onOpen: (sec, part) => openLevel(sec, part), onSeek: (t) => tp?.seek(t) }) : null;
     if (lane) lane.dataset.key = key;
+    // the transport: the last render (the canvas's music node) is the clock without the sound engine
+    tp?.destroy(); tp = null;
+    const mus = n.music && !n.music.missing ? n.music.versions?.find((v) => v.v === n.music.current) : null;
+    let bar = null;
+    if (lane && mus?.file) {
+      const shotsSrc = lane.lane.shots.map((s) => {
+        const v = (n[s.id]?.versions || []).find((x) => x.v === n[s.id].current) || {};
+        return { ...s, src: fileUrl(id, v.file), srcFrom: v.from_sec || 0 };
+      });
+      const pos = h('span', { class: 'tp-pos' }, 'bar 1.1 · 0:00.0');
+      const btn = h('button', { class: 'btn', onclick: () => (tp.playing ? tp.stop() : tp.play()) }, '▶ Play');
+      const ax = lane.lane.ax;
+      tp = ui.createTransport({ h, audioUrl: fileUrl(id, mus.file), shots: shotsSrc, fps: graph?.fps || 30,
+        onTime: (t) => {
+          lane.lane.setPlayhead(t);
+          const barF = Math.max(0, (t - (song.offsetSec || 0)) / (ax.barSec(2) - ax.barSec(1)));
+          const beatsPerBar = ax.tpb / (song.ppq || 960);
+          pos.textContent = `bar ${Math.floor(barF) + 1}.${Math.floor((barF % 1) * beatsPerBar) + 1} · ${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart(4, '0')}`;
+        },
+        onState: (playing) => {
+          btn.textContent = playing ? '■ Stop' : '▶ Play';
+          if (playing) fill(monitor, tp.stage, h('div', { class: 'cv-caption' }, h('span', { class: 'cv-cap-name' }, 'The cut, with the music')));
+          else if (monitor.contains(tp.stage) && !monitorBusy) drawMonitor();
+        } });
+      lane.lane.setPlayhead(0);
+      lane.transport = tp;   // its frame-error log is read by the sync test
+      bar = h('div', { class: 'tp-bar' }, btn, pos, h('span', { class: 'tp-note' }, 'Playing the last render: install the sound engine to hear edits at once (Settings › Setup)'));
+    }
     const channel = focus?.part ? song.channels.find((c) => c.id === focus.part) : null;
     fill(board, h('div', { class: 'cv-music' },
+      bar,
       lane || h('div', { class: 'cv-empty' }, sv?.error ? `The music couldn't be drawn: ${sv.error}` : 'The music appears here under the shots once the score passes its check.'),
       // levels 2 and 3 for now: the section (or part) on its own; the Piano roll and the part's instrument come later
       focus ? h('p', { class: 'help' }, channel
@@ -642,6 +674,8 @@ export function canvasView(ui, id, mode = 'edit') {
       return e.key === 'ArrowLeft' ? back() : history.forward();
     }
     if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    // Space plays and stops the music with the cut while the Music tab is open
+    if (e.key === ' ' && boardView === 'music' && tp && !e.target.closest('video, audio, button')) { e.preventDefault(); return tp.playing ? tp.stop() : tp.play(); }
     if (e.key === 'ArrowRight') go(sel + 1, true);
     else if (e.key === 'ArrowLeft') go(sel - 1, true);
   };
@@ -683,6 +717,7 @@ export function canvasView(ui, id, mode = 'edit') {
       if (JSON.stringify(level) !== was) drawBoard();
     },
     leave() {
+      tp?.destroy();
       clearTimeout(advance);
       clearInterval(selTimer);
       document.removeEventListener('keydown', onKey);
