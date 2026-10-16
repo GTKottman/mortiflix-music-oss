@@ -40,6 +40,14 @@ namespace
     juce::String json (const juce::var& v) { return juce::JSON::toString (v, true); }
     void emit (const juce::var& v) { auto line = json (v) + "\n"; auto s = line.toRawUTF8(); [[maybe_unused]] auto n = ::write (protoFd, s, std::strlen (s)); }
 
+    // Our defaults, not Tracktion's (doc 15 A5): the -3 dB constant-power pan law. Tracktion's default is linear (+6 dB
+    // at hard pan), and each track's VolumeAndPanPlugin stores its own law, reading as linear when unset (its
+    // CachedValue<int> defaults to 0 = PanLawLinear), so every track's volume plugin is set explicitly (trackPanLaw).
+    // Denormals: Tracktion's device callback and graph workers already flush them (checked in its source:
+    // DeviceManager::audioDeviceIOCallbackWithContext, NodePlayerThreadPools::runThread).
+    void applyDefaults() { te::setDefaultPanLaw (te::PanLaw3dBCenter); }
+    void trackPanLaw (te::AudioTrack& t) { t.getVolumePlugin()->setPanLaw (te::PanLaw3dBCenter); }
+
     juce::DynamicObject::Ptr versions()
     {
         juce::DynamicObject::Ptr o = new juce::DynamicObject();
@@ -53,65 +61,215 @@ namespace
 
     int version() { emit (juce::var (versions().get())); return 0; }
 
-    // One track with Tracktion's tone generator at 1 kHz, level 0.5 (−6.02 dBFS), rendered offline at 48 kHz.
-    int selftest()
+    // One track with Tracktion's tone generator at 1 kHz, level 0.5 (−6.02 dBFS), rendered offline at 48 kHz into
+    // memory: centred it must come out at −3 dB per channel (the pan law), panned hard left at full level.
+    te::Renderer::Statistics renderTone (te::Engine& engine, float pan)
     {
-        te::Engine engine { "mortiflix-engine", std::make_unique<HeadlessUI>(), std::make_unique<NoDeviceBehaviour>() };
-        engine.getPluginManager().createBuiltInType<te::ToneGeneratorPlugin>();
-
         auto edit = te::Edit::createSingleTrackEdit (engine, te::Edit::EditRole::forRendering);
         edit->ensureNumberOfAudioTracks (1);
         edit->getMasterVolumePlugin()->setVolumeDb (0.0f);
         auto track = te::getAudioTracks (*edit)[0];
         track->getVolumePlugin()->setVolumeDb (0.0f);
-
+        trackPanLaw (*track);
+        track->getVolumePlugin()->setPan (pan);
         auto plugin = edit->getPluginCache().createNewPlugin (te::ToneGeneratorPlugin::xmlTypeName, {});
         track->pluginList.insertPlugin (plugin, 0, nullptr);
         auto tone = dynamic_cast<te::ToneGeneratorPlugin*> (plugin.get());
         tone->frequencyParam->setParameter (1000.0f, juce::dontSendNotification);
         tone->levelParam->setParameter (0.5f, juce::dontSendNotification);
-
         juce::BigInteger tracks;
         tracks.setBit (te::getAllTracks (*edit).indexOf (track));
-        const double rate = 48000.0;
-        auto stats = te::Renderer::measureStatistics ("selftest", *edit, te::TimeRange (te::TimePosition(), te::TimePosition::fromSeconds (1.0)), tracks, 512, rate);
+        return te::Renderer::measureStatistics ("selftest", *edit, te::TimeRange (te::TimePosition(), te::TimePosition::fromSeconds (1.0)), tracks, 512, 48000.0);
+    }
 
-        // a 0.5 sine at 0 dB through the track and master: peak 0.5, RMS 0.5/√2, one whole second
-        const bool rendered = std::abs (stats.audioDuration - 1.0f) < 0.001f && std::abs (stats.peak - 0.5f) < 0.002f
-                              && std::abs (stats.average - 0.5f / std::sqrt (2.0f)) < 0.002f;
+    int selftest()
+    {
+        te::Engine engine { "mortiflix-engine", std::make_unique<HeadlessUI>(), std::make_unique<NoDeviceBehaviour>() };
+        applyDefaults();
+        engine.getPluginManager().createBuiltInType<te::ToneGeneratorPlugin>();
+        auto centre = renderTone (engine, 0.0f);
+        auto left = renderTone (engine, -1.0f);
+        const float c = 0.5f * std::sqrt (0.5f);   // −3.01 dB of 0.5
+        const bool rendered = std::abs (centre.audioDuration - 1.0f) < 0.001f;
+        const bool panLaw = std::abs (centre.peak - c) < 0.002f && std::abs (left.peak - 0.5f) < 0.002f;
         auto o = new juce::DynamicObject();
-        o->setProperty ("ok", rendered);
-        o->setProperty ("peak", stats.peak);
-        o->setProperty ("peak_db", juce::Decibels::gainToDecibels (stats.peak, -150.0f));
-        o->setProperty ("average", stats.average);
-        o->setProperty ("seconds", stats.audioDuration);
-        o->setProperty ("sample_rate", rate);
+        o->setProperty ("ok", rendered && panLaw);
+        o->setProperty ("peak", centre.peak);
+        o->setProperty ("peak_db", juce::Decibels::gainToDecibels (centre.peak, -150.0f));
+        o->setProperty ("average", centre.average);
+        o->setProperty ("seconds", centre.audioDuration);
+        o->setProperty ("sample_rate", 48000.0);
+        o->setProperty ("pan_law", "-3 dB centre");
+        o->setProperty ("hard_left_peak", left.peak);
         emit (juce::var (o));
-        return rendered ? 0 : 1;
+        return rendered && panLaw ? 0 : 1;
+    }
+
+    // ---- sound out (doc 16 E3) ----
+    juce::var deviceList (te::Engine& engine)
+    {
+        auto& adm = engine.getDeviceManager().deviceManager;
+        juce::Array<juce::var> out;
+        for (auto* type : adm.getAvailableDeviceTypes())
+        {
+            type->scanForDevices();
+            auto o = new juce::DynamicObject();
+            o->setProperty ("backend", type->getTypeName());
+            juce::Array<juce::var> names;
+            for (auto& n : type->getDeviceNames (false)) names.add (n);
+            o->setProperty ("devices", names);
+            out.add (juce::var (o));
+        }
+        return out;
+    }
+
+    juce::var deviceState (te::Engine& engine)
+    {
+        auto& adm = engine.getDeviceManager().deviceManager;
+        auto* dev = adm.getCurrentAudioDevice();
+        auto o = new juce::DynamicObject();
+        o->setProperty ("state", dev != nullptr && dev->isOpen() ? "open" : "closed");
+        if (dev != nullptr)
+        {
+            o->setProperty ("backend", adm.getCurrentAudioDeviceType());
+            o->setProperty ("name", dev->getName());
+            o->setProperty ("rate", dev->getCurrentSampleRate());
+            o->setProperty ("block", dev->getCurrentBufferSizeSamples());
+            o->setProperty ("outLatency", dev->getOutputLatencyInSamples());
+            o->setProperty ("xruns", dev->getXRunCount());
+        }
+        return juce::var (o);
+    }
+
+    juce::var deviceSet (te::Engine& engine, const juce::var& args)
+    {
+        auto& dm = engine.getDeviceManager();
+        auto& adm = dm.deviceManager;
+        const auto backend = args.getProperty ("backend", "JACK").toString();
+        if (adm.getCurrentAudioDevice() == nullptr) dm.initialise (0, 2);
+        adm.setCurrentAudioDeviceType (backend, true);
+        if (adm.getCurrentAudioDeviceType() != backend) throw std::runtime_error (("no " + backend + " backend here").toStdString());
+        auto setup = adm.getAudioDeviceSetup();
+        if (args.hasProperty ("name") && args["name"].toString().isNotEmpty()) setup.outputDeviceName = args["name"].toString();
+        setup.sampleRate = (double) args.getProperty ("rate", 48000);
+        setup.bufferSize = (int) args.getProperty ("block", 1024);
+        setup.useDefaultInputChannels = false;
+        setup.inputChannels.clear();
+        setup.useDefaultOutputChannels = false;
+        setup.outputChannels.clear();
+        setup.outputChannels.setRange (0, 2, true);
+        auto err = adm.setAudioDeviceSetup (setup, true);
+        if (err.isNotEmpty()) throw std::runtime_error (err.toStdString());
+        dm.rescanWaveDeviceList();
+        return deviceState (engine);
     }
 
     // The studio protocol: commands on the message thread, until engine.quit or the studio closes stdin.
-    int serve()
+    struct Server : juce::Timer
     {
         te::Engine engine { "mortiflix-engine", std::make_unique<HeadlessUI>(), std::make_unique<NoDeviceBehaviour>() };
         std::unique_ptr<mfx::Protocol> proto;
-        auto quit = [] { juce::MessageManager::getInstance()->stopDispatchLoop(); };
-        proto = std::make_unique<mfx::Protocol> (protoFd, [&] (const juce::String& cmd, const juce::var&) -> juce::var
+        std::unique_ptr<te::Edit> toneEdit;
+        int lastXruns = 0;
+
+        Server()
+        {
+            applyDefaults();
+            engine.getPluginManager().createBuiltInType<te::ToneGeneratorPlugin>();
+            proto = std::make_unique<mfx::Protocol> (protoFd, [this] (const juce::String& cmd, const juce::var& args) { return handle (cmd, args); });
+            proto->onEnd = [] { juce::MessageManager::getInstance()->stopDispatchLoop(); };
+        }
+
+        juce::var handle (const juce::String& cmd, const juce::var& args)
         {
             if (cmd == "engine.hello")
             {
                 auto o = versions();
                 o->setProperty ("rate", 48000);
-                o->setProperty ("device", juce::var());   // no device opened yet (step E3)
+                o->setProperty ("pan_law", "-3 dB centre");
+                o->setProperty ("device", engine.getDeviceManager().deviceManager.getCurrentAudioDevice() ? deviceState (engine) : juce::var());
                 return juce::var (o.get());
             }
-            if (cmd == "engine.quit") { juce::MessageManager::callAsync (quit); return juce::var (new juce::DynamicObject()); }
+            if (cmd == "engine.quit") { juce::MessageManager::callAsync ([] { juce::MessageManager::getInstance()->stopDispatchLoop(); }); return juce::var (new juce::DynamicObject()); }
+            if (cmd == "device.list") return deviceList (engine);
+            if (cmd == "device.set")
+            {
+                auto st = deviceSet (engine, args);
+                lastXruns = (int) st["xruns"];
+                startTimer (500);
+                proto->event ("device", st.getDynamicObject());
+                return st;
+            }
+            if (cmd == "engine.tone") return tone (args);
             throw std::runtime_error (("unknown command " + cmd).toStdString());
-        });
-        proto->onEnd = quit;
-        proto->start();
+        }
+
+        // A test tone through the real path: an Edit with Tracktion's tone generator, played by its transport on the
+        // open device. Answers at once; a "tone" event says when it ended and how many xruns happened meanwhile.
+        juce::var tone (const juce::var& args)
+        {
+            if (engine.getDeviceManager().deviceManager.getCurrentAudioDevice() == nullptr) throw std::runtime_error ("no sound device open: device.set first");
+            const float hz = (float) (double) args.getProperty ("hz", 1000.0);
+            const float db = (float) (double) args.getProperty ("db", -20.0);
+            const int ms = (int) args.getProperty ("ms", 1000);
+            toneEdit = te::Edit::createSingleTrackEdit (engine, te::Edit::EditRole::forEditing);
+            toneEdit->ensureNumberOfAudioTracks (1);
+            toneEdit->getMasterVolumePlugin()->setVolumeDb (0.0f);
+            auto track = te::getAudioTracks (*toneEdit)[0];
+            track->getVolumePlugin()->setVolumeDb (0.0f);
+            trackPanLaw (*track);
+            track->getVolumePlugin()->setPan (0.0f);
+            auto plugin = toneEdit->getPluginCache().createNewPlugin (te::ToneGeneratorPlugin::xmlTypeName, {});
+            track->pluginList.insertPlugin (plugin, 0, nullptr);
+            auto t = dynamic_cast<te::ToneGeneratorPlugin*> (plugin.get());
+            t->frequencyParam->setParameter (hz, juce::dontSendNotification);
+            // the pan law takes 3 dB at centre: the generator is set 3 dB higher so each channel is at the asked level
+            t->levelParam->setParameter (juce::jlimit (0.00001f, 1.0f, juce::Decibels::decibelsToGain (db + 3.0103f)), juce::dontSendNotification);
+            auto& tc = toneEdit->getTransport();
+            tc.ensureContextAllocated();
+            const int before = engine.getDeviceManager().deviceManager.getCurrentAudioDevice()->getXRunCount();
+            tc.play (false);
+            juce::Timer::callAfterDelay (ms, [this, before]
+            {
+                if (toneEdit == nullptr) return;
+                toneEdit->getTransport().stop (false, false);
+                juce::DynamicObject::Ptr o = new juce::DynamicObject();
+                o->setProperty ("state", "done");
+                auto* dev = engine.getDeviceManager().deviceManager.getCurrentAudioDevice();
+                o->setProperty ("xruns", dev ? dev->getXRunCount() - before : -1);
+                proto->event ("tone", o);
+            });
+            auto o = new juce::DynamicObject();
+            o->setProperty ("playing", true);
+            return juce::var (o);
+        }
+
+        // xruns, as they happen
+        void timerCallback() override
+        {
+            auto* dev = engine.getDeviceManager().deviceManager.getCurrentAudioDevice();
+            if (dev == nullptr) return;
+            const int n = dev->getXRunCount();
+            if (n > lastXruns)
+            {
+                juce::DynamicObject::Ptr o = new juce::DynamicObject();
+                o->setProperty ("count", n);
+                proto->event ("xrun", o);
+            }
+            lastXruns = n;
+        }
+    };
+
+    int serve()
+    {
+        auto server = std::make_unique<Server>();
+        server->proto->start();
         juce::MessageManager::getInstance()->runDispatchLoop();
-        proto->stop();
+        server->proto->stop();
+        server->stopTimer();
+        if (server->toneEdit) server->toneEdit->getTransport().stop (false, true);
+        server->toneEdit.reset();
+        server.reset();
         return 0;
     }
 }

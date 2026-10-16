@@ -62,17 +62,18 @@ test('three crashes inside a minute: it stays stopped, with its last log lines',
 // The real engine, when it has been built on this machine (doc 16 E1 + E2).
 const { existsSync } = await import('node:fs');
 const { homedir } = await import('node:os');
-const { spawnSync } = await import('node:child_process');
+const { spawnSync, spawn } = await import('node:child_process');
 const REAL = [process.env.MFX_DAW_ENGINE, join(homedir(), '.cache/mortiflix/engine-build/mortiflix-engine_artefacts/Release/mortiflix-engine')].find((f) => f && existsSync(f));
 
-test('the real engine: --version, --selftest renders 1 s of a 0.5 sine into memory, --serve speaks the protocol', { skip: !REAL && 'the engine is not built on this machine' }, async (t) => {
+test('the real engine: --version, --selftest (1 s of a 0.5 sine into memory, the -3 dB pan law), --serve speaks the protocol', { skip: !REAL && 'the engine is not built on this machine' }, async (t) => {
   const v = JSON.parse(spawnSync(REAL, ['--version'], { encoding: 'utf8' }).stdout.trim());
   assert.equal(v.name, 'mortiflix-engine');
   assert.match(v.tracktion_engine, /^[0-9a-f]{40}$/);
   const st = spawnSync(REAL, ['--selftest'], { encoding: 'utf8', timeout: 60000 });
   assert.equal(st.status, 0, st.stdout + st.stderr);
   const r = JSON.parse(st.stdout.trim());
-  assert.ok(Math.abs(r.peak - 0.5) < 0.002 && Math.abs(r.average - Math.SQRT1_2 / 2) < 0.002 && r.seconds === 1, JSON.stringify(r));
+  // the -3 dB pan law (doc 15 A5): a 0.5 sine centred comes out at 0.354 per channel, panned hard left at 0.5
+  assert.ok(Math.abs(r.peak - 0.5 * Math.SQRT1_2) < 0.002 && Math.abs(r.hard_left_peak - 0.5) < 0.002 && r.seconds === 1, JSON.stringify(r));
   assert.equal(st.stdout.trim().split('\n').length, 1, 'stdout carries only the JSON line');
   const e = createEngineSupervisor({ bin: REAL, args: ['--serve'] });
   t.after(() => e.stop());
@@ -85,4 +86,41 @@ test('the real engine: --version, --selftest renders 1 s of a 0.5 sine into memo
   const pid = e.pid;
   await e.stop();
   assert.throws(() => process.kill(pid, 0));
+});
+
+// Sound out (doc 16 E3): only when asked (MFX_SOUND_TEST=1), since it plays through this machine's output. The tone is
+// at -60 dBFS by default (MFX_SOUND_DB), measured where PipeWire hands it to the output (the default sink's monitor).
+test('sound out: a tone through JACK (PipeWire) and ALSA reaches the output at its level, with no xruns', { skip: (!REAL || process.env.MFX_SOUND_TEST !== '1') && 'set MFX_SOUND_TEST=1 to play through the output' }, async () => {
+  const db = Number(process.env.MFX_SOUND_DB || -60);
+  for (const backend of ['JACK', 'ALSA']) {
+    const e = createEngineSupervisor({ bin: REAL, args: ['--serve'] });
+    const events = [];
+    e.on('event', (m) => events.push(m));
+    await e.start();
+    const dev = await e.call('device.set', { backend, rate: 48000, block: 1024 }, { timeout: 15000 });
+    assert.equal(dev.state, 'open');
+    assert.equal(dev.rate, 48000);
+    const rec = spawn('parec', ['--device=@DEFAULT_MONITOR@', '--format=float32le', '--rate=48000', '--channels=2', '--raw', '--latency-msec=20']);
+    const chunks = []; rec.stdout.on('data', (d) => chunks.push(d));
+    await new Promise((r) => setTimeout(r, 500));
+    await e.call('engine.tone', { hz: 1000, db, ms: 1500 });
+    await until(() => events.some((x) => x.ev === 'tone'), 5000);
+    await new Promise((r) => setTimeout(r, 500));
+    rec.kill();
+    const buf = Buffer.concat(chunks);
+    const n = Math.floor(buf.length / 8);
+    const k = 2 * Math.cos(2 * Math.PI * 1000 / 48000);
+    const levels = [];
+    for (let a = 0; a + 4800 <= n; a += 4800) {
+      let s1 = 0, s2 = 0;
+      for (let i = a; i < a + 4800; i++) { const s0 = buf.readFloatLE(i * 8) + k * s1 - s2; s2 = s1; s1 = s0; }
+      levels.push(20 * Math.log10(2 * Math.sqrt(Math.max(1e-30, s1 * s1 + s2 * s2 - k * s1 * s2)) / 4800));
+    }
+    const on = levels.filter((x) => x > db - 10);
+    assert.ok(on.length >= 10, `${backend}: the tone reached the output in ${on.length} windows`);
+    const steady = on.slice(1, -1);
+    assert.ok(steady.every((x) => Math.abs(x - db) < 0.5), `${backend}: ${steady.map((x) => x.toFixed(1)).join(' ')}`);
+    assert.equal(events.find((x) => x.ev === 'tone').xruns, 0);
+    await e.stop();
+  }
 });
