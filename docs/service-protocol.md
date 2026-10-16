@@ -149,12 +149,17 @@ Cards: `script {beats}`, `looks {frames, using}`, `shots`/`transitions {nodes}`,
 | Type | Params | Result |
 |---|---|---|
 | `setup.status` | `{}` | `{backend, backends, claude: {found, path, version, logged_in, auth_method, subscription, login_command, detail}, keys, voice, tools: {node, ffmpeg, ffprobe, installable, studio}, first_run}` |
-| `setup.backend` | `{backend: claude-code\|anthropic-api\|demo}` | |
+| `setup.backend` | `{backend?: claude-code\|anthropic-api\|demo, claudeBin?}` | `{backend, claudeBin}`. `claudeBin` = `claude` or an absolute path (the app finds it where a desktop app's PATH doesn't look) |
 | `setup.done` | `{done?: true}` | first run finished |
 | `setup.claude.test` | `{}` | `{ok, reply, seconds}`: one short `claude -p` with no tools |
 | `keys.list` | `{}` | `[{id, name, for, get, set, source}]`, never the values |
 | `keys.set` / `keys.remove` | `{id, value}` / `{id}` | `anthropic`, `elevenlabs`, `uploadpost`, `postiz` (secrets.json) and `gemini` (session.env) |
 | `keys.check` | `{id}` | a free check of a saved key (network, only on request) |
+| `setup.download` | `{label?, files: [{url, dest, size, sha256}]}` | `{job}`: https only, `dest` absolute; each file streams to `<dest>.part`, size + SHA-256 checked, then renamed; files already there are skipped. Only after the user said yes (the app shows size, source, licence) |
+| `setup.install` | `{tool: chrome}` | `{job}`: Chrome for Remotion (`installTool`), after the user said yes |
+| `setup.cancel` | `{job}` | `{cancelled}` |
+
+`tools.engine` = `{ok, path}` (the sound engine). `MFX_FAKE_DOWNLOADS=1` (tests only): `fake:<bytes>` URLs and a pretend Chrome install.
 
 ## Events
 
@@ -169,6 +174,7 @@ Cards: `script {beats}`, `looks {frames, using}`, `shots`/`transitions {nodes}`,
 | `activity` | `{project, t, kind: text\|tool\|todo\|info\|error, text, todos?}` |
 | `assets.progress` | `{project, asset, name, done, total}` |
 | `assets.added` / `assets.failed` | `{project, asset, replaced?}` / `{project, path?, asset?, message}` |
+| `setup.progress` | `{job, kind: download\|install, label, state: running\|done\|failed\|cancelled, line, done?, total?}` |
 | `render.job` | a queue job `{id, label, state: waiting\|running\|done\|failed, project, external?, kind?, progress?, file?, error?, cancelled?}` |
 
 ## Engine changes behind it
