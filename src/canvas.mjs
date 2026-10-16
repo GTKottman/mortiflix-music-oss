@@ -166,10 +166,28 @@ export function syncCanvas(root, id) {
     if (mix) put('music', 'music', { label: 'Music', title: 'The music', beat: null, order: 0 }, snapshot(mix, 'music'));
 
     const bp = readJson(work, 'music/blueprint.json', problems);
-    (bp?.sections || []).forEach((sec, i) => {
-      const mid = sec.id || `m${String(i + 1).padStart(2, '0')}`;
-      put(mid, 'cue', { label: mid.toUpperCase(), title: sec.name, beat: sec.beat || null, order: i, bars: [sec.start_bar, sec.end_bar], intensity: sec.intensity ?? null }, { sha: sha(JSON.stringify(sec)) });
-    });
+    // Once the song exists (doc 18 §4), the cues are its sections: title and bars from it, and a new version whenever
+    // its notes or its parts' instruments change. Before that, from the blueprint.
+    const song = workFile(work, 'music/song.json') ? readJson(work, 'music/song.json', problems) : null;
+    if (song?.patterns?.length) {
+      const m = song.meter?.[0] || { num: 4, den: 4 };
+      const tpb = (song.ppq || 960) * 4 * m.num / m.den;
+      const items = (song.playlist?.items || []).filter((x) => x.kind === 'pattern').sort((a, b) => a.at.tick - b.at.tick);
+      const instruments = (song.channels || []).map((c) => [c.id, c.instrument?.blob || c.instrument?.name || null]);
+      items.forEach((it, i) => {
+        const p = song.patterns.find((x) => x.id === it.ref);
+        if (!p) return;
+        const sec = (bp?.sections || []).find((x) => x.id === p.id) || (bp?.sections || [])[i] || {};
+        const start = it.at.tick / tpb + 1;
+        put(p.id, 'cue', { label: p.id.toUpperCase(), title: p.name || sec.name || p.id, beat: sec.beat || null, order: i, bars: [start, start + it.len / tpb - 1], intensity: sec.intensity ?? null },
+          { sha: sha(JSON.stringify([p.notes, p.bars, instruments])) });
+      });
+    } else {
+      (bp?.sections || []).forEach((sec, i) => {
+        const mid = sec.id || `m${String(i + 1).padStart(2, '0')}`;
+        put(mid, 'cue', { label: mid.toUpperCase(), title: sec.name, beat: sec.beat || null, order: i, bars: [sec.start_bar, sec.end_bar], intensity: sec.intensity ?? null }, { sha: sha(JSON.stringify(sec)) });
+      });
+    }
 
     const board = readJson(work, 'transitions/board.json', problems);
     (board?.cuts || []).forEach((c, i) => {

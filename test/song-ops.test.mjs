@@ -131,3 +131,25 @@ test('versions: the import is v1; going back makes a new version equal to the ol
   assert.deepEqual(readdirSync(sp.versions).filter((f) => f.endsWith('.bin')), [], 'blobs stay shared');
   assert.equal(readdirSync(sp.blobs).length, 1);
 });
+
+test('the canvas reads its cues from the song: a note edit in m02 makes cue m02 v2; a removed pattern leaves a missing cue', { skip }, async (t) => {
+  const { root, id, sp } = await songProject(t);
+  const { syncCanvas } = await import('../src/canvas.mjs');
+  const { writeFileSync } = await import('node:fs');
+  let g = syncCanvas(root, id);
+  assert.deepEqual(g.order.cues, ['m01', 'm02']);
+  assert.deepEqual([g.nodes.m02.title, g.nodes.m02.bars, g.nodes.m02.versions.length], ['The bet', [5, 8], 1]);
+  const n = loadSong(root, id).song.patterns[1].notes.ch02[0];
+  await applyOps(root, id, [{ op: 'note.set', pattern: 'm02', channel: 'ch02', ids: [noteName(n)], fields: { key: n.key - 1 } }]);
+  g = syncCanvas(root, id);
+  assert.equal(g.nodes.m02.versions.length, 2, 'a note edit is a new version of the cue');
+  assert.equal(g.nodes.m01.versions.length, 1);
+  // a pattern gone from the song: its cue stays, marked missing
+  const s = JSON.parse(readFileSync(sp.song, 'utf8'));
+  s.playlist.items = s.playlist.items.filter((x) => x.ref !== 'm02');
+  s.patterns = s.patterns.filter((x) => x.id !== 'm02');
+  writeFileSync(sp.song, JSON.stringify(s));
+  g = syncCanvas(root, id);
+  assert.equal(g.nodes.m02.missing, true);
+  assert.deepEqual(g.order.cues, ['m01']);
+});
