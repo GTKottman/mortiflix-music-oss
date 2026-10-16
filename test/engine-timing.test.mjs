@@ -3,6 +3,9 @@
 //   Q6  sample-accurate notes: 1/32 notes with a 7-tick swing at 97 BPM, each on its own sample, at blocks 64 and 1024
 //   Q7  delay compensation: a plugin that delays 512 samples and says so, beside a dry copy turned upside down: silence
 //   Q8  track delay: +10 ms moves a channel's clicks 480 samples later than the others, −10 ms 480 earlier
+//   Q9  no zipper noise: the fader jumping -20 → 0 dB through our 20 ms ramp leaves ≤ -90 dBFS above 5 kHz
+//   Q27 sample-accurate automation: 0 → -24 dB over one bar on a channel's fader, within 0.01 dB at every 1/16,
+//       byte-identical at blocks 64 and 1024
 //   Q28 block-size independence: the same song at blocks 64, 512 and 1024 is byte-identical
 // The click instrument (engine/src/OurPlugins.h) writes one sample per note-on, so an onset is a non-zero sample.
 import { test } from 'node:test';
@@ -12,7 +15,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir, tmpdir } from 'node:os';
-import { readWav } from './quality/kit.mjs';
+import { readWav, highpass, peak, dB } from './quality/kit.mjs';   // peak() takes seconds
 import { emptySong, writeSong } from '../src/song.mjs';
 
 const REAL = [process.env.MFX_DAW_ENGINE, join(homedir(), '.cache/mortiflix/engine-build/mortiflix-engine_artefacts/Release/mortiflix-engine')].find((f) => f && existsSync(f));
@@ -124,5 +127,43 @@ test('Q8: track delay +10 ms puts a channel 480 samples after the others, -10 ms
     const soft = clicksIn(wav).filter((i) => c[i] < 0.5);
     assert.deepEqual(loud, want, `${ms} ms: the other channel stays on the song's samples`);
     assert.deepEqual(soft.map((s, k) => s - loud[k]), [shift, shift, shift, shift], `${ms} ms`);
+  }
+});
+
+test('Q9: the fader jumping -20 → 0 dB: with our ramp ≤ -90 dBFS above 5 kHz; without it, far above (the test can catch it)', { skip }, (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'mfx-ramp-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const r = spawnSync(REAL, ['--ramp-test', dir], { encoding: 'utf8', timeout: 60_000 });
+  assert.equal(r.status, 0, r.stderr);
+  const jump = 24120;
+  const residual = (f) => peak(highpass(readWav(join(dir, f)), { hz: 5000, order: 8 }), (jump - 2400) / RATE, (jump + 4800) / RATE).db;
+  const unramped = residual('unramped.wav');
+  const ramped = residual('ramped.wav');
+  assert.ok(unramped > -60, `unramped: ${unramped.toFixed(1)} dBFS`);
+  assert.ok(ramped <= -90, `ramped: ${ramped.toFixed(1)} dBFS`);
+  // and the ramp ends where it should: 0 dB 20 ms after the jump (0.5 × 0.7071 at the sine's peak)
+  const w = readWav(join(dir, 'ramped.wav'));
+  assert.ok(Math.abs(w.channels[0][jump + 960 + 480 * 2] - 0.5 * Math.SQRT1_2) < 1e-6);
+});
+
+test('Q27: a fader automated 0 → -24 dB over one bar follows the line within 0.01 dB at every 1/16, the same at blocks 64 and 1024', { skip }, (t) => {
+  const tempo = [{ tick: 0, bpm: 97, shape: 'jump' }];
+  const song = emptySong({ title: 'Automation', bpm: 97 });
+  song.channels = [{ id: 'dc', name: 'DC', kind: 'instrument', midiChannel: 1, instrument: { kind: 'builtin', name: 'mfx-dc', level: 0.5 }, insert: 'mx-dc', volDb: 0, pan: 0 }];
+  song.mixer.inserts = [{ id: 'mx-dc', n: 1, name: 'DC', plugins: [], volDb: 0, pan: 0, out: 'master' }];
+  song.automation = [{ id: 'au1', name: 'Fade', scope: 'song', points: [{ tick: 0, v: 1, shape: 'single' }, { tick: BAR, v: 0, shape: 'hold' }],
+    links: [{ target: { insert: 'mx-dc', param: 'volDb' }, min: -24, max: 0, curve: 0, smoothMs: 0 }] }];
+  song.playlist.items = [{ id: 'i1', kind: 'automation', ref: 'au1', track: 'r1', at: { tick: BAR }, len: BAR }];
+  const s0 = secondsAt(tempo, BAR) * RATE, s1 = secondsAt(tempo, 2 * BAR) * RATE;
+  const end = Math.round(secondsAt(tempo, 3 * BAR) * RATE);
+  const a = render(t, song, { blockSize: 64, toSample: end });
+  const b = render(t, song, { blockSize: 1024, toSample: end });
+  assert.equal(a.sha, b.sha, 'byte-identical at 64 and 1024');
+  const want = (s) => (s < s0 ? 0 : s >= s1 ? -24 : -24 * (s - s0) / (s1 - s0));
+  const out = a.wav.channels[0];
+  for (let k = 0; k < 48; k++) {
+    const s = Math.round(secondsAt(tempo, k * 240) * RATE);   // every 1/16 for three bars
+    const got = dB(out[s] / (0.5 * Math.SQRT1_2));
+    assert.ok(Math.abs(got - want(s)) <= 0.01, `1/16 #${k} (sample ${s}): ${got.toFixed(4)} dB, want ${want(s).toFixed(4)}`);
   }
 });

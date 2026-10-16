@@ -12,8 +12,60 @@ namespace mfx
 
     inline te::BeatPosition beatsOf (const juce::var& ticks) { return te::BeatPosition::fromBeats ((double) ticks / 960.0); }
 
-    // Each track's volume plugin keeps its own pan law and reads as linear when unset: always the -3 dB law here.
-    inline void setTrackPanLaw (te::AudioTrack& t) { t.getVolumePlugin()->setPanLaw (te::PanLaw3dBCenter); }
+    // Our strip (mfx-strip) is the fader and pan; Tracktion's own volume plugin stays at unity: 0 dB, centre, and the
+    // linear law, which is 1.0 on both sides at centre (its -3 dB law would take 3 dB off again).
+    inline void unityVolumePlugin (te::AudioTrack& t)
+    {
+        auto v = t.getVolumePlugin();
+        v->setPanLaw (te::PanLawLinear);
+        v->setVolumeDb (0.0f);
+        v->setPan (0.0f);
+    }
+
+    // Song automation of a channel's volDb / pan (doc 23 §7) → lanes on the song's sample grid. A link targets
+    // { "channel": id, "param" } or { "insert": id, "param" }; v (0–1) maps to min…max in the parameter's unit
+    // (curve 0, straight). "single" points run straight to the next point of the same clip (tension is not read yet),
+    // "hold" holds. Song-scoped clips play where their playlist items are; "pattern:<id>" ones wherever that pattern plays.
+    inline void buildLanes (te::Edit& edit, const juce::var& song, double rate, std::map<juce::String, StripPlugin*>& strips)
+    {
+        auto samplesAt = [&] (double tick) { return edit.tempoSequence.toTime (te::BeatPosition::fromBeats (tick / 960.0)).inSeconds() * rate; };
+        auto* autos = song["automation"].getArray();
+        auto* items = song["playlist"]["items"].getArray();
+        if (autos == nullptr || items == nullptr) return;
+        for (auto& a : *autos)
+        {
+            auto* pts = a["points"].getArray();
+            auto* links = a["links"].getArray();
+            if (pts == nullptr || links == nullptr || pts->isEmpty()) continue;
+            const auto scope = a.getProperty ("scope", "song").toString();
+            for (auto& link : *links)
+            {
+                const auto target = link["target"];
+                const auto param = target["param"].toString();
+                const auto key = target.hasProperty ("channel") ? "ch:" + target["channel"].toString() : "in:" + target["insert"].toString();
+                auto found = strips.find (key);
+                if (found == strips.end() || (param != "volDb" && param != "pan")) continue;
+                auto& lane = param == "volDb" ? found->second->state.volLane : found->second->state.panLane;
+                const double lo = (double) link.getProperty ("min", 0.0), hi = (double) link.getProperty ("max", 1.0);
+                for (auto& it : *items)
+                {
+                    const bool plays = scope == "song" ? (it["kind"].toString() == "automation" && it["ref"].toString() == a["id"].toString())
+                                                       : (it["kind"].toString() == "pattern" && "pattern:" + it["ref"].toString() == scope);
+                    if (! plays) continue;
+                    const double at = (double) it["at"]["tick"], len = (double) it["len"];
+                    for (int k = 0; k < pts->size(); ++k)
+                    {
+                        const auto& p = pts->getReference (k);
+                        const double t = (double) p["tick"];
+                        if (t > len) break;
+                        const bool last = k + 1 >= pts->size() || (double) pts->getReference (k + 1)["tick"] > len;
+                        lane.points.push_back ({ samplesAt (at + t), lo + (double) p["v"] * (hi - lo), ! last && p.getProperty ("shape", "single").toString() != "hold" });
+                    }
+                }
+                std::stable_sort (lane.points.begin(), lane.points.end(), [] (auto& x, auto& y) { return x.at < y.at; });
+            }
+        }
+    }
 
     struct BuiltSong
     {
@@ -79,14 +131,13 @@ namespace mfx
         edit.ensureNumberOfAudioTracks (juce::jmax (1, n));
         auto tracks = te::getAudioTracks (edit);
         std::map<juce::String, te::AudioTrack*> trackOf;
+        std::map<juce::String, StripPlugin*> strips;
         for (int i = 0; i < n; ++i)
         {
             const auto& c = channels->getReference (i);
             auto* t = tracks[i];
             t->setName (c["name"].toString());
-            setTrackPanLaw (*t);
-            t->getVolumePlugin()->setVolumeDb ((float) (double) c.getProperty ("volDb", 0.0));
-            t->getVolumePlugin()->setPan ((float) (double) c.getProperty ("pan", 0.0));
+            unityVolumePlugin (*t);
             t->setMute ((bool) c.getProperty ("mute", false));
             t->setSolo ((bool) c.getProperty ("solo", false));
             if (! c["instrument"].isObject() || ! insertBuiltinInstrument (*t, c["instrument"]))
@@ -108,6 +159,16 @@ namespace mfx
                     t->pluginList.insertPlugin (createBuiltin (edit, v), -1, nullptr);
                 }
             }
+            // the fader and pan, after the insert's effects
+            auto stripPtr = edit.getPluginCache().createNewPlugin (StripPlugin::xmlTypeName, {});
+            auto* strip = dynamic_cast<StripPlugin*> (stripPtr.get());
+            strip->channelId = c["id"].toString();
+            strip->insertId = c["insert"].toString();
+            strip->state.volDb = (double) c.getProperty ("volDb", 0.0);
+            strip->state.pan = (double) c.getProperty ("pan", 0.0);
+            t->pluginList.insertPlugin (stripPtr, t->pluginList.indexOf (t->getVolumePlugin()), nullptr);
+            strips["ch:" + strip->channelId] = strip;
+            if (strip->insertId.isNotEmpty()) strips["in:" + strip->insertId] = strip;
             trackOf[c["id"].toString()] = t;
             ++out.tracks;
         }
@@ -152,6 +213,7 @@ namespace mfx
                 }
             }
         }
+        buildLanes (edit, song, (double) song.getProperty ("sampleRate", 48000.0), strips);
         return out;
     }
 }

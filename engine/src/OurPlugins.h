@@ -4,6 +4,12 @@
 //   mfx-delay   a delay in whole samples that reports its own latency, separately ("delaySamples", "reportSamples",
 //               "gain"): track delay (doc 22 §4: + delays the track, − reports latency so PDC delays all the others)
 //               and the delay-compensation tests (doc 15 Q7: a plugin that delays 512 and says so).
+//   mfx-dc      test source: a constant level ("level", default 0.5) on both sides, so a gain curve can be read off
+//               every sample (doc 15 Q27).
+//   mfx-strip   every track's fader and pan (doc 15 A7, doc 22): the -3 dB constant-power pan law, live moves ramped per
+//               sample over 20 ms (in dB for the fader, along a raised-cosine curve), and song automation of volDb / pan
+//               worked out per sample on the song's own sample grid, so nothing depends on the block size (Q9, Q27).
+//               Tracktion's own volume plugin is left at unity.
 #pragma once
 #include <JuceHeader.h>
 
@@ -125,11 +131,153 @@ namespace mfx
         int pos = 0;
     };
 
+    class DcPlugin : public te::Plugin
+    {
+    public:
+        explicit DcPlugin (te::PluginCreationInfo info) : te::Plugin (info) {}
+        ~DcPlugin() override { notifyListenersOfDeletion(); }
+        static const char* getPluginName() { return "mfx-dc"; }
+        static inline const char* xmlTypeName = "mfx-dc";
+        juce::String getName() const override { return getPluginName(); }
+        juce::String getPluginType() override { return xmlTypeName; }
+        juce::String getShortName (int) override { return getName(); }
+        juce::String getSelectableDescription() override { return getName(); }
+        bool isSynth() override { return true; }
+        bool takesMidiInput() override { return true; }
+        bool producesAudioWhenNoAudioInput() override { return true; }
+        int getNumOutputChannelsGivenInputs (int) override { return 2; }
+        BusLayout getBusses() const override { return BusLayout::singleStereoInOut(); }
+        void initialise (const te::PluginInitialisationInfo&) override {}
+        void deinitialise() override {}
+        float level = 0.5f;
+        void applyToBuffer (const te::PluginRenderContext& fc) override
+        {
+            if (fc.destBuffer == nullptr) return;
+            for (int c = 0; c < fc.destBuffer->getNumChannels(); ++c)
+                juce::FloatVectorOperations::fill (fc.destBuffer->getWritePointer (c, fc.bufferStartSample), level, fc.bufferNumSamples);
+        }
+    };
+
+    // ---- the fader and pan (mfx-strip) ----
+
+    // A value moving to its target over a set number of samples along a raised-cosine curve (no corner where it starts
+    // or stops). A straight line in dB over 20 ms leaves -73 dBFS above 5 kHz on a -20 → 0 dB jump; this curve leaves
+    // -118 dBFS (doc 15 Q9 asks for -90). A new target mid-way starts a new curve from where it is.
+    struct Ramp
+    {
+        double cur = 0, from = 0, target = 0;
+        int n = 0, k = 0;
+        void set (double v) { cur = from = target = v; n = k = 0; }
+        void to (double v, int samples) { target = v; if (samples <= 0) { cur = v; n = k = 0; return; } from = cur; n = samples; k = 0; }
+        double next()
+        {
+            if (k < n)
+            {
+                ++k;
+                cur = k == n ? target : from + (target - from) * (0.5 - 0.5 * std::cos (juce::MathConstants<double>::pi * k / n));
+            }
+            return cur;
+        }
+    };
+
+    // An automation lane on the song's sample grid: points in samples, each either a straight line to the next or held.
+    struct Lane
+    {
+        struct Point { double at; double v; bool lineToNext; };
+        std::vector<Point> points;   // sorted by `at`
+        bool empty() const { return points.empty(); }
+        // the value at sample s, or false before the first point
+        bool valueAt (double s, double& v) const
+        {
+            if (points.empty() || s < points.front().at) return false;
+            auto it = std::upper_bound (points.begin(), points.end(), s, [] (double x, const Point& p) { return x < p.at; });
+            const auto& a = *(it - 1);
+            if (it == points.end() || ! a.lineToNext || it->at <= a.at) { v = a.v; return true; }
+            v = a.v + (it->v - a.v) * (s - a.at) / (it->at - a.at);
+            return true;
+        }
+    };
+
+    inline constexpr double floorDb = -144.0;
+    inline void panGains (double pan, double& l, double& r)
+    {
+        const double p = (juce::jlimit (-1.0, 1.0, pan) + 1.0) * 0.5;
+        l = std::sin ((1.0 - p) * juce::MathConstants<double>::halfPi);
+        r = std::sin (p * juce::MathConstants<double>::halfPi);
+    }
+
+    // Everything the strip needs to process, apart from Tracktion: also used by --ramp-test.
+    struct StripState
+    {
+        std::atomic<double> volDb { 0.0 }, pan { 0.0 };   // set from the message thread (song, mixer.set)
+        Ramp vol, panRamp;
+        double lastVolTarget = 0, lastPanTarget = 0;
+        int rampSamples = 960;                               // 20 ms at 48 kHz
+        Lane volLane, panLane;
+
+        void prepare (double rate)
+        {
+            rampSamples = (int) std::lround (0.020 * rate);
+            vol.set (lastVolTarget = volDb.load());
+            panRamp.set (lastPanTarget = pan.load());
+        }
+        // n samples of L / R starting at the song's sample `at`
+        void process (float* l, float* r, int n, juce::int64 at)
+        {
+            const double vt = volDb.load(), pt = pan.load();
+            if (vt != lastVolTarget) { vol.to (lastVolTarget = vt, rampSamples); }
+            if (pt != lastPanTarget) { panRamp.to (lastPanTarget = pt, rampSamples); }
+            for (int i = 0; i < n; ++i)
+            {
+                const double s = (double) (at + i);
+                double db = vol.next(), p = panRamp.next(), v;
+                if (volLane.valueAt (s, v)) db = v;
+                if (panLane.valueAt (s, v)) p = v;
+                const double g = db <= floorDb ? 0.0 : std::pow (10.0, db / 20.0);
+                double gl, gr;
+                panGains (p, gl, gr);
+                if (l != nullptr) l[i] = (float) (l[i] * g * gl);
+                if (r != nullptr) r[i] = (float) (r[i] * g * gr);
+            }
+        }
+    };
+
+    class StripPlugin : public te::Plugin
+    {
+    public:
+        explicit StripPlugin (te::PluginCreationInfo info) : te::Plugin (info) {}
+        ~StripPlugin() override { notifyListenersOfDeletion(); }
+        static const char* getPluginName() { return "mfx-strip"; }
+        static inline const char* xmlTypeName = "mfx-strip";
+        juce::String getName() const override { return getPluginName(); }
+        juce::String getPluginType() override { return xmlTypeName; }
+        juce::String getShortName (int) override { return getName(); }
+        juce::String getSelectableDescription() override { return getName(); }
+        BusLayout getBusses() const override { return BusLayout::singleStereoInOut(); }
+        int getNumOutputChannelsGivenInputs (int) override { return 2; }
+
+        juce::String channelId, insertId;
+        StripState state;
+
+        void initialise (const te::PluginInitialisationInfo& info) override { state.prepare (info.sampleRate); }
+        void deinitialise() override {}
+        void applyToBuffer (const te::PluginRenderContext& fc) override
+        {
+            if (fc.destBuffer == nullptr) return;
+            auto& b = *fc.destBuffer;
+            const juce::int64 at = std::llround (fc.editTime.getStart().inSeconds() * sampleRate);
+            state.process (b.getWritePointer (0, fc.bufferStartSample), b.getNumChannels() > 1 ? b.getWritePointer (1, fc.bufferStartSample) : nullptr,
+                           fc.bufferNumSamples, at);
+        }
+    };
+
     // Called once per te::Engine, before any song is built.
     inline void registerOurPlugins (te::Engine& engine)
     {
         engine.getPluginManager().createBuiltInType<ClickPlugin>();
         engine.getPluginManager().createBuiltInType<DelayPlugin>();
+        engine.getPluginManager().createBuiltInType<DcPlugin>();
+        engine.getPluginManager().createBuiltInType<StripPlugin>();
     }
 
     // A built-in plugin entry → its plugin, set from the entry (nullptr when it isn't one of ours or Tracktion's).
@@ -143,6 +291,8 @@ namespace mfx
             d->reportSamples = juce::jmax (0, (int) entry.getProperty ("reportSamples", 0));
             d->gain = (float) (double) entry.getProperty ("gain", 1.0);
         }
+        if (auto* dc = dynamic_cast<DcPlugin*> (plugin.get()))
+            dc->level = (float) (double) entry.getProperty ("level", 0.5);
         return plugin;
     }
 

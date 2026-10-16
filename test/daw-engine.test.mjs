@@ -195,3 +195,22 @@ test('the real engine killed by its PID comes back with the song at the same pla
   assert.equal(clock.bar, 2, '3.5 s at 96 BPM is in bar 2');
   assert.equal(e.place.song, join(dir, 'song.json'));
 });
+
+test('the real engine: mixer.set moves a channel\'s fader or pan by channel or insert id, and says no to the rest (doc 15 A7)', { skip: !REAL && 'the engine is not built on this machine' }, async (t) => {
+  const { songFromNotes } = await import('../src/song-import.mjs');
+  const { writeSong } = await import('../src/song.mjs');
+  const fx = join(import.meta.dirname, 'fixtures', 'songs', 'four');
+  const { song } = songFromNotes({ blueprint: JSON.parse(readFileSync(join(fx, 'blueprint.json'), 'utf8')), notes: JSON.parse(readFileSync(join(fx, 'notes.json'), 'utf8')), instruments: null });
+  const dir = mkdtempSync(join(tmpdir(), 'mfx-eng-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  writeFileSync(join(dir, 'song.json'), writeSong(song));
+  const e = createEngineSupervisor({ bin: REAL, args: ['--serve'] });
+  t.after(() => e.stop());
+  await e.start();
+  await assert.rejects(e.call('mixer.set', { channel: 'ch02', field: 'volDb', value: -6 }), /no song loaded/);
+  await e.call('song.load', { path: join(dir, 'song.json') }, { timeout: 60000 });
+  assert.deepEqual(await e.call('mixer.set', { channel: 'ch02', field: 'volDb', value: -6 }), { channel: 'ch02', field: 'volDb', value: -6 });
+  assert.deepEqual(await e.call('mixer.set', { insert: 'mx03', field: 'pan', value: 2 }), { channel: 'ch03', field: 'pan', value: 1 });
+  await assert.rejects(e.call('mixer.set', { channel: 'nope', field: 'pan', value: 0 }), /no channel nope/);
+  await assert.rejects(e.call('mixer.set', { channel: 'ch02', field: 'width', value: 1 }), /can't set width yet/);
+});

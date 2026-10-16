@@ -181,3 +181,30 @@ export function onsets(sig, { thresholdDb = -40, gap = 0.02 } = {}) {
   }
   return out;
 }
+
+// A Butterworth high-pass of even `order` (order / 2 RBJ biquads, Q from the Butterworth pole angles), run forward over
+// each channel in double. For residual tests: what's left above `hz` (doc 15 Q9: zipper noise above 5 kHz).
+export function highpass(sig, { hz, order = 8 } = {}) {
+  const w = (2 * Math.PI * hz) / sig.rate;
+  const cos = Math.cos(w);
+  const stages = Array.from({ length: order / 2 }, (_, k) => {
+    const q = 1 / (2 * Math.cos((Math.PI * (2 * k + 1)) / (2 * order)));
+    const alpha = Math.sin(w) / (2 * q);
+    const a0 = 1 + alpha;
+    return { b0: (1 + cos) / 2 / a0, b1: -(1 + cos) / a0, b2: (1 + cos) / 2 / a0, a1: (-2 * cos) / a0, a2: (1 - alpha) / a0 };
+  });
+  const channels = sig.channels.map((c) => {
+    let x = Float64Array.from(c);
+    for (const s of stages) {
+      const y = new Float64Array(x.length);
+      let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+      for (let i = 0; i < x.length; i++) {
+        const v = s.b0 * x[i] + s.b1 * x1 + s.b2 * x2 - s.a1 * y1 - s.a2 * y2;
+        x2 = x1; x1 = x[i]; y2 = y1; y1 = v; y[i] = v;
+      }
+      x = y;
+    }
+    return Float32Array.from(x);
+  });
+  return { rate: sig.rate, channels };
+}

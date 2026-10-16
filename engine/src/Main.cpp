@@ -3,6 +3,8 @@
 //   --version    one JSON line: this engine's version and the pinned Tracktion Engine and JUCE commits
 //   --selftest   renders 1 s of a 1 kHz test tone through a Tracktion Edit into memory (no sound device) and checks it
 //   --serve      the studio protocol on stdin / stdout (doc 16 §4)
+//   --ramp-test <dir>  writes ramped.wav and unramped.wav: a 100 Hz sine through the fader jumping -20 → 0 dB, with and
+//                without our 20 ms ramp (doc 15 Q9; the test filters and measures them)
 //   --render <song.json> --settings <render.json> --out <dir>
 //                a one-shot offline render (doc 24 §1): 48 kHz 32-bit float, master plugins on, our settings always,
 //                faster than real time; writes mix-f32.wav and render-report.json
@@ -59,6 +61,7 @@ namespace
     // DeviceManager::audioDeviceIOCallbackWithContext, NodePlayerThreadPools::runThread).
     void applyDefaults() { te::setDefaultPanLaw (te::PanLaw3dBCenter); }
     void ourPlugins (te::Engine& engine) { mfx::registerOurPlugins (engine); }
+    // (Song tracks use our mfx-strip for fader and pan instead, with Tracktion's volume plugin at unity: SongBuilder.h.)
     void trackPanLaw (te::AudioTrack& t) { t.getVolumePlugin()->setPanLaw (te::PanLaw3dBCenter); }
 
     juce::DynamicObject::Ptr versions()
@@ -368,6 +371,7 @@ namespace
                 return st;
             }
             if (cmd == "engine.tone") return tone (args);
+            if (cmd == "mixer.set") return mixerSet (args);
             if (cmd == "song.load") return songLoad (args, false);
             if (cmd == "song.patch") return songLoad (args, true);
             if (cmd == "transport.play" || cmd == "transport.stop" || cmd == "transport.seek") return transport (cmd, args);
@@ -447,6 +451,31 @@ namespace
             return juce::var (o);
         }
 
+        // A live fader or pan move (doc 22 §7 mixer.set): { channel | insert, field: volDb | pan, value }, ramped over 20 ms
+        // by the strip. The song file isn't changed here (the studio saves it and sends song.patch).
+        juce::var mixerSet (const juce::var& args)
+        {
+            if (songEdit == nullptr) throw std::runtime_error ("no song loaded");
+            const auto field = args["field"].toString();
+            if (field != "volDb" && field != "pan") throw std::runtime_error (("mixer.set can't set " + field + " yet").toStdString());
+            const auto channel = args["channel"].toString(), insert = args["insert"].toString();
+            for (auto* t : te::getAudioTracks (*songEdit))
+                for (auto* pl : t->pluginList)
+                    if (auto* strip = dynamic_cast<mfx::StripPlugin*> (pl))
+                        if ((channel.isNotEmpty() && strip->channelId == channel) || (insert.isNotEmpty() && strip->insertId == insert))
+                        {
+                            const double v = (double) args["value"];
+                            if (field == "volDb") strip->state.volDb = juce::jlimit (mfx::floorDb, 12.0, v);
+                            else strip->state.pan = juce::jlimit (-1.0, 1.0, v);
+                            auto o = new juce::DynamicObject();
+                            o->setProperty ("channel", strip->channelId);
+                            o->setProperty ("field", field);
+                            o->setProperty ("value", field == "volDb" ? strip->state.volDb.load() : strip->state.pan.load());
+                            return juce::var (o);
+                        }
+            throw std::runtime_error (("no channel " + channel + insert).toStdString());
+        }
+
         juce::var transport (const juce::String& cmd, const juce::var& args)
         {
             if (songEdit == nullptr) throw std::runtime_error ("no song loaded");
@@ -513,6 +542,49 @@ namespace
         }
     };
 
+    // doc 15 Q9: the fader jumps from -20 dB to 0 dB at sample 24120 (a peak of the 100 Hz sine, so an unramped jump is
+    // a real step), once through our strip with its 20 ms ramp and once without.
+    int rampTest (const juce::String& outPath)
+    {
+        const double rate = 48000;
+        const int n = 48000, jump = 24120;
+        juce::File out (outPath);
+        out.createDirectory();
+        for (int ramped = 0; ramped < 2; ++ramped)
+        {
+            juce::AudioBuffer<float> buf (2, n);
+            for (int i = 0; i < n; ++i)
+                for (int c = 0; c < 2; ++c) buf.setSample (c, i, (float) (0.5 * std::sin (2.0 * juce::MathConstants<double>::pi * 100.0 * i / rate)));
+            mfx::StripState st;
+            st.volDb = -20.0;
+            st.prepare (rate);
+            if (! ramped) st.rampSamples = 0;
+            for (int at = 0; at < n; at += 512)
+            {
+                if (at == (jump / 512) * 512)
+                {
+                    // the move lands mid-block in a real engine too: process up to it, then the rest
+                    const int first = jump - at;
+                    st.process (buf.getWritePointer (0, at), buf.getWritePointer (1, at), first, at);
+                    st.volDb = 0.0;
+                    st.process (buf.getWritePointer (0, jump), buf.getWritePointer (1, jump), juce::jmin (512, n - at) - first, jump);
+                    continue;
+                }
+                st.process (buf.getWritePointer (0, at), buf.getWritePointer (1, at), juce::jmin (512, n - at), at);
+            }
+            auto file = out.getChildFile (ramped ? "ramped.wav" : "unramped.wav");
+            file.deleteFile();
+            std::unique_ptr<juce::OutputStream> os (file.createOutputStream().release());
+            juce::WavAudioFormat wav;
+            auto opts = juce::AudioFormatWriterOptions{}.withSampleRate (rate).withNumChannels (2).withBitsPerSample (32)
+                                                        .withSampleFormat (juce::AudioFormatWriterOptions::SampleFormat::floatingPoint);
+            auto writer = wav.createWriterFor (os, opts);
+            if (writer == nullptr) return 1;
+            writer->writeFromAudioSampleBuffer (buf, 0, n);
+        }
+        return 0;
+    }
+
     int serve()
     {
         auto server = std::make_unique<Server>();
@@ -540,11 +612,12 @@ int main (int argc, char* argv[])
     if (args.contains ("--version")) return version();
     if (args.contains ("--selftest")) return selftest();
     if (args.contains ("--serve")) return serve();
+    if (args.contains ("--ramp-test")) { const int i = args.indexOf ("--ramp-test"); return rampTest (i + 1 < args.size() ? args[i + 1] : "."); }
     if (args.contains ("--render"))
     {
         auto after = [&] (const char* flag) { const int i = args.indexOf (flag); return i >= 0 && i + 1 < args.size() ? args[i + 1] : juce::String(); };
         return renderSong (after ("--render"), after ("--settings"), after ("--out"));
     }
-    std::cerr << "mortiflix-engine: --version | --selftest | --serve | --render <song.json> --settings <render.json> --out <dir>" << std::endl;
+    std::cerr << "mortiflix-engine: --version | --selftest | --serve | --ramp-test <dir> | --render <song.json> --settings <render.json> --out <dir>" << std::endl;
     return 2;
 }
