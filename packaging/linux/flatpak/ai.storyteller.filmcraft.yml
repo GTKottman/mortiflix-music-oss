@@ -13,6 +13,9 @@
 #   flatpak run --command=filmcraft-cli ai.storyteller.filmcraft mcp
 #
 # For Flathub, replace the `dir` source with a `git` source pinned to a release tag and commit.
+#
+# Mortiflix FilmCraft: this from-source manifest builds the app only. The Mortiflix bundle (service,
+# Node, ffmpeg, sound engine) ships in the release Flatpak, ai.storyteller.filmcraft.bundle.yml.
 id: ai.storyteller.filmcraft
 runtime: org.freedesktop.Platform
 runtime-version: '25.08'
@@ -41,9 +44,10 @@ finish-args:
   - --filesystem=/media
   - --filesystem=/run/media
   - --filesystem=/mnt
-  # Deliberately not granted: network (the optional --control server listens on 127.0.0.1 in
-  # the sandbox; `flatpak override --user --share=network ai.storyteller.filmcraft` exposes it
-  # to host agents) and host-wide filesystem access.
+  # Mortiflix FilmCraft: the Mortiflix service talks to the AI (Claude), voice and posting
+  # services over the network. (Upstream FilmCraft grants no network.) Still not granted:
+  # host-wide filesystem access. The --control server stays on 127.0.0.1 and off by default.
+  - --share=network
 build-options:
   append-path: /usr/lib/sdk/rust-stable/bin
 modules:

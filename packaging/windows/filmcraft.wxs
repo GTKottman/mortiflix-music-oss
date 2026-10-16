@@ -5,6 +5,10 @@
     wix build filmcraft.wxs -arch x64 -d Version=1.2.3 -d BinDir=... -d IconPath=... -o out.msi
 
   Per-machine install into Program Files and a Start Menu shortcut. No file associations.
+
+  Mortiflix FilmCraft: with -d MfxDir=<folder> it also installs the Mortiflix bundle (the service,
+  its own Node, ffmpeg, the sound engine; packaging/mortiflix/bundle.sh) into INSTALLFOLDER\mortiflix,
+  harvested with WiX v5's Files element.
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
   <Package
@@ -29,12 +33,17 @@
     <Property Id="ARPHELPLINK" Value="https://discord.gg/artcraft" />
 
     <StandardDirectory Id="ProgramFiles6432Folder">
-      <Directory Id="INSTALLFOLDER" Name="FilmCraft" />
+      <Directory Id="INSTALLFOLDER" Name="FilmCraft">
+        <Directory Id="MFXFOLDER" Name="mortiflix" />
+      </Directory>
     </StandardDirectory>
     <StandardDirectory Id="ProgramMenuFolder" />
 
     <Feature Id="Main" Title="FilmCraft" Level="1">
       <ComponentGroupRef Id="FilmcraftFiles" />
+<?ifdef MfxDir?>
+      <ComponentGroupRef Id="MortiflixFiles" />
+<?endif?>
     </Feature>
   </Package>
 
@@ -55,4 +64,12 @@
       </Component>
     </ComponentGroup>
   </Fragment>
+<?ifdef MfxDir?>
+
+  <Fragment>
+    <ComponentGroup Id="MortiflixFiles" Directory="MFXFOLDER">
+      <Files Include="$(var.MfxDir)\**" />
+    </ComponentGroup>
+  </Fragment>
+<?endif?>
 </Wix>

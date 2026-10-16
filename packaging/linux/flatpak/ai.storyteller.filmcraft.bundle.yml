@@ -38,9 +38,10 @@ finish-args:
   - --filesystem=/media
   - --filesystem=/run/media
   - --filesystem=/mnt
-  # Deliberately not granted: network (the optional --control server listens on 127.0.0.1 in
-  # the sandbox; `flatpak override --user --share=network ai.storyteller.filmcraft` exposes it
-  # to host agents) and host-wide filesystem access.
+  # Mortiflix FilmCraft: the Mortiflix service talks to the AI (Claude), voice and posting
+  # services over the network. (Upstream FilmCraft grants no network.) Still not granted:
+  # host-wide filesystem access. The --control server stays on 127.0.0.1 and off by default.
+  - --share=network
 modules:
   - name: filmcraft
     buildsystem: simple
@@ -54,6 +55,9 @@ modules:
       # Already has the release's version and date substituted by package.sh.
       - install -Dm644 share/metainfo/ai.storyteller.filmcraft.metainfo.xml /app/share/metainfo/ai.storyteller.filmcraft.metainfo.xml
       - mkdir -p /app/share/icons /app/share/doc && cp -R share/icons/hicolor /app/share/icons/ && cp -R share/doc/filmcraft /app/share/doc/
+      # Mortiflix FilmCraft: the service, its Node, ffmpeg and the sound engine; the app finds it at
+      # /app/lib/mortiflix-filmcraft (../lib from /app/bin). Tarballs made with --no-mortiflix lack it.
+      - if [ -d lib/mortiflix-filmcraft/service ]; then mkdir -p /app/lib && cp -R lib/mortiflix-filmcraft /app/lib/; fi
     sources:
       - type: dir
         path: stage

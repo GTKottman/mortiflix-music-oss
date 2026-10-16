@@ -14,6 +14,11 @@
   Needs: Rust (MSVC toolchain + the target), the Windows SDK (rc.exe, signtool.exe),
   and WiX v5: dotnet tool install --global wix --version 5.0.2
 
+  Mortiflix FilmCraft: both also carry the Mortiflix bundle (the service, its own Node, ffmpeg,
+  the sound engine) in mortiflix\ beside filmcraft.exe, made by packaging/mortiflix/bundle.sh
+  under Git Bash (env: MFX_SERVICE_SRC, MFX_ENGINE_BIN, NODE_VERSION, ...). -NoMortiflix leaves
+  it out.
+
 .EXAMPLE
   pwsh packaging/windows/package.ps1 -Arch x64
   pwsh packaging/windows/package.ps1 -Arch x86 -SkipBuild
@@ -21,7 +26,8 @@
 #>
 param(
   [ValidateSet('x64', 'x86', 'arm64')] [string] $Arch = 'x64',
-  [switch] $SkipBuild
+  [switch] $SkipBuild,
+  [switch] $NoMortiflix
 )
 $ErrorActionPreference = 'Stop'
 $Root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
@@ -90,12 +96,27 @@ Copy-Item (Join-Path $Bin 'filmcraft.exe'), (Join-Path $Bin 'filmcraft-cli.exe')
 
 & (Join-Path $PSScriptRoot 'sign.ps1') (Join-Path $Stage 'filmcraft.exe') (Join-Path $Stage 'filmcraft-cli.exe')
 
+# ---- Mortiflix bundle ----------------------------------------------------------------------------
+# Found by the app as mortiflix\ beside filmcraft.exe (crates/mortiflix-ui/src/service.rs).
+$MfxDir = Join-Path $Stage 'mortiflix'
+$WixMfx = @()
+if (-not $NoMortiflix) {
+  if ($Arch -eq 'x86') { throw 'the Mortiflix bundle needs x64 or arm64 (no 32-bit Node or ffmpeg builds); use -NoMortiflix' }
+  # Git Bash (bash.exe on PATH can be WSL's, which can't see this checkout the same way).
+  $GitBash = Join-Path $env:ProgramFiles 'Git\bin\bash.exe'
+  $Bash = if ($env:BASH) { $env:BASH } elseif (Test-Path $GitBash) { $GitBash } else { 'bash' }
+  Invoke-Native 'Mortiflix bundle' { & $Bash (Join-Path $Root 'packaging/mortiflix/bundle.sh') --os windows --arch $Arch --out ($MfxDir -replace '\\', '/') }
+  $MfxExes = Get-ChildItem -Path $MfxDir -Recurse -Include '*.exe' | ForEach-Object { $_.FullName }
+  if ($MfxExes) { & (Join-Path $PSScriptRoot 'sign.ps1') @MfxExes }
+  $WixMfx = @('-d', "MfxDir=$MfxDir")
+}
+
 # ---- MSI ---------------------------------------------------------------------------------------
 $Msi = Join-Path $Dist "filmcraft-$Version-windows-$Arch.msi"
 Invoke-Native 'wix build' {
   wix build (Join-Path $PSScriptRoot 'filmcraft.wxs') -arch $Arch `
     -d "Version=$MsiVersion" -d "BinDir=$Stage" -d "IconPath=$(Join-Path $Root 'assets\app-icon\filmcraft.ico')" `
-    -o $Msi
+    @WixMfx -o $Msi
 }
 # wix writes its debug symbols (.wixpdb) next to the MSI; keep them out of the release assets.
 Remove-Item -Force -ErrorAction SilentlyContinue ([IO.Path]::ChangeExtension($Msi, '.wixpdb'))
@@ -106,6 +127,7 @@ $Portable = Join-Path $TargetDir "windows-package\filmcraft-$Version-windows-$Ar
 Remove-Item -Recurse -Force $Portable -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $Portable | Out-Null
 Copy-Item (Join-Path $Stage '*.exe') $Portable
+if (Test-Path $MfxDir) { Copy-Item -Recurse $MfxDir (Join-Path $Portable 'mortiflix') }
 # The marker that makes FilmCraft keep its data in .\data next to the exe instead of %APPDATA% (#139).
 Set-Content -Encoding ascii -Path (Join-Path $Portable 'portable.txt') -Value @(
   'FilmCraft portable: preferences, presets, logs and crash recovery are kept in the data folder',

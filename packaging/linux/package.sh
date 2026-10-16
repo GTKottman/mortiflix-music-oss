@@ -5,9 +5,13 @@
 #   $DIST/filmcraft-<version>-linux-<arch>.AppImage.zsync  delta updates (needs zsyncmake)
 #   $DIST/filmcraft-<version>-linux-<arch>.deb       Debian, Ubuntu, Mint, Pop!_OS, ...
 #   $DIST/filmcraft-<version>-linux-<arch>.rpm       Fedora, openSUSE, RHEL, ...
-#   $DIST/filmcraft-<version>-linux-<arch>.tar.gz    plain FHS-style tree (bin/, share/)
+#   $DIST/filmcraft-<version>-linux-<arch>.tar.gz    plain FHS-style tree (bin/, lib/, share/)
 #
-# Usage: packaging/linux/package.sh [--skip-build] [--formats "appimage deb rpm tar"]
+# Usage: packaging/linux/package.sh [--skip-build] [--formats "appimage deb rpm tar"] [--no-mortiflix]
+#
+# Mortiflix FilmCraft: every format also carries the Mortiflix bundle (the service, its own Node,
+# ffmpeg, the sound engine) in lib/mortiflix-filmcraft, made by packaging/mortiflix/bundle.sh (its
+# env: MFX_SERVICE_SRC, MFX_ENGINE_BIN, NODE_VERSION, ...). --no-mortiflix leaves it out.
 #
 # Needs: cargo; nfpm for deb/rpm (https://nfpm.goreleaser.com); appimagetool for the AppImage
 # (downloaded into $CARGO_TARGET_DIR if missing). Build on an old distro (CI: Ubuntu 22.04,
@@ -24,12 +28,14 @@ HERE="$ROOT/packaging/linux"
 APP_ID=ai.storyteller.filmcraft
 
 SKIP_BUILD=0
+MORTIFLIX=1
 FORMATS="appimage deb rpm tar"
 while [ $# -gt 0 ]; do
   case "$1" in
     --skip-build) SKIP_BUILD=1; shift ;;
     --formats) FORMATS="$2"; shift 2 ;;
-    -h | --help) sed -n '2,21p' "$0"; exit 0 ;;
+    --no-mortiflix) MORTIFLIX=0; shift ;;
+    -h | --help) sed -n '2,25p' "$0"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -71,6 +77,18 @@ mkdir -p "$STAGE/usr/share/icons"
 cp -R "$ROOT/assets/app-icon/hicolor" "$STAGE/usr/share/icons/"
 mkdir -p "$STAGE/usr/share/doc/filmcraft"
 copy_docs "$STAGE/usr/share/doc/filmcraft"
+
+# The Mortiflix bundle, found by the app at ../lib/mortiflix-filmcraft from its binary. The folder
+# always exists so nfpm's tree entry is valid without it.
+mkdir -p "$STAGE/usr/lib/mortiflix-filmcraft"
+if [ "$MORTIFLIX" = 1 ]; then
+  case "$ARCH" in x86_64) MFX_ARCH=x64 ;; aarch64) MFX_ARCH=arm64 ;; *) MFX_ARCH="" ;; esac
+  if [ -n "$MFX_ARCH" ]; then
+    "$ROOT/packaging/mortiflix/bundle.sh" --os linux --arch "$MFX_ARCH" --out "$STAGE/usr/lib/mortiflix-filmcraft"
+  else
+    warn "no Mortiflix bundle for $ARCH (Node and ffmpeg builds exist for x86_64 and aarch64 only)"
+  fi
+fi
 
 if command -v desktop-file-validate >/dev/null; then
   desktop-file-validate "$STAGE/usr/share/applications/$APP_ID.desktop"

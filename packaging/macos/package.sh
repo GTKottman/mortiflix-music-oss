@@ -4,7 +4,14 @@
 #   $DIST/filmcraft-<version>-macos-<arch>.dmg          FilmCraft.app on a drag-to-Applications DMG
 #   $DIST/filmcraft-cli-<version>-macos-<arch>.zip      the headless CLI
 #
-# Usage: packaging/macos/package.sh [--arch universal|aarch64|x86_64] [--skip-build]
+# Usage: packaging/macos/package.sh [--arch universal|aarch64|x86_64] [--skip-build] [--no-mortiflix]
+#
+# Mortiflix FilmCraft: FilmCraft.app also carries the Mortiflix bundle (the service, its own Node,
+# ffmpeg, the sound engine) in Contents/Resources/mortiflix, made by packaging/mortiflix/bundle.sh
+# (env: MFX_SERVICE_SRC, NODE_VERSION, FFMPEG_SHA256, ...; MFX_ENGINE_BIN = the arm64 or only
+# engine, MFX_ENGINE_BIN_X64 = the x86_64 one for a universal build). Universal: each tool is
+# lipo'd from its arm64 and x86_64 builds. Every Mach-O in it is signed with the hardened runtime
+# (Node with packaging/mortiflix/node-entitlements.plist), so it notarizes with the app.
 #
 # Signing (env):
 #   MACOS_SIGN_IDENTITY   codesign identity (name or SHA-1). Default "-" = ad-hoc (local testing;
@@ -19,11 +26,13 @@ HERE="$ROOT/packaging/macos"
 
 ARCH=universal
 SKIP_BUILD=0
+MORTIFLIX=1
 while [ $# -gt 0 ]; do
   case "$1" in
     --arch) ARCH="$2"; shift 2 ;;
     --skip-build) SKIP_BUILD=1; shift ;;
-    -h | --help) sed -n '2,16p' "$0"; exit 0 ;;
+    --no-mortiflix) MORTIFLIX=0; shift ;;
+    -h | --help) sed -n '2,24p' "$0"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -111,8 +120,43 @@ printf 'APPL????' >"$APP/Contents/PkgInfo"
 # licences of the embedded craft-fonts fonts (builds with CRAFT_FONTS_DIR)
 copy_font_licences "$APP/Contents/Resources"
 
+# ---- Mortiflix bundle --------------------------------------------------------------------------
+# Found by the app at ../Resources/mortiflix from Contents/MacOS (crates/mortiflix-ui/src/service.rs).
+MFX="$APP/Contents/Resources/mortiflix"
+if [ "$MORTIFLIX" = 1 ]; then
+  BUNDLE_SH="$ROOT/packaging/mortiflix/bundle.sh"
+  case "$ARCH" in
+    aarch64) "$BUNDLE_SH" --os macos --arch arm64 --out "$MFX" ;;
+    x86_64) "$BUNDLE_SH" --os macos --arch x64 --out "$MFX" ;;
+    universal)
+      "$BUNDLE_SH" --os macos --arch arm64 --out "$MFX"
+      MFX_ENGINE_BIN="${MFX_ENGINE_BIN_X64:-}" "$BUNDLE_SH" --os macos --arch x64 --out "$WORK/mortiflix-x64"
+      while IFS= read -r f; do
+        twin="$WORK/mortiflix-x64/${f#"$MFX"/}"
+        if [ -f "$twin" ] && lipo -info "$f" >/dev/null 2>&1; then
+          lipo -create -output "$f.universal" "$f" "$twin"
+          mv "$f.universal" "$f"
+          lipo -info "$f"
+        elif lipo -info "$f" >/dev/null 2>&1; then
+          warn "$(basename "$f") has no x86_64 build: it runs on Apple silicon only"
+        fi
+      done < <(find "$MFX" -type f -perm -u+x)
+      ;;
+  esac
+fi
+
 # Sign inside-out: nested code first, then the bundle itself (no --deep on the final signature).
-# Today the only nested code is the main executable; frameworks/helpers would be signed here too.
+# Nested code: the Mortiflix bundle's tools (Node needs its JIT entitlements), then the main executable.
+if [ -d "$MFX" ]; then
+  while IFS= read -r f; do
+    if file -b "$f" | grep -q 'Mach-O'; then
+      case "$f" in
+        */node/bin/node) sign --options runtime --entitlements "$ROOT/packaging/mortiflix/node-entitlements.plist" "$f" ;;
+        *) sign --options runtime "$f" ;;
+      esac
+    fi
+  done < <(find "$MFX" -type f)
+fi
 sign --options runtime --entitlements "$HERE/entitlements.plist" "$APP/Contents/MacOS/FilmCraft"
 sign --options runtime --entitlements "$HERE/entitlements.plist" "$APP"
 codesign --verify --strict --deep --verbose=2 "$APP"

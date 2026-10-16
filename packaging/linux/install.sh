@@ -35,6 +35,13 @@ mkdir -p -- "$prefix/bin" "$prefix/share"
 install -m755 -- "$source_dir/bin/filmcraft" "$prefix/bin/filmcraft"
 install -m755 -- "$source_dir/bin/filmcraft-cli" "$prefix/bin/filmcraft-cli"
 cp -R -- "$source_dir/share/." "$prefix/share/"
+# Mortiflix FilmCraft: the service, its Node, ffmpeg and the sound engine (found from bin/ as
+# ../lib/mortiflix-filmcraft). A fresh copy, so files from an older version never linger.
+if [ -d "$source_dir/lib/mortiflix-filmcraft" ]; then
+  rm -rf -- "$prefix/lib/mortiflix-filmcraft"
+  mkdir -p -- "$prefix/lib"
+  cp -R -- "$source_dir/lib/mortiflix-filmcraft" "$prefix/lib/mortiflix-filmcraft"
+fi
 
 # Use an absolute path so launching from the application menu does not depend on PATH.
 # Escape the Exec argument, then the desktop entry's string value (two separate layers).
