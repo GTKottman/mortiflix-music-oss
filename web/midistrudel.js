@@ -181,7 +181,7 @@ export function midiStrudelView(ui) {
       const lines = changedLines(sent, r.code);
       notes = r.notes; problems = r.problems || []; error = null; hoverNote = null; caretNotes = new Set(); info.textContent = "";
       setText(r.code);
-      const how = { 'bar lines': `rewrote ${lines.size === 1 ? 'line' : 'lines'} ${[...lines].map((i) => i + 1).join(', ')}`, 'in place': 'changed the note in place', 'replace bars': `replaced bar${r.from === r.to ? ` ${r.from}` : `s ${r.from}–${r.to}`}`, fresh: 'wrote the pattern fresh' }[r.level] || r.level;
+      const how = { 'bar lines': `rewrote ${lines.size === 1 ? 'line' : 'lines'} ${[...lines].map((i) => i + 1).join(', ')}`, 'in place': 'changed the note in place', arrangement: `hard-coded bar${r.from === r.to ? ` ${r.from}` : `s ${r.from}–${r.to}`} in a new arrangement`, fresh: 'wrote the pattern fresh' }[r.level] || r.level;
       say(`${what}: ${how} · ${Math.round(performance.now() - t0)} ms`);
       showFlash(lines);
       fitKeys(); fitView();

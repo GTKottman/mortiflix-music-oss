@@ -158,8 +158,11 @@ export function notesToIdiomatic(notes, { bars, ticksPerBar = 4 * PPQ, drums = f
   if (clip && opts.noVel) { opts.noVel = false; cells = byBar.map((ns, b) => barCell(ns, b * ticksPerBar, ticksPerBar, opts).text); }
   let p = 1; while (p < bars && !cells.every((c, i) => c === cells[i % p])) p++;
   const used = cells.slice(0, p);
-  const body = used.join(' ').length <= 90 ? `"<${used.join(' ')}>"` : '`<\n' + used.map((c) => `  ${c}\n`).join('') + '>`';
-  if (opts.noVel) return `note(${body}).velocity(${fmtNum(uniform)})`;
+  // one bar's worth: "d2 ~ d2 g2", not "<[d2 ~ d2 g2]>"
+  const one = p === 1 && /^\[[^,]*\]$/.test(used[0]) && !/[\[\]]/.test(used[0].slice(1, -1)) ? used[0].slice(1, -1) : null;
+  const body = one !== null ? `"${one}"` : used.join(' ').length <= 90 ? `"<${used.join(' ')}>"` : '`<\n' + used.map((c) => `  ${c}\n`).join('') + '>`';
+  // .8 is what a note with no velocity plays at, so it isn't written
+  if (opts.noVel) return uniform === 0.8 ? `note(${body})` : `note(${body}).velocity(${fmtNum(uniform)})`;
   return `${body}.as("note:velocity${clip ? ':clip' : ''}")`;
 }
 

@@ -60,14 +60,18 @@ test('the edit ladder: exact, and only the edited spot changes', { skip }, async
   assert.equal(r.level, 'in place');
   assert.equal(r.code, ai.replace('a2]', 'c3]'));
 
-  // replace bars: "a2" plays in bars 4 and 8, so only bar 8 is replaced
+  // arrangement: "a2" plays in bars 4 and 8, so the original stays word for word and bar 8 is hard-coded at that spot
   ({ notes } = await s.notes(ai, { bars: 8 }));
   r = await s.edit(ai, notes.map((n, i) => (i === notes.length - 1 ? { ...n, key: 48 } : n)), { bars: 8 });
-  assert.equal(r.level, 'replace bars');
-  assert.equal(r.code, 'mfx.bars(' + ai + ', 8, 8, `<\n  [d2:.8!2 f2:.8 c3:.8]\n>`.as("note:velocity"))');
-  // a second edit inside those bars changes the inner line only (no nesting)
+  assert.equal(r.level, 'arrangement');
+  assert.equal(r.code, `arrange(\n  [7, ${ai}],\n  [1, note("d2!2 f2 c3")]\n)`);
+  // a second edit inside those bars rewrites only that hard-coded section; a sound ending stays outside arrange()
   const again = await s.edit(r.code, r.notes.map((n) => (n.t === 7 * TPB ? { ...n, vel: 0.5 } : n)), { bars: 8 });
-  assert.equal(again.code, r.code.replace('[d2:.8!2', '[d2:.5 d2:.8'));
+  assert.equal(again.code, r.code.replace('note("d2!2 f2 c3")', '"d2:.5 d2:.8 f2:.8 c3:.8".as("note:velocity")'));
+  const lead = 'note("<[d2 ~ d2 f2] [c2 ~ c2 e2]>").s("sawtooth").lpf(800)';
+  ({ notes } = await s.notes(lead, { bars: 8 }));
+  r = await s.edit(lead, notes.map((n) => (n.t === 2 * TPB + 3 * 960 ? { ...n, key: n.key + 2 } : n)), { bars: 8 });
+  assert.equal(r.code, 'arrange(\n  [2, note("<[d2 ~ d2 f2] [c2 ~ c2 e2]>")],\n  [1, note("d2 ~ d2 g2")],\n  [5, note("<[d2 ~ d2 f2] [c2 ~ c2 e2]>").early(3)]\n).s("sawtooth").lpf(800)');
 
   // bar lines: one line per bar, so an edit in bar 2 changes line 3 and nothing else
   const lpb = '`<\n  [d2:.8 ~ d2:.6 f2:.7]\n  [c2:.8@3 e2:.7]\n>`.as("note:velocity")';

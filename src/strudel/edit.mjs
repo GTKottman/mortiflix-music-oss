@@ -2,7 +2,8 @@
 // the notes the owner wants and returns the smallest text change that runs to exactly those notes (the ladder, §3.4):
 //   1. bar lines    the text is line-per-bar: write it again; only the edited bars' lines differ
 //   2. in place     only pitch or velocity changed, each from one word used by no other note: change that word
-//   3. replace bars anything else: mfx.bars(<music>, from, to, <those bars, line per bar>)
+//   3. arrangement  anything else: the original kept word for word, the edited bars hard-coded notes in their own
+//                   section of Strudel's arrange() at that spot
 //   4. fresh        the whole pattern in the short form (only if 3 can't be made exact)
 // Every result is run and its notes must equal the wanted notes, or the next step is tried.
 import { createEvaluator, PPQ } from './evaluator.mjs';
@@ -10,7 +11,6 @@ import { notesToStrudel, notesToIdiomatic, keyText, sortNotes, strip, sameNotes 
 
 const NOTE_RE = /^([a-gA-G])([#bsf]*)(-?\d+)?$/;
 const CH = { c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11 };
-const BARS_RE = /^mfx\.bars\(([\s\S]*), (\d+), (\d+), (`<[\s\S]*>`\.as\("[a-z:]+"\))\)$/;
 
 function tokenKey(tok) {
   if (/^-?\d+(\.\d+)?$/.test(tok)) return { kind: 'num', key: Number(tok) };
@@ -50,13 +50,12 @@ export function createStrudel({ strudelDir, timeoutMs } = {}) {
     // 2. in place
     const inPlace = wordEdit(text, old, target);
     if (inPlace) { const r = await check(inPlace); if (r) return done('in place', inPlace, r); }
-    // 3. replace bars. An edit inside bars already replaced rewrites only those inner bar lines; a new spot gets its own
-    // mfx.bars around the rest (at most 3 deep, then the spots are joined).
+    // 3. arrangement: the original untouched, the edited bars hard-coded at that spot
     const changed = changedBars(old, target, tpb, bars);
     if (changed.length) {
-      const c = replaceBars(text, target, changed, { ...opts, tpb });
+      const c = arrangement(text, target, changed, { bars, tpb });
       const r = await check(c.code);
-      if (r) return done('replace bars', c.code, r, { from: c.from, to: c.to });
+      if (r) return done('arrangement', c.code, r, { from: c.from, to: c.to });
     }
     // 4. fresh
     for (const c of [notesToIdiomatic(target, opts), notesToStrudel(target, opts)]) {
@@ -69,43 +68,134 @@ export function createStrudel({ strudelDir, timeoutMs } = {}) {
   return { notes, edit, close: ev.close };
 }
 
-// Peels mfx.bars(<music>, from, to, <bars>) layers off the text, outermost first.
-function layersOf(text) {
-  const layers = [];
-  let inner = text;
-  for (let m; (m = inner.match(BARS_RE));) { layers.push({ from: Number(m[2]), to: Number(m[3]), repl: m[4] }); inner = m[1]; }
-  return { inner, layers: layers.reverse() };
+// ---- step 3: a new arrangement for the edit ----
+// The pattern that made the music is kept word for word. The edited bars become hard-coded notes in their own section of
+// Strudel's arrange(), at that spot; the original plays the bars around them. arrange() starts every section from the
+// pattern's own beginning, so a section after an edit carries the original on with .early(<bars before it>). Sound-only
+// methods at the end (.s, .lpf, .room…) stay outside arrange(), so the hard-coded bars sound the same.
+const SOUND = new Set(('s sound bank gain postgain pan orbit lpf lpq hpf hpq bpf bpq cutoff resonance hcutoff hresonance bandf ' +
+  'bandq ftype lpenv hpenv bpenv lpattack lpdecay lpsustain lprelease hpattack hpdecay hpsustain hprelease room roomsize size ' +
+  'roomfade roomlp roomdim dry delay delaytime delayfeedback delayfb attack decay sustain release adsr att dec sus rel shape ' +
+  'distort crush coarse vowel phaser phaserdepth phasercenter phasersweep chorus tremolo tremolodepth tremolosync vib vibmod ' +
+  'fm fmh fmi fmenv fmattack fmdecay fmsustain fmrelease compressor speed begin end loop cut color punchcard pianoroll scope ' +
+  'spectrum analyze _punchcard _pianoroll _scope _spectrum').split(' '));
+
+// Walks the text outside strings and comments, calling visit(i, ch, depth) for every code character.
+function walk(code, visit) {
+  let depth = 0;
+  for (let i = 0; i < code.length; i++) {
+    const ch = code[i];
+    if (ch === '"' || ch === "'" || ch === '`') {
+      let j = i + 1;
+      while (j < code.length && code[j] !== ch) j += code[j] === '\\' ? 2 : 1;
+      i = j;
+      continue;
+    }
+    if (ch === '/' && code[i + 1] === '/') { while (i < code.length && code[i] !== '\n') i++; i--; continue; }
+    if (ch === '/' && code[i + 1] === '*') { const j = code.indexOf('*/', i + 2); i = j < 0 ? code.length : j + 1; continue; }
+    if ('([{'.includes(ch)) depth++;
+    if (')]}'.includes(ch)) depth--;
+    if (visit(i, ch, depth) === false) return;
+  }
 }
 
-function replaceBars(text, target, changed, { bars, ticksPerBar: tpb }) {
-  const { inner, layers } = layersOf(text);
-  // the changed bars (1-based) in runs of neighbours
-  const runs = [];
-  for (const b of changed.map((x) => x + 1)) { const r = runs.at(-1); if (r && b === r.to + 1) r.to = b; else runs.push({ from: b, to: b }); }
-  const all = layers.map((l) => ({ ...l, dirty: false }));
-  for (const run of runs) {
-    const hit = all.filter((l) => l.from <= run.to + 1 && run.from <= l.to + 1);
-    if (!hit.length) { all.push({ ...run, dirty: true }); continue; }
-    const keep = hit[0];
-    keep.from = Math.min(run.from, ...hit.map((l) => l.from));
-    keep.to = Math.max(run.to, ...hit.map((l) => l.to));
-    keep.dirty = true;
-    for (const l of hit.slice(1)) all.splice(all.indexOf(l), 1);
+// { head, expr }: the last statement (the one that makes the music) and the lines before it.
+function lastStatement(code) {
+  let cut = 0;
+  walk(code, (i, ch, depth) => {
+    if (depth !== 0) return;
+    if (ch === ';') cut = i + 1;
+    if (ch === '\n') { const rest = code.slice(i + 1).match(/^\s*(\S)/); if (rest && rest[1] !== '.' && !/[=+\-*/,(&|?:]\s*$/.test(code.slice(0, i))) cut = i + 1; }
+  });
+  return { head: code.slice(0, cut), expr: code.slice(cut).trim() };
+}
+
+// Splits "X.s(…).lpf(…)" into the music X and its sound-only ending.
+function splitSound(expr) {
+  const calls = [];   // [dot, end] of each top-level .name(…)
+  let open = null;
+  walk(expr, (i, ch, depth) => {
+    if (ch === '.' && depth === 0) { const m = expr.slice(i).match(/^\.\s*([A-Za-z_$][\w$]*)\s*\(/); if (m) open = { dot: i, name: m[1] }; }
+    if (ch === ')' && depth === 0 && open) { calls.push({ ...open, end: i + 1 }); open = null; }
+  });
+  let at = expr.length;
+  for (let k = calls.length - 1; k >= 0; k--) {
+    const c = calls[k];
+    if (!SOUND.has(c.name) || expr.slice(c.end, at).trim()) break;
+    at = c.dot;
   }
-  while (all.length > 3) {   // join the two closest spots
-    all.sort((a, b) => a.from - b.from);
-    let best = 0;
-    for (let i = 1; i < all.length - 1; i++) if (all[i + 1].from - all[i].to < all[best + 1].from - all[best].to) best = i;
-    const [a, b] = [all[best], all[best + 1]];
-    all.splice(best, 2, { from: a.from, to: b.to, dirty: true });
+  return { music: expr.slice(0, at).trimEnd(), sound: expr.slice(at) };
+}
+
+// Top-level comma-separated parts of a text.
+function commaParts(text) {
+  const parts = [];
+  let from = 0;
+  walk(text, (i, ch, depth) => { if (ch === ',' && depth === 0) { parts.push(text.slice(from, i).trim()); from = i + 1; } });
+  parts.push(text.slice(from).trim());
+  return parts.filter(Boolean);
+}
+
+// An earlier edit's arrange(): [{ len, offset }] for the original's sections, [{ len, text }] for hard-coded ones.
+function sectionsOf(music, bars) {
+  const m = music.match(/^arrange\(([\s\S]*)\)$/);
+  if (!m) return null;
+  const raw = [];
+  for (const part of commaParts(m[1])) {
+    const pm = part.match(/^\[([\s\S]*)\]$/);
+    if (!pm) return null;
+    const [len, ...rest] = commaParts(pm[1]);
+    if (!/^\d+$/.test(len) || rest.length !== 1) return null;
+    raw.push({ len: Number(len), text: rest[0] });
   }
-  let code = inner;
-  for (const l of all) {
-    const repl = l.dirty ? notesToStrudel(target.filter((n) => n.t >= (l.from - 1) * tpb && n.t < l.to * tpb).map((n) => ({ ...n, t: n.t - (l.from - 1) * tpb })), { bars: l.to - l.from + 1, ticksPerBar: tpb }) : l.repl;
-    code = `mfx.bars(${code}, ${l.from}, ${l.to}, ${repl})`;
+  if (raw.reduce((s, x) => s + x.len, 0) !== bars) return null;
+  // the original: whichever section says X.early(k); with none, the first section
+  const early = raw.map((x) => x.text.match(/^([\s\S]*)\.early\((\d+)\)$/)).find(Boolean);
+  const orig = early ? early[1] : raw[0].text;
+  let at = 0;
+  return { orig, sections: raw.map((x) => {
+    const s = x.text === orig && at === 0 ? { len: x.len, offset: 0 } : x.text === `${orig}.early(${at})` ? { len: x.len, offset: at } : { len: x.len, text: x.text };
+    at += x.len;
+    return s;
+  }) };
+}
+
+function arrangement(code, target, changed, { bars, tpb }) {
+  const { head, expr } = lastStatement(code);
+  const { music, sound } = splitSound(expr);
+  const prior = sectionsOf(music, bars);
+  const orig = prior ? prior.orig : music;
+  // label every bar: 'o' plays the original, a number is a hard-coded section (dirty ones are written again)
+  const label = [];
+  const dirty = new Set();
+  const kept = new Map();
+  if (prior) {
+    let b = 0;
+    prior.sections.forEach((s, i) => { for (let k = 0; k < s.len; k++) label[b++] = 'offset' in s ? 'o' : i; if (!('offset' in s)) kept.set(i, s.text); });
+  } else for (let b = 0; b < bars; b++) label[b] = 'o';
+  let next = 1000;
+  for (const b of changed) {
+    if (label[b] !== 'o') { dirty.add(label[b]); continue; }
+    const g = b > 0 && label[b - 1] !== 'o' ? label[b - 1] : next++;
+    label[b] = g;
+    dirty.add(g);
   }
-  const dirty = all.filter((l) => l.dirty);
-  return { code, from: Math.min(...dirty.map((l) => l.from)), to: Math.max(...dirty.map((l) => l.to)) };
+  const sections = [];
+  for (let b = 0; b < bars;) {
+    let e = b;
+    while (e + 1 < bars && label[e + 1] === label[b]) e++;
+    const len = e - b + 1;
+    if (label[b] === 'o') sections.push(`[${len}, ${b ? `${orig}.early(${b})` : orig}]`);
+    else if (!dirty.has(label[b])) sections.push(`[${len}, ${kept.get(label[b])}]`);
+    else {
+      const slice = target.filter((n) => n.t >= b * tpb && n.t < (e + 1) * tpb).map((n) => ({ ...n, t: n.t - b * tpb }));
+      sections.push(`[${len}, ${notesToIdiomatic(slice, { bars: len, ticksPerBar: tpb })}]`);
+    }
+    b = e + 1;
+  }
+  const from = Math.min(...changed) + 1;
+  const to = Math.max(...changed) + 1;
+  return { code: `${head}arrange(\n  ${sections.join(',\n  ')}\n)${sound}`, from, to };
 }
 
 // Bars (0-based) where the notes differ.

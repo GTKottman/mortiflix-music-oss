@@ -27,13 +27,6 @@ const { transpiler } = await mod('transpiler');
 const noop = () => {};
 await core.evalScope(core, mini, tonal, { samples: noop, soundfont: noop, registerSound: noop, aliasBank: noop, initAudioOnFirstClick: noop });
 
-// The helpers a pattern's text may use (doc 28 §3.4). Bars are 1-based and inclusive, like the owner reads them.
-globalThis.mfx = {
-  bars: (pat, from, to, repl) => core.stack(
-    pat.filterWhen((t) => t < from - 1 || t >= to),
-    repl.late(from - 1).filterWhen((t) => t >= from - 1 && t < to)),
-};
-
 const frac = (f) => ({ s: Number(f.s ?? 1), n: Number(f.n), d: Number(f.d) });
 const r3 = (v) => Math.round(v * 1000) / 1000;
 
