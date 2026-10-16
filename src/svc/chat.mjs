@@ -96,6 +96,9 @@ export function translateEvents(root, id) {
         break;
       case 'SUBMITTED': {
         if (!step) break;
+        // Questions that all have defaults never block: the service goes on with them and says so itself.
+        if (step.review === 'questions' && loadConfig(root).mfxQuestionsBlock !== true
+          && submissions(root, id).find((x) => x.step === step.key && x.version === e.version)?.questions.every((q) => q.default !== null)) break;
         const card = cardFor(root, id, step, e.version);
         const text = card?.kind === 'script' ? `Here's the script in ${card.beats.length} beats.`
           : card?.kind === 'looks' ? `${card.frames.length} looks from the script. I'm using ${card.frames[0]?.label || 'the first'}; pick another any time.`
