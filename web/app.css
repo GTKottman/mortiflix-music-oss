@@ -583,3 +583,13 @@ a.cv-crumb:hover { color: var(--ink); text-decoration: underline; }
 .tp-stage { position: relative; width: 100%; height: 100%; background: #000; }
 .tp-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; z-index: 0; }   /* the readied video runs underneath: a hidden one isn't decoded */
 .tp-video.on { z-index: 1; }
+.sl { position: relative; }
+.sl-pop { position: absolute; top: 2px; width: 330px; z-index: 5; background: var(--raise); border: 1px solid #474747; border-radius: var(--radius-pop); padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 6px 24px rgba(0, 0, 0, .5); }
+.sl-pop-title { color: var(--ink); font-size: 12px; }
+.sl-pop-row { display: flex; align-items: center; gap: 8px; }
+.sl-pop-row.end { justify-content: flex-end; }
+.sl-pop-hint { color: var(--muted); font-size: 12px; }
+.sl-pop-text { width: 100%; height: 46px; box-sizing: border-box; background: var(--well); border: 1px solid var(--field-line); border-radius: var(--radius); color: var(--body); font: inherit; font-size: 12px; padding: 6px; resize: none; }
+.sl-pop-text:focus { border-color: var(--accent); outline: none; }
+.sl-pop-msg { color: var(--bad); font-size: 12px; }
+.sl-pop-msg:empty { display: none; }

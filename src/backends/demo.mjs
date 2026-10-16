@@ -179,6 +179,31 @@ export async function run({ root, projectId, workdir, env, onActivity, signal, c
       writeFileSync(join(workdir, 'design', 'frames.json'), JSON.stringify(fr, null, 2));
       return true;
     }
+    // A music section (doc 26 §8): something visible and safe in the asked bars, written through mfx song notes with the
+    // edit request (so only its bars' locks lift): the notes up an octave, or the drums thinned; thinned when the octave
+    // doesn't pass the harmony check.
+    if (e.kind === 'cue') {
+      let song;
+      try { song = await mfx('song', {}); } catch { return 'Demo: the music has no song yet (it is made with the music step).'; }
+      const sec = song.sections.find((x) => x.id === e.node);
+      if (!sec) return `Demo: ${e.node} isn't in the song.`;
+      const [a, b] = e.bars || [1, Number(sec.bars.split('–')[1]) - Number(sec.bars.split('–')[0]) + 1];
+      const show = await mfx('song-show', { section: e.node, part: e.part || null, bars: [a, b] });
+      const parts = [...new Set(show.notes.map((n) => n.part))];
+      if (!parts.length) return `Demo: ${e.label} has no notes in bars ${a}–${b} to change.`;
+      const up = (k) => k.replace(/(-?\d+)$/, (o) => String(Number(o) + 1));
+      for (const part of parts) {
+        const mine = show.notes.filter((n) => n.part === part).map(({ bar, beat, key, len, vel }) => ({ bar, beat, key, len, vel }));
+        const drums = part === 'ch10';
+        const tries = drums ? [mine.filter((_, i) => i % 2 === 0)] : [mine.map((n) => ({ ...n, key: up(n.key) })), mine.filter((_, i) => i % 2 === 0)];
+        let wrote = null;
+        for (const notes of tries) {
+          try { await mfx('song-notes', { section: e.node, part, bars: [a, b], notes, edit: e.id, rev: show.rev }); wrote = true; break; } catch (err) { wrote = err.message; }
+        }
+        if (wrote !== true) return `Demo: ${wrote}`;
+      }
+      return true;
+    }
     if (e.kind === 'beat') {
       const b = readJ('script/beats.json');
       const beat = b.beats.find((x) => x.id === e.node);

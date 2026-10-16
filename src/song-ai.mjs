@@ -99,7 +99,7 @@ function liftedBy(song, editId, section, part, fromTick, toTick, root, id) {
   if (!editId) return [];
   const e = readEdits(root, id).find((x) => x.id === editId);
   if (!e) throw new UserError(`there is no edit request ${editId}`);
-  if (e.state !== 'requested') throw new UserError(`${editId} is ${e.state}, not open`);
+  if (!['requested', 'working', 'fast'].includes(e.state)) throw new UserError(`${editId} is ${e.state}, not open`);
   if (e.node !== section) throw new UserError(`${editId} is about ${e.node}, not ${section}`);
   const tpb = ticksPerBar(song.meter[0]);
   const [ea, eb] = e.bars ? [(e.bars[0] - 1) * tpb, e.bars[1] * tpb] : [0, Infinity];

@@ -297,7 +297,7 @@ export function canvasView(ui, id, mode = 'edit') {
     const key = JSON.stringify([song?.rev, sv?.draft, graph?.rev, level, ms?.midi?.length]);
     if (lane && lane.dataset.key === key && board.contains(lane)) return;
     const focus = level.section && song?.patterns.some((p) => p.id === level.section) ? level : null;
-    lane = song ? ui.songLane({ h, song, graph, draft: sv.draft, shotNode, transitionOf, focus, onOpen: (sec, part) => openLevel(sec, part), onSeek: (t) => tp?.seek(t) }) : null;
+    lane = song ? ui.songLane({ h, song, graph, draft: sv.draft, shotNode, transitionOf, focus, onOpen: (sec, part) => openLevel(sec, part), onSeek: (t) => tp?.seek(t), onSelect: (sel) => barPopup(sel, song, sv.draft) }) : null;
     if (lane) lane.dataset.key = key;
     // the transport: the last render (the canvas's music node) is the clock without the sound engine
     tp?.destroy(); tp = null;
@@ -336,6 +336,50 @@ export function canvasView(ui, id, mode = 'edit') {
         ? `${channel.name}: ${channel.instrument ? channel.instrument.name : 'plays its Strudel sound (no instrument chosen yet)'}. Right-click empty space or press Alt+← to go back.`
         : 'Double-click a part to open it. Right-click empty space or press Alt+← to go back.')
         : ms?.midi?.length ? ui.musicPanel(id, ms) : h('p', { class: 'help' }, 'When the score passes its check, its MIDI pack shows here: every part on its own channel, a clip per section, and the steps to bring it into your DAW (Settings › Your DAW). Double-click a section to open it.')));
+  }
+
+  // The verdict popup on selected bars (doc 19 §2, mockup A): OK locks them as approved; Fix sends an edit request on
+  // the section with the bars (counted inside it), the part and the owner's words. Cut it / Repeat / Mute come next.
+  let popup = null;
+  function barPopup(sel, song, draft) {
+    popup?.remove(); popup = null;
+    if (!sel || !lane) return;
+    const pat = song.patterns.find((p) => p.id === sel.section);
+    const at = lane.lane.sections.find((x) => x.id === sel.section);
+    const inFrom = sel.from - at.startBar + 1; const inTo = sel.to - at.startBar + 1;
+    const ch = sel.part ? song.channels.find((c) => c.id === sel.part) : null;
+    const bars = sel.from === sel.to ? `Bar ${sel.from}` : `Bars ${sel.from}–${sel.to}`;
+    const words = h('textarea', { class: 'sl-pop-text', rows: 2, placeholder: 'Drop the drums, bigger bass into the cut…', 'aria-label': 'What to change' });
+    const msg = h('div', { class: 'sl-pop-msg', role: 'status' });
+    const tpb = lane.lane.ax.tpb;
+    const close = () => { popup?.remove(); popup = null; lane.lane.select(null); };
+    const ok = async () => {
+      if (draft) return fill(msg, 'Import the song first (it locks bars once it exists).');
+      try {
+        await api(`/api/projects/${id}/music/song/ops`, { method: 'POST', body: { ops: [{ op: 'lock.add', lockBy: 'ok', scope: { pattern: sel.section, ...(sel.part ? { channel: sel.part } : {}), fromTick: (inFrom - 1) * tpb, toTick: inTo * tpb } }] } });
+        ui.toast(`${bars} OK'd: the AI won't change them`);
+        close();
+      } catch (e) { fill(msg, e.message); }
+    };
+    const send = async () => {
+      const text = words.value.trim();
+      if (!text) { words.focus(); return fill(msg, 'Say what to change.'); }
+      try {
+        await api(`/api/projects/${id}/canvas/nodes/${sel.section}`, { method: 'POST', body: { action: 'fix', text, bars: [inFrom, inTo], ...(sel.part ? { part: sel.part } : {}) } });
+        ui.toast(`Fix sent: ${bars} of ${pat.id.toUpperCase()}${ch ? ` (${ch.name})` : ''}`);
+        close();
+      } catch (e) { fill(msg, e.message); }
+    };
+    popup = h('div', { class: 'sl-pop', role: 'dialog', 'aria-label': 'Selected bars' },
+      h('div', { class: 'sl-pop-title' }, `${bars} · ${pat.id.toUpperCase()} ${pat.name || ''}${at.under ? ` · under ${at.under}` : ''}${ch ? ` · ${ch.name}` : ''}`),
+      h('div', { class: 'sl-pop-row' }, h('button', { class: 'btn', onclick: ok }, 'OK'), h('span', { class: 'sl-pop-hint' }, 'or say what to fix:')),
+      words,
+      msg,
+      h('div', { class: 'sl-pop-row end' }, h('button', { class: 'btn', onclick: close }, 'Cancel'), h('button', { class: 'btn primary', onclick: send }, 'Fix')));
+    words.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) send(); if (e.key === 'Escape') close(); });
+    const left = Math.max(8, Math.min(lane.clientWidth - 338, lane.lane.x(lane.lane.ax.barSec(sel.from)) - lane.querySelector('.sl-scroll').scrollLeft));
+    popup.style.left = `${left}px`;
+    lane.append(popup);
   }
 
   // Song › m02 The bet › Bass: each earlier crumb goes back to its level.

@@ -288,20 +288,21 @@ function approveWhenAllDecided(root, id, g, owner, kind) {
 }
 
 // The session reports an edit: done only once its piece really has a new version (sync shows it), or failed.
-export function finishEdit(root, id, eid, { ok, note = '' } = {}) {
+export function finishEdit(root, id, eid, { ok, note = '', via = null } = {}) {
   const g = syncCanvas(root, id);
   const cp = canvasPaths(root, id);
   return withLock(cp.lock, () => {
     const all = loadEdits(root, id);
     const e = all.find((x) => x.id === eid);
     if (!e) throw new CanvasError(`no edit request ${eid}`);
-    if (!['requested', 'working'].includes(e.state)) throw new CanvasError(`${eid} is already ${e.state}`);
+    if (!['requested', 'working', 'fast'].includes(e.state)) throw new CanvasError(`${eid} is already ${e.state}`);
     if (ok) {
       const n = g.nodes[e.node];
       if (!n || !(n.current > e.from_version)) throw new CanvasError(`${e.label} has no new version yet (still v${e.from_version}): write it where the canvas reads it (GATES.md, "The canvas"), then say edit done`);
       e.version = n.current;
     }
     e.state = ok ? 'done' : 'failed';
+    if (via) e.via = via;
     e.note = String(note || '').slice(0, 2000);
     e.finished_at = new Date().toISOString();
     writeFileSync(cp.edits, JSON.stringify({ edits: all }, null, 2));
@@ -319,6 +320,21 @@ export function finishEdit(root, id, eid, { ok, note = '' } = {}) {
 }
 
 export const openEdits = (root, id) => openOf(loadEdits(root, id));
+
+// The Fix fast path (doc 28 §4) holds an edit as 'fast' while it tries, so no session starts for it; it goes back to
+// 'requested' (with what was tried) when the fast path gives up.
+export function setEditState(root, id, eid, state, extra = {}) {
+  const cp = canvasPaths(root, id);
+  return withLock(cp.lock, () => {
+    const all = loadEdits(root, id);
+    const e = all.find((x) => x.id === eid);
+    if (!e) throw new CanvasError(`no edit request ${eid}`);
+    Object.assign(e, extra, { state });
+    writeFileSync(cp.edits, JSON.stringify({ edits: all }, null, 2));
+    syncEditCount(root, id, all);
+    return e;
+  });
+}
 
 // project.json carries how many edits are open, so the runner starts a session for them (gates.settle).
 function syncEditCount(root, id, all) {

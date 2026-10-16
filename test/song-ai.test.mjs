@@ -104,3 +104,61 @@ test('mfx song through the bridge, as a session runs it', { skip }, async (t) =>
   const shown = await main(['song', 'show', 'm01', '--part', 'ch02', '--bars', '2'], env, cwd);
   assert.deepEqual(shown.notes.map((n) => [n.key, n.len]), [['C2', '1/2'], ['E2', '1/2']]);
 });
+
+test('the demo backend fixes bars 7–8 end to end: Fix → session → notes changed in those bars only → done, new cue version', { skip }, async (t) => {
+  process.env.MFX_STRUDEL = dir;
+  const { startProject } = await import('../src/projects.mjs');
+  const { respond } = await import('../src/gates.mjs');
+  const { Runner } = await import('../src/runner.mjs');
+  const { loadEdits } = await import('../src/canvas.mjs');
+  const root = tempStudio(t);
+  const p = createProject(root, { pipeline: 'explainer', title: 'Demo fix', answers: { topic: 'tides' } });
+  startProject(root, p.id);
+  const runner = new Runner(root);
+  runner.acquire();
+  t.after(() => { runner.release(); closeLadder(); });
+  await runner.loop();
+  respond(root, p.id, 'brief', 1, { verdict: 'approve' });
+  await runner.loop();
+  const before = loadSong(root, p.id).song;
+  const cueV = syncCanvas(root, p.id).nodes.m04.versions.length;
+  // bars 7–8 of the song are bars 1–2 of m04
+  const { edit } = nodeAction(root, p.id, 'm04', { action: 'fix', text: 'lift the ending', bars: [1, 2] });
+  await runner.loop();
+  const e = loadEdits(root, p.id).find((x) => x.id === edit.id);
+  assert.equal(e.state, 'done', e.note);
+  const after = loadSong(root, p.id).song;
+  assert.notDeepEqual(after.patterns.find((x) => x.id === 'm04').notes, before.patterns.find((x) => x.id === 'm04').notes);
+  for (const id of ['m01', 'm02', 'm03']) assert.deepEqual(after.patterns.find((x) => x.id === id).notes, before.patterns.find((x) => x.id === id).notes, `${id} untouched`);
+  assert.equal(syncCanvas(root, p.id).nodes.m04.versions.length, cueV + 1, 'the cue has a new version');
+});
+
+test('Fix, fast (doc 28 M10): the demo answers the marked bars as Strudel, checked and put in; done at once, no session', { skip }, async (t) => {
+  process.env.MFX_STRUDEL = dir;
+  const { runFastFix } = await import('../src/song-fix.mjs');
+  const { buildFixPrompt, parseReply } = await import('../src/strudel/fix.mjs');
+  const { loadEdits } = await import('../src/canvas.mjs');
+  const { root, id } = await songProject(t);
+  const { edit } = nodeAction(root, id, 'm02', { action: 'fix', text: 'lift it', bars: [3, 4], part: 'ch03' });
+  // the prompt: plain words and the rows as they are; the reply format the reader takes
+  const { song, text } = loadSong(root, id);
+  const pr = buildFixPrompt(song, text, edit, { blueprint: { chart: [{ bars: [1, 8], chords: ['Dm7', 'Am7', 'Gm7', 'Dm7'] }] } });
+  assert.match(pr.user, /Rewrite m02 "The bet" bars 3-4 \(song bars 7-8\) for Keys only/);
+  assert.match(pr.user, /Owner's words: lift it/);
+  assert.match(pr.user, /Chords, song bars 6-8: Am7 \| Gm7 \| Dm7/);
+  assert.match(pr.user, /\/\/ begin m02 ch03 bars 3-4\n\/\/ end m02 ch03/);
+  assert.doesNotMatch(pr.system + pr.user, /mfx/);
+  assert.throws(() => parseReply('// begin m02 ch02 bars 3-4\nnote("c3")\n// end m02 ch02', pr.asked), /wasn't asked for/);
+  assert.throws(() => parseReply('// begin m02 ch03 bars 3-4\nnote("c3").s("piano")\n// end m02 ch03', pr.asked), /notes only/);
+  const before = loadSong(root, id).song;
+  const r = await runFastFix(root, id, edit.id);
+  assert.equal(r.ok, true, JSON.stringify(r));
+  const e = loadEdits(root, id).find((x) => x.id === edit.id);
+  assert.deepEqual([e.state, e.via], ['done', 'fast']);
+  const after = loadSong(root, id).song;
+  const keysIn = (s, a, b) => (s.patterns[1].notes.ch03 || []).filter((n) => n.t >= (a - 1) * 3840 && n.t < b * 3840);
+  assert.notDeepEqual(keysIn(after, 3, 4), keysIn(before, 3, 4), 'bars 3–4 changed');
+  assert.deepEqual(keysIn(after, 1, 2), keysIn(before, 1, 2), 'bars 1–2 kept');
+  assert.deepEqual(after.patterns[1].notes.ch02, before.patterns[1].notes.ch02, 'other parts kept');
+  assert.ok(r.ms < 5000, `${r.ms} ms`);
+});

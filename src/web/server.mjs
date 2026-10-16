@@ -21,6 +21,8 @@ import * as craft from '../craft.mjs';
 import * as booth from '../booth.mjs';
 import * as music from '../music.mjs';
 import { songView } from '../song-store.mjs';
+import { applyOps } from '../song-ops.mjs';
+import { runFastFix } from '../song-fix.mjs';
 import { canvasView, nodeAction } from '../canvas.mjs';
 import * as filmcraft from '../filmcraft.mjs';
 import { projectSkills, readSkillText } from '../skills.mjs';
@@ -259,7 +261,10 @@ export async function startServer(root, { port = 4646, host = '127.0.0.1', runne
     if (sub === '/canvas' && method === 'GET') return send(res, 200, canvasView(root, id));
     if ((m = sub.match(/^\/canvas\/nodes\/([a-z0-9-]{2,24})$/)) && method === 'POST') {
       const b = await json(req);
-      nodeAction(root, id, m[1], { action: b.action, text: b.text, bars: b.bars ?? null, part: b.part ?? null, write: Boolean(b.write) });
+      const r = nodeAction(root, id, m[1], { action: b.action, text: b.text, bars: b.bars ?? null, part: b.part ?? null, write: Boolean(b.write) });
+      // a Fix on a music section tries the fast path first (doc 28 §4); its first step (holding the edit) runs now,
+      // before the runner can start a session for it
+      if (r?.edit?.kind === 'cue') runFastFix(root, id, r.edit.id).then(() => { changed(); runner.wake(); });
       return after(canvasView(root, id));
     }
     return send(res, 404, { error: 'not found' });
@@ -302,6 +307,12 @@ export async function startServer(root, { port = 4646, host = '127.0.0.1', runne
   async function musicApi(req, res, id, sub, method, after, url) {
     if (sub === '/music' && method === 'GET') return send(res, 200, music.musicStatus(root, id));
     if (sub === '/music/song' && method === 'GET') return send(res, 200, songView(root, id) || { draft: true, song: null });
+    // the owner's own edits to the song (doc 18 §6): always by hand, so they always apply and lock what they touch
+    if (sub === '/music/song/ops' && method === 'POST') {
+      const b = await json(req);
+      const r = await applyOps(root, id, (Array.isArray(b.ops) ? b.ops : []).map((o) => ({ ...o, by: 'hand' })));
+      return after({ rev: r.rev, applied: r.applied.length, refused: r.refused });
+    }
     if (sub === '/music/midi.zip' && method === 'GET') {
       const zip = music.midiPack(root, id);
       const p = loadProject(root, id);

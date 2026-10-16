@@ -63,7 +63,8 @@ export function cutMarks(song, shots, fps = 30) {
 // focus: { section, part } shows one section (and one part) fitted to the width (levels 2 and 3, doc 25 §2).
 // onOpen(sectionId, channelId | null) is called on a double-click on a section block or one of its part rows.
 // onSeek(sec) is called on a click on the bar ruler (video seconds).
-export function songLane({ h, song, graph, draft = false, shotNode = null, transitionOf = () => null, focus = null, onOpen = null, onSeek = null }) {
+// onSelect({ section, from, to, part } | null) reports the selected bars (song bars, 1-based, inside one section).
+export function songLane({ h, song, graph, draft = false, shotNode = null, transitionOf = () => null, focus = null, onOpen = null, onSeek = null, onSelect = null }) {
   const ax = timeAxis(song);
   const shots = shotTimes(graph);
   const fps = graph?.fps || 30;
@@ -215,6 +216,19 @@ export function songLane({ h, song, graph, draft = false, shotNode = null, trans
       });
       g.restore();
     }
+    // the selection: a white outline across the selected bars (all parts, or the one part's row)
+    if (sel) {
+      const s0 = sections.find((x) => x.id === sel.section);
+      if (s0) {
+        const xa = x(ax.barSec(sel.from)); const xb = x(ax.barSec(sel.to + 1));
+        const r = sel.part ? shown.findIndex((c) => c.id === sel.part) : -1;
+        const y0 = r >= 0 ? top + BLOCK_HEAD + r * (ROW + ROW_GAP) - 2 : top - 3;
+        const hgt = r >= 0 ? ROW + 4 : blockH + 6;
+        g.fillStyle = 'rgba(255,255,255,.08)'; g.fillRect(xa, y0, xb - xa, hgt);
+        g.strokeStyle = css(el, '--selected', '#ebebeb'); g.lineWidth = 2;
+        g.strokeRect(xa + 1, y0 + 1, xb - xa - 2, hgt - 2); g.lineWidth = 1;
+      }
+    }
     // the label column stays put while the lane scrolls under it
     g.fillStyle = panelBg; g.fillRect(0, 0, LABELS - 2, H);
     g.font = font(10); g.fillStyle = faint; g.fillText('Bar', 0, RULER / 2);
@@ -265,14 +279,55 @@ export function songLane({ h, song, graph, draft = false, shotNode = null, trans
   }, { passive: false });
   scroller.addEventListener('scroll', () => requestAnimationFrame(draw));
 
-  // a click on the bar ruler moves the playhead there
-  canvas.addEventListener('click', (e) => {
-    if (!onSeek) return;
+  // Selecting bars (doc 19 §2): a bar number in the ruler (drag for a range, Shift-click to extend) picks those bars
+  // in every part and moves the playhead to the first; a part's mini row picks that part only. One section at a time.
+  let sel = null;               // { section, from, to, part } in song bars
+  let dragFrom = null;
+  const barAt = (mx) => { const sec = t0 + (mx + scroller.scrollLeft - LABELS) / pps; return { sec, bar: Math.floor((sec - (song.offsetSec || 0)) / (ax.barSec(2) - ax.barSec(1))) + 1 }; };
+  const sectionOfBar = (bar) => sections.find((x) => bar >= x.startBar && bar < x.startBar + x.bars);
+  function hit(e) {
     const r = canvas.getBoundingClientRect();
     const mx = e.clientX - r.left; const my = e.clientY - r.top;
-    if (mx < LABELS || my > RULER + 2) return;
-    onSeek(Math.max(0, t0 + (mx + scroller.scrollLeft - LABELS) / pps));
+    if (mx < LABELS) return null;
+    const { sec, bar } = barAt(mx);
+    const s = sectionOfBar(bar);
+    if (!s) return null;
+    const top = RULER + 4;
+    if (my <= RULER + 2) return { kind: 'ruler', bar, sec, section: s };
+    if (my < top || my > top + blockH) return null;
+    const row = Math.floor((my - top - BLOCK_HEAD) / (ROW + ROW_GAP));
+    return { kind: 'row', bar, sec, section: s, part: row >= 0 && row < shown.length ? shown[row].id : null };
+  }
+  function setSel(next, { quiet = false } = {}) {
+    sel = next;
+    draw();
+    if (!quiet) onSelect?.(sel ? { ...sel } : null);
+  }
+  canvas.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || e.detail > 1) return;
+    const hh = hit(e);
+    if (!hh) return;
+    if (e.shiftKey && sel && sel.section === hh.section.id) {
+      setSel({ ...sel, from: Math.min(sel.from, hh.bar), to: Math.max(sel.to, hh.bar) });
+      return;
+    }
+    dragFrom = { ...hh, id: e.pointerId };
+    canvas.setPointerCapture(e.pointerId);
+    onSelect?.(null);   // the popup waits until the drag ends
+    setSel({ section: hh.section.id, from: hh.bar, to: hh.bar, part: hh.kind === 'row' ? hh.part : null }, { quiet: true });
+    if (hh.kind === 'ruler') onSeek?.(ax.barSec(hh.bar));
   });
+  canvas.addEventListener('pointermove', (e) => {
+    if (!dragFrom || e.pointerId !== dragFrom.id) return;
+    const r = canvas.getBoundingClientRect();
+    const { bar } = barAt(e.clientX - r.left);
+    const s = sections.find((x) => x.id === dragFrom.section.id);
+    const b = Math.max(s.startBar, Math.min(s.startBar + s.bars - 1, bar));
+    const next = { ...sel, from: Math.min(dragFrom.bar, b), to: Math.max(dragFrom.bar, b) };
+    if (next.from !== sel.from || next.to !== sel.to) { sel = next; draw(); }
+  });
+  canvas.addEventListener('pointerup', () => { if (dragFrom) { dragFrom = null; onSelect?.(sel ? { ...sel } : null); } });
+
   let headAt = null;
   function setPlayhead(sec) {
     headAt = sec;
@@ -298,7 +353,7 @@ export function songLane({ h, song, graph, draft = false, shotNode = null, trans
 
   const ro = new ResizeObserver(() => draw());
   ro.observe(scroller);
-  el.lane = { draw, sections, cuts, shots, end, stop: () => ro.disconnect(), zoom: (v) => { pps = v; draw(); }, get pps() { return pps; }, x: (sec) => LABELS + (sec - t0) * pps, focused, setPlayhead, ax };
+  el.lane = { draw, sections, cuts, shots, end, stop: () => ro.disconnect(), zoom: (v) => { pps = v; draw(); }, get pps() { return pps; }, x: (sec) => LABELS + (sec - t0) * pps, focused, setPlayhead, ax, select: setSel, get selection() { return sel; } };
   return el;
 }
 
