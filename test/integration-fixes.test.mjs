@@ -10,7 +10,7 @@ import { spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { cleanTheme } from '../src/svc/theme.mjs';
 import { makeHandoffDemo } from '../src/demo-handoff.mjs';
-import { handoffPlan, graphView, moveNodes, stillsSettled } from '../src/svc/graph.mjs';
+import { handoffPlan, graphView, moveNodes, stillsSettled, spoken } from '../src/svc/graph.mjs';
 import { setupStatus } from '../src/setup.mjs';
 import { saveConfig } from '../src/studio.mjs';
 import { update } from '../src/projects.mjs';
@@ -57,6 +57,20 @@ test('handoff.plan names the .mortiflix beside the project record; asset nodes k
   const a = graphView(root, p.id).assets.find((x) => x.id === 'a01');
   assert.ok(a, 'the asset is in graph.get');
   assert.deepEqual(a.pos, [120, -40]);
+});
+
+test('run 2: captions and voice clip names leave out the voice directions; Edit gets the newest 3 older versions of a piece', (t) => {
+  assert.equal(spoken('[curious, warm, a little smile] Ever wondered how bees make honey?'), 'Ever wondered how bees make honey?');
+  assert.equal(spoken('Then they cap [beat] each cell.'), 'Then they cap each cell.');
+  assert.equal(spoken('No directions.'), 'No directions.');
+  const root = mkdtempSync(join(tmpdir(), 'mfx-fix-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const p = makeHandoffDemo(root);
+  const plan = handoffPlan(root, p.id);
+  const per = {};
+  for (const o of plan.older_versions) per[o.node] = (per[o.node] || 0) + 1;
+  assert.ok(Object.values(per).every((n) => n <= 3), JSON.stringify(per));
+  assert.ok(plan.captions.every((c) => !/\[/.test(c.text)));
 });
 
 test('every shot version gets a PNG still (its first frame)', { skip: !hasFfmpeg && 'needs ffmpeg' }, async (t) => {

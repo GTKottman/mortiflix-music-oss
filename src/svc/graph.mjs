@@ -9,13 +9,27 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync, rmSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
-import { canvasView, canvasPaths, loadGraph, nodeAction, requestNewPiece, CanvasError, readBeats } from '../canvas.mjs';
+import { canvasView, canvasPaths, loadGraph, nodeAction, requestNewPiece, CanvasError, readBeats, mp4Unfinished } from '../canvas.mjs';
 import { beatNames } from './beatnames.mjs';
 import { projectPaths, loadProject, event } from '../projects.mjs';
 import { withLock } from '../studio.mjs';
 import { listAssets } from './assets.mjs';
 import { cuePlan } from './theme.mjs';
 import { boothStatus } from '../booth.mjs';
+
+// Older versions handed to Edit per piece (the newest ones).
+const OLDER_KEPT = 3;
+// Version files are named by their content, so whether one is a cut-off video never changes: asked once.
+const unfinishedSeen = new Map();
+function unfinished(path) {
+  if (!unfinishedSeen.has(path)) {
+    if (unfinishedSeen.size > 20000) unfinishedSeen.clear();
+    unfinishedSeen.set(path, mp4Unfinished(path));
+  }
+  return unfinishedSeen.get(path);
+}
+// The words as spoken: a line's voice directions ("[warm, a little smile] …") are for the voice, not the captions.
+export const spoken = (words) => String(words || '').replace(/\[[^\]\n]{0,200}\]\s*/g, '').trim();
 
 const readOr = (f, d) => { try { return JSON.parse(readFileSync(f, 'utf8')); } catch { return d; } };
 const files = (root, id) => {
@@ -121,7 +135,9 @@ export function graphView(root, id) {
       ...n,
       ...(n.kind === 'beat' && names[n.id] ? { name: names[n.id].name, name_from: names[n.id].from } : {}),
       beat_no: n.beat ? beatNo[n.beat] ?? null : null,
-      versions: (n.versions || []).map((v) => { const path = v.file ? join(state, v.file) : null; return { ...v, path, still: stillFor(state, n, { ...v, path }) }; }),
+      // a version copied while its video was still being written (before 439e1d1) is a cut-off file: left out
+      versions: (n.versions || []).map((v) => ({ ...v, path: v.file ? join(state, v.file) : null })).filter((v) => !(v.path && unfinished(v.path)))
+        .map((v) => ({ ...v, still: stillFor(state, n, v) })),
       plays: p?.v ?? null,
       pos: layout.positions[n.id] || null,
       default_pos: dpos[n.id] || null,
@@ -384,17 +400,18 @@ export function handoffPlan(root, id) {
     const native = /^(cut|crossfade|cross dissolve|dissolve|dip to black)$/i.test(kind.trim());
     clips.push({ node: tid, kind: 'transition', native, transition: native ? (/dip/i.test(kind) ? 'Dip to Black' : /cut/i.test(kind) ? 'Cut' : 'Cross Dissolve') : kind, at_sec: at.start_sec, from: t.from, to: t.to, version: t.plays, name: `${t.label} · ${kind}`, label: null, bin: native ? null : 'Transitions' });
   }
-  for (const l of sound.voice) if (l.path) clips.push({ node: l.node, kind: 'line', track: 'A1', bin: 'Voice', name: `${l.label} · ${String(l.words || '').slice(0, 60)}`, label: label(l), version: l.version, start_sec: l.start_sec, dur_sec: l.dur_sec, gain_db: l.gain_db, media: { kind: 'audio', path: l.path } });
+  for (const l of sound.voice) if (l.path) clips.push({ node: l.node, kind: 'line', track: 'A1', bin: 'Voice', name: `${l.label} · ${spoken(l.words).slice(0, 60)}`, label: label(l), version: l.version, start_sec: l.start_sec, dur_sec: l.dur_sec, gain_db: l.gain_db, media: { kind: 'audio', path: l.path } });
   if (sound.music) clips.push({ node: 'music', kind: 'music', track: 'A2', bin: 'Music', name: 'Music', label: null, version: sound.music.version, start_sec: 0, dur_sec: null, media: { kind: 'audio', path: sound.music.path }, cues: sound.cues.map((c) => ({ node: c.node, start_sec: c.start_sec, end_sec: c.end_sec, gain_db: c.gain_db, duck_db: c.duck_db, label: label(c) })) });
   const assets = listAssets(root, id).yours;
-  const older = gv.nodes.flatMap((n) => n.versions.filter((v) => v.path && v.v !== n.plays).map((v) => ({ node: n.id, version: v.v, name: `${n.label} v${v.v}`, label: label(n), path: v.path, from_sec: v.from_sec ?? null, to_sec: v.to_sec ?? null })));
+  // the newest few older versions of each piece (run 2: 240 of them, every one a whole animatic, went into Edit)
+  const older = gv.nodes.flatMap((n) => n.versions.filter((v) => v.path && v.v !== n.plays).slice(-OLDER_KEPT).map((v) => ({ node: n.id, version: v.v, name: `${n.label} v${v.v}`, label: label(n), path: v.path, from_sec: v.from_sec ?? null, to_sec: v.to_sec ?? null })));
   const cut = gv.nodes.filter((n) => n.kind === 'shot' && n.state === 'cut').map((n) => { const v = n.versions.find((x) => x.v === n.plays); return v?.path ? { node: n.id, version: v.v, name: `${n.label} · ${n.title || ''}`.slice(0, 80), label: label(n), path: v.path, from_sec: v.from_sec ?? null, to_sec: v.to_sec ?? null } : null; }).filter(Boolean);
   const markers = [];
   for (const b of gv.beats) { const s = shots.find((x) => x.beat === b.id); if (s) markers.push({ kind: 'chapter', node: b.id, time_sec: s.start_sec, name: `${b.no} ${String(b.name || b.title).slice(0, 60)}`, label: b.colour?.label || null, comment: b.title }); }
   for (const c of sound.cues) if (c.start_sec !== null) markers.push({ kind: 'comment', node: c.node, time_sec: c.start_sec, name: `${c.label} · ${c.title || ''}`.trim(), label: label(c) });
   // One caption per voice line; a line moved over the next one ends its caption where the next begins (a caption
   // track holds one caption at a time).
-  const captions = sound.voice.filter((l) => l.dur_sec).map((l) => ({ node: l.node, text: l.words, start_sec: l.start_sec, end_sec: round3(l.start_sec + l.dur_sec) }))
+  const captions = sound.voice.filter((l) => l.dur_sec).map((l) => ({ node: l.node, text: spoken(l.words), start_sec: l.start_sec, end_sec: round3(l.start_sec + l.dur_sec) }))
     .sort((a, b) => a.start_sec - b.start_sec);
   for (let i = 0; i + 1 < captions.length; i++) if (captions[i].end_sec > captions[i + 1].start_sec) captions[i].end_sec = captions[i + 1].start_sec;
   for (let i = captions.length - 1; i >= 0; i--) if (!(captions[i].end_sec > captions[i].start_sec)) captions.splice(i, 1);
