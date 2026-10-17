@@ -156,9 +156,11 @@ pub fn starts(area: &NodeArea) -> std::collections::HashMap<String, (f64, f64)> 
         if n.state == NodeState::Cut {
             continue;
         }
-        let len = n.seconds().unwrap_or(4.0);
-        m.insert(id.clone(), (at, len));
-        at += len;
+        // the film's own timing when the service sends it (run 2: "0:43" for a 0:36 film, every later shot late)
+        let len = n.film_sec.or_else(|| n.seconds()).unwrap_or(4.0);
+        let start = n.film_start.unwrap_or(at);
+        m.insert(id.clone(), (start, len));
+        at = start + len;
     }
     m
 }

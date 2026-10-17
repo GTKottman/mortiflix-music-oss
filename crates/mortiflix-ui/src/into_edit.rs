@@ -2059,12 +2059,14 @@ mod tests {
         let places: Vec<&Value> = f.calls.iter().filter(|c| c.0 == "timeline.place").map(|c| &c.1).collect();
         assert_eq!(places.iter().filter(|p| p["track"] == "V1").map(|p| p["frame"].as_i64().unwrap()).collect::<Vec<_>>(), [0, 90]);
         assert!(places.iter().any(|p| p["track"] == "A1" && p["frame"] == 12 && p["video"] == false));
-        // the music cut at its cues: the first with a duration, the last to the end of the music
+        // the music cut at its cues: the first with a duration, the last stopping at the last picture frame (run 2: it
+        // ran past it), then a fade at its end
         let music: Vec<&&Value> = places.iter().filter(|p| p["track"] == "A2").collect();
         assert_eq!(music.len(), 2);
         assert_eq!(music[0]["duration"].as_i64(), Some(4 * TICKS_PER_SECOND));
         assert_eq!(music[1]["sourceIn"].as_i64(), Some(4 * TICKS_PER_SECOND));
-        assert!(music[1].get("duration").is_none());
+        assert!(music[1]["duration"].as_i64().is_some_and(|d| d > 0));
+        assert_eq!(f.count("sequence.applyAudioTransition"), 1);
         assert_eq!(h.placed.iter().filter(|p| p.kind == "shot").map(|p| p.name.as_str()).collect::<Vec<_>>(), ["Shot 1 · v1", "Shot 2 · v2"]);
         // the dissolve on Shot 1's out edge; the cut is no transition
         assert_eq!(f.count("sequence.applyVideoTransition"), 1);

@@ -1025,6 +1025,29 @@ mod tests {
         NodeArea { graph: Graph::from_json(&sample()), loaded: true, canvas: [0.0, 0.0, 1000.0, 500.0], ..NodeArea::default() }
     }
 
+    /// Run 2: the node area added up each version's whole file ("0:43" for a 0:36 film); with the service's
+    /// shot timeline it shows the film's own times.
+    #[test]
+    fn shot_times_follow_the_film_timeline_when_sent() {
+        let mut v = sample();
+        let film: Vec<String> = Graph::from_json(&v).film.clone();
+        if let Some(nodes) = v.get_mut("nodes").and_then(Value::as_array_mut) {
+            let mut at = 0.0;
+            for id in &film {
+                if let Some(n) = nodes.iter_mut().find(|n| n.get("id").and_then(Value::as_str) == Some(id.as_str())) {
+                    n["film_start"] = json!(at);
+                    n["film_sec"] = json!(1.5);
+                    at += 1.5;
+                }
+            }
+        }
+        let a = NodeArea { graph: Graph::from_json(&v), loaded: true, ..NodeArea::default() };
+        let st = crate::nodes::canvas::starts(&a);
+        let total: f64 = st.values().map(|(_, l)| *l).sum();
+        assert!((total - 1.5 * film.len() as f64).abs() < 1e-9, "{st:?}");
+        assert_eq!(st.get(&film[1]).map(|x| x.0), Some(1.5));
+    }
+
     #[test]
     fn view_round_trips_and_zoom_keeps_the_point_under_the_pointer() {
         let mut a = area();

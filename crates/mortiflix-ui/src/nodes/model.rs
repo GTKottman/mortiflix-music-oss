@@ -188,6 +188,10 @@ pub struct Node {
     pub missing: bool,
     /// Where it was dropped on the canvas (saved by the service), world units.
     pub pos: Option<[f32; 2]>,
+    /// Shot: where it starts in the film and how long it plays there (the service's shot timeline: the
+    /// same as the preview, Voice & music and Edit), when sent.
+    pub film_start: Option<f64>,
+    pub film_sec: Option<f64>,
 }
 
 impl Node {
@@ -385,6 +389,8 @@ impl Node {
             notes: strings("notes"),
             missing: v.get("missing").and_then(Value::as_bool).unwrap_or(false),
             pos,
+            film_start: num(v, "film_start").filter(|x| *x >= 0.0),
+            film_sec: num(v, "film_sec").filter(|x| *x > 0.0),
             id,
         })
     }
