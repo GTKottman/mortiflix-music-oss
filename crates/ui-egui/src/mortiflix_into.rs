@@ -172,9 +172,13 @@ fn build(app: &mut FilmcraftApp, plan: &into::Plan) {
 
 fn swap(app: &mut FilmcraftApp, piece: &into::Piece) {
     let label = format!("Mortiflix: {} v{}", piece.label, piece.version);
+    // the swap selects what it labels: the user's selection comes back after
+    let (clips, items) = (app.session.state.selection.clone(), app.session.state.project_selection.clone());
     let session = &mut app.session;
     let h = &mut app.mfx.core.state.handoff;
     let r = session.edit_group(&label, |s| into::swap(h, piece, &mut |id, p| s.execute(id, p).map_err(|e| e.to_string())).map_err(engine_err));
+    app.session.state.selection = clips;
+    app.session.state.project_selection = items;
     match r {
         Ok(name) => {
             let h = &app.mfx.core.state.handoff;

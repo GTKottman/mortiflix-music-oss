@@ -1357,13 +1357,28 @@ pub fn swap(h: &mut Handoff, piece: &Piece, exec: &mut Exec) -> Result<String, S
         Some(i) => i.item,
         None => import_one(h, piece, exec)?,
     };
-    let old: Vec<u64> = h.placed.iter().filter(|p| p.node == piece.node).map(|p| p.item).collect();
+    let mut old: Vec<u64> = h.placed.iter().filter(|p| p.node == piece.node).map(|p| p.item).collect();
+    old.dedup();
+    let colour = piece.colour.clone().or_else(|| h.placed.iter().find(|p| p.node == piece.node).and_then(|p| p.colour.clone()));
     replace(h, &piece.node, piece.version, item, &clips, exec)?;
+    // the new item and its clips keep the beat's colour (the host restores the selection after)
+    if let Some(c) = colour {
+        let _ = exec("project.select", json!({"items": [item]}));
+        let _ = exec("timeline.select", json!({"clips": clips}));
+        let _ = exec("edit.label", json!({"label": c}));
+    }
     // the old version goes to Older versions (it stays: nothing is thrown away)
     if let Ok(Some(older)) = ensure_bin(h, &["Older versions".to_string()], exec) {
         let _ = exec("project.moveToBin", json!({"items": old, "bin": older}));
         for i in h.items.iter_mut().filter(|i| old.contains(&i.item)) {
-            i.bin = "Older versions".into();
+            let from = std::mem::replace(&mut i.bin, "Older versions".into());
+            let from = from.rsplit('/').next().unwrap_or_default().to_string();
+            if let Some(b) = h.bins.iter_mut().find(|b| b.name == from) {
+                b.count = b.count.saturating_sub(1);
+            }
+            if let Some(b) = h.bins.iter_mut().find(|b| b.name == "Older versions") {
+                b.count = b.count.saturating_add(1);
+            }
         }
     }
     let label = h.placed.iter().find(|p| p.node == piece.node).map(|p| p.name.clone()).unwrap_or_else(|| piece.label.clone());
@@ -2065,6 +2080,8 @@ mod tests {
         assert_eq!(rep["clips"], json!([clip]));
         assert_eq!(rep["keepSourceIn"], false, "the new item's own In point (its range in the file)");
         assert_eq!(f.count("project.moveToBin"), 1);
+        assert!(f.calls.iter().any(|c| c.0 == "edit.label" && c.1["label"] == "Violet"), "the new version keeps the beat colour");
+        assert_eq!(h.bins.iter().find(|b| b.name == "Older versions").unwrap().count, 2);
         assert_eq!(h.placed.iter().find(|p| p.node == "s01").unwrap().version, 2);
         // back to v1 from the bin, no AI
         f.calls.clear();
