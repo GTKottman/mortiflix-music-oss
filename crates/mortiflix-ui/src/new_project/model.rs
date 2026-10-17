@@ -34,6 +34,9 @@ pub struct Question {
     #[serde(deserialize_with = "lenient_string")]
     pub default: String,
     pub help: String,
+    /// `false`: only the listed choices. Otherwise a choice can also be answered in your own words (the service takes
+    /// it unless the pipeline says `"custom": false`).
+    pub custom: Option<bool>,
 }
 
 /// One step of a preset (`pipeline.json` `steps[]`).

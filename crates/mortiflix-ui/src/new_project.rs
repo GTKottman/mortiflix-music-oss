@@ -91,6 +91,8 @@ struct Win {
     focus_name: bool,
     music_ui: music::MusicUi,
     creator: Option<creator::Creator>,
+    /// Choice questions answered in your own words ("Custom"): their ids.
+    custom_answers: std::collections::BTreeSet<String>,
 }
 
 fn state_id() -> egui::Id {
@@ -832,14 +834,45 @@ fn settings_rows(ui: &mut egui::Ui, ctx: &mut MfxCtx, w: &mut Win, p: &Preset) {
             let id = format!("mfx.newProject.setting.{}", q.id);
             match q.kind.as_str() {
                 "choice" => {
-                    let shown = if value.is_empty() { "Let the AI decide".to_string() } else { value.clone() };
-                    let combo = egui::ComboBox::from_id_salt(("mfx-np-setting", q.id.as_str())).selected_text(shown).width(MAIN_W - 260.0).show_ui(ui, |ui| {
+                    // Like the preset creator's Custom chip: any answer in your own words (a 25 min video when the
+                    // list stops at 2 min), unless the preset allows only its list.
+                    let can_custom = q.custom != Some(false);
+                    let mut custom = can_custom && (w.custom_answers.contains(&q.id) || (!value.is_empty() && !q.choices.contains(value)));
+                    let shown = if custom {
+                        "Custom".to_string()
+                    } else if value.is_empty() {
+                        "Let the AI decide".to_string()
+                    } else {
+                        value.clone()
+                    };
+                    let width = if custom { 150.0 } else { MAIN_W - 260.0 };
+                    let combo = egui::ComboBox::from_id_salt(("mfx-np-setting", q.id.as_str())).selected_text(shown).width(width).show_ui(ui, |ui| {
                         for c in &q.choices {
-                            let r = ui.selectable_value(value, c.clone(), c);
+                            let r = ui.selectable_label(!custom && value == c, c);
+                            if r.clicked() {
+                                *value = c.clone();
+                                custom = false;
+                            }
                             ctx.auto(&format!("{id}.{}", c), &r, c);
+                        }
+                        if can_custom {
+                            let r = ui.selectable_label(custom, "Custom");
+                            if r.clicked() && !custom {
+                                custom = true;
+                                value.clear();
+                            }
+                            ctx.auto(&format!("{id}.custom"), &r, "Custom");
                         }
                     });
                     ctx.auto(&id, &combo.response, &label);
+                    if custom {
+                        w.custom_answers.insert(q.id.clone());
+                        let hint = q.choices.first().map(|c| format!("In your own words, like {c}")).unwrap_or_default();
+                        let r = ui.add(egui::TextEdit::singleline(value).hint_text(hint).desired_width(MAIN_W - 420.0));
+                        ctx.auto(&format!("{id}.text"), &r, &format!("{label} in your own words"));
+                    } else {
+                        w.custom_answers.remove(&q.id);
+                    }
                 }
                 "long" => {
                     let r = ui.add(egui::TextEdit::multiline(value).desired_rows(2).desired_width(MAIN_W - 260.0).hint_text(q.help.clone()));
