@@ -333,6 +333,15 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
             }
         });
     });
+    // what these are (owner's first run: the four looks were taken for the shots)
+    ui.add(
+        egui::Label::new(
+            RichText::new("These set the style: colours, characters, type. They are not the shots; the shots come next, one per line of the script.")
+                .size(12.0)
+                .color(t.text_dim),
+        )
+        .wrap(),
+    );
     if crate::service_notice(ui, ctx) {
         return;
     }
@@ -427,7 +436,7 @@ fn frames(ui: &mut egui::Ui, ctx: &mut MfxCtx, view: &View) {
                     } else if f.pending {
                         "changing it…".to_string()
                     } else {
-                        let mut s = f.label.clone();
+                        let mut s = format!("Style sample · {}", f.label);
                         if f.versions > 1 {
                             s.push_str(&format!(" · v{}", f.versions));
                         }

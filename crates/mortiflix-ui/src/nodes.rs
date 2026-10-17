@@ -109,6 +109,16 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
         ui.painter().text(canvas_rect.center(), egui::Align2::CENTER_CENTER, "Loading the nodes…", egui::FontId::proportional(13.0), t.text_dim);
     }
     canvas::show(ui, area, &t, canvas_rect, &mut out);
+    // no shot made yet: say what comes first, over the plans
+    if area.graph.counts().made == 0
+        && let Some(first) = before_shots_line(&area.work)
+    {
+        let p = ui.painter_at(canvas_rect);
+        let g = p.layout(first, egui::FontId::proportional(12.0), t.text, (canvas_rect.width() - 40.0).max(60.0));
+        let r = Rect::from_min_size(canvas_rect.min + vec2(10.0, 8.0), g.size() + vec2(16.0, 8.0));
+        p.rect_filled(r, 4.0, egui::Color32::from_black_alpha(200));
+        p.galley(r.min + vec2(8.0, 4.0), g, t.text);
+    }
     panel::strip(ui, area, strip_rect, &t, &mut out);
     if bin_w > 0.0 {
         panel::bin(ui, area, Rect::from_min_max(body.min, pos2(body.min.x + bin_w, body.max.y)), &t, &mut out);
@@ -151,6 +161,35 @@ fn flush(ctx: &mut MfxCtx, out: canvas::Out) {
 
 /// Stage 3 Shots' main panel (PanelKind::MfxStage on stage 3): the shots themselves are in the node
 /// area; this slot lists what needs you, each a link that selects and frames the shot.
+/// Stage 3 before any shot exists: "Shots appear after the transitions and the music are made:
+/// about 6 min." (the service's `work.active` `before_shots` / `shots_eta_min`).
+pub fn before_shots_line(work: &crate::work::Work) -> Option<String> {
+    if work.before_shots.is_empty() {
+        return work.making_kind("shot").then(|| "The AI is animating the shots now: they appear here one by one.".to_string());
+    }
+    let plain: Vec<String> = work
+        .before_shots
+        .iter()
+        .map(|s| {
+            let l = s.to_lowercase();
+            match l.as_str() {
+                "style frames" | "style-frames" | "looks" => "looks".to_string(),
+                "transition board" | "transitions" => "transitions".to_string(),
+                "brief" => "brief".to_string(),
+                _ => l,
+            }
+        })
+        .collect();
+    let list = match plain.as_slice() {
+        [one] => format!("the {one}"),
+        [rest @ .., last] => format!("the {} and the {last}", rest.join(", the ")),
+        [] => String::new(),
+    };
+    let when = work.shots_eta_min.map(|m| if m <= 1 { ": about a minute".to_string() } else { format!(": about {m} min") }).unwrap_or_default();
+    let plural = plain.len() > 1 || plain.first().is_some_and(|p| p.ends_with('s'));
+    Some(format!("Shots appear after {list} {} made{when}.", if plural { "are" } else { "is" }))
+}
+
 pub fn show_stage(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     let t = ctx.theme;
     if crate::service_notice(ui, ctx) && !ctx.state.nodes.loaded {
@@ -160,7 +199,10 @@ pub fn show_stage(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     ui.label(egui::RichText::new("Shots").strong().color(t.text));
     ui.label(egui::RichText::new(c.line()).color(t.text_dim));
     ui.add_space(6.0);
-    ui.label(egui::RichText::new("Check each shot in the node area: OK, Fix or Cut it.").color(t.text_faint));
+    // before any shot exists: what comes first and about how long (owner's first run)
+    let first = if c.made == 0 { before_shots_line(&ctx.state.work) } else { None };
+    let hint = first.unwrap_or_else(|| "Check each shot in the node area: OK, Fix or Cut it.".into());
+    ui.add(egui::Label::new(egui::RichText::new(hint).color(t.text_faint)).wrap());
     ui.add_space(6.0);
     let need: Vec<(String, String)> = ctx
         .state
@@ -677,6 +719,15 @@ mod tests {
         m.state.nodes.load(&sample());
         m.state.nodes.canvas = [0.0, 0.0, 1200.0, 500.0];
         m
+    }
+
+    #[test]
+    fn stage_three_says_what_comes_before_the_shots() {
+        let w = crate::work::Work::from_json(&json!({"running": true, "before_shots": ["Transition board", "Music"], "shots_eta_min": 6}));
+        assert_eq!(before_shots_line(&w).as_deref(), Some("Shots appear after the transitions and the music are made: about 6 min."));
+        let w = crate::work::Work::from_json(&json!({"running": false, "before_shots": ["Transition board"]}));
+        assert_eq!(before_shots_line(&w).as_deref(), Some("Shots appear after the transitions are made."));
+        assert_eq!(before_shots_line(&crate::work::Work::default()), None);
     }
 
     #[test]
