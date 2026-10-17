@@ -213,7 +213,10 @@ export function pickVersion(root, id, nid, v) {
   if (!n) throw new CanvasError(`no piece ${nid}`);
   if (v !== null && !n.versions.some((x) => x.v === v)) throw new CanvasError(`${n.label} has no v${v}`);
   const f = files(root, id);
-  withLock(f.lock, () => { const p = loadPicks(root, id); if (v === null) delete p[nid]; else p[nid] = v; save(f.picks, p); });
+  // picking the newest is "the newest": a remake later plays (run 2: v2 picked when it was the newest stayed on
+  // after the remakes, and Edit got the old shot)
+  const newest = v !== null && v === n.current;
+  withLock(f.lock, () => { const p = loadPicks(root, id); if (v === null || newest) delete p[nid]; else p[nid] = v; save(f.picks, p); });
   event(root, id, { event: 'VERSION_PICKED', actor: 'you', details: `${n.label} v${v ?? n.current}` });
   return { node: nid, plays: v ?? n.current };
 }
