@@ -468,6 +468,10 @@ fn stage_command(app: &mut FilmcraftApp, what: &str, params: &Value) -> Result<V
     if let Nav::Moved { to, .. } = nav {
         apply_stage(app, to);
         if what == "getVideo" {
+            // bring the edit into FilmCraft without opening it (part 06), then Export renders it
+            if let Some(Err(e)) = crate::mortiflix_into::route(app, "mortiflix.import.run", &json!({"open_edit": false})) {
+                app.ui.status = e;
+            }
             crate::mortiflix_export::get_video(app);
         }
     }

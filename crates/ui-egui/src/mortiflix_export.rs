@@ -121,7 +121,17 @@ pub fn frame(app: &mut FilmcraftApp, ctx: &egui::Context) {
     if watching {
         host.ui.poll_jobs(&mut app.mfx.core.service, ctx.input(|i| i.time));
     }
-    if app.mfx.export.ui.pending_get_video && app.session.active_sequence().is_some_and(|q| q.duration().0 > 0) {
+    // Get the video waits for the hand-off into FilmCraft (`mortiflix.import.run {open_edit: false}`)
+    let handoff = app.mfx.core.state.handoff.phase;
+    if app.mfx.export.ui.pending_get_video && handoff == filmcraft_mortiflix_ui::into_filmcraft::Phase::Failed {
+        app.mfx.export.ui.pending_get_video = false;
+        let why = app.mfx.core.state.handoff.error.clone();
+        app.mfx.export.ui.note = format!("The video couldn't be brought into FilmCraft, so nothing was rendered. {why}").trim().to_string();
+    }
+    if app.mfx.export.ui.pending_get_video
+        && handoff != filmcraft_mortiflix_ui::into_filmcraft::Phase::Preparing
+        && app.session.active_sequence().is_some_and(|q| q.duration().0 > 0)
+    {
         app.mfx.export.ui.pending_get_video = false;
         app.mfx.export.ui.choices.preset = Preset::Youtube;
         app.mfx.export.ui.choices.filmcraft_preset = None;
