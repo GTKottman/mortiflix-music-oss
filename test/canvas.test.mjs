@@ -9,7 +9,7 @@ import { respond } from '../src/gates.mjs';
 import { Runner } from '../src/runner.mjs';
 import { syncCanvas, BEAT_COLOURS } from '../src/canvas.mjs';
 
-const write = (dir, rel, data) => { mkdirSync(join(dir, rel, '..'), { recursive: true }); writeFileSync(join(dir, rel), typeof data === 'string' ? data : JSON.stringify(data)); };
+const write = (dir, rel, data) => { mkdirSync(join(dir, rel, '..'), { recursive: true }); writeFileSync(join(dir, rel), typeof data === 'string' || Buffer.isBuffer(data) ? data : JSON.stringify(data)); };
 
 test('canvas: beats, frames and planned shots from the files, one colour per beat, versions on change', (t) => {
   const root = tempStudio(t);
@@ -50,13 +50,41 @@ test('canvas: one shot made alone before the animatic keeps the other planned sh
   let g = syncCanvas(root, p.id);
   assert.deepEqual(g.order.shots, ['s01', 's02', 's03']);
   // run 2: a Fix made S03 first; out/scenes.json then had only s03, and the film became "1/1"
-  write(work, 'out/shots/s03.mp4', 'mp4');
+  write(work, 'out/shots/s03.mp4', Buffer.from([0, 0, 0, 8, 0x6d, 0x6f, 0x6f, 0x76])); // a whole (tiny) movie: one moov box
   write(work, 'out/scenes.json', { made_from: 'out/shots/s03.mp4', fps: 30, scenes: [{ key: 's03', from_frame: 0, frames: 60, beat: 'b03', file: 'out/shots/s03.mp4' }] });
   g = syncCanvas(root, p.id);
   assert.deepEqual(g.order.shots, ['s01', 's02', 's03']);
   assert.equal(g.nodes.s01.planned, true);
   assert.equal(g.nodes.s03.versions.length, 1);
   assert.equal(g.nodes.s01.missing, undefined);
+  // the animatic then cuts the film; a beat it folded into another shot has no shot of its own
+  write(work, 'out/animatic.mp4', Buffer.from([0, 0, 0, 8, 0x6d, 0x6f, 0x6f, 0x76]));
+  write(work, 'out/scenes.json', { made_from: 'out/animatic.mp4', fps: 30, scenes: [{ key: 's01', from_frame: 0, frames: 60, beat: 'b01' }, { key: 's03', from_frame: 60, frames: 60, beat: 'b03' }] });
+  g = syncCanvas(root, p.id);
+  assert.deepEqual(g.order.shots, ['s01', 's03']);
+});
+
+test('canvas: a video still being written is not a version; it is once it is whole', (t) => {
+  const root = tempStudio(t);
+  const p = createProject(root, { pipeline: 'explainer', title: 'Render', answers: { topic: 'x' } });
+  const work = projectPaths(root, p.id).work;
+  const box = (type, body) => { const b = Buffer.alloc(8 + body.length); b.writeUInt32BE(8 + body.length, 0); b.write(type, 4, 'latin1'); body.copy(b, 8); return b; };
+  const ftyp = box('ftyp', Buffer.from('isom0000'));
+  const mdat = box('mdat', Buffer.alloc(64, 7));
+  write(work, 'script/beats.json', { beats: [{ id: 'b01', words: 'One.' }] });
+  write(work, 'out/scenes.json', { made_from: 'out/a.mp4', fps: 30, scenes: [{ key: 's01', from_frame: 0, frames: 30, beat: 'b01' }] });
+  // run 2: the animatic was copied at every sync while it rendered: 13 cut-off versions of every shot
+  write(work, 'out/a.mp4', Buffer.concat([ftyp, mdat.subarray(0, 40)]));
+  let g = syncCanvas(root, p.id);
+  assert.equal(g.nodes.s01.versions.length, 0, 'half a file: no version yet');
+  assert.equal(g.nodes.s01.planned, true, 'the shot is there, planned');
+  write(work, 'out/a.mp4', Buffer.concat([ftyp, mdat]));
+  g = syncCanvas(root, p.id);
+  assert.equal(g.nodes.s01.versions.length, 0, 'no movie box yet: still rendering');
+  write(work, 'out/a.mp4', Buffer.concat([ftyp, mdat, box('moov', Buffer.alloc(16))]));
+  g = syncCanvas(root, p.id);
+  assert.equal(g.nodes.s01.versions.length, 1, 'whole: one version');
+  assert.deepEqual(g.order.shots, ['s01']);
 });
 
 test('canvas: a file outside the working folder is never copied in', (t) => {

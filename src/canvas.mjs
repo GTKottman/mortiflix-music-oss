@@ -7,7 +7,7 @@
 // media into the project's record (state/<id>/canvas/media/, so a later re-render can't change what the owner saw) and
 // saves the graph in state/<id>/canvas/graph.json. Ids are forever: a node keeps its id and colour for life.
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, writeFileSync, mkdirSync, copyFileSync, realpathSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, copyFileSync, realpathSync, statSync, openSync, readSync, fstatSync, closeSync } from 'node:fs';
 import { join, extname, dirname } from 'node:path';
 import { projectPaths, update, event, projectPipeline, loadProject } from './projects.mjs';
 import { settle, GateError, stepView, respond } from './gates.mjs';
@@ -25,6 +25,36 @@ export const BEAT_COLOURS = [
 ];
 
 const sha = (buf) => createHash('sha256').update(buf).digest('hex');
+// A video still being written (a render streams the animatic out): versioned on a later sync, once whole.
+const BUSY = Symbol('busy');
+// An MP4/MOV is whole when its top-level boxes tile the file and one is the movie box (encoders write it last, or
+// move it to the front when they finish). Only box headers are read.
+export function mp4Unfinished(file) {
+  if (!/\.(mp4|m4v|mov)$/i.test(file)) return false;
+  let fd;
+  try {
+    fd = openSync(file, 'r');
+    const size = fstatSync(fd).size;
+    const h = Buffer.alloc(16);
+    let at = 0;
+    let moov = false;
+    for (let i = 0; i < 10000 && at < size; i++) {
+      if (readSync(fd, h, 0, 16, at) < 8) return true;
+      let len = h.readUInt32BE(0);
+      const type = h.toString('latin1', 4, 8);
+      if (len === 1) len = Number(h.readBigUInt64BE(8));
+      else if (len === 0) len = size - at;
+      if (len < 8) return true;
+      if (type === 'moov') moov = true;
+      at += len;
+    }
+    return !(moov && at === size);
+  } catch {
+    return false;
+  } finally {
+    if (fd !== undefined) try { closeSync(fd); } catch { /* closed */ }
+  }
+}
 
 export function canvasPaths(root, id) {
   const dir = join(projectPaths(root, id).state, 'canvas');
@@ -89,6 +119,12 @@ export function syncCanvas(root, id) {
     // Add a version when the content behind a node changed (its media's or its text's hash).
     const put = (nid, kind, fields, version) => {
       seen.add(nid);
+      // its file is still being written: keep the node as it is until the file settles
+      if (version === BUSY) {
+        if (nodes[nid]) Object.assign(nodes[nid], fields, { kind, colour: colourOf(fields.beat) });
+        else if (kind === 'shot') nodes[nid] = { id: nid, ...fields, kind, colour: colourOf(fields.beat), planned: true, versions: [], current: null };
+        return nodes[nid];
+      }
       const n = nodes[nid] || { id: nid, kind, versions: [] };
       Object.assign(n, fields, { kind, colour: colourOf(fields.beat) });
       delete n.planned; // a planned shot (before the animatic) is real once it has a version
@@ -101,6 +137,9 @@ export function syncCanvas(root, id) {
     const snapshot = (rel, nid) => {
       const f = workFile(work, rel);
       if (!f) { problems.push({ file: rel, text: `doesn't exist (${nid})` }); return null; }
+      // A video still being written: copying it made a version per sync, each a cut-off video (run 2: 13 broken
+      // versions of every shot in 5 s while the animatic rendered)
+      if (mp4Unfinished(f)) return BUSY;
       const buf = readFileSync(f);
       const h = sha(buf);
       const name = `${h.slice(0, 16)}${extname(f).toLowerCase()}`;
@@ -135,6 +174,7 @@ export function syncCanvas(root, id) {
           const fields = { label: sc.key.toUpperCase(), title: sc.name || sc.key, beat: sc.beat || null, order: i, look: frames.find((f) => (f.beats || []).includes(sc.beat))?.id || null };
           // A shot remade on its own (an edit request) arrives as its own file; the others are cut from the video.
           const own = sc.file ? snapshot(sc.file, sc.key) : null;
+          if (own === BUSY || (src === BUSY && !own)) return put(sc.key, 'shot', fields, BUSY);
           if (own) return put(sc.key, 'shot', fields, { ...own, from_sec: 0, to_sec: +(sc.frames / fps).toFixed(3) });
           const from = +(sc.from_frame / fps).toFixed(3);
           const to = +((sc.from_frame + sc.frames) / fps).toFixed(3);
@@ -143,9 +183,12 @@ export function syncCanvas(root, id) {
       }
       // A beat with no scene yet (one shot made alone, before the animatic): its planned shot stays in the film, and
       // the shots go in beat order (run 2: S08 remade first left out/scenes.json with only s08, and the film was "1/1")
+      // Only then: an animatic (shots cut from one video) is the film as the AI cut it, and a beat it folded into another
+      // shot ("Fan and cap") has no shot of its own
       const keys = new Set(scenes.scenes.map((sc) => sc.key));
       const covered = new Set(scenes.scenes.map((sc) => sc.beat).filter(Boolean));
-      const gaps = beats.filter((b) => !covered.has(b.id) && !keys.has(`s${b.id.slice(1)}`));
+      const alone = scenes.scenes.every((sc) => sc.file);
+      const gaps = alone ? beats.filter((b) => !covered.has(b.id) && !keys.has(`s${b.id.slice(1)}`)) : [];
       if (gaps.length) {
         for (const b of gaps) {
           const look = frames.find((f) => (f.beats || []).includes(b.id));
@@ -220,6 +263,7 @@ export function syncCanvas(root, id) {
       const rel = [c.file, c.video, c.clip, c.preview, `out/board/cut-${n2}.mp4`, `out/board/cut-${n2}.webm`, `out/board/cut-${n2}.png`, `out/board/cut-${n2}.jpg`]
         .find((x) => typeof x === 'string' && workFile(work, x));
       const media = rel ? snapshot(rel, tid) : null;
+      if (media === BUSY) { put(tid, 'transition', { label: tid.toUpperCase(), title: transitionName(c), from, to, order: i }, BUSY); return; }
       put(tid, 'transition', { label: tid.toUpperCase(), title: transitionName(c), from, to, order: i, beat: to ? nodes[to]?.beat || null : null },
         { sha: sha(JSON.stringify(c) + (media?.sha || '')), ...(media ? { file: media.file } : {}) });
     });
