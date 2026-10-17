@@ -7,7 +7,7 @@
 //! - Slice-parallel encoding with rayon (feature `threads`, on by default).
 //!
 //! ```no_run
-//! use filmcraft_h264enc::{Encoder, EncoderConfig, RateControl, YuvFrame};
+//! use mortiflix_h264enc::{Encoder, EncoderConfig, RateControl, YuvFrame};
 //! let mut cfg = EncoderConfig::new(1280, 720, 30, 1);
 //! cfg.rate = RateControl::Crf(20.0);
 //! let mut enc = Encoder::new(cfg).unwrap();
@@ -298,7 +298,7 @@ const LOG2_MAX_FRAME_NUM: u32 = 8;
 const LOG2_MAX_POC_LSB: u32 = 8;
 
 /// The bitrate a level must allow for constant quality `crf`, which has no bitrate cap. It
-/// assumes the worst footage: about 3 bits per pixel at CRF 0 (FilmCraft's CRF 0 exports of real
+/// assumes the worst footage: about 3 bits per pixel at CRF 0 (Mortiflix Studio's CRF 0 exports of real
 /// camera footage measured 1.7 on average and 2.4 in their busiest second), halving every 6 steps
 /// (one doubling of the quantiser step). The default CRF 23 keeps 1080p30 at level 4.
 fn crf_level_kbps(crf: f32, mbw: usize, mbh: usize, fps: f64) -> u32 {
@@ -885,7 +885,7 @@ impl Encoder {
             }
             if !self.sei_sent {
                 self.sei_sent = true;
-                let text = format!("filmcraft-h264enc {} - clean-room H.264 encoder - options: {}", env!("CARGO_PKG_VERSION"), self.options());
+                let text = format!("mortiflix-h264enc {} - clean-room H.264 encoder - options: {}", env!("CARGO_PKG_VERSION"), self.options());
                 nals.push(nal::nal(0, NAL_SEI, &nal::sei_user_data_rbsp(&text)));
                 if self.cfg.mastering_display.is_some() || self.cfg.content_light.is_some() {
                     nals.push(nal::nal(0, NAL_SEI, &nal::sei_hdr_rbsp(self.cfg.mastering_display.as_ref(), self.cfg.content_light)));

@@ -2,9 +2,9 @@
 
 use std::sync::Arc;
 
-use filmcraft_audio_dsp::remix as dsp;
-use filmcraft_project::{ClipId, TrackItem};
-use filmcraft_time::Tick;
+use mortiflix_audio_dsp::remix as dsp;
+use mortiflix_project::{ClipId, TrackItem};
+use mortiflix_time::Tick;
 use serde_json::{Value, json};
 
 use super::*;
@@ -125,12 +125,12 @@ fn mixed_audio_is_the_source_pieces() {
     let r = s.execute("clip.remix", json!({"seconds": 18.0})).unwrap();
     assert_cuts_on_beats(&r, &a);
     let it = item(&s, c);
-    let rm = filmcraft_render::remix::Remix::of(&it).unwrap();
+    let rm = mortiflix_render::remix::Remix::of(&it).unwrap();
     let plan = rm.plan_at(SR);
     let total = it.duration.to_units_floor(SR as i64) as usize;
     let provider = s.media.provider(s.project.clone(), s.services.clone());
     let q = s.active_sequence().unwrap();
-    let mix = filmcraft_render::audio::mix_sequence(&s.project, q, 0, total, &provider);
+    let mix = mortiflix_render::audio::mix_sequence(&s.project, q, 0, total, &provider);
     let mut d = 0usize;
     let mut checked = 0;
     let mut worst = 0f32;

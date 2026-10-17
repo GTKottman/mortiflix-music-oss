@@ -3,8 +3,8 @@
 //! music. Built from the service's `preview.plan` (the service picks the best media per shot: its
 //! piece of the animatic, else its look's still, else a beat card, cut shots left out, voice and
 //! music at their times) plus `graph.get` for what the panel shows around it (beat names, the
-//! look's still to fall back to, shots being remade). The host turns it into FilmCraft's "Loose
-//! preview" sequence. Pure data: no egui, no FilmCraft. Every value from the service is hostile
+//! look's still to fall back to, shots being remade). The host turns it into Mortiflix Studio's "Loose
+//! preview" sequence. Pure data: no egui, no Mortiflix Studio. Every value from the service is hostile
 //! input: unknown or malformed fields fall back, and a file that isn't there falls back too.
 
 use std::collections::HashMap;

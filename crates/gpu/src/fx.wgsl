@@ -1,4 +1,4 @@
-// FilmCraft GPU effect stage: the standard effects of `filmcraft_render::gpufx::FxOp`, one
+// Mortiflix Studio GPU effect stage: the standard effects of `mortiflix_render::gpufx::FxOp`, one
 // compute pass each, reading the working image (`src`, linear premultiplied RGBA f32) and writing
 // the next one (`dst`). The math mirrors `FxOp::apply` (the CPU reference) operation by
 // operation; parameters arrive evaluated (keyframes, defaults and clamps applied on the CPU).
@@ -106,7 +106,7 @@ fn sample_clamped(x: f32, y: f32) -> vec4<f32> {
     return top + (bot - top) * ty;
 }
 
-// ---- colour helpers (`filmcraft_color`, `effects::enc` / `dec`)
+// ---- colour helpers (`mortiflix_color`, `effects::enc` / `dec`)
 
 fn linear_to_srgb1(v: f32) -> f32 {
     if v <= 0.0031308 {

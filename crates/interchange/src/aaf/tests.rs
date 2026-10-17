@@ -3,8 +3,8 @@
 
 use std::collections::HashSet;
 
-use filmcraft_project::{Project, SequenceSettings, TrackKind, TransitionAlign, TransitionId, find_effect};
-use filmcraft_time::{FrameRate, Tick, TimeRange};
+use mortiflix_project::{Project, SequenceSettings, TrackKind, TransitionAlign, TransitionId, find_effect};
+use mortiflix_time::{FrameRate, Tick, TimeRange};
 
 use super::ids::{self, cls, ddef, def, path, pid};
 use super::store::{self, Obj, Value};
@@ -12,11 +12,11 @@ use super::*;
 
 fn project() -> (Project, ItemId) {
     let mut p = Project::new("t");
-    let info = filmcraft_media::MediaInfo {
+    let info = mortiflix_media::MediaInfo {
         name: "a.mov".into(),
-        kind: filmcraft_media::MediaKind::Movie,
+        kind: mortiflix_media::MediaKind::Movie,
         duration: FrameRate::FPS_24.tick_of(2400),
-        video: Some(filmcraft_media::VideoStreamInfo {
+        video: Some(mortiflix_media::VideoStreamInfo {
             width: 1280,
             height: 720,
             frame_rate: FrameRate::FPS_24,
@@ -28,16 +28,16 @@ fn project() -> (Project, ItemId) {
             bitrate: None,
             hdr: None,
         }),
-        audio_streams: vec![filmcraft_media::AudioStreamInfo { sample_rate: 48_000, channels: 2, codec: String::new(), bits_per_sample: Some(24) }],
+        audio_streams: vec![mortiflix_media::AudioStreamInfo { sample_rate: 48_000, channels: 2, codec: String::new(), bits_per_sample: Some(24) }],
         container: String::new(),
         start_timecode: Some(86_400),
         file_size: None,
     };
     let a = p.add_item(
         "a.mov",
-        filmcraft_project::Label::Iris,
-        filmcraft_project::ItemKind::Media(filmcraft_project::MediaClip {
-            media: filmcraft_project::MediaRef::File { path: "/m/a.mov".into() },
+        mortiflix_project::Label::Iris,
+        mortiflix_project::ItemKind::Media(mortiflix_project::MediaClip {
+            media: mortiflix_project::MediaRef::File { path: "/m/a.mov".into() },
             info,
             interpret: Default::default(),
             mark_in: None,
@@ -63,7 +63,7 @@ fn project() -> (Project, ItemId) {
     for (kind, i, eff) in [(TrackKind::Video, 0, "cross_dissolve"), (TrackKind::Audio, 2, "constant_power")] {
         let id = TransitionId(p.alloc_id());
         let q = p.sequence_mut(s).unwrap();
-        q.tracks_mut(kind)[0].transitions.push(filmcraft_project::Transition {
+        q.tracks_mut(kind)[0].transitions.push(mortiflix_project::Transition {
             id,
             effect: find_effect(eff).unwrap().instance(),
             start: r.tick_of(42),
@@ -102,7 +102,7 @@ fn the_meta_dictionary_has_its_class_and_type_definition_sets() {
     let (p, s) = project();
     for small in [false, true] {
         let (bytes, _) = export(&p, s, &AafOptions { small_sectors: small, ..Default::default() }).unwrap();
-        let cf = filmcraft_cfb::CompoundFile::open(&bytes).unwrap();
+        let cf = mortiflix_cfb::CompoundFile::open(&bytes).unwrap();
         assert_eq!(cf.entries[cf.find("MetaDictionary-1").unwrap()].clsid, ids::META_DICTIONARY);
         for name in ["ClassDefinitions-3", "TypeDefinitions-4"] {
             // u32 count, u32 first free key, u32 last free key, u16 key pid, u8 key size
@@ -126,7 +126,7 @@ fn written_files_have_the_required_structure() {
     for small in [false, true] {
         let (bytes, _) = export(&p, s, &AafOptions { small_sectors: small, ..Default::default() }).unwrap();
         // compound file level
-        let cf = filmcraft_cfb::CompoundFile::open(&bytes).unwrap();
+        let cf = mortiflix_cfb::CompoundFile::open(&bytes).unwrap();
         assert_eq!(cf.version, if small { 3 } else { 4 });
         assert_eq!(cf.root().clsid, ids::ROOT);
         assert!(cf.read_path("referenced properties").is_ok());
@@ -284,12 +284,12 @@ fn store_round_trips_every_stored_form() {
         .with(0x0006, Value::Weak(path::DATA_DEFS.to_vec(), 0x1B01, vec![5; 16]))
         .with(0x0007, Value::WeakVec(path::DATA_DEFS.to_vec(), 0x1B01, vec![vec![4; 16], vec![5; 16]]))
         .with(0x0008, Value::Stream((0..10_000u32).map(|i| i as u8).collect()));
-    for v in [filmcraft_cfb::Version::V3, filmcraft_cfb::Version::V4] {
+    for v in [mortiflix_cfb::Version::V3, mortiflix_cfb::Version::V4] {
         let bytes = store::write(&root, v).unwrap();
         assert_eq!(store::read(&bytes).unwrap(), root);
     }
     // a data value longer than a property can hold is an error, not a panic
-    assert!(store::write(&Obj::new(ids::ROOT).data_prop(1, vec![0; 70_000]), filmcraft_cfb::Version::V4).is_err());
+    assert!(store::write(&Obj::new(ids::ROOT).data_prop(1, vec![0; 70_000]), mortiflix_cfb::Version::V4).is_err());
 }
 
 /// The property `p` of `o` as a list of objects, to change.
@@ -356,7 +356,7 @@ fn premiere_style_layers_and_nested_compositions_are_read() {
         }
     }
     assert_eq!(compositions, 2);
-    let theirs = store::write(&root, filmcraft_cfb::Version::V4).unwrap();
+    let theirs = store::write(&root, mortiflix_cfb::Version::V4).unwrap();
     assert_ne!(theirs, ours);
 
     let opts = ImportOptions::default();

@@ -23,13 +23,13 @@
 //! the dialog's `transitionDuration.value`, `.ok`, `.cancel`.
 
 use egui::{Align2, Pos2, Rect, RichText, Sense, Stroke, pos2, vec2};
-use filmcraft_edit::Edge;
-use filmcraft_edit::transitions::{self as trn, Alignment};
-use filmcraft_project::{ParamKind, ParamValue, Transition, TransitionId};
-use filmcraft_time::{FrameRate, Tick};
+use mortiflix_edit::Edge;
+use mortiflix_edit::transitions::{self as trn, Alignment};
+use mortiflix_project::{ParamKind, ParamValue, Transition, TransitionId};
+use mortiflix_time::{FrameRate, Tick};
 use serde_json::{Value, json};
 
-use crate::FilmcraftApp;
+use crate::StudioApp;
 use crate::state::TransitionDurationDraft;
 use crate::theme::Tokens;
 
@@ -45,7 +45,7 @@ const EDGE_PX: f32 = 7.0;
 
 /// The selected transition, when it still exists, with its alignment and how many frames it may
 /// last at most (the clips it joins).
-fn lookup(app: &FilmcraftApp, id: TransitionId) -> Option<(Transition, Alignment, i64)> {
+fn lookup(app: &StudioApp, id: TransitionId) -> Option<(Transition, Alignment, i64)> {
     let seq = app.session.active_sequence()?;
     let rate = seq.settings.frame_rate.sane();
     seq.all_tracks().find_map(|tr| {
@@ -57,12 +57,12 @@ fn lookup(app: &FilmcraftApp, id: TransitionId) -> Option<(Transition, Alignment
 }
 
 /// The first selected transition that still exists.
-pub fn selected(app: &FilmcraftApp) -> Option<TransitionId> {
+pub fn selected(app: &StudioApp) -> Option<TransitionId> {
     app.session.state.transition_selection.iter().copied().find(|id| lookup(app, *id).is_some())
 }
 
 fn timecode(frames: f64, rate: FrameRate, drop_frame: bool) -> String {
-    filmcraft_time::format_timecode_frames(frames.round() as i64, rate, drop_frame)
+    mortiflix_time::format_timecode_frames(frames.round() as i64, rate, drop_frame)
 }
 
 /// A duration field in frames that reads and takes timecode (or a frame count, or, when the text is
@@ -73,13 +73,13 @@ fn duration_field(ui: &mut egui::Ui, frames: &mut i64, max: i64, rate: FrameRate
         match s.trim().parse::<i64>() {
             Ok(n) => Some(n as f64),
             // timecode first: `1.00` is a second there, not one
-            Err(_) => filmcraft_time::parse_timecode(s, rate, drop_frame, 0).ok().map(|n| n as f64).or_else(|| crate::calc::eval(s, current)),
+            Err(_) => mortiflix_time::parse_timecode(s, rate, drop_frame, 0).ok().map(|n| n as f64).or_else(|| crate::calc::eval(s, current)),
         }
     }))
 }
 
 /// Effect Controls for a selected transition. `rect` is the panel.
-pub fn effect_controls(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect, id: TransitionId) {
+pub fn effect_controls(app: &mut StudioApp, ui: &mut egui::Ui, rect: Rect, id: TransitionId) {
     let t = app.tokens;
     let Some((x, align, max_frames)) = lookup(app, id) else {
         crate::dock::placeholder(ui, rect, &t, tl!("(no clip selected)"));
@@ -243,7 +243,7 @@ fn ticks_for(lane: Rect, view: (Tick, Tick), px: f32) -> Tick {
 /// The selected transition's own timeline, right of its settings: ruler, clip A, the transition,
 /// clip B, the cut and the playhead. Returns the change a drag of the transition makes this frame,
 /// as `sequence.setTransition` params (without the id); moves the playhead itself.
-fn timeline(app: &mut FilmcraftApp, ui: &mut egui::Ui, lane: Rect, id: TransitionId, x: &Transition, elems: &mut Elems) -> Option<Value> {
+fn timeline(app: &mut StudioApp, ui: &mut egui::Ui, lane: Rect, id: TransitionId, x: &Transition, elems: &mut Elems) -> Option<Value> {
     let t = app.tokens;
     let seq = app.session.active_sequence()?;
     let (rate, drop_frame) = (seq.settings.frame_rate.sane(), seq.settings.drop_frame);
@@ -390,7 +390,7 @@ fn paint_ruler(p: &egui::Painter, ruler: Rect, view: (Tick, Tick), rate: FrameRa
             let x = x_of(ruler, view, rate.tick_of(f));
             p.line_segment([pos2(x, base_y - h), pos2(x, base_y)], Stroke::new(1.0, t.tl_ruler_tick));
             if labelled && f >= 0 {
-                let label = filmcraft_time::format_time(rate.tick_of(f), rate, drop_frame, filmcraft_time::TimeDisplay::Timecode, 48000);
+                let label = mortiflix_time::format_time(rate.tick_of(f), rate, drop_frame, mortiflix_time::TimeDisplay::Timecode, 48000);
                 p.text(pos2(x, ruler.min.y + 7.0), Align2::CENTER_CENTER, label, Tokens::ui(10.0), t.tl_ruler_text);
             }
             f = f.saturating_add(step);
@@ -485,7 +485,7 @@ fn param_widget(ui: &mut egui::Ui, elems: &mut Elems, pid: &str, kind: &ParamKin
 }
 
 /// Double-click a transition in the Timeline: Set Transition Duration.
-pub fn open_duration(app: &mut FilmcraftApp, id: TransitionId) {
+pub fn open_duration(app: &mut StudioApp, id: TransitionId) {
     let Some((x, ..)) = lookup(app, id) else { return };
     let rate = app.session.active_sequence().map(|q| q.settings.frame_rate.sane()).unwrap_or_default();
     app.ui.transition_duration = TransitionDurationDraft { transition: id.0, frames: rate.frame_at(x.duration).max(1) };
@@ -494,7 +494,7 @@ pub fn open_duration(app: &mut FilmcraftApp, id: TransitionId) {
 }
 
 /// The Set Transition Duration dialog. Returns whether it stays open.
-pub fn duration_dialog(app: &mut FilmcraftApp, ctx: &egui::Context) -> bool {
+pub fn duration_dialog(app: &mut StudioApp, ctx: &egui::Context) -> bool {
     let mut d = app.ui.transition_duration.clone();
     let id = TransitionId(d.transition);
     let Some((_, _, max_frames)) = lookup(app, id) else { return false };

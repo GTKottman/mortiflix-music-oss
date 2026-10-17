@@ -2,8 +2,8 @@
 
 use serde_json::{Value, json};
 
-use filmcraft_interchange::{ExportOptions, Format, ImportOptions};
-use filmcraft_project::{ItemId, ItemKind, MediaRef};
+use mortiflix_interchange::{ExportOptions, Format, ImportOptions};
+use mortiflix_project::{ItemId, ItemKind, MediaRef};
 
 use crate::{EngineError, Result, Session};
 
@@ -13,14 +13,14 @@ pub fn detect(path: &str, bytes: &[u8]) -> Option<Format> {
     if !matches!(ext.as_deref(), Some("edl" | "xml" | "fcpxml" | "otio" | "aaf" | "omf" | "omfi")) {
         return None;
     }
-    filmcraft_interchange::detect(bytes, ext.as_deref())
+    mortiflix_interchange::detect(bytes, ext.as_deref())
 }
 
-fn report_json(r: &filmcraft_interchange::Report) -> Vec<String> {
+fn report_json(r: &mortiflix_interchange::Report) -> Vec<String> {
     r.entries.iter().map(|e| if e.count > 1 { format!("{} (×{})", e.message, e.count) } else { e.message.clone() }).collect()
 }
 
-fn is_file_media(item: &filmcraft_project::ProjectItem) -> bool {
+fn is_file_media(item: &mortiflix_project::ProjectItem) -> bool {
     matches!(&item.kind, ItemKind::Media(m) if matches!(m.media, MediaRef::File { .. }))
 }
 
@@ -36,7 +36,7 @@ pub fn import(s: &mut Session, path: &str, bytes: &[u8], format: Format) -> Resu
     let (fragment, report) = match format {
         // AAF / OMF may embed audio: write it next to the document (the media items point there)
         Format::Aaf | Format::Omf => {
-            let r = if format == Format::Aaf { filmcraft_interchange::aaf::import(bytes, &opts) } else { filmcraft_interchange::omf::import(bytes, &opts) };
+            let r = if format == Format::Aaf { mortiflix_interchange::aaf::import(bytes, &opts) } else { mortiflix_interchange::omf::import(bytes, &opts) };
             let (fragment, extracted, report) = r.map_err(|e| EngineError::Other(format!("{path}: {e}")))?;
             for m in extracted {
                 if let Some(dir) = std::path::Path::new(&m.path).parent().filter(|_| !s.services.export_in_memory()) {
@@ -46,12 +46,12 @@ pub fn import(s: &mut Session, path: &str, bytes: &[u8], format: Format) -> Resu
             }
             (fragment, report)
         }
-        _ => filmcraft_interchange::import_with(bytes, format, &opts).map_err(|e| EngineError::Other(format!("{path}: {e}")))?,
+        _ => mortiflix_interchange::import_with(bytes, format, &opts).map_err(|e| EngineError::Other(format!("{path}: {e}")))?,
     };
     let before: std::collections::HashSet<ItemId> = s.project.items.keys().copied().collect();
     let name = opts.name.clone().unwrap_or_else(|| format.name().to_string());
     let seqs = s.edit(&format!("Import {name}"), |proj, _| {
-        let seqs = filmcraft_interchange::merge_into(proj, fragment, None);
+        let seqs = mortiflix_interchange::merge_into(proj, fragment, None);
         // A document that sets only some Motion parameters leaves the others at their "auto"
         // (NaN) defaults. Resolve them as placing a clip does, for every format. A media file's
         // picture size is only what the document says so far (an EDL says nothing: the importer
@@ -91,7 +91,7 @@ pub fn import(s: &mut Session, path: &str, bytes: &[u8], format: Format) -> Resu
                         m.offline = false;
                         m.identity = identity;
                         if let (Some(tc), Some(rate)) = (rebase, rate) {
-                            filmcraft_interchange::rebase_source_timecode(proj, id, tc, rate);
+                            mortiflix_interchange::rebase_source_timecode(proj, id, tc, rate);
                         }
                     }
                     // the picture size is now the file's own: centre the anchors of its clips in it
@@ -138,7 +138,7 @@ pub fn export(s: &mut Session, p: &Value) -> Result<Value> {
         name: s.project.item(seq).map(|i| i.name.clone()),
         ..Default::default()
     };
-    let (bytes, report) = filmcraft_interchange::export(&s.project, seq, format, &opts).map_err(|e| EngineError::Other(e.to_string()))?;
+    let (bytes, report) = mortiflix_interchange::export(&s.project, seq, format, &opts).map_err(|e| EngineError::Other(e.to_string()))?;
     s.services.write_file(&path, &bytes).map_err(|e| EngineError::Other(e.to_string()))?;
     Ok(json!({"path": path, "bytes": bytes.len(), "report": report_json(&report)}))
 }

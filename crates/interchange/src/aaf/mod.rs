@@ -2,7 +2,7 @@
 //!
 //! Written from the public AMWA specifications: *AAF Object Specification v1.1*, *AAF Low-Level
 //! Container Specification v1.0.1* (structured storage mapping, see [`store`]) and *AAF Edit
-//! Protocol v1.0*; the container is Microsoft's Compound File Binary format ([`filmcraft_cfb`]).
+//! Protocol v1.0*; the container is Microsoft's Compound File Binary format ([`mortiflix_cfb`]).
 //!
 //! The exported file holds one top-level **CompositionMob** (Edit Protocol usage code
 //! "top level") with
@@ -11,7 +11,7 @@
 //! - one timeline slot per video track (picture) and per audio track (sound; one per channel when
 //!   broken out to mono), each a **Sequence** of **Filler**s, **SourceClip**s and **Transition**s
 //!   (Cross Dissolve → `VideoDissolve_2`, Dip to Black → `VideoFadeToBlack`, audio crossfades →
-//!   `MonoAudioDissolve`; the FilmCraft effect id is kept in a tagged value),
+//!   `MonoAudioDissolve`; the Mortiflix Studio effect id is kept in a tagged value),
 //! - clip volume as a `MonoAudioGain` **OperationGroup** around the source clip with an
 //!   `Amplitude` **ConstantValue** or **VaryingValue** (keyframes as control points),
 //! - sequence markers as **CommentMarker**s in an event slot;
@@ -28,7 +28,7 @@
 //!
 //! Import reads the same structures (and the common variations: sequences inside sequences,
 //! selectors, operation groups around clips, legacy data definitions, essence groups, and Premiere
-//! Pro's one video slot holding a nested scope with a segment per video track) into FilmCraft
+//! Pro's one video slot holding a nested scope with a segment per video track) into Mortiflix Studio
 //! sequences (a composition that others use becomes a nested sequence), media items (linked by path; embedded audio is returned as WAV files for the
 //! caller to write) and markers.
 
@@ -37,7 +37,7 @@ mod read;
 pub(crate) mod store;
 mod write;
 
-use filmcraft_project::{ItemId, Project};
+use mortiflix_project::{ItemId, Project};
 use serde::{Deserialize, Serialize};
 
 use crate::comp::{self, ExtractedMedia};
@@ -60,7 +60,7 @@ pub fn export(project: &Project, sequence: ItemId, opts: &AafOptions) -> Result<
     let mut report = Report::default();
     let name = opts.name.clone().or_else(|| project.item(sequence).map(|i| i.name.clone())).unwrap_or_else(|| "Sequence".into());
     let doc = comp::from_project(project, sequence, &name, &opts.media, comp::Nests::Compositions, &mut report)?;
-    let version = if opts.small_sectors { filmcraft_cfb::Version::V3 } else { filmcraft_cfb::Version::V4 };
+    let version = if opts.small_sectors { mortiflix_cfb::Version::V3 } else { mortiflix_cfb::Version::V4 };
     let bytes = write::write(&doc, version, &mut report)?;
     Ok((bytes, report))
 }
@@ -77,10 +77,10 @@ pub fn import(bytes: &[u8], opts: &ImportOptions) -> Result<(Imported, Vec<Extra
 /// Whether `bytes` look like an AAF file (a compound file whose root has the AAF root class or a
 /// `Header-2` storage).
 pub fn sniff(bytes: &[u8]) -> bool {
-    if !filmcraft_cfb::sniff(bytes) {
+    if !mortiflix_cfb::sniff(bytes) {
         return false;
     }
-    match filmcraft_cfb::CompoundFile::open(bytes) {
+    match mortiflix_cfb::CompoundFile::open(bytes) {
         Ok(cf) => cf.root().clsid == ids::ROOT || cf.find("Header-2").is_ok(),
         Err(_) => false,
     }

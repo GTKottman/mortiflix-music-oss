@@ -8,17 +8,17 @@
 //! Times are written as frames at the sequence rate (`rate` is the exact rate as a float, e.g.
 //! 23.976023976023978) and read back exactly by snapping the rate to its rational form. Fields
 //! OTIO has no schema for (effects and their keyframes, labels, links, groups, clip gain, track
-//! state, sequence settings, media info, generators) round-trip through `metadata.filmcraft`.
+//! state, sequence settings, media info, generators) round-trip through `metadata.mortiflix`.
 //! Nested sequences are `Stack` items inside tracks.
 
 use std::collections::HashMap;
 
-use filmcraft_media::{Generator, MediaInfo};
-use filmcraft_project::{
+use mortiflix_media::{Generator, MediaInfo};
+use mortiflix_project::{
     ClipId, EffectInstance, ItemId, ItemKind, Label, Marker, MarkerId, MarkerKind, MediaRef, ParamValue, Project, Sequence, SequenceSettings, Track, TrackItem,
     TrackKind, Transition, TransitionAlign, TransitionId,
 };
-use filmcraft_time::{FrameRate, TICKS_PER_SECOND, Tick};
+use mortiflix_time::{FrameRate, TICKS_PER_SECOND, Tick};
 use serde_json::{Value, json};
 
 use crate::common::{
@@ -72,7 +72,7 @@ fn schema_name(v: &Value) -> &str {
 }
 
 fn fc(v: &Value) -> Option<&Value> {
-    v.get("metadata").and_then(|m| m.get("filmcraft"))
+    v.get("metadata").and_then(|m| m.get("mortiflix-studio"))
 }
 
 fn name_of(v: &Value) -> String {
@@ -130,7 +130,7 @@ pub(crate) fn export(p: &Project, seq_id: ItemId, opts: &ExportOptions, report: 
         "OTIO_SCHEMA": "Timeline.1",
         "name": name,
         "global_start_time": rt(rate.tick_of(seq.start_timecode), rate),
-        "metadata": {"filmcraft": x.seq_meta(seq_id)},
+        "metadata": {"mortiflix-studio": x.seq_meta(seq_id)},
         "tracks": stack,
     });
     serde_json::to_string_pretty(&tl).map_err(|e| Error::Other(e.to_string()))
@@ -171,7 +171,7 @@ impl Exp<'_, '_> {
             "effects": [],
             "markers": markers,
             "enabled": true,
-            "metadata": if range.is_some() { json!({"filmcraft": self.seq_meta(id)}) } else { json!({}) },
+            "metadata": if range.is_some() { json!({"mortiflix-studio": self.seq_meta(id)}) } else { json!({}) },
         })
     }
 
@@ -201,7 +201,7 @@ impl Exp<'_, '_> {
             "effects": [],
             "markers": [],
             "enabled": t.enabled,
-            "metadata": {"filmcraft": {
+            "metadata": {"mortiflix-studio": {
                 "locked": t.locked, "sync_lock": t.sync_lock, "muted": t.muted, "solo": t.solo,
                 "channels": t.channels, "volume_db": t.volume_db, "pan": t.pan, "effects": t.effects,
             }},
@@ -216,7 +216,7 @@ impl Exp<'_, '_> {
             "transition_type": if dissolve { "SMPTE_Dissolve" } else { "Custom_Transition" },
             "in_offset": rt(cut - x.start, rate),
             "out_offset": rt(x.end() - cut, rate),
-            "metadata": {"filmcraft": {"effect": x.effect, "align": x.align, "reverse": x.reverse}},
+            "metadata": {"mortiflix-studio": {"effect": x.effect, "align": x.align, "reverse": x.reverse}},
         })
     }
 
@@ -226,15 +226,15 @@ impl Exp<'_, '_> {
             return json!({"OTIO_SCHEMA": "MissingReference.1", "name": name, "available_range": null, "metadata": {}});
         };
         let avail = tr(m.info.start_timecode.map(|f| m.frame_rate().tick_of(f)).unwrap_or(Tick::ZERO), m.info.duration, rate);
-        let meta = json!({"filmcraft": {"item": item.0, "label": self.p.item(item).map(|i| i.label), "info": m.info, "offline": m.offline}});
+        let meta = json!({"mortiflix-studio": {"item": item.0, "label": self.p.item(item).map(|i| i.label), "info": m.info, "offline": m.offline}});
         match &m.media {
             MediaRef::Generator(g) => json!({
                 "OTIO_SCHEMA": "GeneratorReference.1",
                 "name": name,
-                "generator_kind": match g { Generator::ColorMatte { .. } => "SolidColor", Generator::BlackVideo => "black", Generator::BarsAndTone => "SMPTEBars", _ => "FilmCraftGenerator" },
+                "generator_kind": match g { Generator::ColorMatte { .. } => "SolidColor", Generator::BlackVideo => "black", Generator::BarsAndTone => "SMPTEBars", _ => "StudioGenerator" },
                 "parameters": match g { Generator::ColorMatte { color } => json!({"color": color}), _ => json!({}) },
                 "available_range": avail,
-                "metadata": {"filmcraft": {"item": item.0, "generator": g, "info": m.info}},
+                "metadata": {"mortiflix-studio": {"item": item.0, "generator": g, "info": m.info}},
             }),
             MediaRef::File { path } => {
                 let url = match &self.opts.relative_to {
@@ -251,13 +251,13 @@ impl Exp<'_, '_> {
         let mut effects = Vec::new();
         if let Some(h) = it.frame_hold {
             effects.push(
-                json!({"OTIO_SCHEMA": "FreezeFrame.1", "name": "", "effect_name": "FreezeFrame", "time_scalar": 0.0, "metadata": {"filmcraft": {"hold": h}}}),
+                json!({"OTIO_SCHEMA": "FreezeFrame.1", "name": "", "effect_name": "FreezeFrame", "time_scalar": 0.0, "metadata": {"mortiflix-studio": {"hold": h}}}),
             );
         } else if it.speed != 1.0 || it.reverse {
             let s = if it.reverse { -it.speed } else { it.speed };
             effects.push(json!({"OTIO_SCHEMA": "LinearTimeWarp.1", "name": "", "effect_name": "LinearTimeWarp", "time_scalar": s, "metadata": {}}));
         }
-        let meta = json!({"filmcraft": {
+        let meta = json!({"mortiflix-studio": {
             "label": it.label, "link": it.link, "group": it.group, "effects": it.effects,
             "gain_db": it.gain_db, "scale_to_frame": it.scale_to_frame, "source_in_ticks": it.source_in.0,
             "duration_ticks": it.duration.0,
@@ -274,9 +274,9 @@ impl Exp<'_, '_> {
             self.stack.pop();
             s["effects"] = json!(effects);
             s["enabled"] = json!(it.enabled);
-            s["metadata"]["filmcraft"]["clip"] = meta["filmcraft"].clone();
+            s["metadata"]["mortiflix-studio"]["clip"] = meta["mortiflix-studio"].clone();
             // Nested sequence markers stay on the Stack; clip instance markers live on the clip metadata.
-            s["metadata"]["filmcraft"]["clip"]["markers"] = json!(markers);
+            s["metadata"]["mortiflix-studio"]["clip"]["markers"] = json!(markers);
             return s;
         }
         let _ = generator_of(self.p, base);
@@ -313,7 +313,7 @@ fn marker_json(m: &Marker, rate: FrameRate) -> Value {
         "comment": m.comment,
         "color": color_name(m.color),
         "marked_range": tr(m.start, m.duration, rate),
-        "metadata": {"filmcraft": {"kind": m.kind, "label": m.color, "start_ticks": m.start.0, "duration_ticks": m.duration.0}},
+        "metadata": {"mortiflix-studio": {"kind": m.kind, "label": m.color, "start_ticks": m.start.0, "duration_ticks": m.duration.0}},
     })
 }
 
@@ -666,7 +666,7 @@ impl Imp<'_, '_> {
         let name = name_of(c);
         let mut ti = self.b.clip(item, kind, if name.is_empty() { "Nested Sequence" } else { &name }, pos, dur, src_in);
         let clip_meta = meta.and_then(|m| m.get("clip")).cloned();
-        // Stack markers belong to the nested sequence; instance markers are on filmcraft.clip.
+        // Stack markers belong to the nested sequence; instance markers are on mortiflix.clip.
         if let Some(ref cm) = clip_meta {
             ti.markers = self.markers(cm);
         }

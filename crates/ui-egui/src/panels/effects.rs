@@ -2,7 +2,7 @@
 //! effect definitions). Drag onto a clip or edit point; double-click applies to the selection.
 //!
 //! Lumetri Presets: each preset row has a thumbnail (our Lumetri on the procedural preview
-//! picture, `filmcraft_render::lumetri_presets`); double-click (or right-click ▸ Apply to Selected
+//! picture, `mortiflix_render::lumetri_presets`); double-click (or right-click ▸ Apply to Selected
 //! Clips, `effects.presetMenu.apply`) applies it (`lumetri.applyPreset`), and dragging it onto a
 //! Timeline clip applies it to that clip (rows and grid cells alike).
 //! When the panel is wide (maximized), clicking a Lumetri Presets folder shows its presets as a
@@ -12,11 +12,11 @@
 use egui::{Align2, Color32, Rect, Sense, pos2, vec2};
 use serde_json::json;
 
-use crate::FilmcraftApp;
+use crate::StudioApp;
 use crate::icons::{self, Icon};
 use crate::theme::Tokens;
 
-pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
+pub fn show(app: &mut StudioApp, ui: &mut egui::Ui, rect: Rect) {
     let t = app.tokens;
     let sr = Rect::from_min_size(rect.min + vec2(8.0, 6.0), vec2(rect.width() - 16.0, 22.0));
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(sr));
@@ -33,9 +33,9 @@ pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
     let mut bui = ui.new_child(egui::UiBuilder::new().max_rect(body).id_salt("fx-body"));
     bui.set_clip_rect(body);
     let filter = q.to_lowercase();
-    let defs = filmcraft_project::effect_defs();
+    let defs = mortiflix_project::effect_defs();
     // folder tree: top-level categories in Premiere's order
-    let tops = filmcraft_project::vtransition::EFFECT_TOP_FOLDERS;
+    let tops = mortiflix_project::vtransition::EFFECT_TOP_FOLDERS;
     let mut apply: Option<String> = None;
     let mut lumetri_apply: Option<String> = None;
     let mut preset_action: Option<(String, String)> = None;
@@ -68,7 +68,7 @@ pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
             }
             // Sub-folders in definition order; loose items (no sub-folder, e.g. Audio Effects ▸
             // Balance / Mute / Volume) come last, outside any folder.
-            let sub = |d: &filmcraft_project::EffectDef| d.category.get(1).copied().unwrap_or("");
+            let sub = |d: &mortiflix_project::EffectDef| d.category.get(1).copied().unwrap_or("");
             let mut subs: Vec<&str> = items.iter().map(|d| sub(d)).collect();
             subs.dedup();
             subs.sort_by_key(|s| s.is_empty());
@@ -89,7 +89,7 @@ pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
                     }
                     let x = r.min.x + 46.0;
                     let icon_r = Rect::from_center_size(pos2(x - 10.0, r.center().y), vec2(13.0, 13.0));
-                    let is_tr = matches!(d.kind, filmcraft_project::EffectKind::VideoTransition | filmcraft_project::EffectKind::AudioTransition);
+                    let is_tr = matches!(d.kind, mortiflix_project::EffectKind::VideoTransition | mortiflix_project::EffectKind::AudioTransition);
                     ui.painter().rect_stroke(icon_r, 2.0, egui::Stroke::new(1.0, t.text_dim), egui::StrokeKind::Inside);
                     if is_tr {
                         ui.painter().line_segment([icon_r.left_bottom(), icon_r.right_top()], egui::Stroke::new(1.0, t.text_dim));
@@ -139,7 +139,7 @@ pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
     }
 }
 
-fn folder_row(app: &mut FilmcraftApp, ui: &mut egui::Ui, key: &str, depth: usize, filter: &str) -> bool {
+fn folder_row(app: &mut StudioApp, ui: &mut egui::Ui, key: &str, depth: usize, filter: &str) -> bool {
     let t = app.tokens;
     let open = !filter.is_empty() || app.ui.expanded_fx.iter().any(|k| k == key);
     let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 20.0), Sense::click());
@@ -171,7 +171,7 @@ fn folder_row(app: &mut FilmcraftApp, ui: &mut egui::Ui, key: &str, depth: usize
 
 /// Right-click menu of a Lumetri preset: Apply to Selected Clips (automation id
 /// `effects.presetMenu.apply`). True when chosen.
-fn apply_menu(app: &mut FilmcraftApp, resp: &egui::Response) -> bool {
+fn apply_menu(app: &mut StudioApp, resp: &egui::Response) -> bool {
     let mut chosen = false;
     resp.context_menu(|ui| {
         let b = ui.button(tl!("Apply to Selected Clips"));
@@ -185,16 +185,16 @@ fn apply_menu(app: &mut FilmcraftApp, resp: &egui::Response) -> bool {
 }
 
 /// A preset's thumbnail texture (rendered once per size, cached by name).
-fn preset_texture(app: &mut FilmcraftApp, ctx: &egui::Context, p: &filmcraft_render::lumetri_presets::LumetriPreset, w: usize) -> egui::TextureId {
+fn preset_texture(app: &mut StudioApp, ctx: &egui::Context, p: &mortiflix_render::lumetri_presets::LumetriPreset, w: usize) -> egui::TextureId {
     let name = format!("lumetri-preset-{}-{w}", p.name);
     if let Some((id, _)) = app.texture_existing(&name) {
         return id;
     }
     let h = (w * 9 / 16).max(1);
-    let img = filmcraft_render::lumetri_presets::thumbnail(p, w, h);
+    let img = mortiflix_render::lumetri_presets::thumbnail(p, w, h);
     let rgba = crate::frames::Rgba { w: img.w, h: img.h, px: img.over_black_rgba8() };
     let key = crate::frames::FrameKey {
-        target: crate::frames::Target::Item(filmcraft_project::ItemId(u64::MAX)),
+        target: crate::frames::Target::Item(mortiflix_project::ItemId(u64::MAX)),
         frame: 0,
         size: w as u32,
         revision: 0,
@@ -205,8 +205,8 @@ fn preset_texture(app: &mut FilmcraftApp, ctx: &egui::Context, p: &filmcraft_ren
 
 /// The Lumetri Presets folder of the tree: sub-folders and preset rows with thumbnails. Returns
 /// the preset to apply (double-click).
-fn lumetri_rows(app: &mut FilmcraftApp, ui: &mut egui::Ui, filter: &str) -> Option<String> {
-    use filmcraft_render::lumetri_presets as lp;
+fn lumetri_rows(app: &mut StudioApp, ui: &mut egui::Ui, filter: &str) -> Option<String> {
+    use mortiflix_render::lumetri_presets as lp;
     let t = app.tokens;
     let top = "Lumetri Presets";
     let presets: Vec<lp::LumetriPreset> = lp::presets().into_iter().filter(|p| crate::i18n::matches_query(p.name, filter)).collect();
@@ -261,8 +261,8 @@ fn lumetri_rows(app: &mut FilmcraftApp, ui: &mut egui::Ui, filter: &str) -> Opti
 
 /// The wide Effects panel's thumbnail grid of the selected Lumetri Presets folder. Returns the
 /// preset to apply (double-click).
-fn preset_grid(app: &mut FilmcraftApp, ui: &mut egui::Ui, area: Rect) -> Option<String> {
-    use filmcraft_render::lumetri_presets as lp;
+fn preset_grid(app: &mut StudioApp, ui: &mut egui::Ui, area: Rect) -> Option<String> {
+    use mortiflix_render::lumetri_presets as lp;
     let t = app.tokens;
     let folder = app.ui.lumetri_grid_folder.clone()?;
     app.auto.add("effects.presetGrid", area, &folder);

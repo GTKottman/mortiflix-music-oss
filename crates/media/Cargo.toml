@@ -1,5 +1,5 @@
 [package]
-name = "filmcraft-media"
+name = "mortiflix-media"
 description = "Media sources: probing, decoding traits, frame cache, generators, stills"
 version.workspace = true
 edition.workspace = true
@@ -10,17 +10,17 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
-filmcraft-time = { workspace = true }
-filmcraft-color = { workspace = true }
-filmcraft-frame = { workspace = true }
-filmcraft-dng = { workspace = true }
+mortiflix-time = { workspace = true }
+mortiflix-color = { workspace = true }
+mortiflix-frame = { workspace = true }
+mortiflix-dng = { workspace = true }
 rayon = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "tiff", "bmp"] }
 
 [dev-dependencies]
-filmcraft-testkit = { workspace = true }
-filmcraft-dng = { workspace = true, features = ["writer"] }
+mortiflix-testkit = { workspace = true }
+mortiflix-dng = { workspace = true, features = ["writer"] }
 # APNG fixtures for the animated-image tests (the image crate does not encode APNG)
 png = "0.18"

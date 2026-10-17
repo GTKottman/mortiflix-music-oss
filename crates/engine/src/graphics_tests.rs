@@ -1,9 +1,9 @@
 use serde_json::json;
 
 use crate::Session;
-use filmcraft_project::graphic::{LayerContent, eval_layer, layer_indices};
-use filmcraft_project::{ClipId, ItemKind};
-use filmcraft_time::Tick;
+use mortiflix_project::graphic::{LayerContent, eval_layer, layer_indices};
+use mortiflix_project::{ClipId, ItemKind};
+use mortiflix_time::Tick;
 
 fn demo() -> Session {
     let mut s = Session::default();
@@ -11,13 +11,13 @@ fn demo() -> Session {
     s
 }
 
-fn layers(s: &Session, clip: ClipId) -> Vec<filmcraft_project::graphic::LayerSpec> {
+fn layers(s: &Session, clip: ClipId) -> Vec<mortiflix_project::graphic::LayerSpec> {
     let q = s.active_sequence().unwrap();
     let (_, it) = q.find_item(clip).unwrap();
     layer_indices(&it.effects).into_iter().filter_map(|i| eval_layer(&it.effects[i], Tick::ZERO, (q.settings.width, q.settings.height))).collect()
 }
 
-fn text_of(l: &filmcraft_project::graphic::LayerSpec) -> String {
+fn text_of(l: &mortiflix_project::graphic::LayerSpec) -> String {
     match &l.content {
         LayerContent::Text(t) => t.text.clone(),
         _ => panic!("not text"),
@@ -503,12 +503,12 @@ fn new_layer_from_file_places_the_image_above() {
 fn line_starts(s: &Session, clip: ClipId, layer: usize) -> Vec<(String, f64, f64)> {
     let spec = layers(s, clip).remove(layer);
     let LayerContent::Text(t) = &spec.content else { panic!("not text") };
-    let l = filmcraft_render::graphic_clip::text_layout(t);
-    let m = filmcraft_render::graphic_clip::layer_matrix(&spec);
+    let l = mortiflix_render::graphic_clip::text_layout(t);
+    let m = mortiflix_render::graphic_clip::layer_matrix(&spec);
     l.lines
         .iter()
         .map(|line| {
-            let p = m.apply(filmcraft_geom::Vec2::new(line.x as f64, line.baseline as f64));
+            let p = m.apply(mortiflix_geom::Vec2::new(line.x as f64, line.baseline as f64));
             (t.text[line.range.clone()].trim_end().to_string(), p.x, p.y)
         })
         .collect()

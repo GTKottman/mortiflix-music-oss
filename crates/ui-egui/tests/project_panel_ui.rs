@@ -4,7 +4,7 @@
 //! bins opened in place / in a tab / in a window, and the Media Browser (navigation, Favorites,
 //! Edit Columns…, import, drag to the Project panel, Open In Source Monitor).
 //!
-//! Set `FILMCRAFT_UI_SNAPSHOT_DIR=<dir>` to also render offscreen with wgpu and write
+//! Set `MFX_STUDIO_UI_SNAPSHOT_DIR=<dir>` to also render offscreen with wgpu and write
 //! `project-*.png` / `media-browser-*.png`.
 
 #![allow(dead_code)]
@@ -12,15 +12,15 @@
 use std::sync::mpsc::{Sender, channel};
 
 use egui_kittest::Harness;
-use filmcraft_engine::Session;
-use filmcraft_engine::project_panel::{FREEFORM_POS, FREEFORM_STACK, ViewMode};
-use filmcraft_project::{BinEntry, ItemId};
-use filmcraft_ui_egui::FilmcraftApp;
-use filmcraft_ui_egui::control::ControlRequest;
+use mortiflix_engine::Session;
+use mortiflix_engine::project_panel::{FREEFORM_POS, FREEFORM_STACK, ViewMode};
+use mortiflix_project::{BinEntry, ItemId};
+use mortiflix_ui_egui::StudioApp;
+use mortiflix_ui_egui::control::ControlRequest;
 use serde_json::{Value, json};
 
 struct Driver {
-    harness: Harness<'static, FilmcraftApp>,
+    harness: Harness<'static, StudioApp>,
     tx: Sender<ControlRequest>,
     snapshots: Option<std::path::PathBuf>,
 }
@@ -28,8 +28,8 @@ struct Driver {
 impl Driver {
     fn with(session: Session) -> Self {
         let (tx, rx) = channel();
-        let app = FilmcraftApp::new(session).with_control(rx);
-        let snapshots = std::env::var_os("FILMCRAFT_UI_SNAPSHOT_DIR").map(std::path::PathBuf::from);
+        let app = StudioApp::new(session).with_control(rx);
+        let snapshots = std::env::var_os("MFX_STUDIO_UI_SNAPSHOT_DIR").map(std::path::PathBuf::from);
         let mut b = Harness::builder().with_size(egui::vec2(1600.0, 980.0)).with_max_steps(10_000);
         if snapshots.is_some() {
             b = b.wgpu();
@@ -121,7 +121,7 @@ impl Driver {
         self.frames(2);
     }
 
-    fn app(&mut self) -> &mut FilmcraftApp {
+    fn app(&mut self) -> &mut StudioApp {
         self.harness.state_mut()
     }
 
@@ -302,7 +302,7 @@ fn freeform_view_places_and_stacks_cards() {
     d.ok("ui.drag", json!({"from": {"x": from.0, "y": from.1}, "to": {"x": to.0, "y": to.1}, "steps": 16}));
     d.frames(4);
     let pos = d.app().session.project.item(ItemId(items[0])).unwrap().metadata.get(FREEFORM_POS).cloned().expect("card placed");
-    let (x, y, _) = filmcraft_engine::project_panel::parse_pos(&pos).unwrap();
+    let (x, y, _) = mortiflix_engine::project_panel::parse_pos(&pos).unwrap();
     let (ex, ey) = (r[0] - canvas[0] + 140.0, r[1] - canvas[1] + 90.0);
     assert!((x - ex).abs() < 4.0 && (y - ey).abs() < 4.0, "placed at {x},{y}, expected {ex},{ey}");
     d.frames(2);
@@ -375,7 +375,7 @@ fn metadata_display_dialog_and_view_presets() {
     d.frames(4);
     d.click("project.menu.metadataDisplay");
     d.frames(4);
-    assert!(matches!(d.app().ui.project_panel.dialog, Some(filmcraft_ui_egui::panels::project::ProjectDialog::MetadataDisplay { .. })));
+    assert!(matches!(d.app().ui.project_panel.dialog, Some(mortiflix_ui_egui::panels::project::ProjectDialog::MetadataDisplay { .. })));
     d.click("projectDialog.field.Label");
     // fields further down: narrow the list with the search box
     d.click("projectDialog.filter");
@@ -458,7 +458,7 @@ fn bins_open_in_place_in_a_tab_or_in_a_window() {
     d.key("Cmd+A");
     d.ok("ui.type", json!({"text": "Camera A"}));
     d.key("Enter");
-    let name = d.app().session.project.root.find_bin(filmcraft_project::BinId(bin)).unwrap().name.clone();
+    let name = d.app().session.project.root.find_bin(mortiflix_project::BinId(bin)).unwrap().name.clone();
     assert_eq!(name, "Camera A");
 }
 
@@ -510,7 +510,7 @@ fn a_dragged_bin_nests_in_another_and_back_out() {
     d.app().ui.expanded_bins.clear();
     d.frames(3);
     let parent =
-        |d: &mut Driver, b: u64| filmcraft_ui_egui::panels::project::parent_bin(&d.app().session.project.root, filmcraft_project::BinId(b)).map(|p| p.0);
+        |d: &mut Driver, b: u64| mortiflix_ui_egui::panels::project::parent_bin(&d.app().session.project.root, mortiflix_project::BinId(b)).map(|p| p.0);
     let root = d.app().session.project.root.id.0;
     let drag = |d: &mut Driver, from: [f32; 4], to: (f32, f32)| {
         let start = (from[0] + 80.0, from[1] + from[3] / 2.0);
@@ -577,7 +577,7 @@ fn new_bin_asks_for_its_name() {
     d.key("Cmd+A");
     d.ok("ui.type", json!({"text": "Interviews"}));
     d.key("Enter");
-    let name = d.app().session.project.root.find_bin(filmcraft_project::BinId(bin)).unwrap().name.clone();
+    let name = d.app().session.project.root.find_bin(mortiflix_project::BinId(bin)).unwrap().name.clone();
     assert_eq!(name, "Interviews");
     // with a name (agents) the bin is named directly and nothing is edited
     let r = d.ok("ui.menu.invoke", json!({"id": "file.newBin", "params": {"name": "B-roll"}}));
@@ -603,7 +603,7 @@ fn new_bin_then_clear_removes_the_bin() {
     assert!(d.app().session.state.project_selection.is_empty(), "New Bin clears leftover item selection");
     d.click("project.button.project.delete");
     d.frames(2);
-    assert!(d.app().session.project.root.find_bin(filmcraft_project::BinId(bin)).is_none(), "Clear removes the new bin");
+    assert!(d.app().session.project.root.find_bin(mortiflix_project::BinId(bin)).is_none(), "Clear removes the new bin");
     assert_eq!(d.app().session.project.root.children.len(), bins0);
     assert_eq!(d.app().session.project.items.len(), items0, "clips already in the project stay");
 }
@@ -614,7 +614,7 @@ fn media_dir(tag: &str) -> std::path::PathBuf {
     let dir = std::env::temp_dir().join(format!("fc-mb-ui-{tag}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(dir.join("Selects")).unwrap();
-    let wav = filmcraft_media::wav::write_wav16(&[0.0; 9600], 2, 48_000);
+    let wav = mortiflix_media::wav::write_wav16(&[0.0; 9600], 2, 48_000);
     for n in ["a-interview.wav", "b-roll.wav"] {
         std::fs::write(dir.join(n), &wav).unwrap();
     }
@@ -627,12 +627,12 @@ fn media_dir(tag: &str) -> std::path::PathBuf {
 fn file_dialog_import_uses_shown_bin_unless_explicit() {
     let dir = media_dir("import-bin");
     let path = dir.join("a-interview.wav").to_string_lossy().into_owned();
-    let mut app = FilmcraftApp::new(Session::default());
+    let mut app = StudioApp::new(Session::default());
     app.hooks.pick_files = Some(Box::new(move |_| vec![path.clone()]));
     let parent = app.session.execute("file.newBin", json!({"name": "Footage"})).unwrap()["bin"].as_u64().unwrap();
     let child = app.session.execute("file.newBin", json!({"name": "Selects", "parent": parent})).unwrap()["bin"].as_u64().unwrap();
     let root = app.session.project.root.id.0;
-    app.ui.project_panel.tabs.push(filmcraft_ui_egui::panels::project::BinTab { bin: parent, ..Default::default() });
+    app.ui.project_panel.tabs.push(mortiflix_ui_egui::panels::project::BinTab { bin: parent, ..Default::default() });
     for (shown, tab, params, expected) in [
         (None, None, json!({}), root),
         (Some(child), None, json!({}), child),
@@ -645,7 +645,7 @@ fn file_dialog_import_uses_shown_bin_unless_explicit() {
         let result = app.file_dialog("file.import", &params).unwrap();
         assert!(result["errors"].as_array().unwrap().is_empty(), "{result}");
         let item = ItemId(result["items"][0].as_u64().unwrap());
-        let bin = app.session.project.root.find_bin(filmcraft_project::BinId(expected)).unwrap();
+        let bin = app.session.project.root.find_bin(mortiflix_project::BinId(expected)).unwrap();
         assert!(bin.children.contains(&BinEntry::Item(item)), "shown={shown:?}, tab={tab:?}, params={params}: expected bin {expected}");
     }
     std::fs::remove_dir_all(&dir).unwrap();
@@ -845,7 +845,7 @@ fn double_click_empty_area_imports_with_a_project_loaded() {
             session.execute("file.openDemoProject", json!({})).expect("demo project");
         }
         let (tx, rx) = channel();
-        let mut app = FilmcraftApp::new(session).with_control(rx);
+        let mut app = StudioApp::new(session).with_control(rx);
         let picks = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let seen = picks.clone();
         app.hooks.pick_files = Some(Box::new(move |_| {
@@ -910,11 +910,11 @@ fn double_click_imports_with_audio_in_the_timeline() {
     let mut session = Session::default();
     session.execute("file.newSequence", json!({"name": "Mix", "audio": 2, "video": 1})).unwrap();
     let inter: Vec<f32> = (0..48_000).flat_map(|i| [(i as f32 * 0.0576).sin() * 0.5; 2]).collect();
-    let bytes: std::sync::Arc<[u8]> = filmcraft_engine::previews::write_wav_f32(&inter, 48_000).into();
-    let item = filmcraft_engine::commands::import_bytes(&mut session, "/tone.wav", bytes, None).unwrap();
+    let bytes: std::sync::Arc<[u8]> = mortiflix_engine::previews::write_wav_f32(&inter, 48_000).into();
+    let item = mortiflix_engine::commands::import_bytes(&mut session, "/tone.wav", bytes, None).unwrap();
     session.execute("timeline.place", json!({"item": item.0, "audioTrack": "A1", "seconds": 0.0})).unwrap();
     let (tx, rx) = channel();
-    let mut app = FilmcraftApp::new(session).with_control(rx);
+    let mut app = StudioApp::new(session).with_control(rx);
     let picks = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let seen = picks.clone();
     app.hooks.pick_files = Some(Box::new(move |_| {

@@ -4,7 +4,7 @@
 //! artists expect from every editing app), so their math runs on sRGB-encoded straight colour and
 //! the result is converted back to linear. Formulas follow the W3C Compositing and Blending spec.
 
-use filmcraft_color::{linear_to_srgb, srgb_to_linear};
+use mortiflix_color::{linear_to_srgb, srgb_to_linear};
 use rayon::prelude::*;
 
 use crate::image::Image;
@@ -70,7 +70,7 @@ impl Blend {
         Blend::Color,
         Blend::Luminosity,
     ];
-    /// Position in [`Blend::ALL`] (= `filmcraft_project::effect::BLEND_MODES`).
+    /// Position in [`Blend::ALL`] (= `mortiflix_project::effect::BLEND_MODES`).
     pub fn index(self) -> u32 {
         Self::ALL.iter().position(|b| *b == self).unwrap_or(0) as u32
     }
@@ -79,7 +79,7 @@ impl Blend {
     pub fn reads_destination(self) -> bool {
         !matches!(self, Blend::Normal | Blend::Dissolve)
     }
-    /// Index into `filmcraft_project::effect::BLEND_MODES`.
+    /// Index into `mortiflix_project::effect::BLEND_MODES`.
     pub fn from_index(i: u32) -> Blend {
         Self::ALL.get(i as usize).copied().unwrap_or(Blend::Normal)
     }

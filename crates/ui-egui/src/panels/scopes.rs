@@ -1,7 +1,7 @@
 //! Lumetri Scopes: Vectorscope YUV / HLS, Histogram, Parade (RGB / YUV / RGB-White) and Waveform
 //! (RGB / Luma / YC / YC no Chroma) of the Program frame, in a grid when several are shown.
 //!
-//! The maths is in `filmcraft-scopes` (count grids from the decimated frame); this module turns
+//! The maths is in `mortiflix-scopes` (count grids from the decimated frame); this module turns
 //! them into textures (cached per frame and settings) and draws the graticules, labels and the
 //! panel chrome: the footer (colour space, wrench, Clamp Signal, 8 Bit / Float / HDR) and the
 //! settings menu (wrench or right-click: Presets, the scopes, Waveform / Parade Type, Colour
@@ -17,9 +17,9 @@ use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 use egui::{Align2, Color32, Rect, Sense, Stroke, TextureHandle, TextureOptions, pos2, vec2};
-use filmcraft_scopes::{self as sc, Brightness, ColorSpace, ParadeType, Params, Scale, ScopeKind, Signal, Targets, WaveformType};
+use mortiflix_scopes::{self as sc, Brightness, ColorSpace, ParadeType, Params, Scale, ScopeKind, Signal, Targets, WaveformType};
 
-use crate::FilmcraftApp;
+use crate::StudioApp;
 use crate::frames::{FrameKey, Target};
 use crate::icons::{self, Icon};
 use crate::panels::panel_state::{SCOPE_PRESETS, ScopesState};
@@ -49,7 +49,7 @@ fn hash_of(v: impl Hash) -> u64 {
 /// The active sequence's frame `frame` for the scopes: the monitor picture (¼ resolution, from
 /// the frame workers at priority `prio`) or, for Rec. 2100 scopes of an HDR sequence, a small
 /// working-space render. While a new frame renders the last one stays.
-pub fn frame_signal(app: &mut FilmcraftApp, ctx: &egui::Context, slot: &str, frame: i64, st: &ScopesState, prio: u32) -> Option<ScopeFrame> {
+pub fn frame_signal(app: &mut StudioApp, ctx: &egui::Context, slot: &str, frame: i64, st: &ScopesState, prio: u32) -> Option<ScopeFrame> {
     let seq_id = app.session.state.active_sequence?;
     let q = app.session.active_sequence()?;
     let hdr_seq = q.settings.color.working.is_hdr();
@@ -66,7 +66,7 @@ pub fn frame_signal(app: &mut FilmcraftApp, ctx: &egui::Context, slot: &str, fra
         return Some(ScopeFrame { signal: s.clone(), key, pq: *p, space });
     }
     let fresh = if pq {
-        filmcraft_engine::scopes::scope_signal(&app.session, rate.tick_of(frame), 0.125, true)
+        mortiflix_engine::scopes::scope_signal(&app.session, rate.tick_of(frame), 0.125, true)
     } else {
         let fkey = FrameKey { target: Target::Sequence(seq_id), frame, size: 250, revision: rev, draft: false };
         let project = app.session.project.clone();
@@ -84,7 +84,7 @@ pub fn frame_signal(app: &mut FilmcraftApp, ctx: &egui::Context, slot: &str, fra
 }
 
 /// The Lumetri Scopes panel.
-pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
+pub fn show(app: &mut StudioApp, ui: &mut egui::Ui, rect: Rect) {
     let t = app.tokens;
     let st = app.ui.panels.scopes.clone();
     let area = Rect::from_min_max(rect.min, pos2(rect.max.x, rect.max.y - FOOTER_H));
@@ -104,7 +104,7 @@ pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
     footer(app, ui, Rect::from_min_max(pos2(rect.min.x, area.max.y), rect.max), sf.as_ref().map(|s| s.space));
 }
 
-fn footer(app: &mut FilmcraftApp, ui: &mut egui::Ui, r: Rect, space: Option<ColorSpace>) {
+fn footer(app: &mut StudioApp, ui: &mut egui::Ui, r: Rect, space: Option<ColorSpace>) {
     let t = app.tokens;
     let (scale0, clamp0, space0) = (app.ui.panels.scopes.scale, app.ui.panels.scopes.clamp, app.ui.panels.scopes.color_space);
     let space = space.unwrap_or(space0.resolve(false));
@@ -158,7 +158,7 @@ fn pick(ui: &mut egui::Ui, out: &mut Picks, id: &str, label: &str, on: bool) {
 }
 
 /// The scopes' settings menu (wrench and right-click).
-pub fn settings_menu(app: &mut FilmcraftApp, ui: &mut egui::Ui) {
+pub fn settings_menu(app: &mut StudioApp, ui: &mut egui::Ui) {
     ui.set_min_width(220.0);
     let st = app.ui.panels.scopes.clone();
     let mut out: Picks = Vec::new();
@@ -284,7 +284,7 @@ pub fn layout(area: Rect, n: usize) -> Vec<Rect> {
 }
 
 /// Draw `shown` scopes of a frame into `area` (black background expected).
-pub fn draw(app: &mut FilmcraftApp, ui: &mut egui::Ui, area: Rect, shown: &[ScopeKind], sf: &ScopeFrame, st: &ScopesState, prefix: &str) {
+pub fn draw(app: &mut StudioApp, ui: &mut egui::Ui, area: Rect, shown: &[ScopeKind], sf: &ScopeFrame, st: &ScopesState, prefix: &str) {
     let cells = layout(area, shown.len());
     if shown.len() > 1 {
         for c in &cells {
@@ -352,7 +352,7 @@ fn trace_color(name: &str, wt: Option<WaveformType>) -> [f32; 3] {
     }
 }
 
-fn draw_one(app: &mut FilmcraftApp, ui: &mut egui::Ui, cell: Rect, k: ScopeKind, sf: &ScopeFrame, st: &ScopesState, prefix: &str) {
+fn draw_one(app: &mut StudioApp, ui: &mut egui::Ui, cell: Rect, k: ScopeKind, sf: &ScopeFrame, st: &ScopesState, prefix: &str) {
     let ctx = ui.ctx().clone();
     let rows = ((cell.height() - 20.0) * ctx.pixels_per_point()).clamp(64.0, 256.0) as usize;
     let key = hash_of((sf.key, settings_key(st), k, rows));

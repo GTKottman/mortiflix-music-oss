@@ -63,7 +63,7 @@ fn layer1_stream(frames: usize) -> Vec<u8> {
 
 #[test]
 fn mp1_in_matroska_matches_ffmpeg() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let raw = dir().join("synthetic_layer1.mp1");
     std::fs::create_dir_all(dir()).unwrap();
     std::fs::write(&raw, layer1_stream(250)).unwrap();
@@ -71,9 +71,9 @@ fn mp1_in_matroska_matches_ffmpeg() {
         eprintln!("SKIPPED: this ffmpeg can't remux Layer I into Matroska");
         return;
     };
-    let m = filmcraft_matroska::open(bytes(&mkv)).unwrap();
-    assert!(matches!(m.tracks.first().map(|t| &t.codec), Some(filmcraft_matroska::Codec::Mp1)), "A_MPEG/L1 maps to Codec::Mp1");
-    let src = filmcraft_codecs::open_bytes("synthetic_layer1.mkv", bytes(&mkv)).unwrap();
+    let m = mortiflix_matroska::open(bytes(&mkv)).unwrap();
+    assert!(matches!(m.tracks.first().map(|t| &t.codec), Some(mortiflix_matroska::Codec::Mp1)), "A_MPEG/L1 maps to Codec::Mp1");
+    let src = mortiflix_codecs::open_bytes("synthetic_layer1.mkv", bytes(&mkv)).unwrap();
     let a = src.info().audio().cloned().unwrap();
     assert_eq!((a.sample_rate, a.channels), (48_000, 1));
     let want = ffmpeg_audio_f32(&ff, &mkv, &[]);

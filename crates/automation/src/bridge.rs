@@ -120,7 +120,7 @@ impl BridgeClient {
         let s = tokio::time::timeout(Duration::from_secs(5), TcpStream::connect(&self.addr))
             .await
             .map_err(|_| AutomationError::Bridge(format!("timed out connecting to {}", self.addr)))?
-            .map_err(|e| AutomationError::Bridge(format!("cannot connect to {} ({e}); start the app with `filmcraft --control <port>`", self.addr)))?;
+            .map_err(|e| AutomationError::Bridge(format!("cannot connect to {} ({e}); start the app with `mortiflix-studio --control <port>`", self.addr)))?;
         let (r, w) = s.into_split();
         Ok((BufReader::new(r), w))
     }

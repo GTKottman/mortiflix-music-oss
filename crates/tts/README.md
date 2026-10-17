@@ -1,6 +1,6 @@
-# filmcraft-tts
+# mortiflix-tts
 
-Text to speech for FilmCraft's Text to Speech panel (narrations, L2). Engine commands (`tts.*`) and
+Text to speech for Mortiflix Studio's Text to Speech panel (narrations, L2). Engine commands (`tts.*`) and
 clip behaviour: `crates/engine/src/narration.rs`.
 
 - `Voice` trait (script in, mono 24 kHz `f32` out), the voice catalogue (`voices`, `voice`), and
@@ -16,9 +16,9 @@ clip behaviour: `crates/engine/src/narration.rs`.
   vocoder with a harmonic-plus-noise source. Weights are read from the official PyTorch
   checkpoint with candle's restricted pickle reader (no code from the file runs); voice packs from
   their zip archive. `config.json` is checked against the architecture this code implements.
-- `neural` (feature `kokoro`): the natural voices as `Voice`s: script → `filmcraft-tts-text`
+- `neural` (feature `kokoro`): the natural voices as `Voice`s: script → `mortiflix-tts-text`
   (normalizer, CMUdict + letter-to-sound, ≤ 400-symbol chunks, pauses) → Kokoro per chunk → exact
-  silence for pauses, 120 ms between sentences → vocal pitch with `filmcraft-audio-dsp`'s pitch
+  silence for pauses, 120 ms between sentences → vocal pitch with `mortiflix-audio-dsp`'s pitch
   shifter (Kokoro has no pitch input). Pace is Kokoro's speed.
 - `catalog`: the natural-voice package (Kokoro-82M, 9 US English voices graded C+ or better on the
   model card, CMUdict; 336 MB), every file pinned to a revision and SHA-256. Downloaded by the
@@ -31,7 +31,7 @@ only on `serde` and `thiserror` (and checks for wasm).
 
 50 original sentences (`tests/data/sentences.txt`: numbers, money, times, dates, phone numbers,
 acronyms, names) spoken by each voice through the full pipeline, transcribed by Whisper-base
-(FilmCraft's own, `filmcraft-speech`), word error rate after lowercasing and removing punctuation
+(Mortiflix Studio's own, `mortiflix-speech`), word error rate after lowercasing and removing punctuation
 (number formatting such as "six" vs "6" still counts as an error):
 
 | Voice | WER | | Voice | WER |
@@ -44,7 +44,7 @@ acronyms, names) spoken by each voice through the full pipeline, transcribed by 
 
 Speed: 2.2–2.3× real time on one desktop CPU (Linux x86-64, load average ≈ 15 from parallel
 builds), e.g. 186 s of speech in 84 s; model load 0.5 s. Reproduce with the `narrate` example and
-`filmcraft-speech`'s `transcribe` example.
+`mortiflix-speech`'s `transcribe` example.
 
 ## Limitations
 
@@ -59,13 +59,13 @@ builds), e.g. 186 s of speech in 84 s; model load 0.5 s. Reproduce with the `nar
 
 ## Tests
 
-`cargo test -p filmcraft-tts`: determinism, valid samples (finite, peak ≤ 0.8, audible RMS), pause
+`cargo test -p mortiflix-tts`: determinism, valid samples (finite, peak ≤ 0.8, audible RMS), pause
 markers produce exactly the requested number of zero samples, pace 2× / 0.5× gives 0.5× / 2× the
 length (±5 % / ±10 %), measured pitch (autocorrelation) of the female voice is ≥ 1.5× the male, and
 +6 semitones raises it by √2 (±0.12); empty, emoji-only, non-Latin, pause-only and over-long scripts
 are refused before rendering; hostile scripts never panic.
 
-Model-dependent tests run when `FILMCRAFT_KOKORO_DIR` names a downloaded package directory
+Model-dependent tests run when `MFX_STUDIO_KOKORO_DIR` names a downloaded package directory
 (determinism, whole frames, pace changes length, refusals); the loaders have hostile-input tests
 (truncated or oversized voice data, wrong byte order, NaN, non-zip files, mismatched config).
 

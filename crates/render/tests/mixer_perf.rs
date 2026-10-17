@@ -2,7 +2,7 @@
 //! contend for CPU frequency, caches, or memory bandwidth during its timed workload.
 //! Cargo runs integration-test executables sequentially; the threshold is unchanged.
 
-use filmcraft_render::{SourceMap, mixer};
+use mortiflix_render::{SourceMap, mixer};
 
 #[path = "support/mixer.rs"]
 mod support;

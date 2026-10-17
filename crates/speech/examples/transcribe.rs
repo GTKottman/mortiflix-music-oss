@@ -2,17 +2,17 @@
 //!
 //! ```sh
 //! ffmpeg -i speech.flac -ar 16000 -ac 1 -f f32le speech.f32
-//! cargo run --release -p filmcraft-speech --features whisper --example transcribe -- <model dir> [--words] [--diarize] speech.f32…
+//! cargo run --release -p mortiflix-speech --features whisper --example transcribe -- <model dir> [--words] [--diarize] speech.f32…
 //! ```
 
-use filmcraft_speech::{Options, Transcriber, word_error_rate};
+use mortiflix_speech::{Options, Transcriber, word_error_rate};
 
 fn main() {
     let mut args = std::env::args().skip(1);
     let dir = std::path::PathBuf::from(args.next().expect("model dir"));
     let id = dir.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
     let t0 = std::time::Instant::now();
-    let w = filmcraft_speech::whisper::Whisper::load(&dir, &id).expect("load");
+    let w = mortiflix_speech::whisper::Whisper::load(&dir, &id).expect("load");
     eprintln!("loaded {id} in {:.2}s", t0.elapsed().as_secs_f64());
     let mut show_words = false;
     let mut diarize = false;

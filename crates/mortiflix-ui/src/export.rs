@@ -1,14 +1,14 @@
 //! Render and export (doc 39, mockups `UI Layout/39a Export.html` and `39b Rendered.html`).
 //!
-//! Stage 6 is FilmCraft's Export mode. While Mortiflix is on, the Export tab shows this simple
-//! page instead of FilmCraft's full settings: **Where it goes** (YouTube, Social vertical, Master
-//! file, Audio stems, or any of FilmCraft's own formats), a preview, the **Render queue** (one at a
+//! Stage 6 is Mortiflix Studio's Export mode. While Mortiflix is on, the Export tab shows this simple
+//! page instead of Mortiflix Studio's full settings: **Where it goes** (YouTube, Social vertical, Master
+//! file, Audio stems, or any of Mortiflix Studio's own formats), a preview, the **Render queue** (one at a
 //! time on this PC, shared with the Mortiflix service's heavy jobs), the settings with an
 //! **Advanced** fold, and **Render**. When a render finishes, the **Rendered** page hands the file
 //! over (Open, Show in Files/Explorer/Finder, Save a copy…), lists this project's renders, and offers
 //! **Post…** (always asks first; the AI never presses it) and what to do next.
 //!
-//! This crate has no FilmCraft dependency: the host (`filmcraft-ui-egui`, `mortiflix_export.rs`)
+//! This crate has no Mortiflix Studio dependency: the host (`mortiflix-ui-egui`, `mortiflix_export.rs`)
 //! fills a [`TabView`] from the engine each frame, draws the timeline picture where this module
 //! asks ([`TabOut::preview`]), and carries out the [`Action`]s. The choices live in [`ExportState`]
 //! (serde: `mortiflix.renderVideo {"set": {...}}` on the control channel changes them).
@@ -80,8 +80,8 @@ impl Preset {
             Preset::Stems => "Stems",
         }
     }
-    /// FilmCraft 0.8.0's built-in preset each one starts from.
-    pub fn filmcraft_preset(self) -> &'static str {
+    /// Mortiflix Studio 0.8.0's built-in preset each one starts from.
+    pub fn studio_preset(self) -> &'static str {
         match self {
             Preset::Youtube => "YouTube 1080p Full HD",
             Preset::Social => "Social Vertical 1080×1920",
@@ -167,7 +167,7 @@ impl Quality {
             Quality::Best => "Best",
         }
     }
-    /// Bitrate factor against "Good" (FilmCraft's low / medium / high adaptive steps).
+    /// Bitrate factor against "Good" (Mortiflix Studio's low / medium / high adaptive steps).
     fn factor_percent(self) -> u32 {
         match self {
             Quality::Small => 50,
@@ -222,8 +222,8 @@ pub const PLATFORM_TRUE_PEAK: f64 = -1.0;
 #[serde(rename_all = "camelCase", default)]
 pub struct Choices {
     pub preset: Preset,
-    /// One of FilmCraft's own presets (All FilmCraft formats ›) instead of the four.
-    pub filmcraft_preset: Option<String>,
+    /// One of Mortiflix Studio's own presets (All Mortiflix Studio formats ›) instead of the four.
+    pub studio_preset: Option<String>,
     pub size: Size,
     pub quality: Quality,
     pub framing: Framing,
@@ -242,7 +242,7 @@ impl Default for Choices {
     fn default() -> Self {
         Self {
             preset: Preset::Youtube,
-            filmcraft_preset: None,
+            studio_preset: None,
             size: Size::P1080,
             quality: Quality::Good,
             framing: Framing::Fill,
@@ -259,7 +259,7 @@ impl Default for Choices {
 impl Choices {
     /// What the preset row / settings header calls the pick.
     pub fn title(&self) -> String {
-        self.filmcraft_preset.clone().unwrap_or_else(|| self.preset.label().to_string())
+        self.studio_preset.clone().unwrap_or_else(|| self.preset.label().to_string())
     }
     /// The file name to write (without extension).
     pub fn file_stem(&self, project: &str) -> String {
@@ -267,7 +267,7 @@ impl Choices {
         if !name.is_empty() {
             return safe_file_name(name);
         }
-        let label = self.filmcraft_preset.as_deref().unwrap_or(self.preset.file_label());
+        let label = self.studio_preset.as_deref().unwrap_or(self.preset.file_label());
         safe_file_name(&format!("{} – {label}", if project.trim().is_empty() { "Video" } else { project.trim() }))
     }
     /// The folder to write into.
@@ -285,12 +285,12 @@ impl Choices {
                     && let Some(s) = x.as_str()
                     && Preset::from_key(s).is_none()
                 {
-                    // a FilmCraft preset by its own name
-                    cur.insert("filmcraftPreset".into(), json!(s.chars().take(200).collect::<String>()));
+                    // a Mortiflix Studio preset by its own name
+                    cur.insert("studioPreset".into(), json!(s.chars().take(200).collect::<String>()));
                     continue;
                 }
                 if k == "preset" {
-                    cur.insert("filmcraftPreset".into(), Value::Null);
+                    cur.insert("studioPreset".into(), Value::Null);
                 }
                 cur.insert(k.clone(), x.clone());
             }
@@ -302,12 +302,12 @@ impl Choices {
     }
 }
 
-/// What the host turns into FilmCraft export settings (`export.queue.add`): the FilmCraft preset
+/// What the host turns into Edit export settings (`export.queue.add`): the Mortiflix Studio preset
 /// plus the few overrides the simple page makes.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Recipe {
-    pub filmcraft_preset: String,
+    pub studio_preset: String,
     /// Output frame size; None = the preset's.
     pub frame_size: Option<(u32, u32)>,
     /// Video bitrate (kbps); None = the preset's.
@@ -327,7 +327,7 @@ pub struct Recipe {
     pub range: String,
 }
 
-/// The FilmCraft settings for the person's choices.
+/// The Mortiflix Studio settings for the person's choices.
 pub fn recipe(c: &Choices) -> Recipe {
     let range = match c.how_much {
         HowMuch::Whole => "entire",
@@ -341,7 +341,7 @@ pub fn recipe(c: &Choices) -> Recipe {
     };
     let loud = (c.loudness == Loudness::Platform).then_some((PLATFORM_LUFS, PLATFORM_TRUE_PEAK));
     let mut r = Recipe {
-        filmcraft_preset: c.preset.filmcraft_preset().into(),
+        studio_preset: c.preset.studio_preset().into(),
         frame_size: None,
         bitrate_kbps: None,
         max_bitrate_kbps: None,
@@ -354,9 +354,9 @@ pub fn recipe(c: &Choices) -> Recipe {
         hardware: c.hardware,
         range,
     };
-    if let Some(name) = &c.filmcraft_preset {
-        // FilmCraft's own preset as it is: only the range, captions and hardware choice apply
-        r.filmcraft_preset = name.clone();
+    if let Some(name) = &c.studio_preset {
+        // Mortiflix Studio's own preset as it is: only the range, captions and hardware choice apply
+        r.studio_preset = name.clone();
         captions(&mut r);
         return r;
     }
@@ -575,11 +575,11 @@ pub enum RowState {
     Cancelled,
 }
 
-/// One row of the render queue: a FilmCraft export of this app or a Mortiflix service job.
+/// One row of the render queue: a Mortiflix Studio export of this app or a Mortiflix service job.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct QueueRow {
-    /// FilmCraft's queue id, or the service's job id when `service`.
+    /// Mortiflix Studio's queue id, or the service's job id when `service`.
     pub id: u64,
     pub service: bool,
     /// "The Rise of AI – YouTube.mp4", or the service's label ("Shot 7 v3 · new version").
@@ -678,7 +678,7 @@ pub struct Check {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct RenderRecord {
-    /// The FilmCraft queue id(s) that made it (stems: three).
+    /// The Mortiflix Studio queue id(s) that made it (stems: three).
     pub queue_ids: Vec<u64>,
     pub title: String,
     /// The choices it was made with (Render again uses them).
@@ -771,7 +771,7 @@ pub struct ExportState {
     pub renders: Vec<RenderRecord>,
     pub advanced_open: bool,
     pub all_formats_open: bool,
-    /// FilmCraft's full Export settings (Advanced › All FilmCraft settings…) instead of this page.
+    /// Mortiflix Studio's full Export settings (Advanced › All Mortiflix Studio settings…) instead of this page.
     pub full_settings: bool,
     pub confirm: Option<Confirm>,
     /// Get the video: render the YouTube video as soon as the timeline is there.
@@ -976,7 +976,7 @@ impl ExportState {
 // what the host gives the page, and what the page asks the host to do
 // ---------------------------------------------------------------------------------------------
 
-/// What the host knows about the timeline and FilmCraft this frame.
+/// What the host knows about the timeline and Mortiflix Studio this frame.
 #[derive(Clone, Debug, Default)]
 pub struct TabView {
     /// Something on the timeline to render.
@@ -995,11 +995,11 @@ pub struct TabView {
     pub out_height: u32,
     /// "H.264 · 16 Mbps · AAC 384 kbps · −14 LUFS"
     pub summary: String,
-    /// The app's FilmCraft export queue as rows.
+    /// The app's Mortiflix Studio export queue as rows.
     pub queue: Vec<QueueRow>,
     pub default_folder: String,
     pub os: Os,
-    /// FilmCraft's own presets: (category, name).
+    /// Mortiflix Studio's own presets: (category, name).
     pub all_formats: Vec<(String, String)>,
     /// The timeline's current hash (renders made from another are stale).
     pub timeline: u64,
@@ -1016,7 +1016,7 @@ pub enum Action {
     Render,
     /// Render again with a remembered render's choices.
     RenderAgain(usize),
-    /// Stop (cancel) a FilmCraft queue item; the half-written file is deleted.
+    /// Stop (cancel) a Mortiflix Studio queue item; the half-written file is deleted.
     Stop(u64),
     Remove(u64),
     Retry(u64),
@@ -1024,7 +1024,7 @@ pub enum Action {
     Reveal(String),
     SaveCopy(String),
     ChangeFolder,
-    /// Advanced › All FilmCraft settings…: FilmCraft's full Export page.
+    /// Advanced › All Mortiflix Studio settings…: Mortiflix Studio's full Export page.
     FullSettings,
     /// Change something: the Edit tab (stage 5).
     EditTab,
@@ -1047,7 +1047,7 @@ pub struct TabOut {
 // ---------------------------------------------------------------------------------------------
 
 /// What PanelKind::MfxStage shows on stage 6 (when that panel is docked somewhere): stage 6 itself
-/// is FilmCraft's Export tab, so this says where the renders are and offers to go there.
+/// is Mortiflix Studio's Export tab, so this says where the renders are and offers to go there.
 pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     let t = ctx.theme;
     ui.label(egui::RichText::new("Render").size(15.0).color(t.text));
@@ -1118,8 +1118,8 @@ fn where_it_goes(ui: &mut egui::Ui, r: Rect, ctx: &mut MfxCtx, st: &mut ExportSt
     let t = ctx.theme;
     let mut c = body(ui, r, &t, "Where it goes", "", "mfx-export-where");
     for (i, p) in Preset::ALL.into_iter().enumerate() {
-        let on = st.choices.filmcraft_preset.is_none() && st.choices.preset == p;
-        let dims = recipe(&Choices { preset: p, filmcraft_preset: None, ..st.choices.clone() }).frame_size.map(|(w, h)| format!("{w}×{h}")).unwrap_or_default();
+        let on = st.choices.studio_preset.is_none() && st.choices.preset == p;
+        let dims = recipe(&Choices { preset: p, studio_preset: None, ..st.choices.clone() }).frame_size.map(|(w, h)| format!("{w}×{h}")).unwrap_or_default();
         let (line, sub) = match p {
             Preset::Youtube => (format!("{dims} · MP4"), ""),
             Preset::Social => (format!("{dims} · MP4"), "TikTok, Reels, Shorts"),
@@ -1163,15 +1163,15 @@ fn where_it_goes(ui: &mut egui::Ui, r: Rect, ctx: &mut MfxCtx, st: &mut ExportSt
         ctx.auto(&format!("mfx.export.preset.{}", p.key()), &resp, p.label());
         if resp.clicked() {
             st.choices.preset = p;
-            st.choices.filmcraft_preset = None;
+            st.choices.studio_preset = None;
         }
     }
     c.add_space(6.0);
     c.separator();
     let n = v.all_formats.len();
-    let label = format!("All FilmCraft formats ({n}) {}", if st.all_formats_open { "⌄" } else { "›" });
+    let label = format!("All Mortiflix Studio formats ({n}) {}", if st.all_formats_open { "⌄" } else { "›" });
     let r = c.add(egui::Button::new(egui::RichText::new(label).color(t.text_dim).size(12.0)).frame(false));
-    ctx.auto("mfx.export.allFormats", &r, "All FilmCraft formats");
+    ctx.auto("mfx.export.allFormats", &r, "All Mortiflix Studio formats");
     if r.clicked() {
         st.all_formats_open = !st.all_formats_open;
     }
@@ -1184,11 +1184,11 @@ fn where_it_goes(ui: &mut egui::Ui, r: Rect, ctx: &mut MfxCtx, st: &mut ExportSt
                     ui.label(egui::RichText::new(cat).size(11.5).color(t.text_faint));
                     last = cat;
                 }
-                let on = st.choices.filmcraft_preset.as_deref() == Some(name.as_str());
+                let on = st.choices.studio_preset.as_deref() == Some(name.as_str());
                 let r = ui.selectable_label(on, egui::RichText::new(name).size(12.0));
                 ctx.auto(&format!("mfx.export.format.{name}"), &r, name);
                 if r.clicked() {
-                    st.choices.filmcraft_preset = Some(name.clone());
+                    st.choices.studio_preset = Some(name.clone());
                 }
             }
         });
@@ -1198,7 +1198,7 @@ fn where_it_goes(ui: &mut egui::Ui, r: Rect, ctx: &mut MfxCtx, st: &mut ExportSt
 fn preview_panel(ui: &mut egui::Ui, r: Rect, ctx: &mut MfxCtx, st: &mut ExportState, v: &TabView, out: &mut TabOut) {
     let t = ctx.theme;
     let what = if v.out_width > 0 {
-        let crop = if st.choices.filmcraft_preset.is_none() && st.choices.preset == Preset::Social {
+        let crop = if st.choices.studio_preset.is_none() && st.choices.preset == Preset::Social {
             match st.choices.framing {
                 Framing::Fill => ", sides cropped",
                 Framing::Fit => ", bars top and bottom",
@@ -1207,7 +1207,7 @@ fn preview_panel(ui: &mut egui::Ui, r: Rect, ctx: &mut MfxCtx, st: &mut ExportSt
             ""
         };
         format!("What {} gets: {}×{}{crop}", st.choices.title(), v.out_width, v.out_height)
-    } else if st.choices.filmcraft_preset.is_none() && st.choices.preset == Preset::Stems {
+    } else if st.choices.studio_preset.is_none() && st.choices.preset == Preset::Stems {
         "What Audio stems gets: 3 files, same length".to_string()
     } else {
         format!("What {} gets: sound only", st.choices.title())
@@ -1233,7 +1233,7 @@ fn preview_panel(ui: &mut egui::Ui, r: Rect, ctx: &mut MfxCtx, st: &mut ExportSt
         }
         let pic = Rect::from_center_size(pic_area.center(), vec2(w.max(1.0), h.max(1.0)));
         c.painter().rect_filled(pic, 0.0, Color32::BLACK);
-        let fill = st.choices.filmcraft_preset.is_some() || st.choices.preset != Preset::Social || st.choices.framing == Framing::Fill;
+        let fill = st.choices.studio_preset.is_some() || st.choices.preset != Preset::Social || st.choices.framing == Framing::Fill;
         out.preview = Some((pic, fill));
     } else {
         // Audio stems / sound only: one lane per stem with the tracks feeding it
@@ -1419,7 +1419,7 @@ fn settings_panel(ui: &mut egui::Ui, r: Rect, ctx: &mut MfxCtx, st: &mut ExportS
     panel(ui, r, &t);
     let title = st.choices.title();
     let mut c = body(ui, top, &t, "Settings", &title, "mfx-export-settings");
-    let own = st.choices.filmcraft_preset.is_none();
+    let own = st.choices.studio_preset.is_none();
     let p = st.choices.preset;
     egui::ScrollArea::vertical().id_salt("mfx-export-settings-scroll").auto_shrink([false, false]).show(&mut c, |ui| {
         ui.set_width(ui.available_width() - 6.0);
@@ -1545,8 +1545,8 @@ fn settings_panel(ui: &mut egui::Ui, r: Rect, ctx: &mut MfxCtx, st: &mut ExportS
             }
             ui.add_space(8.0);
             ui.horizontal(|ui| {
-                let b = ui.link("All FilmCraft settings…");
-                ctx.auto("mfx.export.advanced.full", &b, "All FilmCraft settings…");
+                let b = ui.link("All Mortiflix Studio settings…");
+                ctx.auto("mfx.export.advanced.full", &b, "All Mortiflix Studio settings…");
                 if b.clicked() {
                     out.actions.push(Action::FullSettings);
                 }
@@ -1554,8 +1554,8 @@ fn settings_panel(ui: &mut egui::Ui, r: Rect, ctx: &mut MfxCtx, st: &mut ExportS
                 let b = ui.link("Reset");
                 ctx.auto("mfx.export.advanced.reset", &b, "Reset");
                 if b.clicked() {
-                    let keep = (st.choices.preset, st.choices.filmcraft_preset.clone(), st.choices.folder.clone());
-                    st.choices = Choices { preset: keep.0, filmcraft_preset: keep.1, folder: keep.2, ..Choices::default() };
+                    let keep = (st.choices.preset, st.choices.studio_preset.clone(), st.choices.folder.clone());
+                    st.choices = Choices { preset: keep.0, studio_preset: keep.1, folder: keep.2, ..Choices::default() };
                 }
             });
         }
@@ -1805,7 +1805,7 @@ fn post_panel(ui: &mut egui::Ui, r: Rect, ctx: &mut MfxCtx, st: &mut ExportState
         return;
     }
     field_label(&mut c, &t, "Accounts");
-    let vertical = rec.choices.preset == Preset::Social && rec.choices.filmcraft_preset.is_none();
+    let vertical = rec.choices.preset == Preset::Social && rec.choices.studio_preset.is_none();
     c.horizontal_wrapped(|ui| {
         for p in st.post.platforms.clone() {
             let on = st.post.picked.contains(&p);
@@ -1933,10 +1933,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn presets_map_to_filmcraft_presets_with_platform_loudness() {
+    fn presets_map_to_mortiflix_presets_with_platform_loudness() {
         let mut c = Choices::default();
         let r = recipe(&c);
-        assert_eq!(r.filmcraft_preset, "YouTube 1080p Full HD");
+        assert_eq!(r.studio_preset, "YouTube 1080p Full HD");
         assert_eq!(r.frame_size, Some((1920, 1080)));
         assert_eq!(r.bitrate_kbps, Some(16_000));
         assert_eq!(r.audio_kbps, Some(384));
@@ -1949,19 +1949,19 @@ mod tests {
         c.preset = Preset::Social;
         c.framing = Framing::Fit;
         let r = recipe(&c);
-        assert_eq!((r.filmcraft_preset.as_str(), r.frame_size, r.fill), ("Social Vertical 1080×1920", Some((2160, 3840)), Some(false)));
+        assert_eq!((r.studio_preset.as_str(), r.frame_size, r.fill), ("Social Vertical 1080×1920", Some((2160, 3840)), Some(false)));
         c.preset = Preset::Master;
         c.captions = Captions::Burned;
         let r = recipe(&c);
-        assert_eq!((r.filmcraft_preset.as_str(), r.loudness, r.burn_captions), ("Apple ProRes 422 HQ", None, false));
+        assert_eq!((r.studio_preset.as_str(), r.loudness, r.burn_captions), ("Apple ProRes 422 HQ", None, false));
         c.preset = Preset::Stems;
         c.how_much = HowMuch::InOut;
         let r = recipe(&c);
-        assert_eq!((r.filmcraft_preset.as_str(), r.loudness, r.range.as_str()), ("Waveform Audio 48 kHz 24-bit", None, "inOut"));
-        c.filmcraft_preset = Some("Vimeo 1080p Full HD".into());
+        assert_eq!((r.studio_preset.as_str(), r.loudness, r.range.as_str()), ("Waveform Audio 48 kHz 24-bit", None, "inOut"));
+        c.studio_preset = Some("Vimeo 1080p Full HD".into());
         c.captions = Captions::Srt;
         let r = recipe(&c);
-        assert_eq!((r.filmcraft_preset.as_str(), r.frame_size, r.caption_sidecar.as_deref()), ("Vimeo 1080p Full HD", None, Some("srt")));
+        assert_eq!((r.studio_preset.as_str(), r.frame_size, r.caption_sidecar.as_deref()), ("Vimeo 1080p Full HD", None, Some("srt")));
     }
 
     #[test]
@@ -1970,9 +1970,9 @@ mod tests {
         c.apply(&json!({"preset": "social", "size": "720p", "quality": "best", "folder": "/tmp/x", "bogus": 1})).unwrap();
         assert_eq!((c.preset, c.size, c.quality, c.folder.as_str()), (Preset::Social, Size::P720, Quality::Best, "/tmp/x"));
         c.apply(&json!({"preset": "Apple ProRes 422"})).unwrap();
-        assert_eq!(c.filmcraft_preset.as_deref(), Some("Apple ProRes 422"));
+        assert_eq!(c.studio_preset.as_deref(), Some("Apple ProRes 422"));
         c.apply(&json!({"preset": "youtube"})).unwrap();
-        assert_eq!((c.preset, c.filmcraft_preset.clone()), (Preset::Youtube, None));
+        assert_eq!((c.preset, c.studio_preset.clone()), (Preset::Youtube, None));
         assert!(c.apply(&json!({"size": "8k"})).is_err());
         assert!(c.apply(&json!([1])).is_err());
         assert!(c.apply(&json!({"size": 5})).is_err());

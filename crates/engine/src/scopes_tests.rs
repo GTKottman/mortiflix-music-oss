@@ -29,7 +29,7 @@ fn scopes_read_reports_exact_levels_of_a_colour_matte() {
     }
     assert_eq!(r["parade"]["traces"]["G"].as_array().unwrap().len(), 4);
     // the vectorscope: one spot at the matte's chroma
-    let [_, cb, cr] = filmcraft_color::rgb_to_ycbcr(200.0 / 255.0, 100.0 / 255.0, 50.0 / 255.0, filmcraft_color::Matrix::Bt709);
+    let [_, cb, cr] = mortiflix_color::rgb_to_ycbcr(200.0 / 255.0, 100.0 / 255.0, 50.0 / 255.0, mortiflix_color::Matrix::Bt709);
     let pk = &r["vectorscopeYuv"]["peaks"][0];
     assert_eq!(pk["share"], json!(1.0));
     assert!((pk["cb"].as_f64().unwrap() - cb as f64 * 100.0).abs() < 0.3 && (pk["cr"].as_f64().unwrap() - cr as f64 * 100.0).abs() < 0.3, "{pk}");
@@ -55,9 +55,9 @@ fn scopes_read_finds_the_colour_bar_targets() {
     let r = s.execute("scopes.read", json!({"scopes": ["vectorscopeYuv"], "scale": 0.25})).unwrap();
     let peaks = r["vectorscopeYuv"]["peaks"].as_array().unwrap();
     let cells: Vec<(u64, u64)> = peaks.iter().take(7).map(|p| (p["x"].as_u64().unwrap(), p["y"].as_u64().unwrap())).collect();
-    let p = filmcraft_scopes::Params::default();
-    for t in filmcraft_scopes::targets(filmcraft_color::Matrix::Bt709, 191.0 / 255.0) {
-        let (x, y) = filmcraft_scopes::cell_of(t.cb, t.cr, p.vector_size, filmcraft_scopes::VECTOR_EXTENT).unwrap();
+    let p = mortiflix_scopes::Params::default();
+    for t in mortiflix_scopes::targets(mortiflix_color::Matrix::Bt709, 191.0 / 255.0) {
+        let (x, y) = mortiflix_scopes::cell_of(t.cb, t.cr, p.vector_size, mortiflix_scopes::VECTOR_EXTENT).unwrap();
         assert!(cells.contains(&(x as u64, y as u64)), "{} target ({x}, {y}) not among {cells:?}", t.name);
     }
 }

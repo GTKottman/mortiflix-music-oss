@@ -10,7 +10,7 @@
 use crate::widgets::CenteredDialog as _;
 use serde_json::{Value, json};
 
-use crate::FilmcraftApp;
+use crate::StudioApp;
 use crate::native_dialogs::FileDialog;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -35,7 +35,7 @@ fn draft_id() -> egui::Id {
 const RATES: [u32; 4] = [32_000, 44_100, 48_000, 96_000];
 
 /// Open the AAF or OMF settings dialog (`id` is the menu command).
-pub fn open(app: &mut FilmcraftApp, ctx: &egui::Context, id: &str) -> Result<Value, String> {
+pub fn open(app: &mut StudioApp, ctx: &egui::Context, id: &str) -> Result<Value, String> {
     let omf = id == "file.exportOmf";
     let seq = app.session.state.active_sequence.and_then(|s| app.session.project.item(s));
     let title = seq.map(|i| i.name.clone()).unwrap_or_default();
@@ -62,7 +62,7 @@ pub fn is_open(ctx: &egui::Context) -> bool {
     ctx.data(|m| m.get_temp::<Option<Draft>>(draft_id())).flatten().is_some()
 }
 
-pub fn show(app: &mut FilmcraftApp, ctx: &egui::Context) {
+pub fn show(app: &mut StudioApp, ctx: &egui::Context) {
     let Some(Some(mut d)) = ctx.data(|m| m.get_temp::<Option<Draft>>(draft_id())) else { return };
     crate::widgets::revert_drag_on_escape(ctx, egui::Id::new("interchange-export-before-drag"), &mut d);
     let p = if d.omf { "omfExport" } else { "aafExport" };

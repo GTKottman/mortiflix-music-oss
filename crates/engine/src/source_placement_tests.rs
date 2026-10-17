@@ -1,6 +1,6 @@
 use super::*;
-use filmcraft_project::{ItemId, ItemKind};
-use filmcraft_time::{Tick, TimeRange};
+use mortiflix_project::{ItemId, ItemKind};
+use mortiflix_time::{Tick, TimeRange};
 use serde_json::json;
 
 fn setup() -> Session {
@@ -169,7 +169,7 @@ fn subclip_placement_keeps_parent_channel_map_and_all_audio_streams() {
     let parent = s.project.resolve_media(sub).unwrap().0;
     let m = std::sync::Arc::make_mut(&mut s.project).item_mut(parent).unwrap().as_media_mut().unwrap();
     m.info.audio_streams.push(m.info.audio_streams[0].clone());
-    m.interpret.audio_channels = Some(filmcraft_project::AudioChannelMap { format: filmcraft_project::AudioChannels::Mono, clips: vec![vec![1], vec![0]] });
+    m.interpret.audio_channels = Some(mortiflix_project::AudioChannelMap { format: mortiflix_project::AudioChannels::Mono, clips: vec![vec![1], vec![0]] });
     s.execute("timeline.place", json!({"item":sub.0,"track":"V1","audioTrack":"A1","time":0})).unwrap();
     assert_eq!(counts(&s), (1, 3));
     let q = s.active_sequence().unwrap();

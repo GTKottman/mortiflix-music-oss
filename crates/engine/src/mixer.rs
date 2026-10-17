@@ -2,11 +2,11 @@
 //!
 //! Strips are addressed by `strip` (or `track`): `"A1"` … (audio tracks), `"S1"` … (submixes),
 //! `"Mix"` (the master), a track id, or a strip name. Lanes are `volume`, `pan`, `mute`,
-//! `send.<i>.level` and `fx.<slot>.<param>` (see [`filmcraft_project::mixer`]).
+//! `send.<i>.level` and `fx.<slot>.<param>` (see [`mortiflix_project::mixer`]).
 //!
 //! **Recording.** `mixer.recordStart` begins an automation pass at the playhead (the UI calls it
 //! when playback starts). While it runs, `mixer.touch` / `mixer.release` are the fader gestures:
-//! the audio follows the control immediately (through [`filmcraft_render::mixer::LiveMix`]) and the
+//! the audio follows the control immediately (through [`mortiflix_render::mixer::LiveMix`]) and the
 //! gesture is recorded as a stream of (time, value) points. `mixer.recordStop` (playback stops)
 //! thins every stream into keyframes and writes them as one undoable step, following the strip's
 //! automation mode:
@@ -32,16 +32,16 @@
 
 use serde_json::{Value, json};
 
-use filmcraft_project::mixer::{
+use mortiflix_project::mixer::{
     self as pm, FADER_MAX_DB, FADER_MIN_DB, LANE_MUTE, LANE_PAN, LANE_VOLUME, MASTER_STRIP, lane_info, parse_fx_lane, parse_send_lane, thin_points, write_lane,
 };
-use filmcraft_project::{AudioChannels, AutomationMode, InputMap, ItemId, Param, ParamValue, Sequence, Track, TrackId, TrackKind, TrackSend, find_effect};
-use filmcraft_time::{TICKS_PER_SECOND, Tick};
+use mortiflix_project::{AudioChannels, AutomationMode, InputMap, ItemId, Param, ParamValue, Sequence, Track, TrackId, TrackKind, TrackSend, find_effect};
+use mortiflix_time::{TICKS_PER_SECOND, Tick};
 
 use crate::commands::{CommandSpec, always, bad, bool_p, f64_p, has_seq, str_p, time_p, u64_p};
 use crate::{EngineError, Result, Session};
-use filmcraft_project::mixer::{LANE_PAN51_X, LANE_PAN51_Y, PAN51_LANES};
-use filmcraft_render::audio::{CLIP_LANE_PAN, CLIP_LANE_VOLUME};
+use mortiflix_project::mixer::{LANE_PAN51_X, LANE_PAN51_Y, PAN51_LANES};
+use mortiflix_render::audio::{CLIP_LANE_PAN, CLIP_LANE_VOLUME};
 
 type Run = fn(&mut Session, &Value) -> Result<Value>;
 type Enabled = fn(&Session) -> std::result::Result<(), String>;
@@ -541,7 +541,7 @@ fn set_keyframe(p: &mut Param, t: Tick, v: f64, hold: bool) {
     p.put_keyframe(t, ParamValue::Float(v));
     if hold {
         for k in p.keyframes.iter_mut() {
-            k.interp = filmcraft_project::Interpolation::Hold;
+            k.interp = mortiflix_project::Interpolation::Hold;
         }
     }
 }
@@ -623,7 +623,7 @@ fn inspect(s: &mut Session, p: &Value) -> Result<Value> {
         "strips": strips,
         "recording": s.mixrec.active(),
         "gestures": s.mixrec.gestures.iter().map(|g| json!({"strip": strip_label(seq, g.strip), "lane": g.lane, "mode": g.mode.label(), "touching": g.touching, "points": g.points.len(), "value": g.value()})).collect::<Vec<_>>(),
-        "latencySamples": filmcraft_render::mixer::graph_latency(seq),
+        "latencySamples": mortiflix_render::mixer::graph_latency(seq),
         "automatchTime": s.prefs.audio.automatch_time,
         "clipModes": seq.audio_tracks.iter().map(|t| json!({"track": strip_label(seq, t.id), "mode": clip_mode(s, t.id).label()})).collect::<Vec<_>>(),
     }))
@@ -741,7 +741,7 @@ fn slot_p(p: &Value, cmd: &str) -> Result<usize> {
 }
 
 /// An insert's scalar parameter values (numbers; toggles as booleans) for `mixer.inspect`.
-fn insert_params(e: &filmcraft_project::EffectInstance) -> Value {
+fn insert_params(e: &mortiflix_project::EffectInstance) -> Value {
     let mut m = serde_json::Map::new();
     for (k, p) in &e.params {
         let v = match &p.value {
@@ -757,7 +757,7 @@ fn add_insert(s: &mut Session, p: &Value) -> Result<Value> {
     let id = strip_p(s, p, "mixer.addInsert")?;
     let eid = str_p(p, "effect").ok_or_else(|| bad("mixer.addInsert", "need `effect` (an audio effect id)"))?;
     let def = find_effect(eid)
-        .filter(|d| d.kind == filmcraft_project::EffectKind::Audio && !d.intrinsic)
+        .filter(|d| d.kind == mortiflix_project::EffectKind::Audio && !d.intrinsic)
         .ok_or_else(|| bad("mixer.addInsert", format!("`{eid}` is not an audio effect")))?;
     let mut inst = def.instance();
     inst.post_fader = bool_p(p, "postFader").unwrap_or(false);
@@ -802,7 +802,7 @@ fn set_insert(s: &mut Session, p: &Value) -> Result<Value> {
                     if e.param(k).is_none()
                         && let Some(d) = e.def().and_then(|d| d.param(k))
                     {
-                        e.params.insert(k.clone(), filmcraft_project::Param::new(d.default.clone()));
+                        e.params.insert(k.clone(), mortiflix_project::Param::new(d.default.clone()));
                     }
                     let par = e.param_mut(k).ok_or_else(|| bad("mixer.setInsert", format!("no parameter `{k}`")))?;
                     par.value = match (&par.value, v) {
@@ -1017,7 +1017,7 @@ fn write_automation(s: &mut Session, p: &Value) -> Result<Value> {
 /// parameter) at the playhead. With `keyframe` (or when already animated) it writes a keyframe at the
 /// playhead; a drag (same clip and parameter, no other edit between) is one undo step.
 fn clip_set(s: &mut Session, p: &Value) -> Result<Value> {
-    let clip = filmcraft_project::ClipId(u64_p(p, "clip").ok_or_else(|| bad("clipMixer.set", "need `clip`"))?);
+    let clip = mortiflix_project::ClipId(u64_p(p, "clip").ok_or_else(|| bad("clipMixer.set", "need `clip`"))?);
     let effect = str_p(p, "effect").unwrap_or("volume").to_string();
     let param = str_p(p, "param").unwrap_or("level").to_string();
     let v = f64_p(p, "value").ok_or_else(|| bad("clipMixer.set", "need `value`"))?;
@@ -1048,14 +1048,14 @@ fn clip_set(s: &mut Session, p: &Value) -> Result<Value> {
 // ------------------------------------------------------------------------------------- audio gain
 
 /// Peak (dBFS, before clip gain) of each selected audio clip's source range.
-pub(crate) fn clip_peaks(s: &Session, clips: &[filmcraft_project::ClipId]) -> Vec<(filmcraft_project::ClipId, f64)> {
+pub(crate) fn clip_peaks(s: &Session, clips: &[mortiflix_project::ClipId]) -> Vec<(mortiflix_project::ClipId, f64)> {
     let Some(seq) = s.active_sequence() else { return Vec::new() };
     let sr = seq.settings.sample_rate.max(1);
     let provider = s.media.provider(s.project.clone(), s.services.clone());
     let mut out = Vec::new();
     for t in &seq.audio_tracks {
         for it in t.items.iter().filter(|i| clips.contains(&i.id)) {
-            let Some(src) = filmcraft_render::SourceProvider::source(&provider, it.item) else { continue };
+            let Some(src) = mortiflix_render::SourceProvider::source(&provider, it.item) else { continue };
             if !src.info().has_audio() {
                 continue;
             }
@@ -1076,9 +1076,9 @@ pub(crate) fn clip_peaks(s: &Session, clips: &[filmcraft_project::ClipId]) -> Ve
     out
 }
 
-fn gain_targets(s: &Session, p: &Value) -> Vec<filmcraft_project::ClipId> {
-    let sel: Vec<filmcraft_project::ClipId> = match p.get("clips").and_then(Value::as_array) {
-        Some(a) => a.iter().filter_map(|v| v.as_u64().map(filmcraft_project::ClipId)).collect(),
+fn gain_targets(s: &Session, p: &Value) -> Vec<mortiflix_project::ClipId> {
+    let sel: Vec<mortiflix_project::ClipId> = match p.get("clips").and_then(Value::as_array) {
+        Some(a) => a.iter().filter_map(|v| v.as_u64().map(mortiflix_project::ClipId)).collect(),
         None => s.state.selection.clone(),
     };
     crate::commands::with_links(s, &sel)
@@ -1089,7 +1089,7 @@ fn gain_targets(s: &Session, p: &Value) -> Vec<filmcraft_project::ClipId> {
 pub fn audio_peak(s: &mut Session, p: &Value) -> Result<Value> {
     let clips = gain_targets(s, p);
     let seq = active_seq(s)?;
-    let gain = |c: filmcraft_project::ClipId| seq.find_item(c).map(|(_, i)| i.gain_db).unwrap_or(0.0);
+    let gain = |c: mortiflix_project::ClipId| seq.find_item(c).map(|(_, i)| i.gain_db).unwrap_or(0.0);
     let peaks = clip_peaks(s, &clips);
     let max = peaks.iter().map(|(c, pk)| pk + gain(*c)).fold(f64::NEG_INFINITY, f64::max);
     Ok(json!({
@@ -1106,7 +1106,7 @@ pub fn audio_gain(s: &mut Session, p: &Value) -> Result<Value> {
         None => if bool_p(p, "relative").unwrap_or(true) { "adjust" } else { "set" }.to_string(),
     };
     let clips = gain_targets(s, p);
-    let new_gain: Vec<(filmcraft_project::ClipId, f64)> = match mode.as_str() {
+    let new_gain: Vec<(mortiflix_project::ClipId, f64)> = match mode.as_str() {
         "set" => clips.iter().map(|c| (*c, db)).collect(),
         "adjust" => {
             let seq = active_seq(s)?;
@@ -1118,7 +1118,7 @@ pub fn audio_gain(s: &mut Session, p: &Value) -> Result<Value> {
                 return Err(bad("clip.audioGain", "no audio clips with audio in the selection"));
             }
             let seq = active_seq(s)?;
-            let gain = |c: filmcraft_project::ClipId| seq.find_item(c).map(|(_, i)| i.gain_db).unwrap_or(0.0);
+            let gain = |c: mortiflix_project::ClipId| seq.find_item(c).map(|(_, i)| i.gain_db).unwrap_or(0.0);
             if mode == "normalizeAll" {
                 peaks.iter().map(|(c, pk)| (*c, db - pk)).collect()
             } else {
@@ -1147,15 +1147,15 @@ pub fn audio_gain(s: &mut Session, p: &Value) -> Result<Value> {
 /// Effects panel ▸ Set Selected as Default Transition (video or audio, from the effect's kind).
 fn set_default_transition(s: &mut Session, p: &Value) -> Result<Value> {
     let id = str_p(p, "effect").ok_or_else(|| bad("effects.setDefaultTransition", "need `effect`"))?;
-    use filmcraft_project::vtransition::find_transition;
+    use mortiflix_project::vtransition::find_transition;
     let def = find_effect(id)
-        .or_else(|| find_transition(id, filmcraft_project::EffectKind::VideoTransition))
-        .or_else(|| find_transition(id, filmcraft_project::EffectKind::AudioTransition))
-        .or_else(|| filmcraft_project::effect_defs().iter().find(|d| d.name.eq_ignore_ascii_case(id)))
+        .or_else(|| find_transition(id, mortiflix_project::EffectKind::VideoTransition))
+        .or_else(|| find_transition(id, mortiflix_project::EffectKind::AudioTransition))
+        .or_else(|| mortiflix_project::effect_defs().iter().find(|d| d.name.eq_ignore_ascii_case(id)))
         .ok_or_else(|| bad("effects.setDefaultTransition", format!("no effect `{id}`")))?;
     match def.kind {
-        filmcraft_project::EffectKind::AudioTransition => s.state.default_audio_transition = def.id.to_string(),
-        filmcraft_project::EffectKind::VideoTransition => s.state.default_video_transition = def.id.to_string(),
+        mortiflix_project::EffectKind::AudioTransition => s.state.default_audio_transition = def.id.to_string(),
+        mortiflix_project::EffectKind::VideoTransition => s.state.default_video_transition = def.id.to_string(),
         _ => return Err(bad("effects.setDefaultTransition", format!("`{}` is not a transition", def.name))),
     }
     Ok(json!({"video": s.state.default_video_transition, "audio": s.state.default_audio_transition}))

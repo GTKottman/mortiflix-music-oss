@@ -6,10 +6,10 @@
 //! `progress.cancel.<id>`, `progress.showFinished`. State: `ui.panels.events` / `ui.panels.progress`.
 
 use egui::{Align2, Color32, Rect, RichText, Sense, Stroke, pos2, vec2};
-use filmcraft_engine::panels::{Level, LogEntry};
+use mortiflix_engine::panels::{Level, LogEntry};
 use serde_json::json;
 
-use crate::FilmcraftApp;
+use crate::StudioApp;
 use crate::theme::Tokens;
 
 fn level_color(l: Level) -> Color32 {
@@ -49,7 +49,7 @@ fn ago(ms: u64) -> String {
     }
 }
 
-pub fn events(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
+pub fn events(app: &mut StudioApp, ui: &mut egui::Ui, rect: Rect) {
     let t = app.tokens;
     let st = app.ui.panels.events.clone();
     let min = Level::from_name(&st.level).unwrap_or(Level::Info);
@@ -144,7 +144,7 @@ pub fn events(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
     }
 }
 
-pub fn progress(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
+pub fn progress(app: &mut StudioApp, ui: &mut egui::Ui, rect: Rect) {
     let t = app.tokens;
     let show_finished = app.ui.panels.progress.show_finished;
     let jobs: Vec<serde_json::Value> = app.session.jobs.iter().rev().map(|j| j.to_json()).collect();

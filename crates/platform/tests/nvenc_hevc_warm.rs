@@ -5,12 +5,12 @@
 
 use std::time::{Duration, Instant};
 
-use filmcraft_platform::nvenc::{hevc_available, hevc_hdr_available, hevc_hdr_probed, hevc_probed};
+use mortiflix_platform::nvenc::{hevc_available, hevc_hdr_available, hevc_hdr_probed, hevc_probed};
 
 #[test]
 fn register_answers_the_hevc_question_in_the_background() {
     assert!(!hevc_probed() && !hevc_hdr_probed(), "nothing has asked yet");
-    filmcraft_platform::register();
+    mortiflix_platform::register();
     let t0 = Instant::now();
     while !hevc_probed() {
         assert!(t0.elapsed() < Duration::from_secs(60), "register() did not start the probe");
@@ -24,9 +24,9 @@ fn register_answers_the_hevc_question_in_the_background() {
     eprintln!("answered in the background after {:?}", t0.elapsed());
     let hdr = hevc_hdr_available();
     assert!(!hdr || hevc_available(), "Main 10 implies HEVC");
-    assert_eq!(filmcraft_export::hdr_available(filmcraft_export::Format::Hevc), hdr);
+    assert_eq!(mortiflix_export::hdr_available(mortiflix_export::Format::Hevc), hdr);
     // the answer is kept: asking and registering again change nothing
     let answer = hevc_available();
-    filmcraft_platform::register();
+    mortiflix_platform::register();
     assert_eq!(hevc_available(), answer);
 }

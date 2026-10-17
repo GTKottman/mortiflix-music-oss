@@ -12,13 +12,13 @@
 //! `timeline.track.A1.lane.kf.<n>` (the diamonds).
 
 use egui::{Align2, Color32, CursorIcon, Rect, Sense, Stroke, pos2, vec2};
-use filmcraft_project::mixer::{LANE_MUTE, LANE_PAN, LANE_VOLUME, lane_info, parse_fx_lane, send_lane};
-use filmcraft_project::{ParamKind, Sequence, Track, TrackKind};
-use filmcraft_time::Tick;
+use mortiflix_project::mixer::{LANE_MUTE, LANE_PAN, LANE_VOLUME, lane_info, parse_fx_lane, send_lane};
+use mortiflix_project::{ParamKind, Sequence, Track, TrackKind};
+use mortiflix_time::Tick;
 use serde_json::json;
 
 use super::timeline::{Layout, Row};
-use crate::FilmcraftApp;
+use crate::StudioApp;
 use crate::icons::{self, Icon};
 use crate::state::Tool;
 use crate::theme::Tokens;
@@ -39,7 +39,7 @@ pub fn lane_options(tr: &Track) -> Vec<(String, String)> {
     for (slot, e) in tr.effects.iter().enumerate() {
         let Some(def) = e.def() else { continue };
         for p in def.params.iter().filter(|p| matches!(p.kind, ParamKind::Float { .. }) && p.animatable) {
-            v.push((filmcraft_project::mixer::fx_lane(slot, p.id), format!("{}: {}", crate::i18n::t(def.name), crate::i18n::t(p.label))));
+            v.push((mortiflix_project::mixer::fx_lane(slot, p.id), format!("{}: {}", crate::i18n::t(def.name), crate::i18n::t(p.label))));
         }
     }
     v
@@ -94,7 +94,7 @@ fn band(r: &Row) -> Rect {
 
 /// Header button (diamond) choosing clip keyframes or a track lane.
 #[allow(clippy::too_many_arguments)]
-pub fn header_button(app: &mut FilmcraftApp, ui: &mut egui::Ui, seq: &Sequence, r: &Row, rect: Rect, visible: Rect, label: &str, t: &Tokens) {
+pub fn header_button(app: &mut StudioApp, ui: &mut egui::Ui, seq: &Sequence, r: &Row, rect: Rect, visible: Rect, label: &str, t: &Tokens) {
     let Some(tr) = seq.track(r.track) else { return };
     let showing = app.ui.timeline.track_lanes.get(&r.track.0).cloned();
     let resp =
@@ -136,7 +136,7 @@ fn drag_id() -> egui::Id {
 
 /// Draw the shown lanes (after clips) and handle their editing (after the timeline's own interaction,
 /// so keyframes sit on top).
-pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, seq: &Sequence, layout: &Layout, aclip: Rect) {
+pub fn show(app: &mut StudioApp, ui: &mut egui::Ui, seq: &Sequence, layout: &Layout, aclip: Rect) {
     if app.ui.timeline.track_lanes.is_empty() {
         return;
     }

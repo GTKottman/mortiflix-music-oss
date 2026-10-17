@@ -1,10 +1,10 @@
 use egui_kittest::Harness;
-use filmcraft_engine::Session;
-use filmcraft_time::Tick;
-use filmcraft_ui_egui::FilmcraftApp;
+use mortiflix_engine::Session;
+use mortiflix_time::Tick;
+use mortiflix_ui_egui::StudioApp;
 use serde_json::json;
 
-fn step(h: &mut Harness<'static, FilmcraftApp>) {
+fn step(h: &mut Harness<'static, StudioApp>) {
     let ctx = h.ctx.clone();
     let mut raw = std::mem::take(h.input_mut());
     eframe::App::raw_input_hook(h.state_mut(), &ctx, &mut raw);
@@ -12,18 +12,18 @@ fn step(h: &mut Harness<'static, FilmcraftApp>) {
     ctx.request_repaint(); // Direct engine edits in a harness do not wake the native event loop.
     h.step();
 }
-fn harness(item: u64) -> Harness<'static, FilmcraftApp> {
+fn harness(item: u64) -> Harness<'static, StudioApp> {
     let mut s = Session::default();
     s.execute("file.openDemoProject", json!({})).unwrap();
     s.execute("file.newSequence", json!({"name":"Drop test","width":1280,"height":720,"fps":24})).unwrap();
     s.execute("source.open", json!({"item":item})).unwrap();
-    let mut h = Harness::builder().with_size(egui::vec2(1600.0, 980.0)).build_eframe(move |_cc| FilmcraftApp::new(s));
+    let mut h = Harness::builder().with_size(egui::vec2(1600.0, 980.0)).build_eframe(move |_cc| StudioApp::new(s));
     for _ in 0..4 {
         step(&mut h);
     }
     h
 }
-fn pointer(h: &mut Harness<'static, FilmcraftApp>, pos: egui::Pos2, pressed: Option<bool>) {
+fn pointer(h: &mut Harness<'static, StudioApp>, pos: egui::Pos2, pressed: Option<bool>) {
     h.input_mut().events.push(egui::Event::PointerMoved(pos));
     if pressed == Some(true) {
         step(h); // Establish hover before pressing, as the live control-channel drag does.
@@ -34,12 +34,12 @@ fn pointer(h: &mut Harness<'static, FilmcraftApp>, pos: egui::Pos2, pressed: Opt
     step(h);
 }
 
-fn control_rect(h: &Harness<'static, FilmcraftApp>, id: &str) -> egui::Rect {
+fn control_rect(h: &Harness<'static, StudioApp>, id: &str) -> egui::Rect {
     let [x, y, w, height] = h.state().auto.elements.iter().find(|e| e.id == id).or_else(|| h.state().auto.find(id)).unwrap().rect;
     egui::Rect::from_min_size(egui::pos2(x, y), egui::vec2(w, height))
 }
 
-fn drag(h: &mut Harness<'static, FilmcraftApp>, control: &str, audio: bool, change_marks: bool) {
+fn drag(h: &mut Harness<'static, StudioApp>, control: &str, audio: bool, change_marks: bool) {
     let from = control_rect(h, control).center();
     let panel = control_rect(h, "panel.Timeline");
     let row = control_rect(h, if audio { "timeline.track.A1.target" } else { "timeline.track.V1.target" });
@@ -98,7 +98,7 @@ fn unmarked_clip_drags_full_length_without_creating_marks() {
     let c = &s.active_sequence().unwrap().video_tracks[0].items[0];
     assert_eq!(c.source_in, Tick::ZERO);
     assert_eq!(c.duration, s.active_sequence().unwrap().settings.frame_rate.snap_nearest(Tick::from_seconds_f64(18.0)));
-    let m = s.project.item(filmcraft_engine::project::ItemId(5)).unwrap().as_media().unwrap();
+    let m = s.project.item(mortiflix_engine::project::ItemId(5)).unwrap().as_media().unwrap();
     assert!(m.mark_in.is_none() && m.mark_out.is_none());
 }
 
@@ -113,9 +113,9 @@ fn audio_file_drag_places_only_audio() {
 
 #[test]
 fn clear_in_out_shortcut_addresses_the_focused_monitor_and_is_undoable() {
-    use filmcraft_engine::clip_ops::source_view;
-    use filmcraft_engine::project::ItemId;
-    use filmcraft_ui_egui::dock::PanelKind;
+    use mortiflix_engine::clip_ops::source_view;
+    use mortiflix_engine::project::ItemId;
+    use mortiflix_ui_egui::dock::PanelKind;
     let mut h = harness(5);
     let start = Tick::from_seconds_f64(1.0);
     let out = Tick::from_seconds_f64(3.0);
@@ -124,7 +124,7 @@ fn clear_in_out_shortcut_addresses_the_focused_monitor_and_is_undoable() {
     h.state_mut().session.execute("markers.markOut", json!({"time":out.0})).unwrap();
     let before = h.state().session.project.to_json();
     let modifiers = egui::Modifiers { shift: true, command: true, ctrl: !cfg!(target_os = "macos"), mac_cmd: cfg!(target_os = "macos"), ..Default::default() };
-    let press = |h: &mut Harness<'static, FilmcraftApp>| {
+    let press = |h: &mut Harness<'static, StudioApp>| {
         h.input_mut().events.push(egui::Event::Key { key: egui::Key::X, physical_key: Some(egui::Key::X), pressed: true, repeat: false, modifiers });
         step(h);
         h.input_mut().events.push(egui::Event::Key { key: egui::Key::X, physical_key: Some(egui::Key::X), pressed: false, repeat: false, modifiers });
@@ -155,15 +155,15 @@ fn clear_in_out_shortcut_addresses_the_focused_monitor_and_is_undoable() {
     }
 }
 
-fn marked_harness() -> Harness<'static, FilmcraftApp> {
+fn marked_harness() -> Harness<'static, StudioApp> {
     let mut h = harness(5);
-    let view = filmcraft_engine::clip_ops::source_view(&h.state().session, filmcraft_engine::project::ItemId(5)).unwrap();
+    let view = mortiflix_engine::clip_ops::source_view(&h.state().session, mortiflix_engine::project::ItemId(5)).unwrap();
     h.state_mut().session.execute("project.setMarks", json!({"item":5,"in":view.rate.tick_of(48).0,"out":view.rate.tick_of(95).0})).unwrap();
     step(&mut h);
     h
 }
-fn marked_range(h: &Harness<'static, FilmcraftApp>) -> filmcraft_time::TimeRange {
-    filmcraft_engine::clip_ops::source_view(&h.state().session, filmcraft_engine::project::ItemId(5)).unwrap().selected_range()
+fn marked_range(h: &Harness<'static, StudioApp>) -> mortiflix_time::TimeRange {
+    mortiflix_engine::clip_ops::source_view(&h.state().session, mortiflix_engine::project::ItemId(5)).unwrap().selected_range()
 }
 #[test]
 fn range_handles_preview_then_commit_one_undo_step() {
@@ -177,7 +177,7 @@ fn range_handles_preview_then_commit_one_undo_step() {
         pointer(&mut h, to, None);
         assert_eq!(h.state().session.project.to_json(), before, "{id} must preview without editing");
         assert!(
-            filmcraft_ui_egui::panels::source_range::preview(h.state(), &h.ctx).is_some(),
+            mortiflix_ui_egui::panels::source_range::preview(h.state(), &h.ctx).is_some(),
             "{id}: from={from:?}, source_time={:?}, playhead={:?}",
             h.state().session.state.source_playhead,
             h.state().auto.find("source.playhead")
@@ -240,12 +240,12 @@ fn range_move_clamps_to_media_bounds_and_keeps_duration() {
         pointer(&mut h, to, None);
         pointer(&mut h, to, Some(false));
         let after = marked_range(&h);
-        let view = filmcraft_engine::clip_ops::source_view(&h.state().session, filmcraft_engine::project::ItemId(5)).unwrap();
+        let view = mortiflix_engine::clip_ops::source_view(&h.state().session, mortiflix_engine::project::ItemId(5)).unwrap();
         assert_eq!(after.duration, before.duration);
         assert!(after.start >= view.start && after.end() <= view.end);
     }
 }
-fn chord(h: &mut Harness<'static, FilmcraftApp>, key: egui::Key, shift: bool, primary: bool) {
+fn chord(h: &mut Harness<'static, StudioApp>, key: egui::Key, shift: bool, primary: bool) {
     let modifiers = egui::Modifiers {
         shift,
         command: primary,
@@ -260,7 +260,7 @@ fn chord(h: &mut Harness<'static, FilmcraftApp>, key: egui::Key, shift: bool, pr
 }
 #[test]
 fn source_marker_navigation_and_clear_shortcuts_leave_program_alone() {
-    use filmcraft_ui_egui::dock::PanelKind;
+    use mortiflix_ui_egui::dock::PanelKind;
     let mut h = marked_harness();
     h.state_mut().ui.focused = PanelKind::Source;
     let before = h.state().session.active_sequence().unwrap().clone();
@@ -269,20 +269,20 @@ fn source_marker_navigation_and_clear_shortcuts_leave_program_alone() {
     assert_eq!(h.state().session.state.source_playhead, marked_range(&h).start);
     assert_eq!(h.state().session.playhead(), program_time);
     chord(&mut h, egui::Key::M, false, false);
-    assert_eq!(filmcraft_engine::clip_ops::source_view(&h.state().session, filmcraft_engine::project::ItemId(5)).unwrap().markers.len(), 1);
+    assert_eq!(mortiflix_engine::clip_ops::source_view(&h.state().session, mortiflix_engine::project::ItemId(5)).unwrap().markers.len(), 1);
     assert_eq!(h.state().session.active_sequence().unwrap(), &before);
     chord(&mut h, egui::Key::I, true, true);
-    assert!(filmcraft_engine::clip_ops::source_view(&h.state().session, filmcraft_engine::project::ItemId(5)).unwrap().mark_in.is_none());
+    assert!(mortiflix_engine::clip_ops::source_view(&h.state().session, mortiflix_engine::project::ItemId(5)).unwrap().mark_in.is_none());
     chord(&mut h, egui::Key::O, true, true);
-    assert!(filmcraft_engine::clip_ops::source_view(&h.state().session, filmcraft_engine::project::ItemId(5)).unwrap().mark_out.is_none());
+    assert!(mortiflix_engine::clip_ops::source_view(&h.state().session, mortiflix_engine::project::ItemId(5)).unwrap().mark_out.is_none());
     assert_eq!(h.state().session.active_sequence().unwrap(), &before);
     assert_eq!(h.state().session.playhead(), program_time);
 }
 
 #[test]
 fn program_range_handles_share_behavior_and_leave_source_marks_alone() {
-    use filmcraft_engine::{clip_ops::source_view, project::ItemId};
-    use filmcraft_ui_egui::dock::PanelKind;
+    use mortiflix_engine::{clip_ops::source_view, project::ItemId};
+    use mortiflix_ui_egui::dock::PanelKind;
     for id in ["program.range.in", "program.range.out", "program.range.body"] {
         let mut h = marked_harness();
         h.state_mut()
@@ -345,7 +345,7 @@ fn program_range_draft_cancels_when_active_sequence_changes() {
 
 #[test]
 fn playhead_scrubs_above_full_range_and_trim_handles_in_both_monitors() {
-    use filmcraft_ui_egui::dock::PanelKind;
+    use mortiflix_ui_egui::dock::PanelKind;
     for source in [true, false] {
         let mut h = harness(5);
         if !source {
@@ -376,7 +376,7 @@ fn program_handles_exist_only_for_explicit_marks_and_clear_hides_them() {
     h.state_mut().session.execute("timeline.place", json!({"item":5})).unwrap();
     let seq = h.state().session.state.active_sequence.unwrap();
     step(&mut h);
-    let has = |h: &Harness<'static, FilmcraftApp>, id: &str| h.state().auto.elements.iter().any(|e| e.id == id);
+    let has = |h: &Harness<'static, StudioApp>, id: &str| h.state().auto.elements.iter().any(|e| e.id == id);
     assert!(!has(&h, "program.range.in") && !has(&h, "program.range.out") && !has(&h, "program.range.body"));
     assert!(has(&h, "program.playhead"));
     h.state_mut().session.execute("project.setMarks", json!({"item":seq.0,"in":Tick::from_seconds_f64(2.0).0})).unwrap();

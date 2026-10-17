@@ -1,6 +1,6 @@
 //! `ics_info` and helpers shared by the encoder and decoder (ISO/IEC 14496-3 §4.4.2.1, §4.5.2.3).
 
-use filmcraft_bitstream::{BitReader, BitWriter};
+use mortiflix_bitstream::{BitReader, BitWriter};
 
 use crate::mdct::WindowShape;
 use crate::tables::{swb_offsets_long, swb_offsets_short};

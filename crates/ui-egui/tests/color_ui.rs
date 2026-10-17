@@ -2,20 +2,20 @@
 //! switches, Interpret Footage ▸ Color Management and the sequence colour settings, driven by
 //! automation id through the control channel.
 //!
-//! Set `FILMCRAFT_UI_SNAPSHOT_DIR=<dir>` to also render offscreen with wgpu and write `color-*.png`.
+//! Set `MFX_STUDIO_UI_SNAPSHOT_DIR=<dir>` to also render offscreen with wgpu and write `color-*.png`.
 
 #![allow(dead_code)]
 
 use std::sync::mpsc::{Sender, channel};
 
 use egui_kittest::Harness;
-use filmcraft_engine::Session;
-use filmcraft_ui_egui::FilmcraftApp;
-use filmcraft_ui_egui::control::ControlRequest;
+use mortiflix_engine::Session;
+use mortiflix_ui_egui::StudioApp;
+use mortiflix_ui_egui::control::ControlRequest;
 use serde_json::{Value, json};
 
 struct Driver {
-    harness: Harness<'static, FilmcraftApp>,
+    harness: Harness<'static, StudioApp>,
     tx: Sender<ControlRequest>,
     snapshots: Option<std::path::PathBuf>,
 }
@@ -25,8 +25,8 @@ impl Driver {
         let mut session = Session::default();
         session.execute("file.openDemoProject", json!({})).expect("demo project");
         let (tx, rx) = channel();
-        let app = FilmcraftApp::new(session).with_control(rx);
-        let snapshots = std::env::var_os("FILMCRAFT_UI_SNAPSHOT_DIR").map(std::path::PathBuf::from);
+        let app = StudioApp::new(session).with_control(rx);
+        let snapshots = std::env::var_os("MFX_STUDIO_UI_SNAPSHOT_DIR").map(std::path::PathBuf::from);
         let mut b = Harness::builder().with_size(egui::vec2(1600.0, 980.0)).with_max_steps(10_000);
         if snapshots.is_some() {
             b = b.wgpu();
@@ -233,7 +233,7 @@ fn apply_match_from_the_color_wheels_section() {
 }
 
 impl Driver {
-    fn app(&mut self) -> &mut FilmcraftApp {
+    fn app(&mut self) -> &mut StudioApp {
         self.harness.state_mut()
     }
 }
@@ -275,7 +275,7 @@ fn hdr_lumetri_controls_hsl_refine_and_comparison_view() {
     // then uses its reference frame
     d.click("lumetri.section.Color Wheels & Match");
     d.click("lumetri.match.comparisonView");
-    assert_eq!(d.app().ui.program.display_mode(), Some(filmcraft_ui_egui::state::DisplayMode::Comparison));
+    assert_eq!(d.app().ui.program.display_mode(), Some(mortiflix_ui_egui::state::DisplayMode::Comparison));
     assert!(!d.ids("program.compare.reference").is_empty());
     let seq = d.exec("sequence.inspect", json!({}));
     let last = seq["video"][0]["items"].as_array().unwrap().last().unwrap().clone();
@@ -288,7 +288,7 @@ fn hdr_lumetri_controls_hsl_refine_and_comparison_view() {
     let e = lumetri(&mut d, clip);
     assert!(e["params"]["wheel_highlights"]["value"].as_str().unwrap() != "Vec2(Vec2 { x: 0.0, y: 0.0 })", "matched to the comparison reference: {e}");
     d.click("lumetri.match.comparisonView");
-    assert_ne!(d.app().ui.program.display_mode(), Some(filmcraft_ui_egui::state::DisplayMode::Comparison));
+    assert_ne!(d.app().ui.program.display_mode(), Some(mortiflix_ui_egui::state::DisplayMode::Comparison));
 }
 
 #[test]
@@ -309,7 +309,7 @@ fn lumetri_presets_in_the_effects_panel() {
     assert_eq!(e["params"]["saturation"]["value"], json!("Float(0.0)"), "{e}");
     d.exec("edit.undo", json!({}));
     // maximized (wide) panel: the folder's thumbnail grid next to the tree
-    d.app().ui.keys.maximized = Some(filmcraft_ui_egui::dock::PanelKind::Effects);
+    d.app().ui.keys.maximized = Some(mortiflix_ui_egui::dock::PanelKind::Effects);
     d.frames(4);
     assert!(!d.ids("effects.presetGrid").is_empty(), "no grid: {:?}", d.ids("effects."));
     let cells = d.ids("effects.presetGrid.");

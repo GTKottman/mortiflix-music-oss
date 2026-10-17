@@ -8,7 +8,7 @@ mod common;
 use std::io::Cursor;
 
 use common::*;
-use filmcraft_isobmff::{Brand, Mp4Writer, SampleEntry, TrackConfig, WriteSample, WriterOptions};
+use mortiflix_isobmff::{Brand, Mp4Writer, SampleEntry, TrackConfig, WriteSample, WriterOptions};
 
 const RATE: u32 = 48_000;
 
@@ -26,8 +26,8 @@ fn tones(ff: &std::path::Path, name: &str, layout: &str, n: usize) -> Option<std
 /// says `channel_config` (AAC LC, 48 kHz), keeping each sample's duration and the priming edit.
 fn rewrap(path: &std::path::Path, name: &str, channel_config: u8, channels: u32) -> std::path::PathBuf {
     let data = bytes(path);
-    let file = filmcraft_isobmff::open(&data).unwrap();
-    let track = file.tracks.iter().find(|t| t.kind == filmcraft_isobmff::TrackKind::Audio).unwrap();
+    let file = mortiflix_isobmff::open(&data).unwrap();
+    let track = file.tracks.iter().find(|t| t.kind == mortiflix_isobmff::TrackKind::Audio).unwrap();
     // object type 2, rate index 3 (48 kHz), then the configuration
     let asc = (((2u16 << 11) | (3 << 7) | ((channel_config as u16) << 3)).to_be_bytes()).to_vec();
     let mut mux = Mp4Writer::new(Cursor::new(Vec::new()), WriterOptions::new(Brand::Mp4)).unwrap();
@@ -43,7 +43,7 @@ fn rewrap(path: &std::path::Path, name: &str, channel_config: u8, channels: u32)
 
 /// Our decode of the whole file, channel by channel.
 fn ours(path: &std::path::Path, name: &str) -> (u32, Vec<Vec<f32>>) {
-    let src = filmcraft_codecs::open_bytes(name, bytes(path)).unwrap();
+    let src = mortiflix_codecs::open_bytes(name, bytes(path)).unwrap();
     let ch = src.info().audio().map(|a| a.channels).unwrap();
     (ch, src.audio(0, RATE as usize * 9 / 10, RATE).unwrap().channels)
 }
@@ -67,14 +67,14 @@ fn peak(x: &[f32]) -> f32 {
 
 #[test]
 fn aac_channel_configurations_report_and_decode_every_channel() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     // ffmpeg 8 writes 7.1 as configuration 7 and ffmpeg 9 as 12: the same five elements
     let Some(seven) = tones(&ff, "aac_71.mp4", "7.1", 8) else {
         eprintln!("SKIPPED: this ffmpeg can't encode 7.1 AAC");
         return;
     };
-    let asc = filmcraft_isobmff::open(bytes(&seven)).unwrap().tracks.iter().find_map(|t| match &t.entries.first()?.codec {
-        filmcraft_isobmff::CodecConfig::Aac(a) => Some(a.channel_config),
+    let asc = mortiflix_isobmff::open(bytes(&seven)).unwrap().tracks.iter().find_map(|t| match &t.entries.first()?.codec {
+        mortiflix_isobmff::CodecConfig::Aac(a) => Some(a.channel_config),
         _ => None,
     });
     let twelve = match asc {

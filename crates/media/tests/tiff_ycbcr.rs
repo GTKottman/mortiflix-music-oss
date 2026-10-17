@@ -2,7 +2,7 @@
 //! ffmpeg writes from YUV sources. The files are built here from TIFF 6.0 (§21 YCbCr images, §9
 //! PackBits), little-endian, one strip.
 
-use filmcraft_media::still::decode_raster;
+use mortiflix_media::still::decode_raster;
 
 /// A YCbCr TIFF: `width` × `height`, subsampling `sub` (horizontal, vertical), `data` the strip
 /// as stored (data units, already compressed when `compression` is 32773), plus `extra` entries
@@ -60,7 +60,7 @@ fn ycbcr_tiff(width: u32, height: u32, sub: (u16, u16), compression: u16, data: 
     out
 }
 
-fn px(r: &filmcraft_media::still::Raster, x: u32, y: u32) -> [u8; 4] {
+fn px(r: &mortiflix_media::still::Raster, x: u32, y: u32) -> [u8; 4] {
     let i = ((y * r.width + x) * 4) as usize;
     [r.rgba[i], r.rgba[i + 1], r.rgba[i + 2], r.rgba[i + 3]]
 }
@@ -132,11 +132,11 @@ fn damaged_ycbcr_tiffs_fail_without_panicking() {
 /// across a data unit) does not dominate; 95 × 63 so the data units do not line up.
 #[test]
 fn ffmpeg_ycbcr_tiffs_match_ffmpeg_decode() {
-    let Some(ff) = filmcraft_testkit::oracle::ffmpeg_or_skip("YCbCr TIFF oracle") else { return };
-    let dir = filmcraft_testkit::fixtures::fixtures_dir("media/tiff_ycbcr");
+    let Some(ff) = mortiflix_testkit::oracle::ffmpeg_or_skip("YCbCr TIFF oracle") else { return };
+    let dir = mortiflix_testkit::fixtures::fixtures_dir("media/tiff_ycbcr");
     for pix_fmt in ["yuv420p", "yuv422p", "yuv444p"] {
         let tiff = dir.join(format!("gradient_{pix_fmt}.tiff"));
-        let made = filmcraft_testkit::fixtures::generate(&tiff, |tmp| {
+        let made = mortiflix_testkit::fixtures::generate(&tiff, |tmp| {
             std::process::Command::new(&ff)
                 .args(["-y", "-v", "error", "-f", "lavfi", "-i", "gradients=size=95x63:seed=7", "-frames:v", "1", "-pix_fmt", pix_fmt])
                 .arg(tmp)

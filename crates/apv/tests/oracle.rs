@@ -3,18 +3,18 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use filmcraft_apv::{
+use mortiflix_apv::{
     ChromaFormat, ContentLightLevel, DecodeOptions, Encoder, EncoderConfig, Frame, MasteringDisplay, Profile, decode_frame, decode_frame_with, probe,
 };
 
 fn ffmpeg() -> Option<PathBuf> {
     // The APV demuxer is new in ffmpeg 8.0; older toolchains are found but
     // cannot read the fixtures, so they skip like a missing tool (#1249).
-    filmcraft_testkit::ffmpeg_with_format_or_skip("apv oracle", "apv", "8.0")
+    mortiflix_testkit::ffmpeg_with_format_or_skip("apv oracle", "apv", "8.0")
 }
 
 fn fixture_dir() -> PathBuf {
-    filmcraft_testkit::fixtures_dir("apv")
+    mortiflix_testkit::fixtures_dir("apv")
 }
 
 fn native_pix_fmt(profile: Profile) -> &'static str {

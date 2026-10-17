@@ -3,7 +3,7 @@
 
 use std::f64::consts::FRAC_PI_2;
 
-use filmcraft_bitstream::{BitReader, BitWriter};
+use mortiflix_bitstream::{BitReader, BitWriter};
 
 use crate::ics::IcsInfo;
 use crate::tables::{tns_max_bands, tns_max_order};

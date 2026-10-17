@@ -2,7 +2,7 @@
 //! Prints timing information to stderr. `H264_BENCH_ITERS=n` (with `H264_THREADS=t`, and
 //! `H264_DRAFT=1` for draft mode) turns it into a benchmark.
 
-use filmcraft_h264::Decoder;
+use mortiflix_h264::Decoder;
 use std::io::Write;
 
 fn main() {
@@ -31,7 +31,7 @@ fn main() {
     let mut dec = Decoder::new();
     let t0 = std::time::Instant::now();
     let mut n = 0usize;
-    let mut write = |pics: Vec<filmcraft_h264::Picture>| {
+    let mut write = |pics: Vec<mortiflix_h264::Picture>| {
         for p in pics {
             n += 1;
             if let Some(o) = out.as_mut() {

@@ -1,6 +1,6 @@
 //! The compositor's working image: premultiplied linear-light RGBA f32, row-major.
 
-use filmcraft_geom::Affine;
+use mortiflix_geom::Affine;
 use rayon::prelude::*;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -95,7 +95,7 @@ impl Image {
         }
         let mut out = Image::new(w, h);
         // Destination bounds of the source rect, to skip empty rows/cols.
-        let b = m.bounds(&filmcraft_geom::Rect::new(0.0, 0.0, self.w as f64, self.h as f64));
+        let b = m.bounds(&mortiflix_geom::Rect::new(0.0, 0.0, self.w as f64, self.h as f64));
         let y0 = (b.y.floor().max(0.0) as usize).min(h);
         let y1 = (b.bottom().ceil().max(0.0) as usize).min(h);
         let x0 = (b.x.floor().max(0.0) as usize).min(w);
@@ -180,7 +180,7 @@ impl Image {
     /// Convert to straight sRGB RGBA8.
     pub fn to_rgba8(&self) -> Vec<u8> {
         let mut out = vec![0u8; self.w * self.h * 4];
-        out.par_chunks_mut(self.w * 4).zip(self.px.par_chunks(self.w * 4)).for_each(|(o, s)| filmcraft_frame::linear_premul_to_srgb8(s, o));
+        out.par_chunks_mut(self.w * 4).zip(self.px.par_chunks(self.w * 4)).for_each(|(o, s)| mortiflix_frame::linear_premul_to_srgb8(s, o));
         out
     }
 
@@ -189,9 +189,9 @@ impl Image {
         let mut out = vec![0u8; self.w * self.h * 4];
         out.par_chunks_mut(self.w * 4).zip(self.px.par_chunks(self.w * 4)).for_each(|(o, s)| {
             for (o, s) in o.as_chunks_mut::<4>().0.iter_mut().zip(s.as_chunks::<4>().0) {
-                o[0] = filmcraft_color::linear_to_srgb_u8(s[0]);
-                o[1] = filmcraft_color::linear_to_srgb_u8(s[1]);
-                o[2] = filmcraft_color::linear_to_srgb_u8(s[2]);
+                o[0] = mortiflix_color::linear_to_srgb_u8(s[0]);
+                o[1] = mortiflix_color::linear_to_srgb_u8(s[1]);
+                o[2] = mortiflix_color::linear_to_srgb_u8(s[2]);
                 o[3] = 255;
             }
         });

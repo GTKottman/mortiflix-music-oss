@@ -1,8 +1,8 @@
 //! Tests of the M3.10 Edit / Clip / File menu commands (`clip_ops`): each one executes, checks the
 //! result, undoes / redoes where it edits, and checks its disabled state.
 
-use filmcraft_project::{AudioChannels, FieldProcessing, ItemId, ItemKind, Label, TimeInterpolation, TrackItem};
-use filmcraft_time::{TICKS_PER_SECOND, Tick};
+use mortiflix_project::{AudioChannels, FieldProcessing, ItemId, ItemKind, Label, TimeInterpolation, TrackItem};
+use mortiflix_time::{TICKS_PER_SECOND, Tick};
 use serde_json::json;
 
 use crate::Session;
@@ -23,7 +23,7 @@ fn v1(s: &Session) -> Vec<TrackItem> {
 }
 
 fn clip(s: &Session, id: u64) -> TrackItem {
-    s.active_sequence().unwrap().find_item(filmcraft_project::ClipId(id)).unwrap().1.clone()
+    s.active_sequence().unwrap().find_item(mortiflix_project::ClipId(id)).unwrap().1.clone()
 }
 
 fn select(s: &mut Session, clips: &[u64]) {
@@ -117,7 +117,7 @@ fn label_commands_and_select_label_group() {
     // Select Label Group (timeline): the Mango overlay alone, the Iris clips together
     s.state.project_selection.clear();
     let ov = s.active_sequence().unwrap().video_tracks[1].items[0].id.0;
-    s.state.selection = vec![filmcraft_project::ClipId(ov)];
+    s.state.selection = vec![mortiflix_project::ClipId(ov)];
     s.execute("edit.selectLabelGroup", json!({})).unwrap();
     assert_eq!(s.state.selection.len(), 1);
 }
@@ -150,8 +150,8 @@ fn paste_attributes_with_scaled_keyframes_and_remove_attributes() {
         let seq = s.state.active_sequence.unwrap();
         let it = p.sequence_mut(seq).unwrap().find_item_mut(a.id).unwrap().1;
         let sc = it.effect_mut("motion").unwrap().param_mut("scale").unwrap();
-        sc.put_keyframe(a_now.source_in, filmcraft_project::ParamValue::Float(100.0));
-        sc.put_keyframe(a_now.source_out(), filmcraft_project::ParamValue::Float(200.0));
+        sc.put_keyframe(a_now.source_in, mortiflix_project::ParamValue::Float(100.0));
+        sc.put_keyframe(a_now.source_out(), mortiflix_project::ParamValue::Float(200.0));
         s.project = std::sync::Arc::new(p);
     }
     select(&mut s, &[a.id.0]);
@@ -183,7 +183,7 @@ fn paste_attributes_with_scaled_keyframes_and_remove_attributes() {
     assert_eq!(f64_param(&got, "motion", "rotation"), 0.0);
     assert_eq!(f64_param(&got, "motion", "scale"), 100.0);
     assert!(got.effect("motion").unwrap().param("scale").unwrap().keyframes.is_empty());
-    assert_eq!(got.effect("motion").unwrap().param("position").unwrap().value.as_vec2().unwrap(), filmcraft_geom::Vec2::new(960.0, 540.0));
+    assert_eq!(got.effect("motion").unwrap().param("position").unwrap().value.as_vec2().unwrap(), mortiflix_geom::Vec2::new(960.0, 540.0));
     assert!(got.effect("gaussian_blur").is_none());
     assert_eq!(f64_param(&got, "opacity", "opacity"), 40.0);
     // audio: volume pasted onto another audio clip
@@ -250,7 +250,7 @@ fn new_sequence_from_clip_bin_from_selection_and_offline_file() {
     // Bin From Selection
     s.execute("project.select", json!({"items": [a.0, b.0]})).unwrap();
     let r = s.execute("file.newBinFromSelection", json!({})).unwrap();
-    let bin = filmcraft_project::BinId(r["bin"].as_u64().unwrap());
+    let bin = mortiflix_project::BinId(r["bin"].as_u64().unwrap());
     let found = s.project.root.find_bin(bin).unwrap();
     assert_eq!(found.name, "Bin 01");
     assert_eq!(s.project.root.parent_of(a), Some(bin));
@@ -291,7 +291,7 @@ fn close_project_and_save_all() {
 fn make_and_edit_subclips() {
     let mut s = demo();
     let ocean = item_named(&s, "Ocean_Sunset.mp4");
-    let r24 = filmcraft_time::FrameRate::FPS_23_976;
+    let r24 = mortiflix_time::FrameRate::FPS_23_976;
     s.execute("source.open", json!({"item": ocean.0})).unwrap();
     s.execute("project.setMarks", json!({"item": ocean.0, "in": r24.tick_of(24).0, "out": r24.tick_of(71).0})).unwrap();
     let r = s.execute("clip.makeSubclip", json!({})).unwrap();
@@ -468,13 +468,13 @@ fn field_options_and_time_interpolation_are_stored() {
     s.execute("clip.speedDuration", json!({"speed": 50.0, "interpolation": "frameSampling"})).unwrap();
     assert_eq!(clip(&s, c).time_interpolation, TimeInterpolation::FrameSampling);
     // survives a save / load
-    let bytes = filmcraft_format::encode(&s.project, true);
-    let back = filmcraft_format::decode(&bytes).unwrap().project;
+    let bytes = mortiflix_format::encode(&s.project, true);
+    let back = mortiflix_format::decode(&bytes).unwrap().project;
     let seq = s.state.active_sequence.unwrap();
-    assert_eq!(back.sequence(seq).unwrap().find_item(filmcraft_project::ClipId(c)).unwrap().1, &clip(&s, c));
+    assert_eq!(back.sequence(seq).unwrap().find_item(mortiflix_project::ClipId(c)).unwrap().1, &clip(&s, c));
 }
 
-fn mean_abs_diff(a: &filmcraft_render::Image, b: &filmcraft_render::Image) -> f32 {
+fn mean_abs_diff(a: &mortiflix_render::Image, b: &mortiflix_render::Image) -> f32 {
     a.px.iter().zip(&b.px).map(|(x, y)| (x - y).abs()).sum::<f32>() / a.px.len() as f32
 }
 
@@ -491,12 +491,12 @@ fn frame_blending_renders_in_between_frames() {
     let t = c.start + rate.tick_of(31);
     s.execute("playhead.set", json!({"time": t.0})).unwrap();
     let it = clip(&s, c.id.0);
-    let src_rate = filmcraft_time::FrameRate::FPS_23_976;
-    assert!(filmcraft_render::interpolation_blend(&it, t, src_rate).is_none(), "frame sampling");
+    let src_rate = mortiflix_time::FrameRate::FPS_23_976;
+    assert!(mortiflix_render::interpolation_blend(&it, t, src_rate).is_none(), "frame sampling");
     let sampled = s.render_program(0.125).unwrap();
     s.execute("clip.timeInterpolation.frameBlending", json!({})).unwrap();
     let it = clip(&s, c.id.0);
-    let (next, w) = filmcraft_render::interpolation_blend(&it, t, src_rate).unwrap();
+    let (next, w) = mortiflix_render::interpolation_blend(&it, t, src_rate).unwrap();
     assert!((w - 0.5).abs() < 0.01, "half-way: {w}");
     assert_eq!(next, src_rate.tick_of(src_rate.frame_at(it.source_time_at(t)) + 1));
     let blended = s.render_program(0.125).unwrap();
@@ -520,7 +520,7 @@ fn frame_blending_renders_in_between_frames() {
     assert!(d < mean_abs_diff(&blended, &sampled), "optical flow stays near the blend on mostly static footage: {d}");
     // at 100 % nothing is blended
     s.execute("clip.speedDuration", json!({"speed": 100.0})).unwrap();
-    assert!(filmcraft_render::interpolation_blend(&clip(&s, c.id.0), t, src_rate).is_none());
+    assert!(mortiflix_render::interpolation_blend(&clip(&s, c.id.0), t, src_rate).is_none());
 }
 
 #[test]
@@ -536,7 +536,7 @@ fn fit_and_fill_frame() {
     s.execute("clip.fitToFrame", json!({})).unwrap();
     let got = clip(&s, c);
     assert!((f64_param(&got, "motion", "scale") - 100.0).abs() < 1e-9);
-    assert_eq!(got.effect("motion").unwrap().param("anchor").unwrap().value.as_vec2().unwrap(), filmcraft_geom::Vec2::new(480.0, 540.0));
+    assert_eq!(got.effect("motion").unwrap().param("anchor").unwrap().value.as_vec2().unwrap(), mortiflix_geom::Vec2::new(480.0, 540.0));
     s.execute("edit.undo", json!({})).unwrap();
     assert!((f64_param(&clip(&s, c), "motion", "scale") - 200.0).abs() < 1e-9);
     s.state.selection.clear();
@@ -783,33 +783,33 @@ fn replace_with_clip_reports_clips_that_run_past_the_new_media() {
 #[test]
 fn audio_source_channels_pick_what_a_clip_plays() {
     let mut it = v1(&demo())[0].clone();
-    assert_eq!(filmcraft_render::audio::source_pair(&it, 2), (0, 1));
-    assert_eq!(filmcraft_render::audio::source_pair(&it, 1), (0, 0));
+    assert_eq!(mortiflix_render::audio::source_pair(&it, 2), (0, 1));
+    assert_eq!(mortiflix_render::audio::source_pair(&it, 1), (0, 0));
     it.source_channels = vec![1];
-    assert_eq!(filmcraft_render::audio::source_pair(&it, 2), (1, 1));
+    assert_eq!(mortiflix_render::audio::source_pair(&it, 2), (1, 1));
     it.source_channels = vec![1, 0];
-    assert_eq!(filmcraft_render::audio::source_pair(&it, 2), (1, 0));
+    assert_eq!(mortiflix_render::audio::source_pair(&it, 2), (1, 0));
     it.source_channels = vec![5];
-    assert_eq!(filmcraft_render::audio::source_pair(&it, 2), (0, 0), "missing channels fall back to the first");
+    assert_eq!(mortiflix_render::audio::source_pair(&it, 2), (0, 0), "missing channels fall back to the first");
 }
 
 #[test]
 fn subclip_source_monitor_trims_and_markers() {
     let mut s = demo();
     let ocean = item_named(&s, "Ocean_Sunset.mp4");
-    let r24 = filmcraft_time::FrameRate::FPS_23_976;
+    let r24 = mortiflix_time::FrameRate::FPS_23_976;
     let f = |n: i64| r24.tick_of(n);
     // clip markers on the master clip at frames 10, 30, 60 and 90
     let mut p = (*s.project).clone();
     if let Some(ItemKind::Media(m)) = p.item_mut(ocean).map(|i| &mut i.kind) {
         for (k, n) in [10, 30, 60, 90].into_iter().enumerate() {
-            m.markers.push(filmcraft_project::Marker {
-                id: filmcraft_project::MarkerId(9000 + k as u64),
+            m.markers.push(mortiflix_project::Marker {
+                id: mortiflix_project::MarkerId(9000 + k as u64),
                 start: f(n),
                 duration: Tick::ZERO,
                 name: format!("m{n}"),
                 comment: String::new(),
-                kind: filmcraft_project::MarkerKind::Comment,
+                kind: mortiflix_project::MarkerKind::Comment,
                 color: Label::Green,
             });
         }
@@ -876,7 +876,7 @@ fn color_matte_color_changes_and_undoes() {
     let mut s = demo();
     let matte = s.execute("file.newColorMatte", json!({"width": 64, "height": 36, "color": "#ff0000"})).unwrap()["item"].as_u64().unwrap();
     let px = |s: &Session| {
-        let f = s.source(ItemId(matte)).unwrap().video_frame(filmcraft_media::FrameRequest::full(Tick::ZERO)).unwrap();
+        let f = s.source(ItemId(matte)).unwrap().video_frame(mortiflix_media::FrameRequest::full(Tick::ZERO)).unwrap();
         f.to_rgba8()[..3].to_vec()
     };
     assert_eq!(px(&s), [255, 0, 0]);
@@ -913,7 +913,7 @@ fn speed_duration_moves_fade_out_to_the_new_clip_end() {
     let fade = &s.active_sequence().unwrap().video_tracks[0].transitions[0];
     assert_eq!((rate.frame_at(it.start), rate.frame_at(it.end())), (0, 50));
     assert_eq!((rate.frame_at(fade.start), rate.frame_at(fade.end())), (40, 50));
-    assert_eq!(fade.from, Some(filmcraft_project::ClipId(c)));
+    assert_eq!(fade.from, Some(mortiflix_project::ClipId(c)));
     assert_eq!(fade.to, None);
 }
 
@@ -942,7 +942,7 @@ fn add_edit_cuts_only_the_selected_clips() {
     };
     // a V1 clip and a time inside it
     let first = v1(&s)[1].clone();
-    let t = first.start + filmcraft_time::Tick(first.duration.0 / 2);
+    let t = first.start + mortiflix_time::Tick(first.duration.0 / 2);
     let (v0, a0) = count(&s);
     s.state.selection = vec![first.id];
     s.execute("sequence.addEdit", json!({"time": t.0})).unwrap();

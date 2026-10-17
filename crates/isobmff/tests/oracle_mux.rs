@@ -3,7 +3,7 @@
 mod common;
 
 use common::*;
-use filmcraft_isobmff::*;
+use mortiflix_isobmff::*;
 use serde_json::Value;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
@@ -41,7 +41,7 @@ fn remux(input: &Path, out_name: &str, brand: Brand, finish: Finish, timecode: O
     let f = open(data.as_slice()).unwrap();
     let mut opts = WriterOptions::new(brand);
     opts.movie_timescale = f.timescale;
-    opts.metadata.push(("©nam".into(), "FilmCraft test".into()));
+    opts.metadata.push(("©nam".into(), "Mortiflix Studio test".into()));
     let mut w = Mp4Writer::new(Cursor::new(Vec::new()), opts).unwrap();
     let av: Vec<usize> = (0..f.tracks.len()).filter(|&i| matches!(f.tracks[i].kind, TrackKind::Video | TrackKind::Audio)).collect();
     let mut map = vec![usize::MAX; f.tracks.len()];
@@ -79,7 +79,7 @@ fn remux(input: &Path, out_name: &str, brand: Brand, finish: Finish, timecode: O
             assert_eq!(f.read_sample(data.as_slice(), i, j).unwrap(), g.read_sample(out.as_slice(), k, j).unwrap());
         }
     }
-    assert_eq!(g.metadata.title(), Some("FilmCraft test"));
+    assert_eq!(g.metadata.title(), Some("Mortiflix Studio test"));
     Some((f, path))
 }
 

@@ -1,6 +1,6 @@
 [package]
-name = "filmcraft-mortiflix-ui"
-description = "Mortiflix FilmCraft: the Mortiflix stages (stage bar, chat, nodes, preview, voice & music) as egui panels, and the Mortiflix service supervisor"
+name = "mortiflix-ui"
+description = "Mortiflix Studio: the Mortiflix stages (stage bar, chat, nodes, preview, voice & music) as egui panels, and the Mortiflix service supervisor"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -14,7 +14,7 @@ egui = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }
-# node stills (pure Rust; the same version and formats filmcraft-media already builds)
+# node stills (pure Rust; the same version and formats mortiflix-media already builds)
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
 # style frames drawn as SVG (the Look stage, the chat's looks card): pure Rust, MIT OR Apache-2.0; text with the
 # system's fonts, no raster images inside SVGs, no memory-mapped fonts

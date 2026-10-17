@@ -4,13 +4,13 @@
 //! `colorDialog.working.<id>`, `colorDialog.wideGamut`, `colorDialog.autoToneMap`,
 //! `colorDialog.ok`, `colorDialog.cancel`.
 
-use filmcraft_color::{ColorSpace, WorkingSpace};
+use mortiflix_color::{ColorSpace, WorkingSpace};
 use serde_json::{Value, json};
 
-use crate::FilmcraftApp;
+use crate::StudioApp;
 use crate::state::ColorDialog;
 
-pub fn open_interpret(app: &mut FilmcraftApp, params: &Value) {
+pub fn open_interpret(app: &mut StudioApp, params: &Value) {
     let items: Vec<u64> = match params.get("items").and_then(Value::as_array) {
         Some(a) => a.iter().filter_map(Value::as_u64).collect(),
         None => {
@@ -33,18 +33,18 @@ pub fn open_interpret(app: &mut FilmcraftApp, params: &Value) {
     app.ui.color_dialog = Some(ColorDialog::Interpret { items, color_space: current });
 }
 
-pub fn open_sequence(app: &mut FilmcraftApp) {
-    let c = app.session.active_sequence().map(|q| q.settings.color).unwrap_or(filmcraft_color::ColorPipeline::REC709);
+pub fn open_sequence(app: &mut StudioApp) {
+    let c = app.session.active_sequence().map(|q| q.settings.color).unwrap_or(mortiflix_color::ColorPipeline::REC709);
     app.ui.color_dialog = Some(ColorDialog::Sequence { working_space: c.working.id().into(), wide_gamut: c.wide_gamut, auto_tone_map: c.auto_tone_map });
 }
 
-fn radio(app: &mut FilmcraftApp, ui: &mut egui::Ui, id: &str, selected: bool, label: &str) -> bool {
+fn radio(app: &mut StudioApp, ui: &mut egui::Ui, id: &str, selected: bool, label: &str) -> bool {
     let r = ui.radio(selected, label);
     app.auto.add(id, r.rect, label);
     r.clicked()
 }
 
-fn buttons(app: &mut FilmcraftApp, ui: &mut egui::Ui) -> (bool, bool) {
+fn buttons(app: &mut StudioApp, ui: &mut egui::Ui) -> (bool, bool) {
     let mut out = (false, false);
     ui.add_space(6.0);
     ui.horizontal(|ui| {
@@ -57,7 +57,7 @@ fn buttons(app: &mut FilmcraftApp, ui: &mut egui::Ui) -> (bool, bool) {
     out
 }
 
-pub fn show(app: &mut FilmcraftApp, ctx: &egui::Context) {
+pub fn show(app: &mut StudioApp, ctx: &egui::Context) {
     let Some(mut d) = app.ui.color_dialog.clone() else { return };
     let mut open = true;
     let mut apply: Option<(&'static str, Value)> = None;

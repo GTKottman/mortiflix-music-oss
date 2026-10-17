@@ -2,7 +2,7 @@
 //!
 //! The decoder is a Direct3D-aware decoder MFT (Microsoft's H.264 decoder, the HEVC Video
 //! Extensions' decoder, or a vendor's synchronous hardware MFT) driven at the level of single
-//! access units: the container demuxer FilmCraft already has supplies the samples, so there is no
+//! access units: the container demuxer Mortiflix Studio already has supplies the samples, so there is no
 //! Source Reader and no second media pipeline. The MFT is given the process's Direct3D 11 video
 //! device through an `IMFDXGIDeviceManager`, which makes it decode with DXVA on the GPU's video
 //! engine and return NV12 (8-bit) / P010 (10-bit) surfaces as Direct3D 11 textures.
@@ -16,7 +16,7 @@
 //!
 //! "Hardware" is verified, not assumed: a decoder MFT that is not Direct3D-aware, or that hands
 //! back system-memory samples (Microsoft's decoders do that when DXVA is unavailable), is
-//! declined or fails the stream, so [`crate::HybridDecoder`] continues with FilmCraft's own
+//! declined or fails the stream, so [`crate::HybridDecoder`] continues with Mortiflix Studio's own
 //! decoder and Windows' software decoding is never used in its place. Streams the GPU's DXVA
 //! decoder does not list (profile, bit depth, chroma format, size) are declined up front.
 //!
@@ -35,8 +35,8 @@ mod stream;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use filmcraft_codecs::hw::{NalCodec, StreamInfo};
-use filmcraft_codecs::{CodecError, DecodedFrame, Result, VideoDecoder};
+use mortiflix_codecs::hw::{NalCodec, StreamInfo};
+use mortiflix_codecs::{CodecError, DecodedFrame, Result, VideoDecoder};
 
 use self::gpu::{Gpu, Readback, SurfaceFormat};
 use self::mft::{MfApi, Mft, Poll};
@@ -50,8 +50,8 @@ const MAX_OUTPUTS_PER_CALL: usize = 4096;
 
 /// The stream description of a sample entry this backend could take (`avcC` / `hvcC` / `vpcC` /
 /// `av1C`), or `None` for other codecs and unreadable configuration records.
-pub fn stream_info(entry: &filmcraft_isobmff::SampleEntry) -> Option<StreamInfo> {
-    use filmcraft_codecs::hw::{FrameStreamInfo, NalStreamInfo};
+pub fn stream_info(entry: &mortiflix_isobmff::SampleEntry) -> Option<StreamInfo> {
+    use mortiflix_codecs::hw::{FrameStreamInfo, NalStreamInfo};
     match NalStreamInfo::from_entry(entry) {
         Some(r) => r.ok().map(StreamInfo::Nal),
         None => FrameStreamInfo::from_entry(entry)?.ok().map(StreamInfo::Frame),

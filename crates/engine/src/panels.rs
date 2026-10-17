@@ -11,8 +11,8 @@
 
 use std::collections::{BTreeMap, VecDeque};
 
-use filmcraft_project::{ItemId, ItemKind, Label, MediaRef, Project};
-use filmcraft_time::{Tick, TimeDisplay, format_time};
+use mortiflix_project::{ItemId, ItemKind, Label, MediaRef, Project};
+use mortiflix_time::{Tick, TimeDisplay, format_time};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -166,7 +166,7 @@ pub fn metadata_target(s: &Session, p: &Value) -> Option<ItemId> {
     if let Some(i) = item_p(p, "item") {
         return Some(i);
     }
-    let clip = u64_p(p, "clip").map(filmcraft_project::ClipId);
+    let clip = u64_p(p, "clip").map(mortiflix_project::ClipId);
     let seq = s.active_sequence();
     let clip_item = |c| seq.and_then(|q| q.find_item(c)).map(|(_, it)| it.item);
     if let Some(c) = clip {
@@ -175,7 +175,7 @@ pub fn metadata_target(s: &Session, p: &Value) -> Option<ItemId> {
     s.state.project_selection.first().copied().or_else(|| s.state.selection.first().and_then(|c| clip_item(*c)))
 }
 
-fn tc(t: Tick, rate: filmcraft_time::FrameRate) -> String {
+fn tc(t: Tick, rate: mortiflix_time::FrameRate) -> String {
     format_time(t, rate, false, TimeDisplay::Timecode, 48000)
 }
 
@@ -196,7 +196,7 @@ pub fn metadata_fields(p: &Project, id: ItemId) -> Vec<Field> {
     add("Clip", "Name", it.name.clone(), true);
     add("Clip", "Label", it.label.name().to_string(), true);
     add("Clip", "Media Type", it.type_label().to_string(), false);
-    let col = |c: &str| filmcraft_project::find::column_text(p, it, c);
+    let col = |c: &str| mortiflix_project::find::column_text(p, it, c);
     add("Clip", "Frame Rate", col("Frame Rate"), false);
     // media start / end / duration in the item's own timecode
     let start = media.and_then(|m| m.info.start_timecode).map(|f| rate.tick_of(f)).unwrap_or(Tick::ZERO);
@@ -221,7 +221,7 @@ pub fn metadata_fields(p: &Project, id: ItemId) -> Vec<Field> {
     if let Some(v) = media.and_then(|m| m.info.video.as_ref()) {
         add("Clip", "Video Info", format!("{} x {} ({:.4})", v.width, v.height, v.par.0 as f64 / v.par.1.max(1) as f64), false);
         add("Clip", "Video Codec", v.codec.clone(), false);
-        let detected = filmcraft_color::ColorSpace::from_info(&v.color);
+        let detected = mortiflix_color::ColorSpace::from_info(&v.color);
         let cs = media.and_then(|m| m.interpret.color_space).unwrap_or(detected);
         add("Clip", "Color Space", cs.label().to_string(), false);
     }

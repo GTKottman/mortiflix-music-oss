@@ -1,4 +1,4 @@
-# Mortiflix FilmCraft: the node area (part 03, doc 35)
+# Mortiflix Studio: the node area (part 03, doc 35)
 
 The bottom panel on stages 1-4 (`PanelKind::MfxNodes`, "Mortiflix Nodes"). The whole film as a noodle graph:
 shot nodes chained by noodles with a transition pill on every cut, voice lines under the shots they're said over
@@ -29,10 +29,10 @@ State: `MfxState.nodes` (serde: `mortiflix.state` shows view, selection, positio
 | Frame | F selected, `\` all, 1-9 a beat, double-click a beat band; the overview strip under the canvas jumps |
 | Find | Ctrl/⌘ + F: words, `#7` / `7`, beat names, state words; Enter frames the next; others dim |
 | Undo / redo here | Ctrl/⌘ + Z, Ctrl/⌘ + Shift + Z (moves, order, OK / Cut) |
-| Maximise / Restore | the header button or ` (FilmCraft's Maximize Frame); the divider above is FilmCraft's dock split |
+| Maximise / Restore | the header button or ` (Mortiflix Studio's Maximize Frame); the divider above is Mortiflix Studio's dock split |
 
-The keys are panel-scoped (engine `FILMCRAFT_PANEL`, scope "Mortiflix Nodes"): with the node area focused
-← / → walk nodes; anywhere else they stay FilmCraft's one-frame steps.
+The keys are panel-scoped (engine `MFX_STUDIO_PANEL`, scope "Mortiflix Nodes"): with the node area focused
+← / → walk nodes; anywhere else they stay Mortiflix Studio's one-frame steps.
 
 ## Talking to the studio (part 08's protocol)
 

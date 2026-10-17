@@ -1,8 +1,8 @@
 //! Tests of the M3.11 File / Edit / Clip commands (`project_tools`).
 
-use filmcraft_media::DemoScene;
-use filmcraft_project::{ItemId, ItemKind};
-use filmcraft_time::Tick;
+use mortiflix_media::DemoScene;
+use mortiflix_project::{ItemId, ItemKind};
+use mortiflix_time::Tick;
 use serde_json::json;
 
 use crate::Session;
@@ -78,7 +78,7 @@ fn file_edit_clip_menu_order_and_shortcuts_match_premiere() {
         ("file.close", "Close", Some("Cmd+W")),
         ("file.importFromMediaBrowser", "Import from Media Browser", Some("Cmd+Alt+I")),
         ("file.mediaProperties", "Selection…", Some("Cmd+Shift+H")),
-        ("file.exportSelectionProject", "Selection as FilmCraft Project…", None),
+        ("file.exportSelectionProject", "Selection as Mortiflix Studio Project…", None),
         ("file.exportAle", "Avid Log Exchange…", None),
         ("edit.find", "Find…", Some("Cmd+F")),
         ("edit.editOriginal", "Edit Original", Some("Cmd+E")),
@@ -119,7 +119,7 @@ fn search_bins_update_live() {
     s.execute("edit.undo", json!({})).unwrap();
     assert_eq!(s.project.search_bins.len(), 1);
     // saved with the project
-    let back = filmcraft_format::decode(&filmcraft_format::encode(&s.project, false)).unwrap().project;
+    let back = mortiflix_format::decode(&mortiflix_format::encode(&s.project, false)).unwrap().project;
     assert_eq!(back.search_bins, s.project.search_bins);
     assert!(s.execute("file.newSearchBin", json!({"text": ""})).is_err());
     assert!(s.execute("file.newSearchBin", json!({"text": "x", "operator": "near"})).is_err());
@@ -151,7 +151,7 @@ fn find_and_find_next_in_the_project_and_timeline() {
     assert!(s.execute("edit.find", json!({"text": "zzz"})).is_err());
     // timeline: clip names, then markers
     let r = s.execute("edit.find", json!({"scope": "timeline", "text": "city"})).unwrap();
-    let c = filmcraft_project::ClipId(r["clip"].as_u64().unwrap());
+    let c = mortiflix_project::ClipId(r["clip"].as_u64().unwrap());
     assert_eq!(s.state.selection, vec![c]);
     assert_eq!(s.playhead(), s.active_sequence().unwrap().find_item(c).unwrap().1.start);
     assert_eq!(r["matches"], 2, "video and audio clip: {r}");
@@ -194,7 +194,7 @@ fn export_selection_project_and_ale() {
     let dir = tmp_dir("export-sel");
     let path = dir.join("Main Only.fcproj").to_string_lossy().to_string();
     let r = s.execute("file.exportSelectionProject", json!({"path": path})).unwrap();
-    let p = filmcraft_format::decode(&std::fs::read(&path).unwrap()).unwrap().project;
+    let p = mortiflix_format::decode(&std::fs::read(&path).unwrap()).unwrap().project;
     assert_eq!(p.name, "Main Only");
     assert!(p.item(main).is_some());
     // the six scenes used by Main Edit come along; Rough Cut, the score, bars and leader don't
@@ -213,7 +213,7 @@ fn export_selection_project_and_ale() {
     let ale = dir.join("log.ale").to_string_lossy().to_string();
     s.execute("project.select", json!({"items": []})).unwrap();
     let r = s.execute("file.exportAle", json!({"path": ale})).unwrap();
-    let doc = filmcraft_interchange::ale::parse(&std::fs::read_to_string(&ale).unwrap()).unwrap();
+    let doc = mortiflix_interchange::ale::parse(&std::fs::read_to_string(&ale).unwrap()).unwrap();
     assert_eq!(r["clips"].as_u64().unwrap() as usize, doc.rows.len());
     assert!(doc.rows.len() >= 9, "{}", doc.rows.len());
     assert_eq!(doc.heading("FPS"), Some("23.976"));
@@ -229,7 +229,7 @@ fn export_selection_project_of_a_bin_exports_its_contents() {
         .children
         .iter()
         .find_map(|c| match c {
-            filmcraft_project::BinEntry::Bin(b) if b.name == "Footage" => {
+            mortiflix_project::BinEntry::Bin(b) if b.name == "Footage" => {
                 let mut items = Vec::new();
                 b.all_items(&mut items);
                 Some((b.id.0, items))
@@ -244,7 +244,7 @@ fn export_selection_project_of_a_bin_exports_its_contents() {
     let dir = tmp_dir("export-bin");
     let path = dir.join("Footage.fcproj").to_string_lossy().to_string();
     let r = s.execute("file.exportSelectionProject", json!({"path": path})).unwrap();
-    let p = filmcraft_format::decode(&std::fs::read(&path).unwrap()).unwrap().project;
+    let p = mortiflix_format::decode(&std::fs::read(&path).unwrap()).unwrap().project;
     assert_eq!(r["items"].as_array().unwrap().len(), p.items.len(), "reported items match the saved project");
     let reported: std::collections::BTreeSet<ItemId> = r["items"].as_array().unwrap().iter().map(|v| ItemId(v.as_u64().unwrap())).collect();
     assert_eq!(reported, bin_items.iter().copied().collect(), "the bin's items are the exported items");
@@ -259,7 +259,7 @@ fn export_selection_project_of_a_bin_exports_its_contents() {
     // A mixed bin + item request must not report the bin id, which names no item in the output.
     let explicit = dir.join("Mixed.fcproj").to_string_lossy().to_string();
     let r = s.execute("file.exportSelectionProject", json!({"items": [footage_bin, bin_items[0].0], "path": explicit})).unwrap();
-    let p = filmcraft_format::decode(&std::fs::read(&explicit).unwrap()).unwrap().project;
+    let p = mortiflix_format::decode(&std::fs::read(&explicit).unwrap()).unwrap().project;
     for v in r["items"].as_array().unwrap() {
         let id = ItemId(v.as_u64().unwrap());
         assert!(p.item(id).is_some(), "reported item {id:?} is in the output");
@@ -300,7 +300,7 @@ fn media_properties_settings_and_scratch_disks() {
     .unwrap();
     let st = &s.project.settings;
     assert_eq!(st.renderer, crate::project_tools::RENDERER_SOFTWARE);
-    assert_eq!(st.video_display, filmcraft_time::TimeDisplay::Frames);
+    assert_eq!(st.video_display, mortiflix_time::TimeDisplay::Frames);
     assert!(!st.audio_display_samples);
     assert_eq!((st.title_safe, st.capture_format.as_str()), ((15.0, 12.0), "HDV"));
     assert_eq!(s.history.undo.len(), n + 1);
@@ -310,7 +310,7 @@ fn media_properties_settings_and_scratch_disks() {
     // Scratch Disks: previews follow the Video Previews folder once the project is saved
     let proj = dir.join("Show.fcproj").to_string_lossy().to_string();
     s.execute("file.saveAs", json!({"path": proj})).unwrap();
-    assert_eq!(crate::project_tools::previews_dir(&s).unwrap(), dir.join("FilmCraft Previews").join("Show"));
+    assert_eq!(crate::project_tools::previews_dir(&s).unwrap(), dir.join("Mortiflix Studio Previews").join("Show"));
     let scratch = dir.join("scratch").to_string_lossy().to_string();
     let r = s.execute("file.projectSettings.scratchDisks", json!({"videoPreviews": scratch, "autoSave": scratch})).unwrap();
     assert_eq!(crate::project_tools::previews_dir(&s).unwrap(), dir.join("scratch").join("Show"));
@@ -490,7 +490,7 @@ fn system_report_lists_the_build() {
     assert_eq!(r["os"], std::env::consts::OS);
     assert!(r["cpuThreads"].as_u64().unwrap() >= 1);
     assert!(r["decoders"].as_array().unwrap().iter().any(|d| d.as_str().unwrap().contains("H.264")));
-    assert_eq!(r["exportFormats"].as_array().unwrap().len(), filmcraft_export::Format::ALL.len());
+    assert_eq!(r["exportFormats"].as_array().unwrap().len(), mortiflix_export::Format::ALL.len());
 }
 
 #[test]
@@ -508,20 +508,20 @@ fn clear_deletes_a_bin_with_everything_in_it() {
     // an empty bin, by its id: gone, nothing else touched
     let r = s.execute("project.delete", json!({"items": [empty]})).unwrap();
     assert_eq!(r, json!({"items": 0, "bins": 1, "offline": 0}));
-    assert!(s.project.root.find_bin(filmcraft_project::BinId(empty)).is_none());
+    assert!(s.project.root.find_bin(mortiflix_project::BinId(empty)).is_none());
     assert_eq!(s.project.items.len(), before);
     // a bin holding a sub-bin holding a clip: all three go
     select(&mut s);
     let r = s.execute("project.delete", json!({"items": [outer]})).unwrap();
     assert_eq!(r, json!({"items": 1, "bins": 1, "offline": 0}));
-    assert!(s.project.root.find_bin(filmcraft_project::BinId(outer)).is_none());
-    assert!(s.project.root.find_bin(filmcraft_project::BinId(inner)).is_none());
+    assert!(s.project.root.find_bin(mortiflix_project::BinId(outer)).is_none());
+    assert!(s.project.root.find_bin(mortiflix_project::BinId(inner)).is_none());
     assert!(s.project.item(ocean).is_none());
     assert_eq!(s.project.items.len(), before - 1);
     // undo puts the bins and the clip back where they were
     s.execute("edit.undo", json!({})).unwrap();
-    assert!(s.project.root.find_bin(filmcraft_project::BinId(inner)).is_some());
-    assert_eq!(s.project.root.parent_of(ocean), Some(filmcraft_project::BinId(inner)));
+    assert!(s.project.root.find_bin(mortiflix_project::BinId(inner)).is_some());
+    assert_eq!(s.project.root.parent_of(ocean), Some(mortiflix_project::BinId(inner)));
     // the clip, its bin and the bin around it all named: each counted once
     select(&mut s);
     let r = s.execute("project.delete", json!({"items": [ocean.0, inner, outer]})).unwrap();

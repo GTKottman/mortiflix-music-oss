@@ -5,12 +5,12 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use filmcraft_avi::{IndexSource, OpenOptions, StreamKind, open, open_with};
+use mortiflix_avi::{IndexSource, OpenOptions, StreamKind, open, open_with};
 
 fn fixture(name: &str, args: &[&str]) -> Option<PathBuf> {
-    let ffmpeg = filmcraft_testkit::ffmpeg_or_skip("avi oracle")?;
-    let out = filmcraft_testkit::fixtures_dir("avi").join(name);
-    filmcraft_testkit::fixtures::generate(&out, |tmp: &Path| {
+    let ffmpeg = mortiflix_testkit::ffmpeg_or_skip("avi oracle")?;
+    let out = mortiflix_testkit::fixtures_dir("avi").join(name);
+    mortiflix_testkit::fixtures::generate(&out, |tmp: &Path| {
         let mut c = Command::new(&ffmpeg);
         c.args(["-v", "error", "-y"]).args(args).args(["-f", "avi"]).arg(tmp);
         c.status().is_ok_and(|s| s.success())
@@ -18,7 +18,7 @@ fn fixture(name: &str, args: &[&str]) -> Option<PathBuf> {
 }
 
 fn packets(path: &Path, stream: usize) -> usize {
-    let ffprobe = filmcraft_testkit::ffprobe().expect("ffprobe next to ffmpeg");
+    let ffprobe = mortiflix_testkit::ffprobe().expect("ffprobe next to ffmpeg");
     let out = Command::new(ffprobe)
         .args(["-v", "error", "-select_streams", &stream.to_string(), "-count_packets", "-show_entries", "stream=nb_read_packets", "-of", "csv=p=0"])
         .arg(path)
@@ -28,7 +28,7 @@ fn packets(path: &Path, stream: usize) -> usize {
 }
 
 fn packet_bytes(path: &Path, stream: usize) -> u64 {
-    let ffprobe = filmcraft_testkit::ffprobe().expect("ffprobe next to ffmpeg");
+    let ffprobe = mortiflix_testkit::ffprobe().expect("ffprobe next to ffmpeg");
     let out = Command::new(ffprobe)
         .args(["-v", "error", "-select_streams", &stream.to_string(), "-show_entries", "packet=size", "-of", "csv=p=0"])
         .arg(path)
@@ -94,12 +94,12 @@ fn ffmpeg_files_match_ffprobe_on_every_index_path() {
     }
 }
 
-fn sizes(f: &filmcraft_avi::AviFile, s: usize) -> Vec<(u64, u32)> {
+fn sizes(f: &mortiflix_avi::AviFile, s: usize) -> Vec<(u64, u32)> {
     f.streams[s].chunks.iter().map(|c| (c.offset, c.size)).collect()
 }
 
 /// A file past 1 GB, as long recordings are: ffmpeg writes `RIFF AVIX` extensions and the
-/// OpenDML index. Needs ffmpeg and 1.2 GB of disk: `cargo test -p filmcraft-avi --test
+/// OpenDML index. Needs ffmpeg and 1.2 GB of disk: `cargo test -p mortiflix-avi --test
 /// ffmpeg_oracle -- --ignored`.
 #[test]
 #[ignore]
@@ -141,7 +141,7 @@ fn opendml_file_past_1_gb() {
 /// A file on disk as a byte source, read where asked.
 struct FileSource(std::sync::Mutex<std::fs::File>);
 
-impl filmcraft_avi::ByteSource for FileSource {
+impl mortiflix_avi::ByteSource for FileSource {
     fn len(&self) -> u64 {
         self.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner).metadata().map(|m| m.len()).unwrap_or(0)
     }
@@ -158,10 +158,10 @@ impl filmcraft_avi::ByteSource for FileSource {
 
 #[test]
 fn file_source_reads_exact_offsets_and_reports_eof() {
-    use filmcraft_avi::ByteSource as _;
+    use mortiflix_avi::ByteSource as _;
     use std::io::Write as _;
 
-    let path = filmcraft_testkit::fixtures::temp_path(&filmcraft_testkit::fixtures_dir("avi").join("read-at-test.bin"));
+    let path = mortiflix_testkit::fixtures::temp_path(&mortiflix_testkit::fixtures_dir("avi").join("read-at-test.bin"));
     let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(&path).unwrap();
     file.write_all(b"0123456789abcdef").unwrap();
     drop(file);

@@ -102,8 +102,8 @@ fn source_insert_three_point() {
         .children
         .iter()
         .find_map(|c| {
-            if let filmcraft_project::BinEntry::Bin(b) = c {
-                b.children.first().and_then(|e| if let filmcraft_project::BinEntry::Item(i) = e { Some(*i) } else { None })
+            if let mortiflix_project::BinEntry::Bin(b) = c {
+                b.children.first().and_then(|e| if let mortiflix_project::BinEntry::Item(i) = e { Some(*i) } else { None })
             } else {
                 None
             }
@@ -194,11 +194,11 @@ fn first_motion(s: &Session) -> (u64, (f64, f64), f64) {
     let it = q.video_tracks.iter().flat_map(|t| &t.items).find(|i| i.effect("motion").is_some()).unwrap();
     let m = it.effect("motion").unwrap();
     let p = match m.param("position").unwrap().value {
-        filmcraft_project::ParamValue::Vec2(v) => (v.x, v.y),
+        mortiflix_project::ParamValue::Vec2(v) => (v.x, v.y),
         _ => panic!("position is a point"),
     };
     let sc = match m.param("scale").unwrap().value {
-        filmcraft_project::ParamValue::Float(v) => v,
+        mortiflix_project::ParamValue::Float(v) => v,
         _ => panic!("scale is a number"),
     };
     (it.id.0, p, sc)
@@ -247,7 +247,7 @@ fn sequence_settings_timecode_render_quality_and_colour() {
     }
     s.execute("sequence.settings", json!({"workingSpace":"rec2100-pq","wideGamut":true,"autoToneMap":true})).unwrap();
     let st = s.active_sequence().unwrap().settings.clone();
-    assert_eq!(st.color.working, filmcraft_color::WorkingSpace::Rec2100Pq);
+    assert_eq!(st.color.working, mortiflix_color::WorkingSpace::Rec2100Pq);
     assert!(st.color.wide_gamut && st.color.auto_tone_map);
     assert_eq!(st.working_space, "Rec. 2100 PQ");
     // disabled without a sequence
@@ -273,11 +273,11 @@ fn effects_and_keyframes() {
     s.execute("effects.apply", json!({"clips": [c], "effect": "Gaussian Blur"})).unwrap();
     s.execute("effects.setParam", json!({"clip": c, "effect": "gaussian_blur", "param": "blurriness", "value": 25.0})).unwrap();
     let q = s.active_sequence().unwrap();
-    let it = q.find_item(filmcraft_project::ClipId(c)).unwrap().1;
+    let it = q.find_item(mortiflix_project::ClipId(c)).unwrap().1;
     assert_eq!(it.effects[0].effect, "gaussian_blur", "standard effects render before intrinsics");
-    assert_eq!(it.effects[0].params["blurriness"].value, filmcraft_project::ParamValue::Float(25.0));
+    assert_eq!(it.effects[0].params["blurriness"].value, mortiflix_project::ParamValue::Float(25.0));
     s.execute("effects.toggleAnimation", json!({"clip": c, "effect": "motion", "param": "scale"})).unwrap();
-    let it = s.active_sequence().unwrap().find_item(filmcraft_project::ClipId(c)).unwrap().1.clone();
+    let it = s.active_sequence().unwrap().find_item(mortiflix_project::ClipId(c)).unwrap().1.clone();
     assert!(it.effect("motion").unwrap().params["scale"].is_animated());
 }
 
@@ -289,7 +289,7 @@ fn add_keyframe_toggles_the_keyframe_at_the_playhead() {
     let mut s = demo();
     let c = s.active_sequence().unwrap().video_tracks[0].items[0].id.0;
     let scale = |s: &Session| {
-        let it = s.active_sequence().unwrap().find_item(filmcraft_project::ClipId(c)).unwrap().1;
+        let it = s.active_sequence().unwrap().find_item(mortiflix_project::ClipId(c)).unwrap().1;
         let p = &it.effect("motion").unwrap().params["scale"];
         (p.keyframes.len(), p.f64_at(it.source_time_at(s.playhead())))
     };
@@ -335,7 +335,7 @@ fn set_param_writes_a_keyframe_when_asked_or_animated() {
     let c = s.active_sequence().unwrap().video_tracks[0].items[0].id.0;
     // (keyframes, static value, value at 0.5 s, value at 2.5 s)
     let scale = |s: &Session| {
-        let it = s.active_sequence().unwrap().find_item(filmcraft_project::ClipId(c)).unwrap().1;
+        let it = s.active_sequence().unwrap().find_item(mortiflix_project::ClipId(c)).unwrap().1;
         let p = &it.effect("motion").unwrap().params["scale"];
         let at = |seconds: f64| p.f64_at(it.source_time_at(Tick::from_seconds_f64(seconds)));
         (p.keyframes.len(), p.value.as_f64().unwrap(), at(0.5), at(2.5))
@@ -373,8 +373,8 @@ fn set_param_writes_a_keyframe_when_asked_or_animated() {
     let blend = json!({"clip": c, "effect": "opacity", "param": "blend", "value": 8, "keyframe": true});
     let e = s.execute("effects.setParam", blend).unwrap_err().to_string();
     assert!(e.contains("cannot be animated"), "{e}");
-    let it = s.active_sequence().unwrap().find_item(filmcraft_project::ClipId(c)).unwrap().1;
-    assert_eq!(it.effect("opacity").unwrap().params["blend"].value, filmcraft_project::ParamValue::Choice(0));
+    let it = s.active_sequence().unwrap().find_item(mortiflix_project::ClipId(c)).unwrap().1;
+    assert_eq!(it.effect("opacity").unwrap().params["blend"].value, mortiflix_project::ParamValue::Choice(0));
     // `keyframe` that is not a bool means no keyframe request
     let mut odd = set(70.0, 0.5);
     odd["keyframe"] = json!("yes");
@@ -390,7 +390,7 @@ fn set_param_keeps_a_keyframe_outside_the_clip_at_its_time() {
     let it = s.active_sequence().unwrap().video_tracks[0].items[1].clone();
     let (c, start, end) = (it.id.0, it.start, it.end());
     let opacity = |s: &Session| {
-        let it = s.active_sequence().unwrap().find_item(filmcraft_project::ClipId(c)).unwrap().1;
+        let it = s.active_sequence().unwrap().find_item(mortiflix_project::ClipId(c)).unwrap().1;
         let p = &it.effect("opacity").unwrap().params["opacity"];
         (p.keyframes.iter().map(|k| (k.time, k.value.as_f64().unwrap())).collect::<Vec<_>>(), it.clone())
     };
@@ -438,11 +438,11 @@ fn set_param_keeps_a_keyframe_outside_the_clip_at_its_time() {
 /// (`effects.list {"detail": true}` lists the names).
 #[test]
 fn set_param_takes_a_choice_by_name() {
-    use filmcraft_project::ParamValue;
+    use mortiflix_project::ParamValue;
     let mut s = demo();
     let c = s.active_sequence().unwrap().video_tracks[0].items[0].id.0;
     let blend =
-        |s: &Session| s.active_sequence().unwrap().find_item(filmcraft_project::ClipId(c)).unwrap().1.effect("opacity").unwrap().params["blend"].value.clone();
+        |s: &Session| s.active_sequence().unwrap().find_item(mortiflix_project::ClipId(c)).unwrap().1.effect("opacity").unwrap().params["blend"].value.clone();
     let set = |value: serde_json::Value| json!({"clip": c, "effect": "opacity", "param": "blend", "value": value});
     s.execute("effects.setParam", set(json!("Screen"))).unwrap();
     assert_eq!(blend(&s), ParamValue::Choice(8));
@@ -472,7 +472,7 @@ fn keyframe_drags_are_one_undo_step() {
     let mut s = demo();
     let c = s.active_sequence().unwrap().audio_tracks[0].items[0].id.0;
     let level = |s: &Session| -> Vec<(i64, f64)> {
-        let it = s.active_sequence().unwrap().find_item(filmcraft_project::ClipId(c)).unwrap().1;
+        let it = s.active_sequence().unwrap().find_item(mortiflix_project::ClipId(c)).unwrap().1;
         it.effect("volume").unwrap().params["level"].keyframes.iter().map(|k| (k.time.0, k.value.as_f64().unwrap())).collect()
     };
     let key = json!({"clip": c, "effect": "volume", "param": "level"});
@@ -530,7 +530,7 @@ fn every_video_transition_applies_via_command() {
     let cut = s.active_sequence().unwrap().video_tracks[0].items[2].start;
     s.execute("playhead.set", json!({"time": cut.0})).unwrap();
     let defs: Vec<_> =
-        filmcraft_project::effect_defs().iter().filter(|d| d.kind == filmcraft_project::EffectKind::VideoTransition && d.category[0] != "Obsolete").collect();
+        mortiflix_project::effect_defs().iter().filter(|d| d.kind == mortiflix_project::EffectKind::VideoTransition && d.category[0] != "Obsolete").collect();
     assert_eq!(defs.len(), 84 + 21);
     for (i, d) in defs.iter().enumerate() {
         // alternate id and display-name lookups
@@ -568,18 +568,18 @@ fn transition_params_and_reverse_via_commands() {
     let find = |s: &Session| s.active_sequence().unwrap().video_tracks[0].transitions.iter().find(|t| t.id.0 == id).cloned().unwrap();
     let tr = find(&s);
     assert!(tr.reverse);
-    assert_eq!(tr.effect.params["border_width"].value, filmcraft_project::ParamValue::Float(12.0));
-    assert_eq!(tr.effect.params["antialias"].value, filmcraft_project::ParamValue::Choice(3));
+    assert_eq!(tr.effect.params["border_width"].value, mortiflix_project::ParamValue::Float(12.0));
+    assert_eq!(tr.effect.params["antialias"].value, mortiflix_project::ParamValue::Choice(3));
     s.execute("sequence.setTransition", json!({"transition": id, "params": {"center": [100.0, 50.0], "border_width": 9999.0}, "reverse": false})).unwrap();
     let tr = find(&s);
     assert!(!tr.reverse);
-    assert_eq!(tr.effect.params["border_width"].value, filmcraft_project::ParamValue::Float(200.0), "clamped to the range");
+    assert_eq!(tr.effect.params["border_width"].value, mortiflix_project::ParamValue::Float(200.0), "clamped to the range");
     assert!(s.execute("sequence.setTransition", json!({"transition": id, "params": {"nope": 1}})).is_err());
     assert!(s.execute("sequence.setTransition", json!({"transition": id, "params": {"antialias": "Ultra"}})).is_err());
     s.execute("edit.undo", json!({})).unwrap();
     assert!(find(&s).reverse, "setTransition is one undo step");
     s.execute("sequence.setTransition", json!({"transition": id, "reset": true})).unwrap();
-    assert_eq!(find(&s).effect.params["border_width"].value, filmcraft_project::ParamValue::Float(0.0));
+    assert_eq!(find(&s).effect.params["border_width"].value, mortiflix_project::ParamValue::Float(0.0));
     let seq = s.execute("sequence.inspect", json!({})).unwrap();
     let js = seq["video"][0]["transitions"].as_array().unwrap().iter().find(|t| t["id"] == id).unwrap().clone();
     assert_eq!(js["effect"], "iris_round");
@@ -767,7 +767,7 @@ fn move_items_to_bin_and_back_with_undo() {
     let home = s.project.root.parent_of(item);
     let r = s.execute("project.moveToBin", json!({"items": [item.0], "bin": bin})).unwrap();
     assert_eq!(r["moved"], 1);
-    assert_eq!(s.project.root.parent_of(item), Some(filmcraft_project::BinId(bin)));
+    assert_eq!(s.project.root.parent_of(item), Some(mortiflix_project::BinId(bin)));
     // the item is in the tree exactly once
     let mut all = Vec::new();
     s.project.root.all_items(&mut all);
@@ -775,7 +775,7 @@ fn move_items_to_bin_and_back_with_undo() {
     s.execute("edit.undo", json!({})).unwrap();
     assert_eq!(s.project.root.parent_of(item), home);
     s.execute("edit.redo", json!({})).unwrap();
-    assert_eq!(s.project.root.parent_of(item), Some(filmcraft_project::BinId(bin)));
+    assert_eq!(s.project.root.parent_of(item), Some(mortiflix_project::BinId(bin)));
     // back to the root with `bin: null`
     s.execute("project.moveToBin", json!({"items": [item.0], "bin": null})).unwrap();
     assert_eq!(s.project.root.parent_of(item), Some(s.project.root.id));
@@ -890,7 +890,7 @@ fn a_merge_key_folds_several_parameters_into_one_undo_step() {
         }
     }
     assert_eq!(s.history.undo.len(), undo + 1);
-    assert_eq!(motion(&s).1, filmcraft_project::ParamValue::Vec2(filmcraft_geom::Vec2::new(530.0, 330.0)));
+    assert_eq!(motion(&s).1, mortiflix_project::ParamValue::Vec2(mortiflix_geom::Vec2::new(530.0, 330.0)));
     s.undo();
     assert_eq!(motion(&s), start);
 }

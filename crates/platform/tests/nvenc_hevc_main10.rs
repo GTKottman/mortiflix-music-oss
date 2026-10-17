@@ -5,12 +5,12 @@
 //! hostile inputs are errors. Skips (with SKIPPED) only on a machine without a 10-bit HEVC encoder.
 #![cfg(target_os = "windows")]
 
-use filmcraft_bitstream::unescape_rbsp;
-use filmcraft_export::{ColorSignal, rgbf_to_yuv420_10};
-use filmcraft_hevc::params::Sps;
-use filmcraft_isobmff::SampleEntry;
-use filmcraft_platform::nvenc::export::nvenc_signal;
-use filmcraft_platform::nvenc::{Codec, Config, Nvenc, Packet, Profile, Signal, hevc_available, hevc_hdr_available, nal_type};
+use mortiflix_bitstream::unescape_rbsp;
+use mortiflix_export::{ColorSignal, rgbf_to_yuv420_10};
+use mortiflix_hevc::params::Sps;
+use mortiflix_isobmff::SampleEntry;
+use mortiflix_platform::nvenc::export::nvenc_signal;
+use mortiflix_platform::nvenc::{Codec, Config, Nvenc, Packet, Profile, Signal, hevc_available, hevc_hdr_available, nal_type};
 
 const W: usize = 1280;
 const H: usize = 720;
@@ -180,7 +180,7 @@ fn round_trip(name: &str, signal: ColorSignal, want_sei: bool) {
 
     // our decoder: 10-bit planes
     let entry = SampleEntry::hevc(hvcc, W as u16, H as u16);
-    let mut dec = filmcraft_codecs::software_video_decoder(&entry).unwrap();
+    let mut dec = mortiflix_codecs::software_video_decoder(&entry).unwrap();
     let mut out = Vec::new();
     for p in &packets {
         out.extend(dec.decode(&p.data, p.pts).unwrap());
@@ -191,7 +191,7 @@ fn round_trip(name: &str, signal: ColorSignal, want_sei: bool) {
     let (mut max_code, mut max_ramp_code) = (0u16, 0u16);
     let mut distinct_min = usize::MAX;
     for f in &out {
-        let filmcraft_frame::PixelData::Yuv16 { planes: p, bits, .. } = &f.frame.data else { panic!("{name}: 16-bit planes, got {}", f.frame.format_label()) };
+        let mortiflix_frame::PixelData::Yuv16 { planes: p, bits, .. } = &f.frame.data else { panic!("{name}: 16-bit planes, got {}", f.frame.format_label()) };
         assert_eq!(*bits, 10, "{name}: decoded bit depth");
         assert_eq!((f.frame.width as usize, f.frame.height as usize), (W, H));
         assert!(p.iter().all(|pl| pl.iter().all(|c| *c < 1024)), "{name}: codes are 10-bit values, not MSB-aligned");
@@ -263,7 +263,7 @@ fn main_10_and_main_encoders_refuse_each_others_pictures() {
     // H.264 takes no colour signal, no 10-bit profile
     let h264 = Config { profile: Profile::Main, ..config(w as u32, h as u32) };
     assert!(Nvenc::with_signal(&h264, &nvenc_signal(&ColorSignal::PQ)).is_err());
-    assert!(Nvenc::with_signal(&h264, &Signal::default()).is_ok() || !filmcraft_platform::nvenc::available());
+    assert!(Nvenc::with_signal(&h264, &Signal::default()).is_ok() || !mortiflix_platform::nvenc::available());
 }
 
 #[test]
@@ -287,9 +287,9 @@ fn hostile_main_10_configurations_give_errors_not_crashes() {
         (
             "a huge SEI payload",
             base.clone(),
-            Signal { sei: vec![filmcraft_platform::nvenc::Sei { payload_type: 137, payload: vec![0xAB; 100_000] }], ..sig.clone() },
+            Signal { sei: vec![mortiflix_platform::nvenc::Sei { payload_type: 137, payload: vec![0xAB; 100_000] }], ..sig.clone() },
         ),
-        ("an empty SEI payload", base.clone(), Signal { sei: vec![filmcraft_platform::nvenc::Sei { payload_type: 144, payload: vec![] }], ..sig.clone() }),
+        ("an empty SEI payload", base.clone(), Signal { sei: vec![mortiflix_platform::nvenc::Sei { payload_type: 144, payload: vec![] }], ..sig.clone() }),
     ];
     for (name, c, s) in variants {
         match calm(name, || Nvenc::with_signal(&c, &s)) {

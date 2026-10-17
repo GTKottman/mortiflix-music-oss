@@ -8,7 +8,7 @@
 use crate::Decoder;
 use crate::cabac::{Contexts, NEXT_STATE, RANGE_TAB_LPS, init_contexts};
 use crate::spec_tables::*;
-use filmcraft_bitstream::{BitWriter, escape_rbsp};
+use mortiflix_bitstream::{BitWriter, escape_rbsp};
 
 const W: usize = 96;
 const H: usize = 64;
@@ -546,10 +546,10 @@ fn as_u8(p: &crate::Plane) -> &[u8] {
 
 /// Compare with ffmpeg's decode of the same stream (skipped when ffmpeg is absent).
 fn check_ffmpeg(name: &str, stream: &[u8], pics: &[crate::Picture]) {
-    let Some(ff) = filmcraft_testkit::ffmpeg_or_skip(name) else { return };
-    let dir = filmcraft_testkit::fixtures_dir("hevc");
-    let src = filmcraft_testkit::temp_path(&dir.join(format!("synth_{name}.hevc")));
-    let yuv = filmcraft_testkit::temp_path(&dir.join(format!("synth_{name}.yuv")));
+    let Some(ff) = mortiflix_testkit::ffmpeg_or_skip(name) else { return };
+    let dir = mortiflix_testkit::fixtures_dir("hevc");
+    let src = mortiflix_testkit::temp_path(&dir.join(format!("synth_{name}.hevc")));
+    let yuv = mortiflix_testkit::temp_path(&dir.join(format!("synth_{name}.yuv")));
     std::fs::write(&src, stream).unwrap();
     let st = std::process::Command::new(ff)
         .args(["-hide_banner", "-loglevel", "error", "-y", "-i"])

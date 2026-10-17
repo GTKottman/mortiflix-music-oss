@@ -1,5 +1,5 @@
 [package]
-name = "filmcraft-dnx"
+name = "mortiflix-dnx"
 description = "Clean-room Avid DNxHD / DNxHR (SMPTE ST 2019-1 VC-3) decoder and encoder"
 version.workspace = true
 edition.workspace = true
@@ -14,9 +14,9 @@ default = ["threads"]
 threads = ["dep:rayon"]
 
 [dependencies]
-filmcraft-bitstream = { workspace = true }
+mortiflix-bitstream = { workspace = true }
 thiserror = { workspace = true }
 rayon = { workspace = true, optional = true }
 
 [dev-dependencies]
-filmcraft-testkit = { workspace = true }
+mortiflix-testkit = { workspace = true }

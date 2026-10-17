@@ -92,7 +92,7 @@ pub fn header(ui: &mut egui::Ui, area: &mut NodeArea, rect: Rect, maximised: boo
         let g = line(&p, &note, 12.0, if area.error.is_empty() { t.text_faint } else { t.warn }, max_w);
         p.galley(pos2(x + 12.0, rect.center().y - g.size().y / 2.0), g, t.text);
     }
-    // ⤢ Maximise / ⤡ Restore in a fixed-width slot (FilmCraft's Maximize Frame, `)
+    // ⤢ Maximise / ⤡ Restore in a fixed-width slot (Mortiflix Studio's Maximize Frame, `)
     let mr = Rect::from_min_size(pos2(rect.max.x - 118.0, rect.min.y + 3.0), vec2(114.0, rect.height() - 6.0));
     let label = if maximised { "Restore  `" } else { "Maximise  `" };
     let resp = ui.interact(mr, egui::Id::new("mfx-nodes-maximise"), Sense::click()).on_hover_text("Maximise or restore the node area (`)");

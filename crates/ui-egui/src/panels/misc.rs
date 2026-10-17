@@ -1,12 +1,12 @@
 //! Smaller panels: History, Markers, Info (the Media Browser is `panels::media_browser`).
 
 use egui::{Align2, Color32, Rect, Sense, pos2, vec2};
-use filmcraft_time::{TimeDisplay, format_time};
+use mortiflix_time::{TimeDisplay, format_time};
 
-use crate::FilmcraftApp;
+use crate::StudioApp;
 use crate::theme::Tokens;
 
-pub fn history(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
+pub fn history(app: &mut StudioApp, ui: &mut egui::Ui, rect: Rect) {
     let t = app.tokens;
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(rect.shrink(6.0)));
     let undo: Vec<String> = app.session.history.undo.iter().map(|h| h.0.clone()).collect();
@@ -52,17 +52,17 @@ pub fn history(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
 
 /// The marker colours of the Markers panel filter (each chip stands for the labels that share its
 /// marker colour).
-pub const MARKER_FILTER: [filmcraft_project::Label; 7] = {
-    use filmcraft_project::Label::*;
+pub const MARKER_FILTER: [mortiflix_project::Label; 7] = {
+    use mortiflix_project::Label::*;
     [Green, Rose, Purple, Mango, Yellow, Blue, Teal]
 };
 
 /// A marker's Label menu. An explicit program target keeps panel focus and clip/project
 /// selections from routing colour changes to another item (#1143).
-pub(crate) fn marker_label_menu(app: &mut FilmcraftApp, ui: &mut egui::Ui, marker: &filmcraft_project::Marker, prefix: &str) {
+pub(crate) fn marker_label_menu(app: &mut StudioApp, ui: &mut egui::Ui, marker: &mortiflix_project::Marker, prefix: &str) {
     let label = crate::i18n::t("Label");
     let menu = ui.menu_button(label, |ui| {
-        for color in filmcraft_project::Label::ALL {
+        for color in mortiflix_project::Label::ALL {
             let name = crate::i18n::t(color.name());
             let r = ui.selectable_label(color == marker.color, name);
             app.auto.add_response(&format!("{prefix}.color.{}", color.name()), &r, name);
@@ -79,7 +79,7 @@ pub(crate) fn marker_label_menu(app: &mut FilmcraftApp, ui: &mut egui::Ui, marke
 
 /// Markers panel: a colour filter row (click a chip to show/hide that colour; automation ids
 /// `markers.filter.<label>`), then the sequence markers (`markers.row.<id>`; click = go to it).
-pub fn markers(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
+pub fn markers(app: &mut StudioApp, ui: &mut egui::Ui, rect: Rect) {
     let t = app.tokens;
     // Keep the immutable project snapshot alive while UI commands mutate the session.
     // Cloning a sequence here copies every clip and effect on every redraw.
@@ -124,11 +124,11 @@ pub fn markers(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
             let name = if m.name.is_empty() { tl!("Marker") } else { &m.name };
             ui.painter().text(pos2(r.min.x + 16.0, r.min.y + 12.0), Align2::LEFT_CENTER, name, Tokens::ui(12.0), t.text);
             let mut tc = format_time(m.start, seq.settings.frame_rate, seq.settings.drop_frame, TimeDisplay::Timecode, 48000);
-            if m.duration > filmcraft_time::Tick::ZERO {
+            if m.duration > mortiflix_time::Tick::ZERO {
                 let d = format_time(m.duration, seq.settings.frame_rate, seq.settings.drop_frame, TimeDisplay::Timecode, 48000);
                 tc = format!("{tc}  ({d})");
             }
-            if m.kind == filmcraft_project::MarkerKind::Chapter {
+            if m.kind == mortiflix_project::MarkerKind::Chapter {
                 tc = tlf!("{tc}  Chapter", tc);
             }
             ui.painter().text(pos2(r.min.x + 16.0, r.min.y + 27.0), Align2::LEFT_CENTER, tc, Tokens::mono(11.0), t.hot_text);
@@ -157,7 +157,7 @@ pub fn markers(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
     }
 }
 
-pub fn info(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
+pub fn info(app: &mut StudioApp, ui: &mut egui::Ui, rect: Rect) {
     let t = app.tokens;
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(rect.shrink(8.0)));
     let ui = &mut child;

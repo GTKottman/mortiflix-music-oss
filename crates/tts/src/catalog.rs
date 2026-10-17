@@ -1,7 +1,7 @@
 //! The downloadable neural voices: Kokoro-82M, its voice packs and the CMUdict pronunciation
 //! dictionary. Every file is pinned to a revision and checked against its SHA-256 when downloaded
-//! (the downloader is `filmcraft_speech::models::download_files`, run by the engine after the
-//! user confirms). Nothing here is bundled with FilmCraft or committed to the repository.
+//! (the downloader is `mortiflix_speech::models::download_files`, run by the engine after the
+//! user confirms). Nothing here is bundled with Mortiflix Studio or committed to the repository.
 //!
 //! Licences: Kokoro-82M weights and voices by hexgrad, Apache-2.0 (declared on the model card; the
 //! repository has no separate LICENSE file). CMUdict, Carnegie Mellon University, BSD-style.
@@ -147,7 +147,7 @@ mod tests {
             assert_eq!(find(v.info.id).map(|x| x.file), Some(v.file));
         }
         assert!(size() > 330_000_000 && size() < 340_000_000, "{}", size());
-        let dir = std::env::temp_dir().join(format!("filmcraft-tts-cat-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("mortiflix-tts-cat-{}", std::process::id()));
         assert!(!installed(&dir));
         assert_eq!(missing_bytes(&dir), size());
     }

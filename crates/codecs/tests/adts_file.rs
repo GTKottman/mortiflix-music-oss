@@ -1,10 +1,10 @@
-//! Standalone ADTS `.aac` files (#1291): File ▸ Import offers them, and FilmCraft's own AAC export
+//! Standalone ADTS `.aac` files (#1291): File ▸ Import offers them, and Mortiflix Studio's own AAC export
 //! writes them (#814), so they must open as audio. The streams are made with our AAC encoder, which
 //! prefixes each access unit with an ADTS header (ISO/IEC 13818-7 §6.2).
 
 use std::sync::Arc;
 
-use filmcraft_aac::{Encoder, EncoderConfig};
+use mortiflix_aac::{Encoder, EncoderConfig};
 
 const RATE: u32 = 48_000;
 
@@ -26,7 +26,7 @@ fn rms(s: &[f32]) -> f32 {
 
 #[test]
 fn adts_aac_files_import_as_audio() {
-    let src = filmcraft_codecs::open_bytes("tone.aac", Arc::from(adts_tone(2, 1))).unwrap();
+    let src = mortiflix_codecs::open_bytes("tone.aac", Arc::from(adts_tone(2, 1))).unwrap();
     let info = src.info();
     let a = info.audio().unwrap();
     assert_eq!((a.sample_rate, a.channels), (RATE, 2));
@@ -60,7 +60,7 @@ fn damaged_adts_files_fail_without_panicking() {
     long[4] = 0xFF;
     cases.push(long);
     for (i, b) in cases.into_iter().enumerate() {
-        let r = std::panic::catch_unwind(|| filmcraft_codecs::open_bytes("damaged.aac", Arc::from(b)).map(|s| s.audio(0, 4800, RATE).is_ok()));
+        let r = std::panic::catch_unwind(|| mortiflix_codecs::open_bytes("damaged.aac", Arc::from(b)).map(|s| s.audio(0, 4800, RATE).is_ok()));
         assert!(r.is_ok(), "case {i} panicked");
     }
 }

@@ -1,8 +1,8 @@
-# filmcraft-h264
+# mortiflix-h264
 
 Clean-room, pure-Rust (no `unsafe`) H.264 / AVC decoder, implemented from the public ITU-T
 Rec. H.264 (ISO/IEC 14496-10) specification. It is an L0 crate: it depends only on
-`filmcraft-bitstream`, `thiserror`, and optionally `rayon` (default feature `threads`), and builds
+`mortiflix-bitstream`, `thiserror`, and optionally `rayon` (default feature `threads`), and builds
 for `wasm32-unknown-unknown`.
 
 All syntax tables (CAVLC code tables, the 1024 CABAC `(m, n)` context initialisation pairs,
@@ -40,7 +40,7 @@ oracles and fixture generators.
 ## API
 
 ```rust
-use filmcraft_h264::Decoder;
+use mortiflix_h264::Decoder;
 
 let mut dec = Decoder::new(); // or Decoder::with_threads(n), Decoder::from_avcc(&avcc)?
 // dec.threads(): worker threads in use; dec.set_draft(true): draft mode (playback only)
@@ -85,7 +85,7 @@ engine decodes a context-coded bin without branching on its outcome.
 
 ### Draft mode
 
-`Decoder::set_draft(true)` (reduced-resolution playback only; FilmCraft enables it with Settings ▸
+`Decoder::set_draft(true)` (reduced-resolution playback only; Mortiflix Studio enables it with Settings ▸
 Playback ▸ Draft decoding while the Program monitor plays at 1/2 or 1/4 resolution) skips the
 deblocking filter (8.7) of non-reference pictures (`nal_ref_idc` 0). No picture is predicted from
 a non-reference picture, and deblocking never changes the motion data that direct prediction
@@ -95,7 +95,7 @@ below it saves ~9 % of the decoding work (the B-pyramid's non-reference half of 
 
 ## Tests
 
-`cargo test -p filmcraft-h264` (fixtures are generated on first use into `target/fixtures/h264/`
+`cargo test -p mortiflix-h264` (fixtures are generated on first use into `target/fixtures/h264/`
 with ffmpeg + libx264; tests print a message and skip when `/opt/homebrew/bin/ffmpeg` is absent).
 
 - Unit tests: CAVLC tables (prefix-freeness / Kraft sums, spec-style residual example), CABAC engine
@@ -164,12 +164,12 @@ encoder is unavailable.
 | vt_high | testsrc2+noise 640x360 | VideoToolbox, High |
 | vt_high_1080p | testsrc2 1920x1080 | VideoToolbox, High 8 Mbit/s |
 
-`cargo test --release -p filmcraft-h264 --test conformance coverage_report -- --ignored --nocapture`
+`cargo test --release -p mortiflix-h264 --test conformance coverage_report -- --ignored --nocapture`
 prints which coding tools each fixture exercises.
 
 ## Performance
 
-`cargo test --release -p filmcraft-h264 --test perf -- --ignored --nocapture` (1080p High profile,
+`cargo test --release -p mortiflix-h264 --test perf -- --ignored --nocapture` (1080p High profile,
 CABAC, B-pyramid, 120 frames, 8.8 Mbit/s; bit-exactness is verified first). Measured on an Apple M4
 Pro (14 cores) while the machine was heavily shared (load average 40-180), so these are lower bounds:
 
@@ -195,7 +195,7 @@ inverse transforms and dequantisation 9 %, motion compensation 8 %, intra predic
 picture copies 4 %. At ~4.5 GHz a 4K frame takes ~85 ms of one
 core, so 23.976 fps needs about two cores' worth of frame threads.
 
-The example `cargo run --release -p filmcraft-h264 --example h264dec -- in.h264 out.yuv` decodes a
+The example `cargo run --release -p mortiflix-h264 --example h264dec -- in.h264 out.yuv` decodes a
 file; `H264_BENCH_ITERS=n` (and `H264_THREADS=t`, `H264_DRAFT=1`) turns it into a benchmark,
 `H264_STATS=1` prints the coverage counters.
 

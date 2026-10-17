@@ -1,7 +1,7 @@
 //! The Settings dialog (app menu ▸ Settings ▸ <category>; Edit ▸ Preferences in the in-window
 //! menu bar; General is Cmd+,). One window titled "Preferences": the category list on the left,
 //! the category's fields on the right, Help / Reset… / Cancel / OK at the bottom. The page layout
-//! comes from the engine's field schema ([`filmcraft_engine::settings::categories`]); edits go to a
+//! comes from the engine's field schema ([`mortiflix_engine::settings::categories`]); edits go to a
 //! draft (`UiState::settings`, serde so `ui.inspect` / `ui.set` reach it) and are applied with
 //! `prefs.set` on OK.
 //!
@@ -13,15 +13,15 @@
 //! `settings.ok`.
 
 use egui::{Align, Align2, Color32, CornerRadius, Frame, Layout, Margin, Rect, RichText, Sense, Stroke, Ui, vec2};
-use filmcraft_engine::settings::{self, DeviceList, Field, Kind, Row};
-use filmcraft_project::Label;
+use mortiflix_engine::settings::{self, DeviceList, Field, Kind, Row};
+use mortiflix_project::Label;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
 use crate::icons::Icon;
 use crate::native_dialogs::FileDialog;
 use crate::theme::Tokens;
-use crate::{AudioDevices, Dialog, FilmcraftApp};
+use crate::{AudioDevices, Dialog, StudioApp};
 
 /// Window size (Premiere's is 927 × 724 pt).
 const W: f32 = 900.0;
@@ -54,7 +54,7 @@ pub struct SettingsDraft {
 }
 
 /// Open the dialog on a category page.
-pub fn open(app: &mut FilmcraftApp, page: &str) -> Result<Value, String> {
+pub fn open(app: &mut StudioApp, page: &str) -> Result<Value, String> {
     let cat = settings::category(page).ok_or_else(|| format!("unknown settings category `{page}`"))?;
     app.ui.settings = Some(SettingsDraft { page: cat.id.into(), values: app.session.prefs.to_value(), ..Default::default() });
     app.dialog = Some(Dialog::Preferences);
@@ -62,7 +62,7 @@ pub fn open(app: &mut FilmcraftApp, page: &str) -> Result<Value, String> {
 }
 
 /// `app.settings.<category>` (and the older `app.preferences[.autoSave]` ids).
-pub fn route(app: &mut FilmcraftApp, id: &str) -> Option<Result<Value, String>> {
+pub fn route(app: &mut StudioApp, id: &str) -> Option<Result<Value, String>> {
     if let Some(page) = id.strip_prefix("app.settings.") {
         return Some(open(app, page));
     }
@@ -74,13 +74,13 @@ pub fn route(app: &mut FilmcraftApp, id: &str) -> Option<Result<Value, String>> 
 }
 
 /// The colour of a label (Settings ▸ Labels).
-pub fn label_color(app: &FilmcraftApp, l: Label) -> Color32 {
+pub fn label_color(app: &StudioApp, l: Label) -> Color32 {
     let c = app.session.prefs.labels.rgb(l);
     Color32::from_rgb(c[0], c[1], c[2])
 }
 
 /// Choose a theme from View ▸ Appearance or `ui.set`: stored as Settings ▸ Appearance ▸ Color Theme.
-pub fn set_theme(app: &mut FilmcraftApp, ctx: &egui::Context, k: crate::theme::ThemeKind) {
+pub fn set_theme(app: &mut StudioApp, ctx: &egui::Context, k: crate::theme::ThemeKind) {
     if let Err(e) = app.session.execute("prefs.set", json!({"key": "appearance.colorTheme", "value": k.pref_name()})) {
         app.ui.status = e.to_string();
     }
@@ -90,7 +90,7 @@ pub fn set_theme(app: &mut FilmcraftApp, ctx: &egui::Context, k: crate::theme::T
 
 /// The header's appearance button and View ▸ Appearance ▸ Next Appearance Mode: Auto, Light, Dark,
 /// then Auto again. The light and dark theme choices are kept.
-pub fn cycle_appearance(app: &mut FilmcraftApp, ctx: &egui::Context) {
+pub fn cycle_appearance(app: &mut StudioApp, ctx: &egui::Context) {
     let next = app.session.prefs.appearance.next_mode();
     if let Err(e) = app.session.execute("prefs.set", json!({"key": "appearance.appearanceMode", "value": next})) {
         app.ui.status = e.to_string();
@@ -99,7 +99,7 @@ pub fn cycle_appearance(app: &mut FilmcraftApp, ctx: &egui::Context) {
 }
 
 /// Favorite shortcuts use a stable light-then-dark order, independently of insertion order.
-pub fn appearance_context_menu(app: &mut FilmcraftApp, ui: &mut Ui) {
+pub fn appearance_context_menu(app: &mut StudioApp, ui: &mut Ui) {
     if ui.button(tl!("Appearance Settings…")).clicked() {
         if let Err(error) = open(app, "appearance") {
             app.ui.status = error;
@@ -126,7 +126,7 @@ pub fn appearance_context_menu(app: &mut FilmcraftApp, ui: &mut Ui) {
 const APPEARANCE_KEYS: &[&str] =
     &["appearance.appearanceMode", "appearance.lightTheme", "appearance.darkTheme", "appearance.colorTheme", "appearance.favoriteThemes"];
 
-/// A small FilmCraft editor painted with `t`'s colours: the header with the Import / Edit / Export
+/// A small Mortiflix Studio editor painted with `t`'s colours: the header with the Import / Edit / Export
 /// tabs, the Source and Program monitors, the Project panel, the tools, the Timeline with video and
 /// audio clips and the playhead, and the audio meters (the Editing workspace).
 fn theme_preview(ui: &mut Ui, t: &Tokens, width: f32) {
@@ -241,7 +241,7 @@ fn theme_preview(ui: &mut Ui, t: &Tokens, width: f32) {
 /// One theme card of the Appearance page: title, "Active" while the mode shows it, the preview and
 /// a radio button per theme (automation ids `settings.<key>.<value>`).
 #[allow(clippy::too_many_arguments)]
-fn theme_card(app: &mut FilmcraftApp, ui: &mut Ui, d: &mut SettingsDraft, key: &str, title: &str, opts: &[(&str, &str)], active: bool, width: f32) {
+fn theme_card(app: &mut StudioApp, ui: &mut Ui, d: &mut SettingsDraft, key: &str, title: &str, opts: &[(&str, &str)], active: bool, width: f32) {
     let t = app.tokens;
     let current = choice_text(get(&d.values, key));
     let shown = opts.iter().find(|(v, _)| *v == current).or(opts.first()).map_or("darkest", |(v, _)| v);
@@ -298,7 +298,7 @@ fn theme_card(app: &mut FilmcraftApp, ui: &mut Ui, d: &mut SettingsDraft, key: &
 }
 
 /// Settings ▸ Appearance: the Appearance Mode selector above the light and dark theme cards.
-fn appearance_modes(app: &mut FilmcraftApp, ui: &mut Ui, d: &mut SettingsDraft) {
+fn appearance_modes(app: &mut StudioApp, ui: &mut Ui, d: &mut SettingsDraft) {
     let key = "appearance.appearanceMode";
     let mode = choice_text(get(&d.values, key));
     ui.horizontal(|ui| {
@@ -320,7 +320,7 @@ fn appearance_modes(app: &mut FilmcraftApp, ui: &mut Ui, d: &mut SettingsDraft) 
 }
 
 /// Patch the open dialog's draft (`ui.set {"settings": {"page": "trim", "values": {key: value}}}`).
-pub fn patch(app: &mut FilmcraftApp, p: &Value) -> Result<(), String> {
+pub fn patch(app: &mut StudioApp, p: &Value) -> Result<(), String> {
     let d = app.ui.settings.as_mut().ok_or("the Settings dialog is not open")?;
     if let Some(page) = p.get("page").and_then(Value::as_str) {
         d.page = settings::category(page).ok_or_else(|| format!("unknown settings category `{page}`"))?.id.into();
@@ -368,7 +368,7 @@ fn modal_frame(t: &Tokens) -> Frame {
     Frame::new().fill(t.panel_bg).stroke(Stroke::new(1.0, t.separator)).corner_radius(CornerRadius::same(10)).inner_margin(Margin::same(0))
 }
 
-fn button(app: &mut FilmcraftApp, ui: &mut Ui, id: &str, label: &str, primary: bool) -> bool {
+fn button(app: &mut StudioApp, ui: &mut Ui, id: &str, label: &str, primary: bool) -> bool {
     let t = app.tokens;
     let text = RichText::new(label).size(13.0).color(if primary { Color32::WHITE } else { t.text });
     let b = egui::Button::new(text)
@@ -428,7 +428,7 @@ fn choice_text(v: &Value) -> String {
 }
 
 /// A dropdown of (value, label) options; returns the chosen value.
-fn combo(app: &mut FilmcraftApp, ui: &mut Ui, key: &str, current: &str, opts: &[(String, String)], width: f32) -> Option<String> {
+fn combo(app: &mut StudioApp, ui: &mut Ui, key: &str, current: &str, opts: &[(String, String)], width: f32) -> Option<String> {
     let shown = opts.iter().find(|o| o.0 == current).map(|o| o.1.clone()).unwrap_or_else(|| current.to_string());
     let mut chosen = None;
     let mut items: Vec<(String, Rect, String)> = Vec::new();
@@ -458,7 +458,7 @@ fn static_opts(o: &[(&str, &str)]) -> Vec<(String, String)> {
     o.iter().map(|(v, l)| (v.to_string(), l.to_string())).collect()
 }
 
-fn device_opts(app: &mut FilmcraftApp, d: &mut SettingsDraft, list: DeviceList) -> Vec<(String, String)> {
+fn device_opts(app: &mut StudioApp, d: &mut SettingsDraft, list: DeviceList) -> Vec<(String, String)> {
     if d.devices.is_none() {
         d.devices = Some(app.audio.as_ref().map(|a| a.devices()).unwrap_or_default());
     }
@@ -473,7 +473,7 @@ fn device_opts(app: &mut FilmcraftApp, d: &mut SettingsDraft, list: DeviceList) 
     v
 }
 
-fn number(app: &mut FilmcraftApp, ui: &mut Ui, key: &str, value: f64, range: (f64, f64), decimals: usize, label: &str) -> Option<f64> {
+fn number(app: &mut StudioApp, ui: &mut Ui, key: &str, value: f64, range: (f64, f64), decimals: usize, label: &str) -> Option<f64> {
     let mut x = value;
     let speed = ((range.1 - range.0) / 2000.0).clamp(0.05, 1.0);
     let dv = crate::widgets::number_drag(&mut x).range(range.0..=range.1).speed(speed).fixed_decimals(decimals);
@@ -482,7 +482,7 @@ fn number(app: &mut FilmcraftApp, ui: &mut Ui, key: &str, value: f64, range: (f6
     (r.changed() && x != value).then_some(x)
 }
 
-fn draw_field(app: &mut FilmcraftApp, ui: &mut Ui, d: &mut SettingsDraft, f: &Field) {
+fn draw_field(app: &mut StudioApp, ui: &mut Ui, d: &mut SettingsDraft, f: &Field) {
     let enabled = f.enabled_by.is_none_or(|k| get(&d.values, k).as_bool().unwrap_or(true));
     let cur = get(&d.values, f.key).clone();
     ui.add_enabled_ui(enabled, |ui| {
@@ -598,7 +598,7 @@ fn draw_field(app: &mut FilmcraftApp, ui: &mut Ui, d: &mut SettingsDraft, f: &Fi
 }
 
 /// A colour swatch (opens a picker) and its `#rrggbb` text.
-fn color_field(app: &mut FilmcraftApp, ui: &mut Ui, d: &mut SettingsDraft, key: &str, label: &str) {
+fn color_field(app: &mut StudioApp, ui: &mut Ui, d: &mut SettingsDraft, key: &str, label: &str) {
     let hex = choice_text(get(&d.values, key));
     let mut rgb = settings::parse_hex(&hex).unwrap_or([128, 128, 128]);
     let r = egui::color_picker::color_edit_button_srgb(ui, &mut rgb);
@@ -627,7 +627,7 @@ fn color_field(app: &mut FilmcraftApp, ui: &mut Ui, d: &mut SettingsDraft, key: 
 /// Settings ▸ Labels ▸ Label Color Presets: take the label names and colours from a preset, and
 /// share presets as files. Picking a preset or Revert edits the draft (OK applies it, Cancel
 /// discards it); Import, Export and Delete act on the files at once.
-fn label_presets(app: &mut FilmcraftApp, ui: &mut Ui, d: &mut SettingsDraft) {
+fn label_presets(app: &mut StudioApp, ui: &mut Ui, d: &mut SettingsDraft) {
     let t = app.tokens;
     let presets = d.label_presets.get_or_insert_with(|| app.session.label_presets().into_iter().map(|(p, _)| p).collect()).clone();
     let labels: settings::LabelPrefs = serde_json::from_value(get(&d.values, "labels").clone()).unwrap_or_default();
@@ -704,7 +704,7 @@ fn label_presets(app: &mut FilmcraftApp, ui: &mut Ui, d: &mut SettingsDraft) {
 }
 
 /// An icon button of the Label Color Presets row (`settings.labelPresets.<id>`).
-fn preset_button(app: &mut FilmcraftApp, ui: &mut Ui, id: &str, icon: Icon, tip: &str, enabled: bool) -> bool {
+fn preset_button(app: &mut StudioApp, ui: &mut Ui, id: &str, icon: Icon, tip: &str, enabled: bool) -> bool {
     let t = app.tokens;
     let r = ui.add_enabled_ui(enabled, |ui| crate::icons::button(ui, icon, 24.0, false, &t, tip)).inner;
     app.auto.add(&format!("settings.labelPresets.{id}"), r.rect, tip);
@@ -719,7 +719,7 @@ fn mb(bytes: u64) -> String {
     if bytes >= 1 << 30 { format!("{:.1} GB", bytes as f64 / (1u64 << 30) as f64) } else { format!("{:.1} MB", bytes as f64 / (1u64 << 20) as f64) }
 }
 
-fn custom(app: &mut FilmcraftApp, ui: &mut Ui, d: &mut SettingsDraft, name: &str) {
+fn custom(app: &mut StudioApp, ui: &mut Ui, d: &mut SettingsDraft, name: &str) {
     let t = app.tokens;
     match name {
         "labelColors" => {
@@ -750,7 +750,7 @@ fn custom(app: &mut FilmcraftApp, ui: &mut Ui, d: &mut SettingsDraft, name: &str
         "memoryInfo" => {
             let (used, budget) = app.frames.cache_usage();
             note(ui, &t, &tlf!("Decoded frames held for the monitors and thumbnails: {used} of {budget}.", used = mb(used as u64), budget = mb(budget as u64)));
-            note(ui, &t, tl!("FilmCraft keeps the rest of the RAM free for other applications."));
+            note(ui, &t, tl!("Mortiflix Studio keeps the rest of the RAM free for other applications."));
         }
         "mediaCacheInfo" => {
             if d.cache_info.is_null() {
@@ -801,7 +801,7 @@ fn custom(app: &mut FilmcraftApp, ui: &mut Ui, d: &mut SettingsDraft, name: &str
     }
 }
 
-fn rows(app: &mut FilmcraftApp, ui: &mut Ui, d: &mut SettingsDraft, list: &[Row]) {
+fn rows(app: &mut StudioApp, ui: &mut Ui, d: &mut SettingsDraft, list: &[Row]) {
     let t = app.tokens;
     for (i, r) in list.iter().enumerate() {
         // Labels: Label Colors on the left, the rest of the page (Label Defaults, Label Color
@@ -843,7 +843,7 @@ fn rows(app: &mut FilmcraftApp, ui: &mut Ui, d: &mut SettingsDraft, list: &[Row]
 }
 
 /// Draw the dialog; returns whether it stays open.
-pub fn show(app: &mut FilmcraftApp, ctx: &egui::Context) -> bool {
+pub fn show(app: &mut StudioApp, ctx: &egui::Context) -> bool {
     let Some(mut d) = app.ui.settings.take() else { return false };
     crate::widgets::revert_drag_on_escape(ctx, egui::Id::new("settings-dialog-before-drag"), &mut d);
     let t = app.tokens;
@@ -907,11 +907,11 @@ pub fn show(app: &mut FilmcraftApp, ctx: &egui::Context) -> bool {
         ui.horizontal(|ui| {
             ui.add_space(20.0);
             if button(app, ui, "settings.help", tl!("Help"), false) {
-                crate::links::open(app, ctx, &format!("{}/blob/main/docs/project-files.md#settings", crate::links::GITHUB));
+                crate::links::open(app, ctx, crate::links::APP_PAGE);
             }
             if button(app, ui, "settings.reset", tl!("Reset…"), false) {
                 // this category back to its defaults (OK applies it)
-                let defaults = filmcraft_engine::autosave::Preferences::default().to_value();
+                let defaults = mortiflix_engine::autosave::Preferences::default().to_value();
                 let keep = get(&d.values, "general.recentProjects").clone();
                 d.values[d.page.as_str()] = defaults[d.page.as_str()].clone();
                 put(&mut d.values, "general.recentProjects", keep);
@@ -957,7 +957,7 @@ mod tests {
     #[test]
     fn favorite_theme_star_and_shortcut_select_explicit_family() {
         use egui_kittest::{Harness, kittest::Queryable};
-        let mut app = FilmcraftApp::new(filmcraft_engine::Session::default());
+        let mut app = StudioApp::new(mortiflix_engine::Session::default());
         open(&mut app, "appearance").unwrap();
         let mut h = Harness::builder().with_size(vec2(1400.0, 1000.0)).build_eframe(move |_| app);
         h.run_steps(4);
@@ -967,7 +967,7 @@ mod tests {
         h.get_by_label("OK").click();
         h.run_steps(3);
         assert_eq!(h.state().session.prefs.appearance.favorite_themes, vec!["dark"]);
-        let mut app = FilmcraftApp::new(filmcraft_engine::Session::default());
+        let mut app = StudioApp::new(mortiflix_engine::Session::default());
         app.session.execute("prefs.set", json!({"key": "appearance.favoriteThemes", "value": ["light", "dark"]})).unwrap();
         let mut h = Harness::builder().with_size(vec2(400.0, 240.0)).build_ui_state(
             |ui, app| {
@@ -979,7 +979,7 @@ mod tests {
         h.get_by_label("Appearance").click_secondary();
         h.run_steps(3);
         assert!(h.query_by_label("Appearance Settings…").is_some());
-        if let Some(path) = std::env::var_os("FILMCRAFT_FAVORITES_SCREENSHOT") {
+        if let Some(path) = std::env::var_os("MFX_STUDIO_FAVORITES_SCREENSHOT") {
             h.render().unwrap().save(path).unwrap();
         }
         h.get_by_label("Light").click();
@@ -993,9 +993,9 @@ mod tests {
     #[test]
     fn ui_scale_overrides_the_system_scale_and_auto_restores_it() {
         let ctx = egui::Context::default();
-        let mut app = FilmcraftApp::new(filmcraft_engine::Session::default());
+        let mut app = StudioApp::new(mortiflix_engine::Session::default());
         // a frame applying the settings, then the next one, where a new zoom takes effect
-        let pass = |app: &mut FilmcraftApp| {
+        let pass = |app: &mut StudioApp| {
             let mut input = egui::RawInput::default();
             input.viewports.entry(egui::ViewportId::ROOT).or_default().native_pixels_per_point = Some(1.5);
             ctx.run_ui(input.clone(), |ui| app.apply_prefs(ui.ctx())).textures_delta.clear();
@@ -1015,7 +1015,7 @@ mod tests {
     #[test]
     fn appearance_button_cycles_modes_without_losing_theme_choices() {
         let ctx = egui::Context::default();
-        let mut app = FilmcraftApp::new(filmcraft_engine::Session::default());
+        let mut app = StudioApp::new(mortiflix_engine::Session::default());
         app.apply_prefs(&ctx);
         assert_eq!((app.session.prefs.appearance.appearance_mode.as_str(), app.tokens.kind), ("dark", ThemeKind::Dark), "new users keep Darkest");
         app.session.execute("prefs.set", json!({"values": {"appearance.darkTheme": "dark"}})).unwrap();
@@ -1041,7 +1041,7 @@ mod tests {
         use std::sync::Arc;
         use std::sync::atomic::{AtomicU8, Ordering};
         let ctx = egui::Context::default();
-        let mut app = FilmcraftApp::new(filmcraft_engine::Session::default());
+        let mut app = StudioApp::new(mortiflix_engine::Session::default());
         let system = Arc::new(AtomicU8::new(2));
         let read = system.clone();
         app.hooks.system_theme = Some(Box::new(move |_| match read.load(Ordering::Relaxed) {
@@ -1053,7 +1053,7 @@ mod tests {
         app.apply_prefs(&ctx);
         assert_eq!(app.tokens.kind, ThemeKind::Light);
         assert!(!app.ui.dark);
-        assert_eq!(ctx.theme(), egui::Theme::Light, "egui's style follows FilmCraft's choice");
+        assert_eq!(ctx.theme(), egui::Theme::Light, "egui's style follows Mortiflix Studio's choice");
         system.store(1, Ordering::Relaxed);
         app.apply_prefs(&ctx);
         assert_eq!(app.tokens.kind, ThemeKind::Dark);

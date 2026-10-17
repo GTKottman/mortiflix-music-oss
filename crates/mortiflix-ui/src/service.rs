@@ -23,7 +23,7 @@ use serde_json::{Value, json};
 pub const PROTOCOL: u32 = 1;
 /// The request id the supervisor uses for its own `hello` after each start.
 pub const HELLO_ID: u64 = 0;
-/// The settings file beside FilmCraft's `preferences.json`.
+/// The settings file beside Mortiflix Studio's `preferences.json`.
 pub const SETTINGS_FILE: &str = "mortiflix.json";
 /// The service script inside the mortiflix-oss folder.
 pub const SERVICE_SCRIPT: &str = "bin/mortiflix-service.mjs";
@@ -35,7 +35,7 @@ const MAX_EVENTS: usize = 512;
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "state", rename_all = "camelCase")]
 pub enum ServiceStatus {
-    /// Not started (tests, FilmCraft alone).
+    /// Not started (tests, Mortiflix Studio alone).
     #[default]
     Off,
     /// No service path set: first-run setup is needed.
@@ -113,7 +113,7 @@ pub const BUNDLE_NODE: &str = if cfg!(windows) { "node/node.exe" } else { "node/
 pub const BUNDLE_TOOLS: &str = "bin";
 
 /// Where a packaged install keeps the Mortiflix service with its own Node, ffmpeg and sound engine:
-/// `MFX_BUNDLE`, else beside the binary: `mortiflix/` (Windows), `../lib/mortiflix-filmcraft/` (Linux,
+/// `MFX_BUNDLE`, else beside the binary: `mortiflix/` (Windows), `../lib/mortiflix-studio/` (Linux,
 /// AppImage), `../Resources/mortiflix/` (macOS app). None = no bundle (a development build).
 pub fn bundled_dir() -> Option<PathBuf> {
     let has_service = |d: &Path| d.join(BUNDLE_SERVICE).join(SERVICE_SCRIPT).is_file();
@@ -123,7 +123,7 @@ pub fn bundled_dir() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
     let dir = exe.parent()?;
     let up = dir.parent().unwrap_or(dir);
-    [dir.join("mortiflix"), up.join("lib").join("mortiflix-filmcraft"), up.join("Resources").join("mortiflix")].into_iter().find(|d| has_service(d))
+    [dir.join("mortiflix"), up.join("lib").join("mortiflix-studio"), up.join("Resources").join("mortiflix")].into_iter().find(|d| has_service(d))
 }
 
 /// How to start the service.
@@ -485,8 +485,7 @@ fn run_child(config: &ServiceConfig, script: &Path, cmd_rx: &Receiver<Value>, ou
             read_lines(stderr, |line| log::info!("mortiflix service: {}", String::from_utf8_lossy(line.get(..500).unwrap_or(line))))
         }));
     });
-    let hello =
-        json!({"id": HELLO_ID, "type": "hello", "params": {"client": "mortiflix-filmcraft", "version": env!("CARGO_PKG_VERSION"), "protocol": PROTOCOL}});
+    let hello = json!({"id": HELLO_ID, "type": "hello", "params": {"client": "mortiflix-studio", "version": env!("CARGO_PKG_VERSION"), "protocol": PROTOCOL}});
     let write = |stdin: &mut std::process::ChildStdin, v: &Value| -> std::io::Result<()> {
         let mut bytes = serde_json::to_vec(v).map_err(std::io::Error::other)?;
         bytes.push(b'\n');

@@ -4,20 +4,20 @@
 //! step per drag, keying the playhead when the stopwatch is on. Clicking an effect header selects
 //! it and only its arrow twirls it; double-clicking a clip's picture selects its Motion.
 //!
-//! With `FILMCRAFT_UI_SHOTS=<dir>` the tests also render the UI with wgpu and write PNGs there.
+//! With `MFX_STUDIO_UI_SHOTS=<dir>` the tests also render the UI with wgpu and write PNGs there.
 
 use std::sync::mpsc::{Sender, channel};
 
 use egui_kittest::Harness;
-use filmcraft_engine::Session;
-use filmcraft_project::{ClipId, ParamValue};
-use filmcraft_time::Tick;
-use filmcraft_ui_egui::FilmcraftApp;
-use filmcraft_ui_egui::control::ControlRequest;
+use mortiflix_engine::Session;
+use mortiflix_project::{ClipId, ParamValue};
+use mortiflix_time::Tick;
+use mortiflix_ui_egui::StudioApp;
+use mortiflix_ui_egui::control::ControlRequest;
 use serde_json::{Value, json};
 
 struct Driver {
-    harness: Harness<'static, FilmcraftApp>,
+    harness: Harness<'static, StudioApp>,
     tx: Sender<ControlRequest>,
     shots: Option<std::path::PathBuf>,
 }
@@ -27,8 +27,8 @@ impl Driver {
         let mut session = Session::default();
         session.execute("file.openDemoProject", json!({})).expect("demo project");
         let (tx, rx) = channel();
-        let app = FilmcraftApp::new(session).with_control(rx);
-        let shots = std::env::var_os("FILMCRAFT_UI_SHOTS").map(std::path::PathBuf::from);
+        let app = StudioApp::new(session).with_control(rx);
+        let shots = std::env::var_os("MFX_STUDIO_UI_SHOTS").map(std::path::PathBuf::from);
         // frames 1/60 s apart, so that two clicks make a double-click
         let mut b = Harness::builder().with_size(egui::vec2(1600.0, 980.0)).with_step_dt(1.0 / 60.0).with_max_steps(10_000);
         if shots.is_some() {
@@ -265,7 +265,7 @@ fn a_drag_keys_the_playhead_and_headers_select_while_arrows_twirl() {
     d.exec("effects.toggleAnimation", json!({"clip": clip, "effect": "motion", "param": "position"}));
     let key0 = d.param(clip, "motion", "position").1;
     assert_eq!(key0.len(), 1);
-    d.exec("playhead.set", json!({"time": mid + filmcraft_time::TICKS_PER_SECOND}));
+    d.exec("playhead.set", json!({"time": mid + mortiflix_time::TICKS_PER_SECOND}));
     d.frames(2);
     // clicking a property (its name) selects Motion too
     let (sx, sy) = d.center("effectControls.motion.scale.stopwatch");
@@ -279,7 +279,7 @@ fn a_drag_keys_the_playhead_and_headers_select_while_arrows_twirl() {
     let (moved, keys) = d.param(clip, "motion", "position");
     assert_eq!(keys.len(), 2, "a keyframe at the playhead: {keys:?}");
     assert!(keys.contains(&key0[0]));
-    assert_ne!(moved, ParamValue::Vec2(filmcraft_geom::Vec2::new(p0.0, p0.1)));
+    assert_ne!(moved, ParamValue::Vec2(mortiflix_geom::Vec2::new(p0.0, p0.1)));
     assert_eq!(d.undo_len(), undo + 1);
     // the first keyframe keeps its value
     d.exec("playhead.set", json!({"time": mid}));
@@ -348,7 +348,7 @@ fn transform_effect_handles_and_double_click_selection() {
     let seq = d.exec("sequence.inspect", json!({}));
     let overlay = seq["video"][1]["items"][0]["clip"].as_u64().unwrap();
     let start = seq["video"][1]["items"][0]["start"].as_i64().unwrap();
-    d.exec("playhead.set", json!({"time": start + filmcraft_time::TICKS_PER_SECOND}));
+    d.exec("playhead.set", json!({"time": start + mortiflix_time::TICKS_PER_SECOND}));
     d.frames(3);
     let pic = d.rect("program.picture");
     d.ok("ui.click", json!({"x": pic[0] + pic[2] * 0.8, "y": pic[1] + pic[3] * 0.76, "count": 2}));
@@ -368,7 +368,7 @@ fn transform_effect_handles_and_double_click_selection() {
         .iter()
         .find(|it| {
             let (s, l) = (it["start"].as_i64().unwrap(), it["duration"].as_i64().unwrap());
-            (s..s + l).contains(&(start + filmcraft_time::TICKS_PER_SECOND))
+            (s..s + l).contains(&(start + mortiflix_time::TICKS_PER_SECOND))
         })
         .unwrap()["clip"]
         .as_u64()

@@ -3,10 +3,10 @@
 
 mod support;
 
-use filmcraft_interchange::{ExportOptions, Format, Imported, detect, export, import};
-use filmcraft_media::Generator;
-use filmcraft_project::{ItemKind, Keyframe, Label, Marker, MarkerId, MarkerKind, MediaRef, Param, ParamValue, Project, TrackKind, TransitionAlign};
-use filmcraft_time::{FrameRate, Tick};
+use mortiflix_interchange::{ExportOptions, Format, Imported, detect, export, import};
+use mortiflix_media::Generator;
+use mortiflix_project::{ItemKind, Keyframe, Label, Marker, MarkerId, MarkerKind, MediaRef, Param, ParamValue, Project, TrackKind, TransitionAlign};
+use mortiflix_time::{FrameRate, Tick};
 use proptest::prelude::*;
 use support::*;
 
@@ -205,7 +205,7 @@ fn golden_premiere_style_nested_and_transitions() {
     assert_eq!(tm.info.start_timecode, Some(86_400));
     assert_eq!(tm.info.duration, r.tick_of(2400));
     assert_eq!(tower.label, Label::Mango);
-    let bin = p.root.children.iter().find_map(|c| if let filmcraft_project::BinEntry::Bin(b) = c { Some(b) } else { None }).unwrap();
+    let bin = p.root.children.iter().find_map(|c| if let mortiflix_project::BinEntry::Bin(b) = c { Some(b) } else { None }).unwrap();
     assert_eq!(bin.name, "Footage");
     assert_eq!(p.root.parent_of(tower.id), Some(bin.id));
 
@@ -259,7 +259,7 @@ fn golden_premiere_style_nested_and_transitions() {
     assert_eq!(s.markers[0].start, r.tick_of(30));
 }
 
-fn rich_project() -> (Project, filmcraft_project::ItemId) {
+fn rich_project() -> (Project, mortiflix_project::ItemId) {
     let r = FrameRate::FPS_29_97;
     let mut p = Project::new("P");
     let a = media(&mut p, "/m/a b.mov", true, true, r);
@@ -288,7 +288,7 @@ fn rich_project() -> (Project, filmcraft_project::ItemId) {
         sc.keyframes.push(Keyframe::new(r.tick_of(330), ParamValue::Float(80.0)));
         it.effect_mut("motion").unwrap().params.insert("scale".into(), sc);
         it.effect_mut("opacity").unwrap().params.insert("opacity".into(), Param::new(ParamValue::Float(75.0)));
-        it.effects.push(filmcraft_project::find_effect("gaussian_blur").unwrap().instance());
+        it.effects.push(mortiflix_project::find_effect("gaussian_blur").unwrap().instance());
         it.markers.push(Marker {
             id: MarkerId(900),
             start: r.tick_of(310),
@@ -409,7 +409,7 @@ proptest! {
         let ms = [media(&mut p, "/x/one.mov", true, true, rate), media(&mut p, "/x/two.mov", true, true, rate), media(&mut p, "/y/three four.mxf", true, true, rate)];
         let s = sequence(&mut p, "S", rate, false);
         let mut ends = [0i64; 3];
-        let mut prev: [Option<filmcraft_project::ClipId>; 3] = [None; 3];
+        let mut prev: [Option<mortiflix_project::ClipId>; 3] = [None; 3];
         let mut aends = [0i64; 3];
         for g in &clips {
             let t = ends[g.track] + g.gap;

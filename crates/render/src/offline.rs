@@ -5,8 +5,8 @@
 //! The slate is drawn at the size the caller asks for, so a 4K clip's slate scales with playback
 //! resolution like any other frame, and it is deterministic (tests compare renders against it).
 
-use filmcraft_geom::Vec2;
-use filmcraft_text::{Align, ParagraphStyle, TextStyle, layout, render};
+use mortiflix_geom::Vec2;
+use mortiflix_text::{Align, ParagraphStyle, TextStyle, layout, render};
 
 use crate::graphics::{paint_mask, premul_linear};
 use crate::image::Image;
@@ -62,13 +62,13 @@ pub fn slate(w: usize, h: usize, file_name: &str, reason: OfflineReason) -> Imag
     // centre panel
     let (pw, ph) = ((w as f32 * 0.78).min(s * 1.9), s * 0.46);
     let (px0, py0) = ((w as f32 - pw) / 2.0, (s - ph) / 2.0);
-    fill_path(&mut img, &filmcraft_text::Path::rect(px0, py0, px0 + pw, py0 + ph), PANEL);
+    fill_path(&mut img, &mortiflix_text::Path::rect(px0, py0, px0 + pw, py0 + ph), PANEL);
     // warning triangle with a "!" (two fills: amber outline, panel-coloured inside, amber bar + dot)
     let tri_h = s * 0.13;
     let (tcx, ty0) = (w as f32 / 2.0, py0 + s * 0.045);
     let tri = |inset: f32| {
         let k = inset * 1.9;
-        filmcraft_text::Path::polygon(&[
+        mortiflix_text::Path::polygon(&[
             (tcx, ty0 + k),
             (tcx + tri_h * 0.62 - k * 0.9, ty0 + tri_h - inset),
             (tcx - tri_h * 0.62 + k * 0.9, ty0 + tri_h - inset),
@@ -77,8 +77,8 @@ pub fn slate(w: usize, h: usize, file_name: &str, reason: OfflineReason) -> Imag
     fill_path(&mut img, &tri(0.0), AMBER);
     fill_path(&mut img, &tri(tri_h * 0.11), [PANEL[0], PANEL[1], PANEL[2], 1.0]);
     let bar_w = (tri_h * 0.09).max(1.0);
-    fill_path(&mut img, &filmcraft_text::Path::rect(tcx - bar_w / 2.0, ty0 + tri_h * 0.36, tcx + bar_w / 2.0, ty0 + tri_h * 0.70), AMBER);
-    fill_path(&mut img, &filmcraft_text::Path::rect(tcx - bar_w / 2.0, ty0 + tri_h * 0.76, tcx + bar_w / 2.0, ty0 + tri_h * 0.76 + bar_w), AMBER);
+    fill_path(&mut img, &mortiflix_text::Path::rect(tcx - bar_w / 2.0, ty0 + tri_h * 0.36, tcx + bar_w / 2.0, ty0 + tri_h * 0.70), AMBER);
+    fill_path(&mut img, &mortiflix_text::Path::rect(tcx - bar_w / 2.0, ty0 + tri_h * 0.76, tcx + bar_w / 2.0, ty0 + tri_h * 0.76 + bar_w), AMBER);
     // text
     let cx = w as f32 / 2.0;
     text(&mut img, reason.headline(), "Bold", Vec2::new(cx as f64, (ty0 + tri_h + s * 0.085) as f64), s * 0.062, [1.0, 1.0, 1.0, 1.0], pw * 0.94);
@@ -98,10 +98,10 @@ pub fn slate_rgba8(w: usize, h: usize, file_name: &str, reason: OfflineReason) -
     slate(w, h, file_name, reason).to_rgba8()
 }
 
-fn fill_path(img: &mut Image, p: &filmcraft_text::Path, color: [f32; 4]) {
+fn fill_path(img: &mut Image, p: &mortiflix_text::Path, color: [f32; 4]) {
     let Some(bb) = p.bounds() else { return };
     let (x0, y0) = (bb.0.floor() as i32, bb.1.floor() as i32);
-    let m = filmcraft_text::raster::fill(p, (bb.2.ceil() as i32 - x0).max(1) as usize, (bb.3.ceil() as i32 - y0).max(1) as usize, -x0 as f32, -y0 as f32);
+    let m = mortiflix_text::raster::fill(p, (bb.2.ceil() as i32 - x0).max(1) as usize, (bb.3.ceil() as i32 - y0).max(1) as usize, -x0 as f32, -y0 as f32);
     paint_mask(img, &m, x0, y0, color, 1.0);
 }
 
@@ -110,7 +110,7 @@ fn text(img: &mut Image, s: &str, style: &str, pos: Vec2, px: f32, color: [f32; 
     if px < 3.0 {
         return;
     }
-    let mut st = TextStyle { family: filmcraft_text::fonts::DEFAULT_FAMILY.into(), style: style.into(), size: px, ..Default::default() };
+    let mut st = TextStyle { family: mortiflix_text::fonts::DEFAULT_FAMILY.into(), style: style.into(), size: px, ..Default::default() };
     let para = ParagraphStyle { align: Align::Center, ..Default::default() };
     let mut l = layout(s, &st, &para);
     let wid = l.bounds[2] - l.bounds[0];

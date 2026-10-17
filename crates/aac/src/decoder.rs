@@ -1,6 +1,6 @@
 //! AAC-LC decoder: raw access units (`raw_data_block`, ISO/IEC 14496-3 §4.4.2.1) → planar f32.
 
-use filmcraft_bitstream::BitReader;
+use mortiflix_bitstream::BitReader;
 
 use crate::config::{AudioSpecificConfig, ElementType, ProgramConfig};
 use crate::huffman::{self, INTENSITY_HCB, INTENSITY_HCB2, NOISE_HCB, ZERO_HCB};

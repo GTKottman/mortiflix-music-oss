@@ -1,7 +1,7 @@
 //! Text-based editing commands (`transcript.*`): the Text panel ▸ Transcript tab.
 //!
 //! Transcripts belong to media items (`Project::transcripts`, media time); the sequence transcript
-//! is derived from them ([`filmcraft_edit::transcript::sequence_words`]). Words of the sequence
+//! is derived from them ([`mortiflix_edit::transcript::sequence_words`]). Words of the sequence
 //! transcript are addressed by index (`from`, `to`, inclusive), as `transcript.inspect` lists them.
 //!
 //! Speech recognition goes through a [`Transcriber`]: [`Session::transcriber`] when a host or a
@@ -13,11 +13,11 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 
-use filmcraft_edit as edit;
-use filmcraft_edit::transcript::{self as tx, CaptionRules, SeqWord};
-use filmcraft_project::{CaptionFormat, CaptionTrack, ItemId, ItemKind, TrackId, Transcript};
-use filmcraft_speech::{Options, SpeechError, Transcriber};
-use filmcraft_time::{TICKS_PER_SECOND, Tick, TimeRange};
+use mortiflix_edit as edit;
+use mortiflix_edit::transcript::{self as tx, CaptionRules, SeqWord};
+use mortiflix_project::{CaptionFormat, CaptionTrack, ItemId, ItemKind, TrackId, Transcript};
+use mortiflix_speech::{Options, SpeechError, Transcriber};
+use mortiflix_time::{TICKS_PER_SECOND, Tick, TimeRange};
 
 use crate::commands::{CommandSpec, always, bad, bool_p, f64_p, has_seq, str_p, u64_p};
 use crate::{EngineError, Result, Session};
@@ -36,7 +36,7 @@ pub fn models_dir() -> Option<std::path::PathBuf> {
 
 /// Whether this build can transcribe with Whisper (feature `whisper`).
 pub fn speech_available() -> bool {
-    filmcraft_speech::available()
+    mortiflix_speech::available()
 }
 
 /// The words of the active sequence's transcript.
@@ -117,10 +117,10 @@ fn item_audio(s: &Session, item: ItemId) -> Option<Vec<f32>> {
     if !src.info().has_audio() {
         return None;
     }
-    let sr = filmcraft_speech::SAMPLE_RATE;
+    let sr = mortiflix_speech::SAMPLE_RATE;
     let len = dur.to_units_floor(sr as i64).max(0) as usize;
     let buf = src.audio(0, len, sr).ok()?;
-    Some(filmcraft_speech::downmix(&buf.channels))
+    Some(mortiflix_speech::downmix(&buf.channels))
 }
 
 fn speech_err(e: SpeechError) -> EngineError {
@@ -134,14 +134,14 @@ fn transcriber(s: &Session, p: &Value) -> Result<Arc<dyn Transcriber>> {
     }
     // Settings ▸ Media Analysis & Transcription ▸ Speech model
     let model = str_p(p, "model").unwrap_or(&s.prefs.media_analysis.whisper_model);
-    if filmcraft_speech::models::find(model).is_none() {
+    if mortiflix_speech::models::find(model).is_none() {
         return Err(speech_err(SpeechError::UnknownModel(model.into())));
     }
-    if !filmcraft_speech::available() {
+    if !mortiflix_speech::available() {
         return Err(EngineError::Other(NO_SPEECH.into()));
     }
     let dir = models_dir().ok_or_else(|| EngineError::Other("no data directory for speech models".into()))?;
-    filmcraft_speech::load(&dir, model).map_err(speech_err)
+    mortiflix_speech::load(&dir, model).map_err(speech_err)
 }
 
 fn generate(s: &mut Session, p: &Value) -> Result<Value> {
@@ -404,13 +404,13 @@ fn create_captions(s: &mut Session, p: &Value) -> Result<Value> {
 fn models(_: &mut Session, _: &Value) -> Result<Value> {
     let dir = models_dir();
     Ok(json!({
-        "available": filmcraft_speech::available(),
-        "default": filmcraft_speech::models::DEFAULT_MODEL,
+        "available": mortiflix_speech::available(),
+        "default": mortiflix_speech::models::DEFAULT_MODEL,
         "dir": dir.as_ref().map(|d| d.to_string_lossy().to_string()),
-        "models": filmcraft_speech::models::catalogue().iter().map(|m| json!({
+        "models": mortiflix_speech::models::catalogue().iter().map(|m| json!({
             "id": m.id, "name": m.name, "multilingual": m.multilingual, "description": m.description,
             "license": m.license, "source": m.source, "size": m.size(),
-            "installed": dir.as_ref().is_some_and(|d| filmcraft_speech::models::installed(d, m)),
+            "installed": dir.as_ref().is_some_and(|d| mortiflix_speech::models::installed(d, m)),
         })).collect::<Vec<_>>(),
     }))
 }
@@ -418,13 +418,13 @@ fn models(_: &mut Session, _: &Value) -> Result<Value> {
 /// Download a catalogue model into `<data dir>/models` (feature `speech-download`). Hosts show
 /// the size, source and licence (`transcript.models`) and ask before running this.
 fn download_model(_: &mut Session, p: &Value) -> Result<Value> {
-    let id = str_p(p, "model").unwrap_or(filmcraft_speech::models::DEFAULT_MODEL);
-    let m = filmcraft_speech::models::find(id).ok_or_else(|| speech_err(SpeechError::UnknownModel(id.into())))?;
+    let id = str_p(p, "model").unwrap_or(mortiflix_speech::models::DEFAULT_MODEL);
+    let m = mortiflix_speech::models::find(id).ok_or_else(|| speech_err(SpeechError::UnknownModel(id.into())))?;
     let dir = models_dir().ok_or_else(|| EngineError::Other("no data directory for speech models".into()))?;
     #[cfg(feature = "speech-download")]
     {
-        filmcraft_speech::models::download(&dir, m, &mut |_, _, _| true).map_err(speech_err)?;
-        Ok(json!({"model": m.id, "dir": filmcraft_speech::models::model_dir(&dir, m).to_string_lossy()}))
+        mortiflix_speech::models::download(&dir, m, &mut |_, _, _| true).map_err(speech_err)?;
+        Ok(json!({"model": m.id, "dir": mortiflix_speech::models::model_dir(&dir, m).to_string_lossy()}))
     }
     #[cfg(not(feature = "speech-download"))]
     {

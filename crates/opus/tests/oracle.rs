@@ -11,7 +11,7 @@ mod common;
 
 use std::process::Command;
 
-use filmcraft_opus::{Decoder, Mode, OpusHead, Packet};
+use mortiflix_opus::{Decoder, Mode, OpusHead, Packet};
 
 fn has_libopus(ff: &std::path::Path) -> bool {
     Command::new(ff).args(["-hide_banner", "-encoders"]).output().map(|o| String::from_utf8_lossy(&o.stdout).contains("libopus")).unwrap_or(false)

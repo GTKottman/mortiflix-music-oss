@@ -28,7 +28,7 @@ struct Scratch(PathBuf);
 
 impl Scratch {
     fn new(name: &str) -> Self {
-        let d = filmcraft_testkit::workspace_root().join("target").join("export-tests").join(format!("engine-{name}-{}", std::process::id()));
+        let d = mortiflix_testkit::workspace_root().join("target").join("export-tests").join(format!("engine-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         Scratch(d)
@@ -93,7 +93,7 @@ fn nested_camel_case_settings_are_honoured() {
 }
 
 fn probe(path: &str) -> Option<Value> {
-    let ffprobe = filmcraft_testkit::ffprobe_or_skip("export presets")?;
+    let ffprobe = mortiflix_testkit::ffprobe_or_skip("export presets")?;
     let out = std::process::Command::new(ffprobe).args(["-v", "error", "-of", "json", "-show_format", "-show_streams", path]).output().unwrap();
     assert!(out.status.success(), "{path}: {}", String::from_utf8_lossy(&out.stderr));
     Some(serde_json::from_slice(&out.stdout).unwrap())
@@ -124,7 +124,7 @@ fn every_builtin_preset_exports_and_ffprobe_confirms() {
     let dir = Scratch::new("presets");
     for pr in &presets {
         let name = pr["name"].as_str().unwrap();
-        let sub = dir.0.join(format!("p{}", filmcraft_export::presets::preset_key(name)));
+        let sub = dir.0.join(format!("p{}", mortiflix_export::presets::preset_key(name)));
         std::fs::create_dir_all(&sub).unwrap();
         let path = sub.join("Demo").to_string_lossy().to_string();
         let params = json!({"preset": name, "path": path, "range": "custom", "startSeconds": 1.0, "endSeconds": 1.25, "wait": true});
@@ -321,7 +321,7 @@ fn h264_presets_hit_their_bitrates() {
         ("YouTube 1080p Full HD", 16_000.0, 20.0 / 16.0),
         ("Vimeo 1080p Full HD", 18_000.0, 24.0 / 18.0),
     ] {
-        let path = dir.path(&format!("{}.mp4", filmcraft_export::presets::preset_key(preset)));
+        let path = dir.path(&format!("{}.mp4", mortiflix_export::presets::preset_key(preset)));
         s.execute(
             "file.exportMedia",
             json!({"preset": preset, "path": path, "range": "custom", "startSeconds": 0.0, "endSeconds": 3.0, "audio": false, "wait": true}),
@@ -526,7 +526,7 @@ fn jobs_and_queue_items_report_the_time_they_have_left() {
 
 #[test]
 fn hardware_encoding_is_off_unless_asked_for() {
-    use filmcraft_export::HardwareEncoding::{Auto, Off};
+    use mortiflix_export::HardwareEncoding::{Auto, Off};
     let s = demo();
     let setting = |p: Value| crate::export_tools::settings_from_params(&s, &p, "file.exportMedia").map(|(_, st)| st.hardware_encoding);
     assert_eq!(setting(json!({"path": "x.mp4"})).unwrap(), Off);
@@ -540,13 +540,13 @@ fn hardware_encoding_is_off_unless_asked_for() {
     assert!(e.contains("off | auto"), "{e}");
     // and it travels in the settings object, with the default filling in when it is missing
     assert_eq!(setting(json!({"path": "x.mp4", "settings": {"hardwareEncoding": "auto"}})).unwrap(), Auto);
-    let old: filmcraft_export::ExportSettings = serde_json::from_value(json!({"format": "h264"})).unwrap();
+    let old: mortiflix_export::ExportSettings = serde_json::from_value(json!({"format": "h264"})).unwrap();
     assert_eq!(old.hardware_encoding, Off);
 }
 
 #[test]
 fn crf_param_picks_constant_quality() {
-    use filmcraft_export::BitrateMode::{Cbr, Crf, Vbr1Pass};
+    use mortiflix_export::BitrateMode::{Cbr, Crf, Vbr1Pass};
     let s = demo();
     let setting = |p: Value| crate::export_tools::settings_from_params(&s, &p, "file.exportMedia").map(|(_, st)| (st.bitrate_mode, st.crf));
     assert_eq!(setting(json!({"path": "x.mp4"})).unwrap(), (Vbr1Pass, 23.0));
@@ -560,7 +560,7 @@ fn crf_param_picks_constant_quality() {
 
 #[test]
 fn exr_compression_param_is_parsed_and_defaults_to_none() {
-    use filmcraft_export::ExrCompression::{None as Plain, Rle, Zip, Zips};
+    use mortiflix_export::ExrCompression::{None as Plain, Rle, Zip, Zips};
     let s = demo();
     let setting = |p: Value| crate::export_tools::settings_from_params(&s, &p, "file.exportMedia").map(|(_, st)| st.exr_compression);
     assert_eq!(setting(json!({"path": "x.exr", "format": "exr"})).unwrap(), Plain);
@@ -569,7 +569,7 @@ fn exr_compression_param_is_parsed_and_defaults_to_none() {
     }
     let e = setting(json!({"path": "x.exr", "format": "exr", "exrCompression": "piz"})).unwrap_err().to_string();
     assert!(e.contains("none | rle | zips | zip"), "{e}");
-    let old: filmcraft_export::ExportSettings = serde_json::from_value(json!({"format": "exr"})).unwrap();
+    let old: mortiflix_export::ExportSettings = serde_json::from_value(json!({"format": "exr"})).unwrap();
     assert_eq!(old.exr_compression, Plain);
 }
 
@@ -627,7 +627,7 @@ fn quick_export_uses_and_remembers_a_preset() {
     let mut s = demo();
     let dir = Scratch::new("quick");
     let r = s.execute("export.quick", json!({"path": dir.path("quick"), "range": "custom", "startSeconds": 0, "endSeconds": 0.25, "wait": true})).unwrap();
-    assert_eq!(r["preset"], filmcraft_export::presets::DEFAULT_PRESET);
+    assert_eq!(r["preset"], mortiflix_export::presets::DEFAULT_PRESET);
     assert_eq!(r["path"], dir.path("quick.mp4"));
     assert!(Path::new(&dir.path("quick.mp4")).exists());
     s.execute(
@@ -670,8 +670,8 @@ fn ranges_resolve_and_sidecar_captions_are_written() {
     let srt = std::fs::read_to_string(dir.path("cap.srt")).unwrap();
     // Timed from In at 1 s (the caption starts on frame 35), clipped to the export duration.
     let resolved = s.execute("export.resolve", json!({"preset": "Waveform Audio 48 kHz 16-bit"})).unwrap();
-    let duration = filmcraft_time::Tick(resolved["range"]["duration"].as_i64().unwrap());
-    let timing = format!("00:00:00,460 --> {}", filmcraft_captions::format_clock(duration, ','));
+    let duration = mortiflix_time::Tick(resolved["range"]["duration"].as_i64().unwrap());
+    let timing = format!("00:00:00,460 --> {}", mortiflix_captions::format_clock(duration, ','));
     assert!(srt.contains("Hello sidecar") && srt.contains(&timing), "{srt}");
     s.execute("file.exportMedia", json!({"preset": "Waveform Audio 48 kHz 16-bit", "path": out, "captionSidecar": "vtt", "wait": true})).unwrap();
     assert!(std::fs::read_to_string(dir.path("cap.vtt")).unwrap().starts_with("WEBVTT"));
@@ -722,9 +722,9 @@ fn caption_sidecars_keep_only_the_exported_interval() {
     use std::collections::BTreeMap;
     use std::sync::{Arc, Mutex};
 
-    use filmcraft_captions::{Document, Format};
-    use filmcraft_media::MediaSource;
-    use filmcraft_time::{TICKS_PER_SECOND, Tick};
+    use mortiflix_captions::{Document, Format};
+    use mortiflix_media::MediaSource;
+    use mortiflix_time::{TICKS_PER_SECOND, Tick};
 
     #[derive(Default)]
     struct MemoryFiles(Mutex<BTreeMap<String, Vec<u8>>>);
@@ -761,10 +761,10 @@ fn caption_sidecars_keep_only_the_exported_interval() {
         assert_eq!(result["result"]["path"], "output.wav");
         assert!(result["result"]["bytes"].as_u64().is_some_and(|n| n > 0), "{result}");
         let wav = files.0.lock().unwrap().get("output.wav").unwrap().clone();
-        let audio = filmcraft_media::wav::WavSource::parse("output.wav", wav.into()).unwrap();
+        let audio = mortiflix_media::wav::WavSource::parse("output.wav", wav.into()).unwrap();
         assert_eq!(audio.info().duration, duration, "exported audio duration");
         let bytes = files.0.lock().unwrap().get(&format!("output.{ext}")).unwrap().clone();
-        let doc = filmcraft_captions::parse(&bytes, format).unwrap();
+        let doc = mortiflix_captions::parse(&bytes, format).unwrap();
         assert!(doc.warnings.is_empty(), "{doc:?}");
         doc
     }
@@ -803,7 +803,7 @@ fn caption_sidecars_keep_only_the_exported_interval() {
         // A standalone caption export still exports the whole track even with sequence In/Out set.
         let path = format!("standalone.{}", format.extension());
         s.execute("captions.export", json!({"path":path})).unwrap();
-        let standalone = filmcraft_captions::parse(files.0.lock().unwrap().get(&path).unwrap(), format).unwrap();
+        let standalone = mortiflix_captions::parse(files.0.lock().unwrap().get(&path).unwrap(), format).unwrap();
         assert_eq!(standalone, all);
     }
     assert_eq!(serde_json::to_value(&s.project).unwrap(), original, "export must not trim the project captions");

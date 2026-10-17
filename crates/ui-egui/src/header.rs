@@ -5,12 +5,12 @@
 
 use egui::{Color32, Rect, Sense, Stroke, pos2, vec2};
 
-use crate::FilmcraftApp;
+use crate::StudioApp;
 use crate::icons::{self, Icon};
 use crate::state::Mode;
 use crate::theme::Tokens;
 
-pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
+pub fn show(app: &mut StudioApp, ui: &mut egui::Ui, rect: Rect) {
     let t = app.tokens;
     let p = ui.painter().clone();
     p.rect_filled(rect, 0.0, t.header_bg);
@@ -37,7 +37,7 @@ pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
     }
     x = home.max.x + 16.0;
     // Mode tabs (14 pt; active = primary text with a 2 pt underline under the label); Mortiflix
-    // FilmCraft shows them only on stages 5-6 (doc 30)
+    // Mortiflix Studio shows them only on stages 5-6 (doc 30)
     let tabs: &[(Mode, &str, &str)] = if crate::mortiflix::hides_mode_tabs(app) {
         &[]
     } else {
@@ -72,12 +72,12 @@ pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
         left_end = mu.min_rect().max.x;
     }
     // Document title, centred
-    // A Mortiflix project open: "<its title> – Mortiflix FilmCraft" (the unsaved mark kept)
+    // A Mortiflix project open: "<its title> – Mortiflix Studio" (the unsaved mark kept)
     let name = crate::mortiflix::doc_title(app).unwrap_or_else(|| app.session.project.name.clone());
     let title = if app.session.is_dirty() { tlf!("{name} - Edited", name = name) } else { name };
     // Right cluster: icons at ~38 pt pitch, then workspace name in caps.
     let mut rx = rect.max.x - 14.0;
-    let mut btn = |ui: &mut egui::Ui, icon: Icon, id: &str, tip: &str, app: &mut FilmcraftApp| -> egui::Response {
+    let mut btn = |ui: &mut egui::Ui, icon: Icon, id: &str, tip: &str, app: &mut StudioApp| -> egui::Response {
         let r = Rect::from_center_size(pos2(rx - 14.0, rect.center().y), vec2(28.0, 28.0));
         rx -= 38.0;
         let resp = ui.interact(r, egui::Id::new(("hdr", id)), Sense::click()).on_hover_text(tip);

@@ -1,4 +1,4 @@
-//! Clip audio effects: project effect instances → `filmcraft-audio-dsp` processors.
+//! Clip audio effects: project effect instances → `mortiflix-audio-dsp` processors.
 //!
 //! The mixer is pull-based (any sample range, any order), but most audio effects are stateful
 //! (filters, dynamics, delay/reverb tails). A small cache keeps processed effect chains per clip
@@ -10,9 +10,9 @@
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 
-use filmcraft_audio_dsp::AudioEffect;
-use filmcraft_project::{EffectInstance, TrackItem};
-use filmcraft_time::Tick;
+use mortiflix_audio_dsp::AudioEffect;
+use mortiflix_project::{EffectInstance, TrackItem};
+use mortiflix_time::Tick;
 
 /// How a project effect maps onto a DSP effect.
 pub(crate) struct Mapping {
@@ -266,14 +266,14 @@ fn direct(d: &mut dyn AudioEffect, e: &EffectInstance, t: Tick) {
 /// effect editors: [`AudioEffect::response_db`] / [`AudioEffect::transfer_db`]).
 pub fn configured(e: &EffectInstance, t: Tick, sample_rate: u32) -> Option<Box<dyn AudioEffect>> {
     let m = mapping(&e.effect)?;
-    let mut d = filmcraft_audio_dsp::create_effect(m.dsp, sample_rate as f32, 2)?;
+    let mut d = mortiflix_audio_dsp::create_effect(m.dsp, sample_rate as f32, 2)?;
     (m.apply)(d.as_mut(), e, t);
     Some(d)
 }
 
 /// Processing latency (samples) of a project audio effect at `sample_rate`.
 pub fn latency(effect_id: &str, sample_rate: u32) -> usize {
-    mapping(effect_id).and_then(|m| filmcraft_audio_dsp::create_effect(m.dsp, sample_rate as f32, 2)).map_or(0, |d| d.latency())
+    mapping(effect_id).and_then(|m| mortiflix_audio_dsp::create_effect(m.dsp, sample_rate as f32, 2)).map_or(0, |d| d.latency())
 }
 
 fn shelf(d: &mut dyn AudioEffect, kind: f32, freq: f32, gain: f32) {
@@ -373,7 +373,7 @@ pub fn process(item: &TrackItem, a0: i64, n: usize, sr: u32, read: &dyn Fn(i64, 
             let pre = (pre_s * sr as f64).ceil() as usize;
             let mut fx: Vec<Box<dyn AudioEffect>> = Vec::new();
             for (_, m) in &act {
-                if let Some(d) = filmcraft_audio_dsp::create_effect(m.dsp, sr as f32, width) {
+                if let Some(d) = mortiflix_audio_dsp::create_effect(m.dsp, sr as f32, width) {
                     fx.push(d);
                 }
             }
@@ -402,14 +402,14 @@ pub fn process(item: &TrackItem, a0: i64, n: usize, sr: u32, read: &dyn Fn(i64, 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use filmcraft_audio_dsp::Unit;
-    use filmcraft_project::{EffectKind, ParamKind, effect_defs};
+    use mortiflix_audio_dsp::Unit;
+    use mortiflix_project::{EffectKind, ParamKind, effect_defs};
 
     #[test]
     fn every_audio_effect_has_dsp() {
         for d in effect_defs().iter().filter(|d| d.kind == EffectKind::Audio && !d.intrinsic) {
             let m = mapping(d.id).unwrap_or_else(|| panic!("{} has no DSP mapping", d.id));
-            assert!(filmcraft_audio_dsp::effect_info(m.dsp).is_some(), "{} → unknown DSP {}", d.id, m.dsp);
+            assert!(mortiflix_audio_dsp::effect_info(m.dsp).is_some(), "{} → unknown DSP {}", d.id, m.dsp);
             let inst = d.instance();
             let mut fx = configured(&inst, Tick::ZERO, 48000).unwrap();
             let mut l: Vec<f32> = (0..4800).map(|i| ((i * 7919 % 1000) as f32 / 1000.0 - 0.5) * 0.5).collect();
@@ -417,14 +417,14 @@ mod tests {
             fx.process(&mut [&mut l, &mut r]);
             assert!(l.iter().chain(&r).all(|v| v.is_finite()), "{}", d.id);
         }
-        assert_eq!(filmcraft_project::effect::PREMIERE_AUDIO_EFFECTS.len(), 53);
+        assert_eq!(mortiflix_project::effect::PREMIERE_AUDIO_EFFECTS.len(), 53);
     }
 
     #[test]
     fn direct_mappings_match_dsp_parameters() {
         for &(pid, dsp, _) in DIRECT {
-            let def = filmcraft_project::find_effect(pid).unwrap_or_else(|| panic!("{pid}"));
-            let info = filmcraft_audio_dsp::effect_info(dsp).unwrap_or_else(|| panic!("{dsp}"));
+            let def = mortiflix_project::find_effect(pid).unwrap_or_else(|| panic!("{pid}"));
+            let info = mortiflix_audio_dsp::effect_info(dsp).unwrap_or_else(|| panic!("{dsp}"));
             for p in &def.params {
                 let s = info.params.iter().find(|s| s.id == p.id).unwrap_or_else(|| panic!("{pid}.{} missing in {dsp}", p.id));
                 match &p.kind {
@@ -450,12 +450,12 @@ mod tests {
 
     #[test]
     fn editor_curves_follow_project_parameters() {
-        let def = filmcraft_project::find_effect("graphic_eq").unwrap();
+        let def = mortiflix_project::find_effect("graphic_eq").unwrap();
         let mut inst = def.instance();
-        inst.param_mut("b6").unwrap().value = filmcraft_project::ParamValue::Float(9.0);
+        inst.param_mut("b6").unwrap().value = mortiflix_project::ParamValue::Float(9.0);
         let fx = configured(&inst, Tick::ZERO, 48000).unwrap();
         assert!((fx.response_db(1000.0).unwrap() - 9.0).abs() < 1.0);
-        let def = filmcraft_project::find_effect("dynamics_rack").unwrap();
+        let def = mortiflix_project::find_effect("dynamics_rack").unwrap();
         let fx = configured(&def.instance(), Tick::ZERO, 48000).unwrap();
         assert!((fx.transfer_db(0, 0.0).unwrap() + 10.0).abs() < 1e-3, "−20 dB threshold, 2:1");
         assert_eq!(latency("fft_filter", 48000), 2048);
@@ -464,8 +464,8 @@ mod tests {
 
     #[test]
     fn parametric_eq_applies_every_control() {
-        let def = filmcraft_project::find_effect("parametric_eq").unwrap();
-        let resp = |id: &str, v: filmcraft_project::ParamValue, extra: Option<(&str, filmcraft_project::ParamValue)>| {
+        let def = mortiflix_project::find_effect("parametric_eq").unwrap();
+        let resp = |id: &str, v: mortiflix_project::ParamValue, extra: Option<(&str, mortiflix_project::ParamValue)>| {
             let mut inst = def.instance();
             inst.param_mut(id).unwrap().value = v;
             if let Some((k, x)) = extra {
@@ -473,7 +473,7 @@ mod tests {
             }
             configured(&inst, Tick::ZERO, 48000).unwrap().response_db(1000.0).unwrap()
         };
-        use filmcraft_project::ParamValue::{Bool, Float};
+        use mortiflix_project::ParamValue::{Bool, Float};
         assert!((resp("master_gain", Float(-30.0), None) + 30.0).abs() < 1.0);
         for b in ["b1", "b2", "b4", "b5"] {
             let g = resp(&format!("{b}_gain"), Float(-24.0), Some((&format!("{b}_freq"), Float(1000.0))));

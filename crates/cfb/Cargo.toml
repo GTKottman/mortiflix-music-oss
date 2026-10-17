@@ -1,5 +1,5 @@
 [package]
-name = "filmcraft-cfb"
+name = "mortiflix-cfb"
 description = "Clean-room Compound File Binary (Microsoft structured storage, [MS-CFB]) reader and writer: the container of AAF files"
 version.workspace = true
 edition.workspace = true

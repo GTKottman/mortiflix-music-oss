@@ -1,5 +1,5 @@
 [package]
-name = "filmcraft-apv"
+name = "mortiflix-apv"
 description = "Clean-room Advanced Professional Video (APV, IETF RFC 9924) decoder and encoder"
 version.workspace = true
 edition.workspace = true
@@ -10,12 +10,12 @@ default = ["threads"]
 threads = ["dep:rayon"]
 
 [dependencies]
-filmcraft-bitstream.workspace = true
+mortiflix-bitstream.workspace = true
 rayon = { workspace = true, optional = true }
 thiserror.workspace = true
 
 [dev-dependencies]
-filmcraft-testkit.workspace = true
+mortiflix-testkit.workspace = true
 
 [lints]
 workspace = true

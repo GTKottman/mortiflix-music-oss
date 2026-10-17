@@ -2,7 +2,7 @@
 
 mod common;
 use common::psnr;
-use filmcraft_prores::*;
+use mortiflix_prores::*;
 
 /// Deterministic test picture: gradients, a sharp-edged grid, a disc and mild noise.
 pub fn synth(w: u32, h: u32, chroma: ChromaFormat, depth: u8, alpha: bool, seed: u32) -> Frame {

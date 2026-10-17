@@ -21,8 +21,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use filmcraft_project::{Bin, BinEntry, BinId, ItemId, ItemKind, MediaRef, Project, ProjectItem, TrackKind};
-use filmcraft_time::{Tick, TimeDisplay, format_time};
+use mortiflix_project::{Bin, BinEntry, BinId, ItemId, ItemKind, MediaRef, Project, ProjectItem, TrackKind};
+use mortiflix_time::{Tick, TimeDisplay, format_time};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -257,7 +257,7 @@ pub const BUILTIN_COLUMNS: [&str; 36] = [
     "Camera Angle",
 ];
 
-/// Metadata keys FilmCraft uses for its own bookkeeping (not offered as columns).
+/// Metadata keys Mortiflix Studio uses for its own bookkeeping (not offered as columns).
 pub const INTERNAL_KEYS: [&str; 3] = [FREEFORM_POS, FREEFORM_STACK, crate::keyboard::POSTER_FRAME_KEY];
 
 /// Freeform position, stack and arrangement keys (hidden from the Metadata panel).
@@ -302,7 +302,7 @@ pub enum SortKey {
     Text(String),
 }
 
-fn media_of<'a>(p: &'a Project, it: &'a ProjectItem) -> Option<&'a filmcraft_project::MediaClip> {
+fn media_of<'a>(p: &'a Project, it: &'a ProjectItem) -> Option<&'a mortiflix_project::MediaClip> {
     match &it.kind {
         ItemKind::Media(m) => Some(m),
         ItemKind::Subclip { parent, .. } => p.item(*parent).and_then(|x| x.as_media()),
@@ -402,7 +402,7 @@ pub fn cell(p: &Project, it: &ProjectItem, column: &str) -> (String, SortKey) {
         ),
         "Audio Codec" => text(media.and_then(|m| m.info.audio()).map(|a| a.codec.clone()).unwrap_or_default()),
         "Color Space" => text(match (media.and_then(|m| m.info.video.as_ref().map(|v| (m, v))), &it.kind) {
-            (Some((m, v)), _) => m.interpret.color_space.unwrap_or_else(|| filmcraft_color::ColorSpace::from_info(&v.color)).label().to_string(),
+            (Some((m, v)), _) => m.interpret.color_space.unwrap_or_else(|| mortiflix_color::ColorSpace::from_info(&v.color)).label().to_string(),
             (None, ItemKind::Sequence(q)) => q.settings.color.working.label().to_string(),
             _ => String::new(),
         }),

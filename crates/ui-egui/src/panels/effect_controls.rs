@@ -3,11 +3,11 @@
 //! keyframe lane on the right. Also hosts the Lumetri Color panel body (same editor, grouped).
 
 use egui::{Align2, Color32, Pos2, Rect, Sense, Stroke, pos2, vec2};
-use filmcraft_project::{ClipId, EffectInstance, ParamKind, ParamValue, TrackItem, TrackKind};
-use filmcraft_time::Tick;
+use mortiflix_project::{ClipId, EffectInstance, ParamKind, ParamValue, TrackItem, TrackKind};
+use mortiflix_time::Tick;
 use serde_json::{Value, json};
 
-use crate::FilmcraftApp;
+use crate::StudioApp;
 use crate::icons::{self, Icon};
 use crate::state::KeyframeRef;
 use crate::theme::Tokens;
@@ -65,7 +65,7 @@ fn keyframe_exists(it: &TrackItem, k: &KeyframeRef) -> bool {
 
 /// Edit ▸ Select All (⌘A) with Effect Controls focused selects every keyframe the panel shows
 /// instead of the Timeline's clips (#1241). False when the panel is not focused or shows none.
-pub(crate) fn select_all_keyframes(app: &mut FilmcraftApp) -> bool {
+pub(crate) fn select_all_keyframes(app: &mut StudioApp) -> bool {
     if app.ui.focused != crate::dock::PanelKind::EffectControls {
         return false;
     }
@@ -77,7 +77,7 @@ pub(crate) fn select_all_keyframes(app: &mut FilmcraftApp) -> bool {
                 keys.extend(p.keyframes.iter().map(|kf| key(param, None, kf.time)));
             }
             for (m, mask) in e.masks.iter().enumerate() {
-                for param in filmcraft_project::mask::MASK_PARAMS {
+                for param in mortiflix_project::mask::MASK_PARAMS {
                     keys.extend(mask.param(param).into_iter().flat_map(|p| &p.keyframes).map(|kf| key(param, Some(m), kf.time)));
                 }
             }
@@ -90,13 +90,13 @@ pub(crate) fn select_all_keyframes(app: &mut FilmcraftApp) -> bool {
     true
 }
 
-fn selected_clip(app: &FilmcraftApp) -> Option<(ClipId, TrackItem, TrackKind)> {
+fn selected_clip(app: &StudioApp) -> Option<(ClipId, TrackItem, TrackKind)> {
     selected_clips(app).into_iter().next()
 }
 
 /// The selected clip (video first) and the audio linked to it when that audio is selected or
 /// linked selection is on — so clip audio FX (Parametric EQ, Custom Setup) stay visible on A/V pairs.
-fn selected_clips(app: &FilmcraftApp) -> Vec<(ClipId, TrackItem, TrackKind)> {
+fn selected_clips(app: &StudioApp) -> Vec<(ClipId, TrackItem, TrackKind)> {
     let Some(seq) = app.session.active_sequence() else { return Vec::new() };
     let picked: Vec<(ClipId, &TrackItem, TrackKind)> = app
         .session
@@ -125,7 +125,7 @@ fn selected_clips(app: &FilmcraftApp) -> Vec<(ClipId, TrackItem, TrackKind)> {
     out
 }
 
-pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
+pub fn show(app: &mut StudioApp, ui: &mut egui::Ui, rect: Rect) {
     let t = app.tokens;
     let clips = selected_clips(app);
     // keep only selected keyframes that still exist on a clip shown here
@@ -320,7 +320,7 @@ pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
         app.auto.add("effectControls.playhead", Rect::from_min_max(pos2(px - 5.0, top), pos2(px + 5.0, tip)), "playhead");
     }
     // footer timecode
-    let tc = filmcraft_time::format_time(ph, seq.settings.frame_rate, seq.settings.drop_frame, filmcraft_time::TimeDisplay::Timecode, 48000);
+    let tc = mortiflix_time::format_time(ph, seq.settings.frame_rate, seq.settings.drop_frame, mortiflix_time::TimeDisplay::Timecode, 48000);
     ui.painter().text(pos2(rect.min.x + 10.0, rect.max.y - 13.0), Align2::LEFT_CENTER, tc, Tokens::mono(13.0), t.timecode);
     keys.finish(app, ui);
     run(app, ui.ctx(), actions);
@@ -353,7 +353,7 @@ pub(crate) fn fit_to_row(ui: &mut egui::Ui) {
 }
 
 /// Premiere's "Custom Setup ▸ Edit…" row: opens the effect's Clip Fx Editor window.
-fn custom_setup_row(app: &mut FilmcraftApp, ui: &mut egui::Ui, body: Rect, lane: &Rect, clip: ClipId, idx: usize, effect: &str) {
+fn custom_setup_row(app: &mut StudioApp, ui: &mut egui::Ui, body: Rect, lane: &Rect, clip: ClipId, idx: usize, effect: &str) {
     let t = app.tokens;
     let (r, _) = ui.allocate_exact_size(vec2(body.width(), ROW_H), Sense::hover());
     row_line(ui, r, lane, &t);
@@ -369,13 +369,13 @@ fn custom_setup_row(app: &mut FilmcraftApp, ui: &mut egui::Ui, body: Rect, lane:
     }
 }
 
-fn seq_name(app: &FilmcraftApp) -> String {
+fn seq_name(app: &StudioApp) -> String {
     app.session.state.active_sequence.and_then(|s| app.session.project.item(s)).map(|i| i.name.clone()).unwrap_or_default()
 }
 
 /// The keyframe lane's time ruler: ticks and sequence timecode across the clip's stretch of the
 /// timeline (the lane shows exactly the clip, so the ruler starts at the clip's start).
-fn paint_ruler(p: &egui::Painter, ruler: Rect, it: &TrackItem, rate: filmcraft_time::FrameRate, drop_frame: bool, t: &Tokens) {
+fn paint_ruler(p: &egui::Painter, ruler: Rect, it: &TrackItem, rate: mortiflix_time::FrameRate, drop_frame: bool, t: &Tokens) {
     let p = p.with_clip_rect(ruler);
     let dur = it.duration.0.max(1) as f64;
     let frame_px = ruler.width() as f64 * rate.frame_duration().0.max(1) as f64 / dur;
@@ -415,7 +415,7 @@ fn paint_ruler(p: &egui::Painter, ruler: Rect, it: &TrackItem, rate: filmcraft_t
             let x = ruler.min.x + ((rate.tick_of(f) - it.start).0 as f64 / dur) as f32 * ruler.width();
             p.line_segment([pos2(x, base_y - h), pos2(x, base_y)], Stroke::new(1.0, t.tl_ruler_tick));
             if labelled {
-                let label = filmcraft_time::format_time(rate.tick_of(f), rate, drop_frame, filmcraft_time::TimeDisplay::Timecode, 48000);
+                let label = mortiflix_time::format_time(rate.tick_of(f), rate, drop_frame, mortiflix_time::TimeDisplay::Timecode, 48000);
                 p.text(pos2(x, ruler.min.y + 7.0), Align2::CENTER_CENTER, label, Tokens::ui(10.0), t.tl_ruler_text);
             }
             f = f.saturating_add(step);
@@ -430,10 +430,10 @@ fn paint_ruler(p: &egui::Painter, ruler: Rect, it: &TrackItem, rate: filmcraft_t
 /// Returns whether the diamond was clicked; the arrows queue their own `playhead.set`.
 #[allow(clippy::too_many_arguments)]
 fn keyframe_nav(
-    app: &mut FilmcraftApp,
+    app: &mut StudioApp,
     ui: &mut egui::Ui,
     at: Pos2,
-    param: Option<&filmcraft_project::Param>,
+    param: Option<&mortiflix_project::Param>,
     mt: Tick,
     it: &TrackItem,
     id: egui::Id,
@@ -479,7 +479,7 @@ fn keyframe_nav(
 /// the clip does not have yet (Crop) is applied first.
 #[allow(clippy::too_many_arguments)]
 fn properties_nav(
-    app: &mut FilmcraftApp,
+    app: &mut StudioApp,
     ui: &mut egui::Ui,
     row: Rect,
     clip: ClipId,
@@ -507,14 +507,14 @@ fn properties_nav(
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn param_row(
-    app: &mut FilmcraftApp,
+    app: &mut StudioApp,
     ui: &mut egui::Ui,
     body: Rect,
     clip: ClipId,
     idx: usize,
     e: &EffectInstance,
     mask: Option<usize>,
-    pd: &filmcraft_project::ParamDef,
+    pd: &mortiflix_project::ParamDef,
     mt: Tick,
     actions: &mut Vec<(String, Value)>,
     lane: &Rect,
@@ -715,7 +715,7 @@ pub(crate) fn param_row(
 }
 
 /// Shared by the lane diamonds and graph points: commands use media time and preserve the mask.
-fn keyframe_menu(app: &mut FilmcraftApp, ui: &mut egui::Ui, target: KeyframeRef, actions: &mut Vec<(String, Value)>) {
+fn keyframe_menu(app: &mut StudioApp, ui: &mut egui::Ui, target: KeyframeRef, actions: &mut Vec<(String, Value)>) {
     let mut params = json!({"clip": target.clip, "effect": target.effect, "param": target.param, "mediaTime": target.time.0});
     if let Some(mask) = target.mask {
         params["mask"] = json!(mask);
@@ -749,7 +749,7 @@ fn keyframe_menu(app: &mut FilmcraftApp, ui: &mut egui::Ui, target: KeyframeRef,
 }
 
 /// Lumetri Color panel: edits (or adds) the Lumetri effect on the selected clip, grouped by section.
-pub fn lumetri_panel(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
+pub fn lumetri_panel(app: &mut StudioApp, ui: &mut egui::Ui, rect: Rect) {
     let t = app.tokens;
     let Some((clip, it, _)) = selected_clip(app) else {
         crate::dock::placeholder(ui, rect, &t, tl!("Select a clip to grade"));
@@ -825,7 +825,7 @@ pub fn lumetri_panel(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
 }
 
 /// Properties panel (Premiere 26): a compact inspector for the selected clip.
-pub fn properties_panel(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
+pub fn properties_panel(app: &mut StudioApp, ui: &mut egui::Ui, rect: Rect) {
     let t = app.tokens;
     let clips = selected_clips(app);
     let Some((clip, it, kind)) = clips.first().cloned() else {
@@ -847,7 +847,7 @@ pub fn properties_panel(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
         ui.painter().text(pos2(r.min.x + 18.0, r.center().y), Align2::LEFT_CENTER, label, Tokens::ui(12.0), t.text_dim);
         r
     };
-    let section = |ui: &mut egui::Ui, app: &mut FilmcraftApp, name: &str, reset: Option<(usize, u64)>, actions: &mut Vec<(String, Value)>| -> bool {
+    let section = |ui: &mut egui::Ui, app: &mut StudioApp, name: &str, reset: Option<(usize, u64)>, actions: &mut Vec<(String, Value)>| -> bool {
         ui.add_space(4.0);
         let key = format!("props:{name}");
         let open = !app.ui.collapsed_fx.contains(&key);
@@ -1017,7 +1017,7 @@ pub(crate) fn row_fill(r: Rect) -> Rect {
 /// with no value change — so a Scale scrub that pauses between percents is still one undo (#887). A
 /// change that brings its own `merge` key (a Program monitor handle changing several parameters)
 /// keeps it.
-pub(crate) fn run(app: &mut FilmcraftApp, ctx: &egui::Context, actions: Vec<(String, Value)>) {
+pub(crate) fn run(app: &mut StudioApp, ctx: &egui::Context, actions: Vec<(String, Value)>) {
     let (down, press) = ctx.input(|i| (i.pointer.any_down(), i.pointer.press_start_time()));
     let key = egui::Id::new("effect-controls-drag-step");
     let begun = ctx.data(|d| d.get_temp::<Option<f64>>(key)).flatten();
@@ -1066,14 +1066,14 @@ fn graph_components(v: &ParamValue) -> Vec<f64> {
 /// Keyframes drag vertically (value); Bezier influence handles drag horizontally.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn graph_rows(
-    app: &mut FilmcraftApp,
+    app: &mut StudioApp,
     ui: &mut egui::Ui,
     body: Rect,
     clip: ClipId,
     idx: usize,
     mask: Option<usize>,
-    pd: &filmcraft_project::ParamDef,
-    param: &filmcraft_project::Param,
+    pd: &mortiflix_project::ParamDef,
+    param: &mortiflix_project::Param,
     lane: &Rect,
     it: &TrackItem,
     actions: &mut Vec<(String, Value)>,
@@ -1137,7 +1137,7 @@ pub(crate) fn graph_rows(
         p.add(egui::Shape::line(line, Stroke::new(1.5, curve_color(c))));
     }
     // velocity (units per second, derivative of the sampled value; a point's speed along its path)
-    let secs = (dur * speed / filmcraft_time::TICKS_PER_SECOND as f64 / n as f64).max(1e-9);
+    let secs = (dur * speed / mortiflix_time::TICKS_PER_SECOND as f64 / n as f64).max(1e-9);
     let vel: Vec<f64> = vals
         .windows(2)
         .map(|w| {
@@ -1167,9 +1167,9 @@ pub(crate) fn graph_rows(
             continue;
         }
         let eases_out =
-            !matches!(k.interp, filmcraft_project::Interpolation::Linear | filmcraft_project::Interpolation::Hold | filmcraft_project::Interpolation::EaseIn);
+            !matches!(k.interp, mortiflix_project::Interpolation::Linear | mortiflix_project::Interpolation::Hold | mortiflix_project::Interpolation::EaseIn);
         let eases_in =
-            !matches!(k.interp, filmcraft_project::Interpolation::Linear | filmcraft_project::Interpolation::Hold | filmcraft_project::Interpolation::EaseOut);
+            !matches!(k.interp, mortiflix_project::Interpolation::Linear | mortiflix_project::Interpolation::Hold | mortiflix_project::Interpolation::EaseOut);
         let comps = graph_components(&k.value);
         for (ci, &v) in comps.iter().enumerate() {
             if !v.is_finite() {
@@ -1252,9 +1252,9 @@ pub(crate) fn graph_rows(
 }
 
 /// Read-only text for parameters without an inline editor (LUT references, free text, curves).
-fn param_text(project: &filmcraft_project::Project, id: &str, value: &ParamValue) -> String {
+fn param_text(project: &mortiflix_project::Project, id: &str, value: &ParamValue) -> String {
     match value {
-        ParamValue::Text(s) if id.ends_with("_lut") => filmcraft_render::luts::label(Some(project), s),
+        ParamValue::Text(s) if id.ends_with("_lut") => mortiflix_render::luts::label(Some(project), s),
         ParamValue::Text(s) if s.is_empty() => tl!("None").into(),
         ParamValue::Text(s) => s.clone(),
         ParamValue::Curve(pts) if pts.is_empty() || *pts == [[0.0, 0.0], [1.0, 1.0]] => tl!("Default").into(),
@@ -1269,7 +1269,7 @@ mod param_text_tests {
 
     #[test]
     fn readable_values_for_text_lut_and_curve_params() {
-        let p = filmcraft_project::Project::default();
+        let p = mortiflix_project::Project::default();
         assert_eq!(param_text(&p, "input_lut", &ParamValue::Text(String::new())), "None");
         assert_eq!(param_text(&p, "look_lut", &ParamValue::Text("builtin:look-teal-orange".into())), "Teal & Orange");
         assert_eq!(param_text(&p, "label", &ParamValue::Text(String::new())), "None");
@@ -1288,21 +1288,21 @@ mod drag_undo_tests {
     /// the same parameter are still two undo steps.
     #[test]
     fn each_press_begins_its_own_undo_step() {
-        let mut s = filmcraft_engine::Session::default();
+        let mut s = mortiflix_engine::Session::default();
         s.execute("file.openDemoProject", json!({})).unwrap();
         let clip = s.active_sequence().unwrap().video_tracks[0].items[0].id.0;
-        let mut app = crate::FilmcraftApp::new(s);
+        let mut app = crate::StudioApp::new(s);
         let ctx = egui::Context::default();
-        let opacity = |app: &crate::FilmcraftApp| {
+        let opacity = |app: &crate::StudioApp| {
             let q = app.session.active_sequence().unwrap();
-            let it = q.find_item(filmcraft_project::ClipId(clip)).unwrap().1;
+            let it = q.find_item(mortiflix_project::ClipId(clip)).unwrap().1;
             it.effects.iter().find(|e| e.effect == "opacity").unwrap().params["opacity"].value.as_f64().unwrap()
         };
         let start = opacity(&app);
         let pos = egui::pos2(10.0, 10.0);
         let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
         let mut time = 0.0;
-        let mut frame = |app: &mut crate::FilmcraftApp, events: Vec<egui::Event>, value: Option<f64>| {
+        let mut frame = |app: &mut crate::StudioApp, events: Vec<egui::Event>, value: Option<f64>| {
             time += 0.1;
             let raw = egui::RawInput { time: Some(time), events, ..Default::default() };
             let mut out = ctx.run_ui(raw, |ui| {
@@ -1329,21 +1329,21 @@ mod drag_undo_tests {
     /// still one undo, not one step per 1%.
     #[test]
     fn a_scale_drag_with_idle_frames_is_one_undo_step() {
-        let mut s = filmcraft_engine::Session::default();
+        let mut s = mortiflix_engine::Session::default();
         s.execute("file.openDemoProject", json!({})).unwrap();
         let clip = s.active_sequence().unwrap().video_tracks[0].items[0].id.0;
-        let mut app = crate::FilmcraftApp::new(s);
+        let mut app = crate::StudioApp::new(s);
         let ctx = egui::Context::default();
-        let scale = |app: &crate::FilmcraftApp| {
+        let scale = |app: &crate::StudioApp| {
             let q = app.session.active_sequence().unwrap();
-            let it = q.find_item(filmcraft_project::ClipId(clip)).unwrap().1;
+            let it = q.find_item(mortiflix_project::ClipId(clip)).unwrap().1;
             it.effects.iter().find(|e| e.effect == "motion").unwrap().params["scale"].value.as_f64().unwrap()
         };
         let start = scale(&app);
         let pos = egui::pos2(10.0, 10.0);
         let button = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
         let mut time = 0.0;
-        let mut frame = |app: &mut crate::FilmcraftApp, events: Vec<egui::Event>, value: Option<f64>| {
+        let mut frame = |app: &mut crate::StudioApp, events: Vec<egui::Event>, value: Option<f64>| {
             time += 0.1;
             let raw = egui::RawInput { time: Some(time), events, ..Default::default() };
             let mut out = ctx.run_ui(raw, |ui| {
@@ -1381,15 +1381,15 @@ mod lane_tests {
     /// keyframe navigators included.
     #[test]
     fn a_clip_without_a_duration_still_draws() {
-        let mut s = filmcraft_engine::Session::default();
+        let mut s = mortiflix_engine::Session::default();
         s.execute("file.openDemoProject", json!({})).unwrap();
         let clip = s.active_sequence().unwrap().video_tracks[0].items[0].id;
         s.execute("timeline.select", json!({"clips": [clip.0]})).unwrap();
         s.execute("effects.toggleAnimation", json!({"clip": clip.0, "effect": "motion", "param": "scale"})).unwrap();
         let seq = s.state.active_sequence.unwrap();
-        let mut app = crate::FilmcraftApp::new(s);
+        let mut app = crate::StudioApp::new(s);
         let ctx = context();
-        for duration in [0, -5 * filmcraft_time::TICKS_PER_SECOND] {
+        for duration in [0, -5 * mortiflix_time::TICKS_PER_SECOND] {
             let project = std::sync::Arc::make_mut(&mut app.session.project);
             project.sequence_mut(seq).unwrap().find_item_mut(clip).unwrap().1.duration = Tick(duration);
             let rect = Rect::from_min_size(pos2(0.0, 0.0), vec2(700.0, 500.0));
@@ -1407,7 +1407,7 @@ mod lane_tests {
     /// tick forever.
     #[test]
     fn ruler_survives_damaged_numbers() {
-        let mut s = filmcraft_engine::Session::default();
+        let mut s = mortiflix_engine::Session::default();
         s.execute("file.openDemoProject", json!({})).unwrap();
         let mut it = s.active_sequence().unwrap().video_tracks[0].items[0].clone();
         let ctx = context();
@@ -1416,13 +1416,13 @@ mod lane_tests {
         let rates = [(24000, 1001), (30, 1), (1000, 1), (1, 1), (1, big), (big, big), (0, 0), (-25, 1)];
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
             for width in [300.0, 0.0, -40.0, 0.001, 1.0e9, f32::NAN, f32::INFINITY] {
-                for duration in [1, 0, -7, filmcraft_time::TICKS_PER_SECOND, Tick::MAX.0 / 2] {
+                for duration in [1, 0, -7, mortiflix_time::TICKS_PER_SECOND, Tick::MAX.0 / 2] {
                     for start in [0, Tick::MIN.0, Tick::MAX.0 / 2] {
                         for (num, den) in rates {
                             it.start = Tick(start);
                             it.duration = Tick(duration);
                             let ruler = Rect::from_min_size(pos2(10.0, 10.0), vec2(width, RULER_H));
-                            paint_ruler(ui.painter(), ruler, &it, filmcraft_time::FrameRate { num, den }, false, &t);
+                            paint_ruler(ui.painter(), ruler, &it, mortiflix_time::FrameRate { num, den }, false, &t);
                         }
                     }
                 }
@@ -1434,10 +1434,10 @@ mod lane_tests {
     /// A five-second lane 300 px wide is labelled every two seconds, in sequence timecode.
     #[test]
     fn ruler_labels_sequence_timecode() {
-        let mut s = filmcraft_engine::Session::default();
+        let mut s = mortiflix_engine::Session::default();
         s.execute("file.openDemoProject", json!({})).unwrap();
         let mut it = s.active_sequence().unwrap().video_tracks[0].items[0].clone();
-        let rate = filmcraft_time::FrameRate { num: 24, den: 1 };
+        let rate = mortiflix_time::FrameRate { num: 24, den: 1 };
         it.start = rate.tick_of(24 * 60);
         it.duration = rate.tick_of(24 * 5);
         let ctx = context();
@@ -1462,10 +1462,10 @@ mod lane_tests {
 #[cfg(test)]
 mod graph_drag_tests {
     use super::*;
-    use filmcraft_project::{Interpolation, Keyframe, Param};
+    use mortiflix_project::{Interpolation, Keyframe, Param};
 
     struct Driver {
-        app: FilmcraftApp,
+        app: StudioApp,
         ctx: egui::Context,
         clip: ClipId,
         time: f64,
@@ -1478,7 +1478,7 @@ mod graph_drag_tests {
         }
 
         fn with(param: &'static str, from: ParamValue, to: ParamValue) -> Self {
-            let mut session = filmcraft_engine::Session::default();
+            let mut session = mortiflix_engine::Session::default();
             session.execute("file.openDemoProject", json!({})).unwrap();
             let seq = session.state.active_sequence.unwrap();
             let clip = session.active_sequence().unwrap().video_tracks[0].items[0].id;
@@ -1488,7 +1488,7 @@ mod graph_drag_tests {
             a.interp = Interpolation::Bezier;
             b.interp = Interpolation::Bezier;
             it.effects.iter_mut().find(|e| e.effect == "motion").unwrap().params.insert(param.into(), Param { value: from, keyframes: vec![a, b] });
-            let app = FilmcraftApp::new(session);
+            let app = StudioApp::new(session);
             let ctx = egui::Context::default();
             crate::theme::install(&ctx, &app.tokens);
             Self { app, ctx, clip, time: 0.0, param }
@@ -1592,7 +1592,7 @@ mod graph_drag_tests {
     /// #239: Position (a point) has graphs too; dragging its X keyframe moves only X, in one undo step.
     #[test]
     fn position_graph_drags_one_coordinate_of_a_point_keyframe() {
-        use filmcraft_geom::Vec2;
+        use mortiflix_geom::Vec2;
         let mut d = Driver::with("position", ParamValue::Vec2(Vec2::new(400.0, 300.0)), ParamValue::Vec2(Vec2::new(800.0, 500.0)));
         assert!(graphable(&d.param().value));
         let before = d.param();

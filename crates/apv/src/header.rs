@@ -1,6 +1,6 @@
 //! RFC 9924 §5.3 and §8 syntax structures: Access Unit, PBU, Frame Header, Tile Info, and Metadata.
 
-use filmcraft_bitstream::{BitReader, BitWriter};
+use mortiflix_bitstream::{BitReader, BitWriter};
 
 use crate::tables::DEFAULT_Q_MATRIX_VAL;
 use crate::{ChromaFormat, ColorInfo, ContentLightLevel, Error, MasteringDisplay, Result};

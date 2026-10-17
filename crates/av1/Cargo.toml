@@ -1,5 +1,5 @@
 [package]
-name = "filmcraft-av1"
+name = "mortiflix-av1"
 description = "Clean-room AV1 decoder (AV1 Bitstream & Decoding Process Specification v1.0.0 with Errata 1)"
 version.workspace = true
 edition.workspace = true
@@ -14,12 +14,12 @@ default = ["threads"]
 threads = ["dep:rayon"]
 
 [dependencies]
-filmcraft-bitstream = { workspace = true }
+mortiflix-bitstream = { workspace = true }
 thiserror = { workspace = true }
 rayon = { workspace = true, optional = true }
 
 [dev-dependencies]
-filmcraft-testkit = { workspace = true }
+mortiflix-testkit = { workspace = true }
 
 # Thread CPU clock for load-robust performance tests.
 [target.'cfg(unix)'.dev-dependencies]

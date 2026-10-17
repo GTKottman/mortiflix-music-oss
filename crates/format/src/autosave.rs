@@ -132,7 +132,7 @@ mod tests {
 
     #[test]
     fn rotation_keeps_newest_and_ignores_other_files() {
-        let d = std::env::temp_dir().join(format!("filmcraft-rotate-{}", std::process::id()));
+        let d = std::env::temp_dir().join(format!("mortiflix-rotate-{}", std::process::id()));
         let _ = fs::remove_dir_all(&d);
         for i in 0..7 {
             write_auto_save(&d, "Cut", 1_790_000_000 + i * 60, 0, b"{}", 5).unwrap();

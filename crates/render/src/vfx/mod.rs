@@ -1,5 +1,5 @@
 //! CPU implementations of the Premiere 26 video-effect catalogue added in M5.11 (see
-//! `filmcraft_project::effect::vfx` for the definitions), plus the rebuilt versions of a few core
+//! `mortiflix_project::effect::vfx` for the definitions), plus the rebuilt versions of a few core
 //! effects (Ultra Key, Lens Flare, Noise, Mosaic, Simple Text, Track Matte Key).
 //!
 //! Conventions match [`crate::effects`]: images are premultiplied linear f32; spatial parameters
@@ -24,9 +24,9 @@ mod text;
 #[cfg(test)]
 mod tests;
 
-use filmcraft_geom::{Affine, Vec2};
-use filmcraft_project::{EffectInstance, ParamValue, Project, Sequence, TrackItem};
-use filmcraft_time::{Tick, TimeDisplay, format_time};
+use mortiflix_geom::{Affine, Vec2};
+use mortiflix_project::{EffectInstance, ParamValue, Project, Sequence, TrackItem};
+use mortiflix_time::{Tick, TimeDisplay, format_time};
 use rayon::prelude::*;
 
 use crate::effects::FxCtx;
@@ -110,7 +110,7 @@ impl FxEnv for ItemEnv<'_> {
             if std::ptr::eq(e, upto) {
                 break;
             }
-            if e.def().is_some_and(|d| !d.intrinsic) && !filmcraft_project::graphic::is_layer(e) && !is_temporal(&e.effect) {
+            if e.def().is_some_and(|d| !d.intrinsic) && !mortiflix_project::graphic::is_layer(e) && !is_temporal(&e.effect) {
                 crate::mask::apply_effect(&mut img, e, &cx);
             }
         }
@@ -150,7 +150,7 @@ impl FxEnv for ItemEnv<'_> {
         self.project
             .items
             .values()
-            .find(|p| matches!(&p.kind, filmcraft_project::ItemKind::Sequence(s) if std::ptr::eq(&**s, self.seq)))
+            .find(|p| matches!(&p.kind, mortiflix_project::ItemKind::Sequence(s) if std::ptr::eq(&**s, self.seq)))
             .map(|p| p.name.clone())
             .unwrap_or_default()
     }
@@ -203,10 +203,10 @@ pub(crate) fn tv(e: &EffectInstance, id: &str) -> String {
     }
 }
 /// A point parameter in working pixels. Auto (NaN) components use the effect's auto position
-/// (`filmcraft_project::effect::auto_point`) or the layer centre.
+/// (`mortiflix_project::effect::auto_point`) or the layer centre.
 pub(crate) fn pv(e: &EffectInstance, id: &str, cx: &FxCtx, img: &Image) -> Vec2 {
     let v = e.param(id).map(|p| p.vec2_at(cx.t)).or_else(|| def_value(e, id).and_then(|v| v.as_vec2())).unwrap_or(Vec2::new(f64::NAN, f64::NAN));
-    let (fx, fy) = filmcraft_project::effect::auto_point(&e.effect, id).unwrap_or((0.5, 0.5));
+    let (fx, fy) = mortiflix_project::effect::auto_point(&e.effect, id).unwrap_or((0.5, 0.5));
     Vec2::new(if v.x.is_nan() { img.w as f64 * fx } else { v.x * cx.px_scale as f64 }, if v.y.is_nan() { img.h as f64 * fy } else { v.y * cx.px_scale as f64 })
 }
 /// A point offset parameter (no auto position) in working pixels.
@@ -240,7 +240,7 @@ pub(crate) fn lin(c: [f32; 4]) -> [f32; 3] {
 }
 
 /// Blend `src` (straight linear RGB) onto `base` (straight linear RGB) with one of
-/// [`filmcraft_project::effect::SIMPLE_BLEND`] (Normal, Add, Screen, Multiply, Overlay).
+/// [`mortiflix_project::effect::SIMPLE_BLEND`] (Normal, Add, Screen, Multiply, Overlay).
 #[inline]
 pub(crate) fn blend_simple(mode: u32, base: [f32; 3], src: [f32; 3]) -> [f32; 3] {
     let mut o = [0.0; 3];
@@ -426,7 +426,7 @@ pub(crate) fn place(img: &mut Image, c: Vec2, offset: Vec2, scale: f64, rot_deg:
     affine_warp(img, &m);
 }
 
-/// Easing curves for [`filmcraft_project::effect::EASINGS`].
+/// Easing curves for [`mortiflix_project::effect::EASINGS`].
 pub(crate) fn ease(kind: u32, t: f64) -> f64 {
     let t = t.clamp(0.0, 1.0);
     match kind {

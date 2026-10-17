@@ -1,10 +1,10 @@
 //! Horizontal vs vertical graphic text with underline (letter A, 60 px).
-use filmcraft_geom::{Affine, Vec2};
-use filmcraft_project::graphic::{new_text_layer, new_vertical_text_layer};
-use filmcraft_project::{EffectInstance, ParamValue};
-use filmcraft_render::graphic_clip::render_graphic_layers;
-use filmcraft_render::image::Image;
-use filmcraft_time::Tick;
+use mortiflix_geom::{Affine, Vec2};
+use mortiflix_project::graphic::{new_text_layer, new_vertical_text_layer};
+use mortiflix_project::{EffectInstance, ParamValue};
+use mortiflix_render::graphic_clip::render_graphic_layers;
+use mortiflix_render::image::Image;
+use mortiflix_time::Tick;
 
 fn set(e: &mut EffectInstance, k: &str, v: ParamValue) {
     e.params.get_mut(k).unwrap_or_else(|| panic!("{k}")).value = v;

@@ -11,7 +11,7 @@ use crate::picture::*;
 use crate::slice::{SliceHeader, SliceType};
 use crate::tables::*;
 use crate::transform::{self, LevelScale};
-use filmcraft_bitstream::BitReader;
+use mortiflix_bitstream::BitReader;
 
 /// Per-slice data kept with the picture (deblocking, motion field export).
 #[derive(Clone, Debug, Default)]

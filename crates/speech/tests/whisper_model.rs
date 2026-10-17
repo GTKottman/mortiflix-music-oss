@@ -1,15 +1,15 @@
 //! Whisper end-to-end on real speech, when the weights are on this machine.
 //!
-//! Never downloads. Looks for the model in `$FILMCRAFT_MODELS_DIR/<id>/`, then
+//! Never downloads. Looks for the model in `$MFX_STUDIO_MODELS_DIR/<id>/`, then
 //! `<repo>/target/models/<id>/` (put a model there by hand, or let the app download it into the
-//! data directory and point `FILMCRAFT_MODELS_DIR` at `<data dir>/models`). Speech samples are
+//! data directory and point `MFX_STUDIO_MODELS_DIR` at `<data dir>/models`). Speech samples are
 //! `<repo>/target/fixtures/speech/**/<name>.f32` (mono 16 kHz little-endian f32) with the
 //! reference text in `<name>.txt`; without either the test prints SKIPPED.
 #![cfg(feature = "whisper")]
 
 use std::path::{Path, PathBuf};
 
-use filmcraft_speech::{Options, Transcriber, models, word_error_rate};
+use mortiflix_speech::{Options, Transcriber, models, word_error_rate};
 
 fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -17,7 +17,7 @@ fn repo() -> PathBuf {
 
 fn model_dir(id: &str) -> Option<PathBuf> {
     let m = models::find(id)?;
-    let mut roots: Vec<PathBuf> = std::env::var_os("FILMCRAFT_MODELS_DIR").map(PathBuf::from).into_iter().collect();
+    let mut roots: Vec<PathBuf> = std::env::var_os("MFX_STUDIO_MODELS_DIR").map(PathBuf::from).into_iter().collect();
     roots.push(repo().join("target/models"));
     // worktrees: the main checkout's target
     if let Ok(main) = std::fs::canonicalize(repo())
@@ -72,7 +72,7 @@ fn tiny_model_transcribes_public_domain_speech() {
         eprintln!("SKIPPED: no speech samples in target/fixtures/speech");
         return;
     }
-    let w = filmcraft_speech::whisper::Whisper::load(&dir, "whisper-tiny").unwrap();
+    let w = mortiflix_speech::whisper::Whisper::load(&dir, "whisper-tiny").unwrap();
     let opts = Options { language: Some("en".into()), diarize: false, ..Default::default() };
     let (mut errs, mut words) = (0.0, 0usize);
     for (p, reference) in samples.iter().take(8) {
@@ -83,7 +83,7 @@ fn tiny_model_transcribes_public_domain_speech() {
         errs += word_error_rate(reference, &hyp) * n as f64;
         words += n;
         // word times: in order, inside the audio
-        let end = filmcraft_speech::sample_tick(audio.len() as i64);
+        let end = mortiflix_speech::sample_tick(audio.len() as i64);
         t.check().unwrap();
         assert!(t.words.iter().all(|x| x.end <= end), "{}", p.display());
     }

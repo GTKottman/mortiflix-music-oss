@@ -1,15 +1,15 @@
 //! Built-in keyboard shortcut tables (command id, keys, panel; "" = application-wide).
 //!
 //! Key assignments are functional facts about how other editors are operated; these tables map
-//! them onto FilmCraft's own command ids. No files from any other application are used.
-//! Keys use FilmCraft's canonical notation (`Cmd` = ⌘ on macOS / Ctrl elsewhere, `Ctrl` = the
+//! them onto Mortiflix Studio's own command ids. No files from any other application are used.
+//! Keys use Mortiflix Studio's canonical notation (`Cmd` = ⌘ on macOS / Ctrl elsewhere, `Ctrl` = the
 //! macOS Control key, `Alt` = ⌥ Option / Alt; `Backspace` = the Mac "delete" key, `Delete` = the
 //! forward-delete key).
 
 pub type Entry = (&'static str, &'static str, &'static str);
 
-/// FilmCraft additions to the per-command defaults: panel-specific shortcuts.
-pub const FILMCRAFT_PANEL: &[Entry] = &[
+/// Mortiflix Studio additions to the per-command defaults: panel-specific shortcuts.
+pub const MFX_STUDIO_PANEL: &[Entry] = &[
     ("project.delete", "Backspace", "Project"),
     // the forward-delete key (Delete on Windows and Linux keyboards) clears timeline clips too;
     // application-wide it is Project ▸ Clear (#243)
@@ -18,7 +18,7 @@ pub const FILMCRAFT_PANEL: &[Entry] = &[
     ("edit.undo", "Left", "History"),
     ("edit.redo", "Right", "History"),
     ("sequence.close", "Cmd+W", "Timeline"),
-    // Mortiflix FilmCraft node area (doc 35): keys follow focus
+    // Mortiflix Studio node area (doc 35): keys follow focus
     ("nodes.prev", "Left", "Mortiflix Nodes"),
     ("nodes.next", "Right", "Mortiflix Nodes"),
     ("nodes.up", "Up", "Mortiflix Nodes"),
@@ -46,13 +46,13 @@ pub const FILMCRAFT_PANEL: &[Entry] = &[
     ("nodes.frameBeat7", "7", "Mortiflix Nodes"),
     ("nodes.frameBeat8", "8", "Mortiflix Nodes"),
     ("nodes.frameBeat9", "9", "Mortiflix Nodes"),
-    // Mortiflix FilmCraft: Undo in the Script panel brings back the newest deleted line
+    // Mortiflix Studio: Undo in the Script panel brings back the newest deleted line
     ("script.undo", "Cmd+Z", "Mortiflix Stage"),
-    // Mortiflix FilmCraft: Loop in the loose preview (app-wide Cmd+L is Link)
+    // Mortiflix Studio: Loop in the loose preview (app-wide Cmd+L is Link)
     ("mortiflix.preview.loop", "Cmd+L", "Mortiflix Preview"),
 ];
 
-/// Premiere Pro's default keyboard (macOS) mapped onto FilmCraft commands. FilmCraft Default takes
+/// Premiere Pro's default keyboard (macOS) mapped onto Mortiflix Studio commands. Mortiflix Studio Default takes
 /// every entry whose command has no shortcut yet and whose key is free (the shortcut audit);
 /// the "Premiere Pro Compatible" preset applies all of them.
 pub const PREMIERE: &[Entry] = &[
@@ -246,7 +246,7 @@ pub const PREMIERE: &[Entry] = &[
     ("graphics.leadingDown", "Alt+Down", ""),
     ("graphics.leadingUp5", "Alt+Shift+Up", ""),
     ("graphics.leadingDown5", "Alt+Shift+Down", ""),
-    ("help.filmcraftHelp", "F1", ""),
+    ("help.studioHelp", "F1", ""),
     ("app.quit", "Cmd+Q", ""),
     ("clip.setPosterFrame", "Cmd+P", ""),
     ("clip.clearPosterFrame", "Alt+P", ""),
@@ -298,7 +298,7 @@ pub const PREMIERE: &[Entry] = &[
     ("edit.redo", "Right", "History"),
 ];
 
-/// Premiere's panel-scoped default keys for the keyboard-only commands (M3.12). FilmCraft Default
+/// Premiere's panel-scoped default keys for the keyboard-only commands (M3.12). Mortiflix Studio Default
 /// uses them as they are, and they are part of the "Premiere Pro Compatible" preset ([`premiere`]).
 pub const PREMIERE_PANEL: &[Entry] = &[
     ("timeline.nudgeLeft", "Cmd+Left", "Timeline"),
@@ -392,7 +392,7 @@ pub fn premiere() -> Vec<Entry> {
     PREMIERE.iter().chain(PREMIERE_PANEL).copied().collect()
 }
 
-/// Final Cut Pro's default keys for the equivalent FilmCraft commands.
+/// Final Cut Pro's default keys for the equivalent Mortiflix Studio commands.
 pub const FINAL_CUT: &[Entry] = &[
     ("tool.selection", "A", ""),
     ("tool.razor", "B", ""),
@@ -442,7 +442,7 @@ pub const FINAL_CUT: &[Entry] = &[
     ("sequence.renderInToOut", "Ctrl+Shift+R", ""),
 ];
 
-/// Avid Media Composer's default keys for the equivalent FilmCraft commands.
+/// Avid Media Composer's default keys for the equivalent Mortiflix Studio commands.
 pub const AVID: &[Entry] = &[
     ("playback.reverse", "J", ""),
     ("playback.stop", "K", ""),

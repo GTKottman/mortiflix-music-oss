@@ -199,7 +199,7 @@ pub struct TimelineView {
     pub fit_pending: bool,
     /// The playhead the view last saw: a jump while stopped (Home, End, edit points) scrolls to it.
     #[serde(skip)]
-    pub seen_playhead: Option<(filmcraft_project::ItemId, f64)>,
+    pub seen_playhead: Option<(mortiflix_project::ItemId, f64)>,
     /// The zoom a fit gave an empty sequence (which fits its 1 s minimum): the first clip to arrive
     /// fits again, unless the zoom was changed in between.
     #[serde(skip)]
@@ -297,7 +297,7 @@ impl DisplayMode {
 }
 
 /// Monitor guide (frame pixels): `vertical` = a line at x = `position`.
-pub type Guide = filmcraft_engine::autosave::Guide;
+pub type Guide = mortiflix_engine::autosave::Guide;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
@@ -423,7 +423,7 @@ pub struct KeyframeRef {
     pub param: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mask: Option<usize>,
-    pub time: filmcraft_time::Tick,
+    pub time: mortiflix_time::Tick,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -457,10 +457,10 @@ pub struct UiState {
     #[serde(default)]
     pub effect_controls_split: f32,
     pub show_menu_bar: bool,
-    /// The header bar (Home, Import, Edit, Export, workspaces). An app that embeds FilmCraft can hide it.
+    /// The header bar (Home, Import, Edit, Export, workspaces). An app that embeds Mortiflix Studio can hide it.
     #[serde(default = "shown")]
     pub show_header: bool,
-    /// The status bar (hints, messages, job progress). An app that embeds FilmCraft can hide it.
+    /// The status bar (hints, messages, job progress). An app that embeds Mortiflix Studio can hide it.
     #[serde(default = "shown")]
     pub show_status_bar: bool,
     pub dark: bool,
@@ -846,7 +846,7 @@ pub struct TransitionDurationDraft {
 /// The Sequence Settings dialog (Sequence ▸ Sequence Settings…), filled from the active sequence
 /// when it opens (`panels::sequence_settings::open`). `tab`: `general`, `color` or `vr`; the
 /// timebase is `fps_num`/`fps_den`; `mix`: `Stereo`, `Mono`, `5.1` or `Adaptive`; `working_space`:
-/// a [`filmcraft_color::WorkingSpace`] id. `scale_motion` is "Scale motion effects proportionally
+/// a [`mortiflix_color::WorkingSpace`] id. `scale_motion` is "Scale motion effects proportionally
 /// when changing frame size", on by default as in Premiere.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]

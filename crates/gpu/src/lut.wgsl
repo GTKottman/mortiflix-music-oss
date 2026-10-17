@@ -1,4 +1,4 @@
-// 3D LUT application with tetrahedral interpolation (same math as filmcraft_color::Lut3d::apply).
+// 3D LUT application with tetrahedral interpolation (same math as mortiflix_color::Lut3d::apply).
 // Pixels are straight (unpremultiplied) display-encoded RGBA; alpha passes through.
 
 struct Params {

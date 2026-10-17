@@ -1,7 +1,7 @@
 //! Length-prefixed (`avcC` / `hvcC`) access units to Annex B byte streams, the input format of
 //! Windows' H.264 and HEVC decoder MFTs. Safe code, tested on every target.
 
-use filmcraft_codecs::hw::NalStreamInfo;
+use mortiflix_codecs::hw::NalStreamInfo;
 
 const START_CODE: [u8; 4] = [0, 0, 0, 1];
 
@@ -36,7 +36,7 @@ pub fn to_annex_b(info: &NalStreamInfo, sample: &[u8], headers: bool) -> Result<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use filmcraft_codecs::hw::NalCodec;
+    use mortiflix_codecs::hw::NalCodec;
 
     fn info(length_size: usize, codec: NalCodec) -> NalStreamInfo {
         NalStreamInfo {
@@ -51,7 +51,7 @@ mod tests {
             bit_depth_chroma: 8,
             interlaced: false,
             profile_idc: 100,
-            color: filmcraft_color::ColorInfo::REC709,
+            color: mortiflix_color::ColorInfo::REC709,
             par: (1, 1),
             reorder: 0,
         }

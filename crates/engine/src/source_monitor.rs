@@ -3,8 +3,8 @@
 use crate::clip_ops::source_view;
 use crate::commands::bad;
 use crate::{EngineError, Result, Session};
-use filmcraft_project::{ClipId, ItemId, ItemKind, Label, Marker, MarkerId, MarkerKind, Project};
-use filmcraft_time::{FrameRate, TICKS_PER_SECOND, Tick, TimeRange};
+use mortiflix_project::{ClipId, ItemId, ItemKind, Label, Marker, MarkerId, MarkerKind, Project};
+use mortiflix_time::{FrameRate, TICKS_PER_SECOND, Tick, TimeRange};
 use serde_json::{Value, json};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -139,8 +139,8 @@ pub(crate) fn close(s: &mut Session, all: bool) -> Result<Value> {
 fn marker_list(p: &mut Project, item: ItemId) -> Result<&mut Vec<Marker>> {
     let it = p.item_mut(item).ok_or_else(|| EngineError::Other("Source item is unavailable".into()))?;
     match &mut it.kind {
-        filmcraft_project::ItemKind::Media(m) => Ok(&mut m.markers),
-        filmcraft_project::ItemKind::Sequence(q) => Ok(&mut std::sync::Arc::make_mut(q).markers),
+        mortiflix_project::ItemKind::Media(m) => Ok(&mut m.markers),
+        mortiflix_project::ItemKind::Sequence(q) => Ok(&mut std::sync::Arc::make_mut(q).markers),
         _ => Err(EngineError::Other("Source marker editing requires media or a sequence".into())),
     }
 }

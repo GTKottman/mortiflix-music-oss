@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
-use filmcraft_ui_egui::play_ahead::{AudioStats, BLOCK_FRAMES, LEAD_S, spawn};
+use mortiflix_ui_egui::play_ahead::{AudioStats, BLOCK_FRAMES, LEAD_S, spawn};
 
 const SR: u32 = 48_000;
 const PERIOD: usize = 512;

@@ -25,7 +25,7 @@ mod tests;
 #[cfg(target_os = "linux")]
 pub use linux::VaDecoder;
 
-use filmcraft_frame::VideoFrame;
+use mortiflix_frame::VideoFrame;
 
 /// The hardware a front end ([`h264::Front`], [`hevc::Front`]) drives: a fixed set of surfaces,
 /// picture decoding into one of them, and reading one back or filling it.
@@ -60,9 +60,9 @@ pub trait Accel: Send {
 
 #[cfg(target_os = "linux")]
 mod linux {
-    use filmcraft_bitstream::unescape_rbsp;
-    use filmcraft_codecs::hw::{NalCodec, NalStreamInfo};
-    use filmcraft_codecs::{CodecError, DecodedFrame, Result, VideoDecoder};
+    use mortiflix_bitstream::unescape_rbsp;
+    use mortiflix_codecs::hw::{NalCodec, NalStreamInfo};
+    use mortiflix_codecs::{CodecError, DecodedFrame, Result, VideoDecoder};
 
     use super::va::Session;
     use super::{ffi, h264, hevc};
@@ -130,7 +130,7 @@ mod linux {
                     }
                     let profiles = h264_profiles(info.profile_idc).ok_or_else(|| format!("H.264 profile_idc {} is not taken", info.profile_idc))?;
                     let rbsp = parameter_set(&info.parameter_sets, 1, |h| h & 0x1f == 7).ok_or("no SPS")?;
-                    let sps = filmcraft_h264::params::Sps::parse(&rbsp).map_err(|e| e.to_string())?;
+                    let sps = mortiflix_h264::params::Sps::parse(&rbsp).map_err(|e| e.to_string())?;
                     sps.check_supported().map_err(|e| e.to_string())?;
                     let mbs = (sps.pic_width_in_mbs, sps.frame_height_in_mbs());
                     // the DPB, the picture being decoded, and one spare
@@ -143,7 +143,7 @@ mod linux {
                     let profiles =
                         hevc_profiles(info.profile_idc, bits).ok_or_else(|| format!("HEVC profile {} at {bits}-bit is not taken", info.profile_idc))?;
                     let rbsp = parameter_set(&info.parameter_sets, 2, |h| (h >> 1) & 0x3f == 33).ok_or("no SPS")?;
-                    let sps = filmcraft_hevc::params::Sps::parse(&rbsp).map_err(|e| e.to_string())?;
+                    let sps = mortiflix_hevc::params::Sps::parse(&rbsp).map_err(|e| e.to_string())?;
                     sps.check_supported().map_err(|e| e.to_string())?;
                     if sps.range_extension {
                         return Err("HEVC range extensions are not taken".into());

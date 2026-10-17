@@ -1,16 +1,16 @@
-# filmcraft-apv
+# mortiflix-apv
 
 Clean-room Advanced Professional Video (APV) decoder and encoder in pure Rust, implemented strictly
 from the public **IETF RFC 9924** specification (*Advanced Professional Video*, February 2026,
 ISSN 2070-1721).
 
-Layer L0: depends only on `filmcraft-bitstream`, `thiserror`, and (optional, feature `threads`,
+Layer L0: depends only on `mortiflix-bitstream`, `thiserror`, and (optional, feature `threads`,
 default on) `rayon`. Builds for `wasm32-unknown-unknown`; `unsafe_code = "forbid"`.
 
 ## API
 
 ```rust
-use filmcraft_apv::*;
+use mortiflix_apv::*;
 
 // Decode one APV Access Unit (or raw bitstream AU prefixed with a 32-bit au_size).
 let frame: Frame = decode_frame(&au)?;
@@ -69,6 +69,6 @@ let apvc: Vec<u8> = enc.decoder_config_record();  // APVDecoderConfigurationReco
 
 `tests/oracle.rs` encodes synthetic test patterns across all 7 profiles, odd dimensions, multiple
 tiles, custom asymmetric quantization matrices, and HDR metadata PBUs, then decodes the resulting
-`.apv` streams with `ffmpeg -v error -xerror -f apv` and compares against `filmcraft_apv::decode_frame`.
-Because APV specifies an exact integer inverse transform, **`filmcraft-apv` is 100% bit-exact
+`.apv` streams with `ffmpeg -v error -xerror -f apv` and compares against `mortiflix_apv::decode_frame`.
+Because APV specifies an exact integer inverse transform, **`mortiflix-apv` is 100% bit-exact
 (`max_diff = 0`) with FFmpeg's APV decoder across every profile and test case.**

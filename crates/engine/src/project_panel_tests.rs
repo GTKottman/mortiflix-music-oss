@@ -2,7 +2,7 @@
 //! sorting, view presets, Freeform positions / stacks / arrangements (undoable, saved with the
 //! project) and bin renames.
 
-use filmcraft_project::{BinEntry, ItemId, ItemKind};
+use mortiflix_project::{BinEntry, ItemId, ItemKind};
 use serde_json::{Value, json};
 
 use crate::Session;
@@ -201,7 +201,7 @@ fn freeform_positions_are_undoable_and_saved_with_the_project() {
     assert_eq!(pos(&s, ids[0]).2, Some(250.0));
     // saved with the project (item metadata) and back
     let text = serde_json::to_string(&*s.project).unwrap();
-    let p2: filmcraft_project::Project = serde_json::from_str(&text).unwrap();
+    let p2: mortiflix_project::Project = serde_json::from_str(&text).unwrap();
     assert_eq!(p2.item(ids[0]).unwrap().metadata.get(FREEFORM_POS), s.project.item(ids[0]).unwrap().metadata.get(FREEFORM_POS));
     // the Metadata panel doesn't list the bookkeeping keys
     let m = s.execute("metadata.get", json!({"item": ids[0].0})).unwrap();
@@ -263,7 +263,7 @@ fn bins_rename_nest_and_list() {
     assert_eq!(r[cam + 2]["item"], json!(ids[0].0));
     assert_eq!(r[cam + 2]["depth"], 2);
     s.execute("edit.undo", json!({})).unwrap();
-    assert_eq!(s.project.root.find_bin(filmcraft_project::BinId(b)).unwrap().name, "Footage");
+    assert_eq!(s.project.root.find_bin(mortiflix_project::BinId(b)).unwrap().name, "Footage");
     assert!(s.execute("project.renameBin", json!({"bin": b, "name": "  "})).is_err());
     // only the bin's rows without `recursive`
     let rows = s.execute("project.items", json!({"bin": inner})).unwrap();

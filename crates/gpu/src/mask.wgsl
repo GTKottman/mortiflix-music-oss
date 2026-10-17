@@ -1,4 +1,4 @@
-// Mask coverage + masked-effect mix (same math as filmcraft_render::mask; see its docs).
+// Mask coverage + masked-effect mix (same math as mortiflix_render::mask; see its docs).
 // Masks arrive flattened to polygons in working-image pixels, active ones only (mode != None).
 
 struct Params {

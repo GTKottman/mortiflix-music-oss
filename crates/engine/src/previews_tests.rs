@@ -3,10 +3,10 @@
 
 use std::sync::Arc;
 
-use filmcraft_media::Generator;
-use filmcraft_media::generators::GeneratorSource;
-use filmcraft_project::{ClipId, Label, ParamValue, SequenceSettings, TrackKind, find_effect};
-use filmcraft_time::{FrameRate, TICKS_PER_SECOND, Tick, TimeRange};
+use mortiflix_media::Generator;
+use mortiflix_media::generators::GeneratorSource;
+use mortiflix_project::{ClipId, Label, ParamValue, SequenceSettings, TrackKind, find_effect};
+use mortiflix_time::{FrameRate, TICKS_PER_SECOND, Tick, TimeRange};
 use serde_json::{Value, json};
 
 use crate::Session;
@@ -14,7 +14,7 @@ use crate::previews::BarState;
 
 fn tmp(name: &str) -> std::path::PathBuf {
     let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
-    std::env::temp_dir().join(format!("filmcraft-previews-test-{name}-{}-{nanos}", std::process::id()))
+    std::env::temp_dir().join(format!("mortiflix-previews-test-{name}-{}-{nanos}", std::process::id()))
 }
 
 /// A 64×36 24 fps sequence: V1 = matte with Tint (0..24) + plain matte (24..48), A1 = tone (0..48).
@@ -42,7 +42,7 @@ fn session_with(name: &str, video: Generator) -> (Session, ClipId) {
     let mut b = p.make_track_item(matte, TrackKind::Video, r.tick_of(24), TimeRange::new(r.tick_of(24), r.tick_of(24)), r).unwrap();
     let au = p.make_track_item(tone, TrackKind::Audio, Tick::ZERO, TimeRange::new(Tick::ZERO, r.tick_of(48)), r).unwrap();
     for e in a.effects.iter_mut().chain(b.effects.iter_mut()) {
-        filmcraft_project::resolve_auto_points(e, (64, 36), (64, 36));
+        mortiflix_project::resolve_auto_points(e, (64, 36), (64, 36));
     }
     a.effects.push(find_effect("tint").unwrap().instance());
     let a_id = a.id;
@@ -82,7 +82,7 @@ fn render_turns_green_edit_invalidates_and_undo_restores() {
     assert_eq!((f.width, f.height), (64, 36));
     assert!(s.previews.frame(&s.media, &s.project, seq, 30, 1.0).is_none());
     // the preview frame matches the live render closely (ProRes 10-bit)
-    let live = filmcraft_render::render_sequence(
+    let live = mortiflix_render::render_sequence(
         &s.project,
         seq,
         FrameRate::FPS_24.tick_of(5),
@@ -173,7 +173,7 @@ fn render_in_to_out_renders_only_the_marked_frames() {
     }
     // the preview's frames line up with the sequence (the leader changes from frame to frame)
     let live = |s: &Session, f: i64| {
-        filmcraft_render::render_sequence(
+        mortiflix_render::render_sequence(
             &s.project,
             seq,
             FrameRate::FPS_24.tick_of(f),
@@ -216,7 +216,7 @@ fn previews_survive_save_and_open() {
     let path = folder.join("Film.fcproj").to_string_lossy().to_string();
     s.execute("file.save", json!({"path": path})).unwrap();
     // the unsaved project's previews moved next to the project
-    assert_eq!(s.previews.dir().unwrap(), folder.join("FilmCraft Previews").join("Film"));
+    assert_eq!(s.previews.dir().unwrap(), folder.join("Mortiflix Studio Previews").join("Film"));
     assert_eq!(states(&s), vec!["green", "none"]);
     let mut t = Session::default();
     t.execute("file.open", json!({"path": path})).unwrap();
@@ -235,7 +235,7 @@ fn render_selection_and_audio_previews() {
     let seq = s.state.active_sequence.unwrap();
     let provider = s.media.provider(s.project.clone(), s.services.clone());
     let q = s.project.sequence(seq).unwrap();
-    let live = filmcraft_render::audio::mix_sequence(&s.project, q, 1000, 30_000, &provider);
+    let live = mortiflix_render::audio::mix_sequence(&s.project, q, 1000, 30_000, &provider);
     let v = s.execute("sequence.renderAudio", json!({"wait": true})).unwrap();
     job_ok(&s, &v);
     assert!(s.previews.audio_segments(&s.project, seq).iter().all(|g| s.previews.has_audio(&g.hash)));

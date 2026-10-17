@@ -1,4 +1,4 @@
-//! Decode an IVF AV1 file: `cargo run --release -p filmcraft-av1 --example av1dec -- in.ivf [out.yuv]`.
+//! Decode an IVF AV1 file: `cargo run --release -p mortiflix-av1 --example av1dec -- in.ivf [out.yuv]`.
 //! Writes raw planar 16-bit little-endian output. `AV1_THREADS=n` sets the thread count,
 //! `AV1_LOOPS=k` decodes the file k times (benchmarking), `AV1_STATS=1` prints stage statistics.
 
@@ -17,10 +17,10 @@ fn main() {
     let hl = u16::from_le_bytes([data[6], data[7]]) as usize;
     let t0 = std::time::Instant::now();
     let mut n = 0;
-    let mut dec = if threads > 0 { filmcraft_av1::Decoder::with_threads(threads) } else { filmcraft_av1::Decoder::new() };
+    let mut dec = if threads > 0 { mortiflix_av1::Decoder::with_threads(threads) } else { mortiflix_av1::Decoder::new() };
     // AV1_DRAFT=1: draft mode (non-reference frames skip the in-loop filters).
     dec.set_draft(std::env::var_os("AV1_DRAFT").is_some());
-    let mut write = |pics: Vec<filmcraft_av1::Picture>| {
+    let mut write = |pics: Vec<mortiflix_av1::Picture>| {
         for pic in pics {
             n += 1;
             if let Some(o) = out.as_mut() {

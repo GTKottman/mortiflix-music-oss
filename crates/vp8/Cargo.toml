@@ -1,5 +1,5 @@
 [package]
-name = "filmcraft-vp8"
+name = "mortiflix-vp8"
 description = "Clean-room pure-Rust VP8 decoder (RFC 6386)"
 version.workspace = true
 edition.workspace = true

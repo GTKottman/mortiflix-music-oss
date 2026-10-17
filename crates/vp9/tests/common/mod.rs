@@ -2,7 +2,7 @@
 //! reader, and comparison helpers.
 #![allow(dead_code)]
 
-use filmcraft_vp9::{Decoder, Picture};
+use mortiflix_vp9::{Decoder, Picture};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -321,7 +321,7 @@ pub fn write_ivf(path: &Path, w: u16, h: u16, frames: &[Vec<u8>]) {
     std::fs::write(path, d).unwrap();
 }
 
-pub type DecodeFailure = (usize, filmcraft_vp9::Error, Vec<Picture>);
+pub type DecodeFailure = (usize, mortiflix_vp9::Error, Vec<Picture>);
 
 /// Decode an IVF file with `threads` workers (0 = default), pts = frame index.
 pub fn decode_file_threads(path: &Path, threads: usize) -> Result<Vec<Picture>, DecodeFailure> {

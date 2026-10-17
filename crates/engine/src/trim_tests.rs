@@ -273,12 +273,12 @@ fn trim_delta_stops_at_the_end_of_the_media() {
     let mut s = demo();
     let last = *v1(&s).last().unwrap();
     let clip = ClipId(last.0);
-    let far = Tick(3600 * filmcraft_time::TICKS_PER_SECOND);
-    let shown = commands::trim_delta(&s, clip, filmcraft_edit::Edge::Out, filmcraft_edit::TrimMode::Regular, far).unwrap();
+    let far = Tick(3600 * mortiflix_time::TICKS_PER_SECOND);
+    let shown = commands::trim_delta(&s, clip, mortiflix_edit::Edge::Out, mortiflix_edit::TrimMode::Regular, far).unwrap();
     assert!(Tick::ZERO < shown && shown < far, "clamped to the media left after the clip: {shown:?}");
     let r = s.execute("timeline.trim", json!({"clip": last.0, "edge": "out", "mode": "regular", "delta": far.0})).unwrap();
     assert_eq!(r["delta"], json!(shown.0), "the preview and the trim agree");
     let small = s.sequence_rate().frame_duration();
-    let back = commands::trim_delta(&s, clip, filmcraft_edit::Edge::Out, filmcraft_edit::TrimMode::Regular, -small).unwrap();
+    let back = commands::trim_delta(&s, clip, mortiflix_edit::Edge::Out, mortiflix_edit::TrimMode::Regular, -small).unwrap();
     assert_eq!(back, -small, "a trim within the media is not clamped");
 }

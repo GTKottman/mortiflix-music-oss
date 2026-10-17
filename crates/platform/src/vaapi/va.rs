@@ -13,8 +13,8 @@ use std::os::fd::AsRawFd;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 
-use filmcraft_frame::VideoFrame;
 use libloading::Library;
+use mortiflix_frame::VideoFrame;
 
 use super::Accel;
 use super::ffi::{self, VAConfigAttrib, VAImage, VAImageFormat, VASurfaceID};

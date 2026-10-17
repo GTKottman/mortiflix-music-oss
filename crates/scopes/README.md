@@ -1,6 +1,6 @@
-# filmcraft-scopes
+# mortiflix-scopes
 
-Video scope maths for the Lumetri Scopes panel (layer L3; depends only on `filmcraft-color` and
+Video scope maths for the Lumetri Scopes panel (layer L3; depends only on `mortiflix-color` and
 `serde`; no UI, builds for wasm32). The UI (`crates/ui-egui/src/panels/scopes.rs`) draws what this
 crate computes; `scopes.read` (`crates/engine/src/scopes.rs`) returns it as numbers for agents.
 
@@ -39,7 +39,7 @@ Clamp Signal; decimation; NaN and empty frames; summaries; painting.
 
 ## Speed
 
-`cargo test --release -p filmcraft-scopes perf -- --ignored --nocapture` (1920×1080 RGBA8 noise,
+`cargo test --release -p mortiflix-scopes perf -- --ignored --nocapture` (1920×1080 RGBA8 noise,
 Apple M4 Pro, one thread, machine shared with other builds):
 
 | Step | ms |

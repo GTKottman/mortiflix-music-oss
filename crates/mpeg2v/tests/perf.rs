@@ -1,4 +1,4 @@
-//! Decode speed (ignored; run with `cargo test --release -p filmcraft-mpeg2v --test perf --
+//! Decode speed (ignored; run with `cargo test --release -p mortiflix-mpeg2v --test perf --
 //! --ignored --nocapture`). Uses the 1080i fixture of `tests/oracle.rs` (ffmpeg-encoded, 25 Mb/s).
 
 mod common;
@@ -8,15 +8,15 @@ use common::*;
 #[test]
 #[ignore]
 fn perf_1080i_decode_fps() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let f = make(&ff, &HD1080I).expect("fixture");
     let es = std::fs::read(&f).unwrap();
-    let aus = filmcraft_mpeg2v::access_units(&es);
+    let aus = mortiflix_mpeg2v::access_units(&es);
     for threads in [false, true] {
         let mut best = f64::MAX;
         let mut frames = 0;
         for _ in 0..5 {
-            let mut d = filmcraft_mpeg2v::Decoder::new();
+            let mut d = mortiflix_mpeg2v::Decoder::new();
             d.set_threads(threads);
             let t0 = std::time::Instant::now();
             let mut n = 0;

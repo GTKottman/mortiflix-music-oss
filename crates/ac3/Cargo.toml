@@ -1,5 +1,5 @@
 [package]
-name = "filmcraft-ac3"
+name = "mortiflix-ac3"
 description = "Clean-room AC-3 and E-AC-3 (Dolby Digital / Dolby Digital Plus, ATSC A/52) audio decoder"
 version.workspace = true
 edition.workspace = true
@@ -13,4 +13,4 @@ workspace = true
 thiserror = { workspace = true }
 
 [dev-dependencies]
-filmcraft-testkit = { workspace = true }
+mortiflix-testkit = { workspace = true }

@@ -16,7 +16,7 @@
 //! are converted on import: their `Ctrl` is the primary modifier (`Cmd`) and `Win`/`Meta` maps to
 //! the macOS Control key.
 //!
-//! Built-in presets: **FilmCraft Default** (each command's default plus the Premiere-default audit,
+//! Built-in presets: **Mortiflix Studio Default** (each command's default plus the Premiere-default audit,
 //! see [`Shortcuts::audit`]), **Premiere Pro Compatible**, **Final Cut Pro Compatible** and
 //! **Avid Media Composer Compatible** ([`crate::shortcut_presets`]). Custom presets are JSON files in
 //! `<data dir>/Keyboard Shortcuts/`; the active set persists in `active.json` there.
@@ -56,13 +56,13 @@ pub const PANELS: &[&str] = &[
     "Lumetri Color",
 ];
 
-pub const DEFAULT_PRESET: &str = "FilmCraft Default";
+pub const DEFAULT_PRESET: &str = "Mortiflix Studio Default";
 pub const PREMIERE_PRESET: &str = "Premiere Pro Compatible";
 pub const FCP_PRESET: &str = "Final Cut Pro Compatible";
 pub const AVID_PRESET: &str = "Avid Media Composer Compatible";
 pub const BUILTIN_PRESETS: [&str; 4] = [DEFAULT_PRESET, PREMIERE_PRESET, FCP_PRESET, AVID_PRESET];
 
-const FILE_FORMAT: &str = "filmcraft-keyboard-shortcuts";
+const FILE_FORMAT: &str = "mortiflix-keyboard-shortcuts";
 const DIR_NAME: &str = "Keyboard Shortcuts";
 const ACTIVE_FILE: &str = "active.json";
 
@@ -471,7 +471,7 @@ pub struct PresetFile {
     pub format: String,
     pub version: u32,
     pub name: String,
-    /// The OS the key names were written for; None = canonical (FilmCraft) notation.
+    /// The OS the key names were written for; None = canonical (Mortiflix Studio) notation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub platform: Option<Platform>,
     /// `active.json` only: the active set differs from the preset it started from.
@@ -564,7 +564,7 @@ impl Shortcuts {
 
     // ---------------------------------------------------------------- presets
 
-    /// Default bindings of every known command, plus FilmCraft's panel shortcuts.
+    /// Default bindings of every known command, plus Mortiflix Studio's panel shortcuts.
     fn base_defaults(&self) -> Vec<Binding> {
         let mut out = Vec::new();
         for c in self.commands() {
@@ -572,7 +572,7 @@ impl Shortcuts {
                 out.push(Binding::new(&c.id, k, p.as_deref()));
             }
         }
-        for (c, k, p) in presets::FILMCRAFT_PANEL.iter().chain(presets::PREMIERE_PANEL) {
+        for (c, k, p) in presets::MFX_STUDIO_PANEL.iter().chain(presets::PREMIERE_PANEL) {
             if self.known(c) {
                 out.push(Binding::new(c, k, panel_opt(p)));
             }
@@ -580,7 +580,7 @@ impl Shortcuts {
         out
     }
 
-    /// Premiere-default entries FilmCraft Default adopts: commands with no shortcut of their own
+    /// Premiere-default entries Mortiflix Studio Default adopts: commands with no shortcut of their own
     /// whose Premiere key is free in that context on this platform.
     pub fn audit(&self) -> Vec<Binding> {
         self.audit_for(Platform::current())
@@ -697,7 +697,7 @@ impl Shortcuts {
         let Some(dir) = self.presets_dir() else { return };
         let f = self.file(&self.preset, self.modified);
         if let Err(e) = std::fs::create_dir_all(&dir)
-            .and_then(|_| filmcraft_format::atomic_write(&dir.join(ACTIVE_FILE), &serde_json::to_vec_pretty(&f).unwrap_or_default()))
+            .and_then(|_| mortiflix_format::atomic_write(&dir.join(ACTIVE_FILE), &serde_json::to_vec_pretty(&f).unwrap_or_default()))
         {
             log::warn!("saving keyboard shortcuts: {e}");
         }
@@ -1075,7 +1075,7 @@ fn read_file(path: &Path) -> std::result::Result<PresetFile, String> {
     let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let f: PresetFile = serde_json::from_slice(&bytes).map_err(|e| format!("{}: {e}", path.display()))?;
     if f.format != FILE_FORMAT {
-        return Err(format!("{}: not a FilmCraft keyboard shortcuts file", path.display()));
+        return Err(format!("{}: not a Mortiflix Studio keyboard shortcuts file", path.display()));
     }
     Ok(f)
 }
@@ -1084,7 +1084,7 @@ fn write_file(path: &Path, f: &PresetFile) -> std::result::Result<(), String> {
     if let Some(d) = path.parent() {
         std::fs::create_dir_all(d).map_err(|e| format!("{}: {e}", d.display()))?;
     }
-    filmcraft_format::atomic_write(path, &serde_json::to_vec_pretty(f).unwrap_or_default()).map_err(|e| format!("{}: {e}", path.display()))
+    mortiflix_format::atomic_write(path, &serde_json::to_vec_pretty(f).unwrap_or_default()).map_err(|e| format!("{}: {e}", path.display()))
 }
 
 // ------------------------------------------------------------------ commands

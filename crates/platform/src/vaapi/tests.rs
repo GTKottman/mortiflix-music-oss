@@ -10,9 +10,9 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
-use filmcraft_codecs::DecodedFrame;
-use filmcraft_codecs::hw::NalStreamInfo;
-use filmcraft_frame::VideoFrame;
+use mortiflix_codecs::DecodedFrame;
+use mortiflix_codecs::hw::NalStreamInfo;
+use mortiflix_frame::VideoFrame;
 
 use super::Accel;
 use super::ffi::{self, VAIQMatrixBufferH264, VAPictureH264, VAPictureParameterBufferH264, VASliceParameterBufferH264};
@@ -148,9 +148,9 @@ const STREAMS: &[(&str, &str, &str)] = &[
 ];
 
 fn fixture(ff: &std::path::Path, name: &str, profile: &str, params: &str) -> Option<PathBuf> {
-    let out = filmcraft_testkit::fixtures_dir("platform").join(name);
+    let out = mortiflix_testkit::fixtures_dir("platform").join(name);
     let src = "testsrc2=s=320x184:r=24:d=2";
-    filmcraft_testkit::fixtures::generate(&out, |tmp| {
+    mortiflix_testkit::fixtures::generate(&out, |tmp| {
         Command::new(ff)
             .args(["-y", "-v", "error", "-f", "lavfi", "-i", src, "-c:v", "libx264", "-profile:v", profile, "-x264-params", params, "-pix_fmt", "yuv420p"])
             .arg(tmp)
@@ -161,15 +161,15 @@ fn fixture(ff: &std::path::Path, name: &str, profile: &str, params: &str) -> Opt
 }
 
 struct Stream {
-    entry: filmcraft_isobmff::SampleEntry,
+    entry: mortiflix_isobmff::SampleEntry,
     samples: Vec<(Vec<u8>, i64)>,
     sync: Vec<bool>,
 }
 
 fn read_stream(path: &std::path::Path) -> Stream {
     let bytes = std::fs::read(path).unwrap();
-    let file = filmcraft_isobmff::open(bytes.clone()).unwrap();
-    let t = file.track_of_kind(filmcraft_isobmff::TrackKind::Video).unwrap();
+    let file = mortiflix_isobmff::open(bytes.clone()).unwrap();
+    let t = file.track_of_kind(mortiflix_isobmff::TrackKind::Video).unwrap();
     let track = &file.tracks[t];
     let samples = (0..track.samples.len()).map(|i| (file.read_sample(&bytes, t, i).unwrap(), track.samples[i].pts)).collect();
     Stream { entry: track.entries[0].clone(), samples, sync: track.samples.iter().map(|s| s.is_sync).collect() }
@@ -194,7 +194,7 @@ fn run_front(f: &mut Front<Recorder>, samples: &[(Vec<u8>, i64)]) -> Vec<i64> {
     out
 }
 
-fn run_software(d: &mut dyn filmcraft_codecs::VideoDecoder, samples: &[(Vec<u8>, i64)]) -> Vec<i64> {
+fn run_software(d: &mut dyn mortiflix_codecs::VideoDecoder, samples: &[(Vec<u8>, i64)]) -> Vec<i64> {
     let mut out = Vec::new();
     for (s, p) in samples {
         out.extend(pts(&d.decode(s, *p).unwrap()));
@@ -205,12 +205,12 @@ fn run_software(d: &mut dyn filmcraft_codecs::VideoDecoder, samples: &[(Vec<u8>,
 
 #[test]
 fn output_order_and_buffers_match_the_software_decoder() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     for (name, profile, params) in STREAMS {
         let Some(path) = fixture(&ff, name, profile, params) else { continue };
         let s = read_stream(&path);
         let mut f = front(&s);
-        let mut sw = filmcraft_codecs::software_video_decoder(&s.entry).unwrap();
+        let mut sw = mortiflix_codecs::software_video_decoder(&s.entry).unwrap();
         let a = run_front(&mut f, &s.samples);
         assert_eq!(a, run_software(sw.as_mut(), &s.samples), "{name}");
         assert_eq!(f.accel().pictures, s.samples.len(), "{name}: every picture decoded");
@@ -236,7 +236,7 @@ fn output_order_and_buffers_match_the_software_decoder() {
 /// Damaged samples give errors (the hybrid decoder then continues in software), never a panic.
 #[test]
 fn damaged_samples_are_errors() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let (name, profile, params) = STREAMS[0];
     let Some(path) = fixture(&ff, name, profile, params) else { return };
     let s = read_stream(&path);
@@ -278,10 +278,10 @@ const HEVC_STREAMS: &[(&str, &str, &str)] = &[
 ];
 
 fn hevc_fixture(ff: &std::path::Path, name: &str, pix_fmt: &str, params: &str) -> Option<PathBuf> {
-    let out = filmcraft_testkit::fixtures_dir("platform").join(name);
+    let out = mortiflix_testkit::fixtures_dir("platform").join(name);
     let src = "testsrc2=s=320x184:r=24:d=2";
     let profile = if pix_fmt.contains("10") { "main10" } else { "main" };
-    filmcraft_testkit::fixtures::generate(&out, |tmp| {
+    mortiflix_testkit::fixtures::generate(&out, |tmp| {
         Command::new(ff)
             .args([
                 "-y",
@@ -325,12 +325,12 @@ fn run_hevc(f: &mut super::hevc::Front<Recorder>, samples: &[(Vec<u8>, i64)]) ->
 
 #[test]
 fn hevc_output_order_and_buffers_match_the_software_decoder() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     for (name, pix_fmt, params) in HEVC_STREAMS {
         let Some(path) = hevc_fixture(&ff, name, pix_fmt, params) else { continue };
         let s = read_stream(&path);
         let mut f = hevc_front(&s);
-        let mut sw = filmcraft_codecs::software_video_decoder(&s.entry).unwrap();
+        let mut sw = mortiflix_codecs::software_video_decoder(&s.entry).unwrap();
         assert_eq!(run_hevc(&mut f, &s.samples), run_software(sw.as_mut(), &s.samples), "{name}");
         // seeks to every sync sample (open-GOP CRA pictures included: RASL pictures left out)
         for k in (1..s.samples.len()).filter(|&i| s.sync[i]) {
@@ -345,7 +345,7 @@ fn hevc_output_order_and_buffers_match_the_software_decoder() {
 /// Damaged HEVC samples give errors, never a panic.
 #[test]
 fn hevc_damaged_samples_are_errors() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let (name, pix_fmt, params) = HEVC_STREAMS[0];
     let Some(path) = hevc_fixture(&ff, name, pix_fmt, params) else { return };
     let s = read_stream(&path);

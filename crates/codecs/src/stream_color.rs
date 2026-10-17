@@ -6,8 +6,8 @@
 //! files the bitstream is the only place their colour is described. [`resolve`] merges it with
 //! what the container signals, which wins.
 
-use filmcraft_color::{ColorInfo, Matrix, Range, Transfer};
-use filmcraft_isobmff::{AvcConfig, CodecConfig, HevcConfig};
+use mortiflix_color::{ColorInfo, Matrix, Range, Transfer};
+use mortiflix_isobmff::{AvcConfig, CodecConfig, HevcConfig};
 
 use crate::video::primaries_from_code;
 
@@ -51,7 +51,7 @@ pub fn from_codec_config(codec: &CodecConfig) -> Option<ColorCodes> {
 fn avc(c: &AvcConfig) -> Option<ColorCodes> {
     // NAL header byte: nal_unit_type 7 is an SPS
     let nal = c.sps.iter().find(|n| n.first().is_some_and(|h| h & 0x1f == 7))?;
-    let sps = filmcraft_h264::params::Sps::parse(&filmcraft_bitstream::unescape_rbsp(nal.get(1..)?)).ok()?;
+    let sps = mortiflix_h264::params::Sps::parse(&mortiflix_bitstream::unescape_rbsp(nal.get(1..)?)).ok()?;
     let v = sps.vui?;
     Some(ColorCodes { primaries: v.colour_primaries, transfer: v.transfer_characteristics, matrix: v.matrix_coefficients, full_range: Some(v.full_range) })
 }
@@ -59,7 +59,7 @@ fn avc(c: &AvcConfig) -> Option<ColorCodes> {
 fn hevc(c: &HevcConfig) -> Option<ColorCodes> {
     // two-byte NAL header: nal_unit_type 33 is an SPS (whatever array the record files it under)
     let nal = c.arrays.iter().flat_map(|a| &a.nalus).find(|n| n.first().is_some_and(|h| (h >> 1) & 0x3f == 33))?;
-    let sps = filmcraft_hevc::params::Sps::parse(&filmcraft_bitstream::unescape_rbsp(nal.get(2..)?)).ok()?;
+    let sps = mortiflix_hevc::params::Sps::parse(&mortiflix_bitstream::unescape_rbsp(nal.get(2..)?)).ok()?;
     let v = sps.vui?;
     Some(ColorCodes { primaries: v.colour_primaries, transfer: v.transfer_characteristics, matrix: v.matrix_coefficients, full_range: Some(v.full_range) })
 }
@@ -67,17 +67,17 @@ fn hevc(c: &HevcConfig) -> Option<ColorCodes> {
 fn av1(config_obus: &[u8]) -> Option<ColorCodes> {
     // OBU type 1: the sequence header
     let (_, payload) = crate::hw_frame::obus(config_obus).into_iter().find(|(t, _)| *t == 1)?;
-    let c = filmcraft_av1::SequenceHeader::parse(payload).ok()?.color;
+    let c = mortiflix_av1::SequenceHeader::parse(payload).ok()?.color;
     Some(ColorCodes { primaries: c.color_primaries, transfer: c.transfer_characteristics, matrix: c.matrix_coefficients, full_range: Some(c.color_range) })
 }
 
 /// Colour from the code points a file signals, most authoritative first (the container's colour
 /// box, then the bitstream's): the matrix, transfer, primaries and range each come from the first
 /// source that signals a value we know. What no source signals keeps the defaults: the matrix by
-/// frame size ([`filmcraft_frame::default_matrix`]: BT.601 for SD, BT.709 otherwise), BT.709
+/// frame size ([`mortiflix_frame::default_matrix`]: BT.601 for SD, BT.709 otherwise), BT.709
 /// transfer and primaries, limited range.
 pub fn resolve(width: u32, height: u32, sources: &[ColorCodes]) -> ColorInfo {
-    let mut c = ColorInfo { matrix: filmcraft_frame::default_matrix(width, height), ..ColorInfo::REC709 };
+    let mut c = ColorInfo { matrix: mortiflix_frame::default_matrix(width, height), ..ColorInfo::REC709 };
     if let Some(m) = sources.iter().find_map(|s| Matrix::from_code(s.matrix)) {
         c.matrix = m;
     }

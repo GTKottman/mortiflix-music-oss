@@ -9,9 +9,9 @@
 //! address `path` / `feather` / `opacity` / `expansion`. Every edit is one undo step (`merge`: a
 //! key folds a continuous drag into one step).
 
-use filmcraft_geom::{Affine, Vec2};
-use filmcraft_project::{ClipId, EffectInstance, Mask, MaskMode, MaskPath, MaskVertex, ParamValue, TrackKind, TrackMethod};
-use filmcraft_time::Tick;
+use mortiflix_geom::{Affine, Vec2};
+use mortiflix_project::{ClipId, EffectInstance, Mask, MaskMode, MaskPath, MaskVertex, ParamValue, TrackKind, TrackMethod};
+use mortiflix_time::Tick;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
@@ -159,12 +159,12 @@ fn source_size(s: &Session, clip: ClipId) -> (f64, f64) {
     let seq = s.active_sequence();
     let it = seq.and_then(|q| q.find_item(clip)).map(|(_, i)| i);
     let dims = it.and_then(|i| s.project.item(i.item)).and_then(|pi| match &pi.kind {
-        filmcraft_project::ItemKind::Media(m) => m.info.video.as_ref().map(|v| (v.width, v.height)),
-        filmcraft_project::ItemKind::Sequence(q) => Some((q.settings.width, q.settings.height)),
-        filmcraft_project::ItemKind::AdjustmentLayer { width, height, .. } | filmcraft_project::ItemKind::Graphic { width, height, .. } => {
+        mortiflix_project::ItemKind::Media(m) => m.info.video.as_ref().map(|v| (v.width, v.height)),
+        mortiflix_project::ItemKind::Sequence(q) => Some((q.settings.width, q.settings.height)),
+        mortiflix_project::ItemKind::AdjustmentLayer { width, height, .. } | mortiflix_project::ItemKind::Graphic { width, height, .. } => {
             Some((*width, *height))
         }
-        filmcraft_project::ItemKind::Subclip { parent, .. } => {
+        mortiflix_project::ItemKind::Subclip { parent, .. } => {
             s.project.item(*parent).and_then(|pp| pp.as_media()).and_then(|m| m.info.video.as_ref()).map(|v| (v.width, v.height))
         }
     });
@@ -181,9 +181,9 @@ fn edit_mask<R>(s: &mut Session, p: &Value, label: &str, f: impl FnOnce(&mut Mas
     let eff = p.get("effect").cloned();
     let mask_i = u64_p(p, "mask").map(|m| m as usize).or(sel.filter(|x| x.clip == clip).map(|x| x.mask));
     let seq_id = s.state.active_sequence.ok_or(EngineError::NoSequence)?;
-    let body = move |pr: &mut filmcraft_project::Project, _: &mut crate::EditorState| -> Result<R> {
+    let body = move |pr: &mut mortiflix_project::Project, _: &mut crate::EditorState| -> Result<R> {
         let q = pr.sequence_mut(seq_id).ok_or(EngineError::NoSequence)?;
-        let (_, it) = q.find_item_mut(clip).ok_or(filmcraft_edit::EditError::NoItem(clip))?;
+        let (_, it) = q.find_item_mut(clip).ok_or(mortiflix_edit::EditError::NoItem(clip))?;
         let mt = it.source_time_at(ph.clamp(it.start, it.end() - Tick(1)));
         let ei = effect_index(&it.effects, eff.as_ref(), sel, clip).ok_or_else(|| bad(label, "no such effect on clip"))?;
         let e = &mut it.effects[ei];
@@ -233,10 +233,10 @@ fn add(s: &mut Session, p: &Value) -> Result<Value> {
     let seq_id = s.state.active_sequence.ok_or(EngineError::NoSequence)?;
     let (ei, mi, name) = s.edit("Create Mask", move |pr, st| {
         let q = pr.sequence_mut(seq_id).ok_or(EngineError::NoSequence)?;
-        let (_, it) = q.find_item_mut(clip).ok_or(filmcraft_edit::EditError::NoItem(clip))?;
+        let (_, it) = q.find_item_mut(clip).ok_or(mortiflix_edit::EditError::NoItem(clip))?;
         let ei = effect_index(&it.effects, eff.as_ref(), None, clip).ok_or_else(|| bad("masks.add", "no such effect on clip"))?;
         let e = &mut it.effects[ei];
-        if e.def().is_none_or(|d| d.kind != filmcraft_project::EffectKind::Video) {
+        if e.def().is_none_or(|d| d.kind != mortiflix_project::EffectKind::Video) {
             return Err(bad("masks.add", "masks apply to video effects"));
         }
         if e.effect == "motion" {
@@ -261,7 +261,7 @@ fn remove(s: &mut Session, p: &Value) -> Result<Value> {
     let seq_id = s.state.active_sequence.ok_or(EngineError::NoSequence)?;
     s.edit("Delete Mask", move |pr, st| {
         let q = pr.sequence_mut(seq_id).ok_or(EngineError::NoSequence)?;
-        let (_, it) = q.find_item_mut(clip).ok_or(filmcraft_edit::EditError::NoItem(clip))?;
+        let (_, it) = q.find_item_mut(clip).ok_or(mortiflix_edit::EditError::NoItem(clip))?;
         let ei = effect_index(&it.effects, eff.as_ref(), sel, clip).ok_or_else(|| bad("masks.remove", "no such effect on clip"))?;
         let e = &mut it.effects[ei];
         if mask_i >= e.masks.len() {
@@ -554,7 +554,7 @@ fn list(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 /// The parameter a keyframe / setParam command addresses: a mask parameter when `mask` is given.
-pub(crate) fn target_param<'a>(e: &'a mut EffectInstance, p: &Value, pid: &str) -> Option<&'a mut filmcraft_project::Param> {
+pub(crate) fn target_param<'a>(e: &'a mut EffectInstance, p: &Value, pid: &str) -> Option<&'a mut mortiflix_project::Param> {
     match u64_p(p, "mask") {
         Some(mi) => e.masks.get_mut(mi as usize)?.param_mut(pid),
         None => e.params.get_mut(pid),
@@ -569,7 +569,7 @@ pub struct PendingTrack {
     pub job: u64,
     pub target: MaskSel,
     /// Sequence the clip lives in.
-    pub seq: filmcraft_project::ItemId,
+    pub seq: mortiflix_project::ItemId,
     /// (media time, path) in tracking order.
     pub keys: Arc<Mutex<Vec<(Tick, MaskPath)>>>,
     applied: usize,
@@ -619,7 +619,7 @@ fn track(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad("masks.track", if backward { "already at the clip's first frame" } else { "already at the clip's last frame" }));
     }
     let src = s.source(it.item).ok_or_else(|| EngineError::Other("the clip has no media to track".into()))?;
-    let size = filmcraft_render::source_size(&s.project, it.item).ok_or_else(|| bad("masks.track", "the clip has no picture"))?;
+    let size = mortiflix_render::source_size(&s.project, it.item).ok_or_else(|| bad("masks.track", "the clip has no picture"))?;
     let scale = (TRACK_MAX_WIDTH / size.0.max(1) as f64).min(1.0) as f32;
     let id = s.jobs.iter().map(|j| j.id).max().unwrap_or(0) + 1;
     let label = format!("Track {} ({})", mask.name, if backward { "backward" } else { "forward" });
@@ -631,10 +631,10 @@ fn track(s: &mut Session, p: &Value) -> Result<Value> {
     let run = move || {
         use std::sync::atomic::Ordering;
         let t0 = web_time::Instant::now();
-        let gray = |t: Tick| -> Option<(filmcraft_render::track::Prepared, f64)> {
-            let f = src.video_frame(filmcraft_media::FrameRequest { time: t, scale }).ok()?;
-            let g = filmcraft_render::track::Gray::from_rgba8(f.width as usize, f.height as usize, &f.to_rgba8());
-            Some((filmcraft_render::track::Prepared::new(g), f.width as f64 / size.0.max(1) as f64))
+        let gray = |t: Tick| -> Option<(mortiflix_render::track::Prepared, f64)> {
+            let f = src.video_frame(mortiflix_media::FrameRequest { time: t, scale }).ok()?;
+            let g = mortiflix_render::track::Gray::from_rgba8(f.width as usize, f.height as usize, &f.to_rgba8());
+            Some((mortiflix_render::track::Prepared::new(g), f.width as f64 / size.0.max(1) as f64))
         };
         let mut path = start_path;
         let mut err: Option<String> = None;
@@ -654,7 +654,7 @@ fn track(s: &mut Session, p: &Value) -> Result<Value> {
                         break;
                     };
                     let region: Vec<Vec2> = path.flatten(0.5).into_iter().map(|q| q * k_prev).collect();
-                    let Some(st) = filmcraft_render::track::track_step(&prev, &next, &region, method) else {
+                    let Some(st) = mortiflix_render::track::track_step(&prev, &next, &region, method) else {
                         err = Some(format!("lost track after {} frame(s): not enough detail inside the mask", step - 1));
                         break;
                     };
@@ -674,7 +674,7 @@ fn track(s: &mut Session, p: &Value) -> Result<Value> {
         let r = match &err {
             // stopping keeps what was tracked
             Some(e) if e != "stopped" => Err(e.clone()),
-            _ => Ok(filmcraft_export::Report {
+            _ => Ok(mortiflix_export::Report {
                 path: String::new(),
                 frames: done,
                 seconds: secs,
@@ -698,7 +698,7 @@ fn track(s: &mut Session, p: &Value) -> Result<Value> {
         run();
         poll(s);
     } else {
-        std::thread::Builder::new().name("filmcraft-mask-track".into()).spawn(run).map_err(|e| EngineError::Other(e.to_string()))?;
+        std::thread::Builder::new().name("mortiflix-mask-track".into()).spawn(run).map_err(|e| EngineError::Other(e.to_string()))?;
     }
     let st = s.jobs.iter().find(|j| j.id == id).map(crate::Job::to_json).unwrap_or(Value::Null);
     Ok(json!({"job": id, "frames": steps, "status": st}))
@@ -726,7 +726,7 @@ pub fn poll(s: &mut Session) {
             let (target, seq_id, key) = (pj.target, pj.seq, format!("mask-track-{}", pj.job));
             let r = s.edit_merged("Track Mask", &key, move |pr, _| {
                 let q = pr.sequence_mut(seq_id).ok_or(EngineError::NoSequence)?;
-                let (_, it) = q.find_item_mut(target.clip).ok_or(filmcraft_edit::EditError::NoItem(target.clip))?;
+                let (_, it) = q.find_item_mut(target.clip).ok_or(mortiflix_edit::EditError::NoItem(target.clip))?;
                 let m = it.effects.get_mut(target.effect).and_then(|e| e.masks.get_mut(target.mask)).ok_or_else(|| bad("masks.track", "the mask is gone"))?;
                 for (t, path) in new {
                     m.path.put_keyframe(t, ParamValue::Path(path));

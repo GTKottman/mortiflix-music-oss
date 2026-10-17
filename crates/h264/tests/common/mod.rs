@@ -1,7 +1,7 @@
 //! Test fixture generation (ffmpeg/libx264 as an external oracle) and comparison helpers.
 #![allow(dead_code)]
 
-use filmcraft_h264::{Decoder, Picture};
+use mortiflix_h264::{Decoder, Picture};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Mutex, PoisonError};
@@ -312,13 +312,13 @@ pub fn fixture(name: &str) -> &'static Fixture {
     FIXTURES.iter().find(|f| f.name == name).unwrap_or_else(|| panic!("unknown fixture {name}"))
 }
 
-/// ffmpeg (see `filmcraft_testkit::oracle`).
+/// ffmpeg (see `mortiflix_testkit::oracle`).
 pub fn ffmpeg() -> Option<PathBuf> {
-    filmcraft_testkit::ffmpeg()
+    mortiflix_testkit::ffmpeg()
 }
 
 pub fn fixtures_dir() -> PathBuf {
-    filmcraft_testkit::fixtures_dir("h264")
+    mortiflix_testkit::fixtures_dir("h264")
 }
 
 fn run(cmd: &mut Command) -> bool {
@@ -338,13 +338,13 @@ fn run(cmd: &mut Command) -> bool {
 /// Generate (if needed) the fixture stream and its ffmpeg reference decode.
 /// Returns None (with a message) when ffmpeg is unavailable.
 pub fn ensure(f: &Fixture) -> Option<(PathBuf, PathBuf)> {
-    let ff = filmcraft_testkit::ffmpeg_or_skip(f.name)?;
+    let ff = mortiflix_testkit::ffmpeg_or_skip(f.name)?;
     let _generation = FIXTURE_GENERATION.lock().unwrap_or_else(PoisonError::into_inner);
     let dir = fixtures_dir();
     let h264 = dir.join(format!("{}.h264", f.name));
     let yuv = dir.join(format!("{}.yuv", f.name));
     if !h264.exists() {
-        let tmp = filmcraft_testkit::temp_path(&h264);
+        let tmp = mortiflix_testkit::temp_path(&h264);
         let mut vf = format!("{}=size={}x{}:rate=25,format=yuv420p", f.source, f.width, f.height);
         if !f.filter.is_empty() {
             vf.push(',');
@@ -367,7 +367,7 @@ pub fn ensure(f: &Fixture) -> Option<(PathBuf, PathBuf)> {
         std::fs::rename(&tmp, &h264).unwrap();
     }
     if !yuv.exists() {
-        let tmp = filmcraft_testkit::temp_path(&yuv);
+        let tmp = mortiflix_testkit::temp_path(&yuv);
         let mut c = Command::new(&ff);
         c.args(["-hide_banner", "-loglevel", "error", "-y", "-i"]).arg(&h264);
         c.args(["-fps_mode", "passthrough", "-f", "rawvideo", "-pix_fmt", "yuv420p"]).arg(&tmp);
@@ -420,7 +420,7 @@ pub fn split_access_units(data: &[u8]) -> Vec<&[u8]> {
 
 /// Decode a whole Annex-B file access unit by access unit (pts = AU index).
 /// Failed decode: (access unit index, error, pictures output before the error).
-pub type DecodeFailure = (usize, filmcraft_h264::Error, Vec<Picture>);
+pub type DecodeFailure = (usize, mortiflix_h264::Error, Vec<Picture>);
 
 pub fn decode_file(path: &Path) -> Result<Vec<Picture>, DecodeFailure> {
     decode_file_threads(path, 0)

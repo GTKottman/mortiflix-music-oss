@@ -6,11 +6,11 @@
 use std::io::Cursor;
 use std::sync::Arc;
 
-use filmcraft_bitstream::{BitWriter, escape_rbsp};
-use filmcraft_color::{ColorInfo, ColorSpace, Matrix, Primaries, Range, Transfer};
-use filmcraft_isobmff::{Av1Config, AvcConfig, Brand, CodecConfig, HevcConfig, HevcNalArray, Mp4Writer, SampleEntry, TrackConfig, WriteSample, WriterOptions};
-use filmcraft_matroska::{MkvWriter, MuxOptions, TrackKind, TrackSpec};
-use filmcraft_media::MediaSource;
+use mortiflix_bitstream::{BitWriter, escape_rbsp};
+use mortiflix_color::{ColorInfo, ColorSpace, Matrix, Primaries, Range, Transfer};
+use mortiflix_isobmff::{Av1Config, AvcConfig, Brand, CodecConfig, HevcConfig, HevcNalArray, Mp4Writer, SampleEntry, TrackConfig, WriteSample, WriterOptions};
+use mortiflix_matroska::{MkvWriter, MuxOptions, TrackKind, TrackSpec};
+use mortiflix_media::MediaSource;
 
 use crate::stream_color::{ColorCodes, from_codec_config, resolve};
 
@@ -188,11 +188,11 @@ fn av1(obus: Vec<u8>) -> CodecConfig {
 }
 
 /// A one-sample MP4 with `codec` (the sample is never decoded) and, when given, a `colr` box.
-fn mp4(codec: CodecConfig, w: u16, h: u16, colr: Option<filmcraft_isobmff::ColorInfo>) -> Arc<[u8]> {
+fn mp4(codec: CodecConfig, w: u16, h: u16, colr: Option<mortiflix_isobmff::ColorInfo>) -> Arc<[u8]> {
     let mut entry = match codec {
         CodecConfig::Avc(c) => SampleEntry::avc(c, w, h),
         CodecConfig::Hevc(c) => SampleEntry::hevc(c, w, h),
-        other => SampleEntry::video(filmcraft_isobmff::FourCc(*b"av01"), other, w, h),
+        other => SampleEntry::video(mortiflix_isobmff::FourCc(*b"av01"), other, w, h),
     };
     if let Some(v) = entry.video.as_mut() {
         v.color = colr;
@@ -203,7 +203,7 @@ fn mp4(codec: CodecConfig, w: u16, h: u16, colr: Option<filmcraft_isobmff::Color
     mux.finish().expect("finish").into_inner().into()
 }
 
-fn mp4_color(codec: CodecConfig, w: u16, h: u16, colr: Option<filmcraft_isobmff::ColorInfo>) -> ColorInfo {
+fn mp4_color(codec: CodecConfig, w: u16, h: u16, colr: Option<mortiflix_isobmff::ColorInfo>) -> ColorInfo {
     let src = crate::Mp4Source::open("clip.mp4", mp4(codec, w, h, colr)).expect("open");
     src.info().video.as_ref().expect("video").color
 }
@@ -246,7 +246,7 @@ fn unspecified_or_missing_vui_keeps_the_size_defaults() {
 
 #[test]
 fn colr_wins_over_the_bitstream() {
-    use filmcraft_isobmff::ColorInfo::{Nclc, Nclx};
+    use mortiflix_isobmff::ColorInfo::{Nclc, Nclx};
     let sps = || hevc(hevc_sps(1920, 1080, Some(PQ_2020)));
     // a BT.709 nclx box beats a PQ VUI, and is what the decoder's frames are tagged with
     let colr = Nclx { primaries: 1, transfer: 1, matrix: 1, full_range: false };
@@ -263,7 +263,7 @@ fn colr_wins_over_the_bitstream() {
     let nclc = Nclc { primaries: 1, transfer: 1, matrix: 1 };
     assert_eq!(mp4_color(avc(h264_sps(80, 45, Some(FULL_ONLY))), 1280, 720, Some(nclc)).range, Range::Full);
     // an ICC profile has no code points: the bitstream decides
-    let icc = filmcraft_isobmff::ColorInfo::Icc { kind: filmcraft_isobmff::FourCc(*b"prof"), profile: vec![0; 8] };
+    let icc = mortiflix_isobmff::ColorInfo::Icc { kind: mortiflix_isobmff::FourCc(*b"prof"), profile: vec![0; 8] };
     assert_eq!(mp4_color(sps(), 1920, 1080, Some(icc)).transfer, Transfer::Pq);
 }
 

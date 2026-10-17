@@ -1,6 +1,6 @@
 //! Colour management in the renderer: source colour space resolution (Interpret Footage override
 //! or stream metadata), source → working conversion of decoded frames, and the working → monitor
-//! transform. The maths lives in `filmcraft_color::transform`.
+//! transform. The maths lives in `mortiflix_color::transform`.
 //!
 //! A sequence whose pipeline is "plain" (Rec. 709 working space without wide gamut) and media
 //! whose metadata says Rec. 709 / sRGB / linear take the original fast path unchanged. On such a
@@ -11,9 +11,9 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 
-use filmcraft_color::{ColorPipeline, ColorSpace, InputTransform, OutputTransform, Range};
-use filmcraft_frame::VideoFrame;
-use filmcraft_project::{ItemId, Project};
+use mortiflix_color::{ColorPipeline, ColorSpace, InputTransform, OutputTransform, Range};
+use mortiflix_frame::VideoFrame;
+use mortiflix_project::{ItemId, Project};
 
 use crate::Image;
 
@@ -59,7 +59,7 @@ pub fn input_transform(cs: ColorSpace, range: Range, pipe: &ColorPipeline, peak_
 /// whose working → monitor transform is the identity. None for log media (camera-gamut
 /// compression), RGB frames and other pipelines, which [`decode`] converts on the CPU.
 pub fn gpu_input(project: &Project, item: ItemId, pipe: &ColorPipeline, cs: ColorSpace, frame: &VideoFrame) -> Option<Arc<InputTransform>> {
-    if !pipe.is_plain() || !matches!(frame.data, filmcraft_frame::PixelData::Yuv8 { .. } | filmcraft_frame::PixelData::Yuv16 { .. }) {
+    if !pipe.is_plain() || !matches!(frame.data, mortiflix_frame::PixelData::Yuv8 { .. } | mortiflix_frame::PixelData::Yuv16 { .. }) {
         return None;
     }
     let t = input_transform(cs, frame.color.range, pipe, source_peak_nits(project, item));
@@ -75,11 +75,11 @@ pub fn decode(project: &Project, item: ItemId, frame: &VideoFrame, n: usize, pip
     }
     // RGB stills/generators carry full-range code values; YUV carries its own range flag
     let range = match frame.data {
-        filmcraft_frame::PixelData::Rgba8(_) | filmcraft_frame::PixelData::RgbaF32(_) => Range::Full,
+        mortiflix_frame::PixelData::Rgba8(_) | mortiflix_frame::PixelData::RgbaF32(_) => Range::Full,
         _ => frame.color.range,
     };
     let t = input_transform(cs, range, pipe, source_peak_nits(project, item));
-    let float_src = matches!(frame.data, filmcraft_frame::PixelData::RgbaF32(_));
+    let float_src = matches!(frame.data, mortiflix_frame::PixelData::RgbaF32(_));
     // float frames are linear already: only the gamut/tone stages apply to them
     let (w, h, px) = frame.to_linear_f32_decimated_with(n, if float_src { None } else { Some(&t.table) });
     let mut img = Image { w, h, px };
@@ -110,7 +110,7 @@ pub fn display_transform(pipe: &ColorPipeline) -> Arc<OutputTransform> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use filmcraft_color::{ColorInfo, Primaries, Transfer, WorkingSpace};
+    use mortiflix_color::{ColorInfo, Primaries, Transfer, WorkingSpace};
 
     fn frame(rgb: [u8; 3], color: ColorInfo) -> VideoFrame {
         let mut f = VideoFrame::rgba8(2, 2, [rgb[0], rgb[1], rgb[2], 255].repeat(4));
@@ -120,16 +120,16 @@ mod tests {
 
     #[test]
     fn mastering_metadata_sets_the_tone_mapping_peak() {
-        use filmcraft_color::HdrMetadata;
-        use filmcraft_media::MediaSource;
-        use filmcraft_project::{ItemKind, Label, MediaClip, MediaRef};
+        use mortiflix_color::HdrMetadata;
+        use mortiflix_media::MediaSource;
+        use mortiflix_project::{ItemKind, Label, MediaClip, MediaRef};
         let pq = ColorInfo { transfer: Transfer::Pq, primaries: Primaries::Bt2020, ..ColorInfo::SRGB_FULL };
         // a PQ grey of ≈ 2000 cd/m² (code 0.83) and one of ≈ 4000 cd/m² (code 0.90)
-        let px = |nits: f32| (filmcraft_color::pq_inverse_eotf(nits / 10_000.0) * 255.0).round() as u8;
+        let px = |nits: f32| (mortiflix_color::pq_inverse_eotf(nits / 10_000.0) * 255.0).round() as u8;
         let item_with = |hdr: Option<HdrMetadata>| {
             let mut p = Project::new("t");
-            let g = filmcraft_media::Generator::BlackVideo;
-            let mut info = filmcraft_media::generators::GeneratorSource::new(g.clone(), 2, 2, Default::default(), filmcraft_time::Tick(1)).info().clone();
+            let g = mortiflix_media::Generator::BlackVideo;
+            let mut info = mortiflix_media::generators::GeneratorSource::new(g.clone(), 2, 2, Default::default(), mortiflix_time::Tick(1)).info().clone();
             if let Some(v) = info.video.as_mut() {
                 v.color = pq;
                 v.hdr = hdr;

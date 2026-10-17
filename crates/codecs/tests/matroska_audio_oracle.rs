@@ -15,7 +15,7 @@ fn roughness(x: &[f32], from: usize) -> f32 {
 
 #[test]
 fn matroska_audio_plays_without_holes() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let cases: [(&str, u32, &[&str]); 5] = [
         ("tone_aac_48k.mkv", 48_000, &["-c:a", "aac", "-b:a", "160k"]),
         ("tone_aac_44k.mkv", 44_100, &["-c:a", "aac", "-b:a", "160k"]),
@@ -30,7 +30,7 @@ fn matroska_audio_plays_without_holes() {
             eprintln!("SKIPPED ({name}): this ffmpeg can't encode it");
             continue;
         };
-        let src = filmcraft_codecs::open_bytes(name, bytes(&path)).unwrap();
+        let src = mortiflix_codecs::open_bytes(name, bytes(&path)).unwrap();
         assert_eq!(src.info().audio().map(|a| a.sample_rate), Some(rate), "{name}");
         let frames = rate as usize * 29 / 10;
         let mut ours = Vec::with_capacity(frames);
@@ -87,7 +87,7 @@ fn noise(n: usize) -> Vec<f32> {
 /// samples), so its lag is reported, not asserted.
 #[test]
 fn matroska_audio_is_sample_aligned_with_ffmpeg() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let cases: [(&str, u32, &[&str]); 6] = [
         ("ref_aac_48k.mkv", 48_000, &["-c:a", "aac", "-b:a", "256k"]),
         ("ref_aac_44k.mkv", 44_100, &["-c:a", "aac", "-b:a", "256k"]),
@@ -99,7 +99,7 @@ fn matroska_audio_is_sample_aligned_with_ffmpeg() {
     for (name, rate, codec) in cases {
         let reference = noise(rate as usize * 2);
         let raw = format!("ref_noise_{rate}.f32");
-        let raw_path = filmcraft_testkit::fixtures::generate(&dir().join(&raw), |tmp| {
+        let raw_path = mortiflix_testkit::fixtures::generate(&dir().join(&raw), |tmp| {
             std::fs::write(tmp, reference.iter().flat_map(|v| v.to_le_bytes()).collect::<Vec<u8>>()).is_ok()
         })
         .unwrap();
@@ -110,11 +110,11 @@ fn matroska_audio_is_sample_aligned_with_ffmpeg() {
             continue;
         };
         let file = bytes(&path);
-        let mkv = filmcraft_matroska::open(file.clone()).unwrap();
+        let mkv = mortiflix_matroska::open(file.clone()).unwrap();
         let delay_ns = mkv.tracks.first().map_or(0, |t| t.codec_delay_ns) as i64;
         let delay = (delay_ns * rate as i64 + 500_000_000) / 1_000_000_000;
         assert!(delay > 0, "{name}: no CodecDelay");
-        let src = filmcraft_codecs::open_bytes(name, file).unwrap();
+        let src = mortiflix_codecs::open_bytes(name, file).unwrap();
         let frames = rate as usize * 3 / 2;
         let mut ours = Vec::with_capacity(frames);
         while ours.len() < frames {

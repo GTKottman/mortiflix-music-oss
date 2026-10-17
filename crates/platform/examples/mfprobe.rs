@@ -3,28 +3,28 @@
 //! sample and prints the GPU decode, GPU to CPU readback and plane conversion costs per picture).
 #[cfg(target_os = "windows")]
 fn main() {
-    use filmcraft_codecs::VideoDecoder;
-    println!("register: {:?}", filmcraft_platform::register());
+    use mortiflix_codecs::VideoDecoder;
+    println!("register: {:?}", mortiflix_platform::register());
     let time = std::env::args().any(|a| a == "--time");
     for path in std::env::args().skip(1).filter(|a| !a.starts_with("--")) {
         let Ok(bytes) = std::fs::read(&path) else {
             println!("{path}: unreadable");
             continue;
         };
-        let Ok(file) = filmcraft_isobmff::open(bytes.clone()) else {
+        let Ok(file) = mortiflix_isobmff::open(bytes.clone()) else {
             println!("{path}: not an MP4");
             continue;
         };
-        let Some(t) = file.track_of_kind(filmcraft_isobmff::TrackKind::Video) else {
+        let Some(t) = file.track_of_kind(mortiflix_isobmff::TrackKind::Video) else {
             println!("{path}: no video");
             continue;
         };
         let Some(entry) = file.tracks[t].entries.first() else { continue };
-        let Some(info) = filmcraft_platform::media_foundation::stream_info(entry) else {
+        let Some(info) = mortiflix_platform::media_foundation::stream_info(entry) else {
             println!("{path}: not an avcC / hvcC / vpcC / av1C stream this backend reads");
             continue;
         };
-        let mut d = match filmcraft_platform::media_foundation::MfDecoder::new(info) {
+        let mut d = match mortiflix_platform::media_foundation::MfDecoder::new(info) {
             Ok(d) => d,
             Err(e) => {
                 println!("{path}: declined: {e}");

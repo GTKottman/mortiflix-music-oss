@@ -1,6 +1,6 @@
 [package]
-name = "filmcraft-ui-egui"
-description = "The FilmCraft egui frontend (swappable): panels, docking, timeline, monitors, control channel"
+name = "mortiflix-ui-egui"
+description = "The Mortiflix Studio egui frontend (swappable): panels, docking, timeline, monitors, control channel"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -11,23 +11,23 @@ workspace = true
 
 [dependencies]
 craft-ui = { workspace = true }
-filmcraft-time = { workspace = true }
-filmcraft-geom = { workspace = true }
-filmcraft-color = { workspace = true }
-filmcraft-frame = { workspace = true }
-filmcraft-media = { workspace = true }
-filmcraft-project = { workspace = true }
-filmcraft-tts = { workspace = true }
-filmcraft-speech = { workspace = true }
-filmcraft-edit = { workspace = true }
-filmcraft-render = { workspace = true }
-filmcraft-text = { workspace = true }
-filmcraft-audio-dsp = { workspace = true }
-filmcraft-engine = { workspace = true }
-filmcraft-export = { workspace = true }
-filmcraft-gpu = { workspace = true }
-filmcraft-scopes = { workspace = true }
-filmcraft-mortiflix-ui = { workspace = true }
+mortiflix-time = { workspace = true }
+mortiflix-geom = { workspace = true }
+mortiflix-color = { workspace = true }
+mortiflix-frame = { workspace = true }
+mortiflix-media = { workspace = true }
+mortiflix-project = { workspace = true }
+mortiflix-tts = { workspace = true }
+mortiflix-speech = { workspace = true }
+mortiflix-edit = { workspace = true }
+mortiflix-render = { workspace = true }
+mortiflix-text = { workspace = true }
+mortiflix-audio-dsp = { workspace = true }
+mortiflix-engine = { workspace = true }
+mortiflix-export = { workspace = true }
+mortiflix-gpu = { workspace = true }
+mortiflix-scopes = { workspace = true }
+mortiflix-ui = { workspace = true }
 egui = { workspace = true }
 eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit"] }
 serde = { workspace = true }
@@ -49,11 +49,11 @@ cpu-time = "1"
 
 [dev-dependencies]
 pollster = "0.4"
-filmcraft-codecs = { workspace = true }
+mortiflix-codecs = { workspace = true }
 # the bench registers OS hardware decoders as the desktop app does (dev-dependency only: ui-egui
 # itself stays OS-independent and web-portable)
-filmcraft-platform = { workspace = true }
-filmcraft-interchange = { workspace = true }
+mortiflix-platform = { workspace = true }
+mortiflix-interchange = { workspace = true }
 egui_kittest = { workspace = true, features = ["eframe", "wgpu"] }
 
 # build.rs bakes contributors/contributors.json into the binary (About ▸ Contributors).

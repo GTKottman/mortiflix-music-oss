@@ -3,15 +3,15 @@
 
 use std::sync::OnceLock;
 
-use filmcraft_edit as edit;
-use filmcraft_edit::{Edge, TrimMode};
-use filmcraft_media::Generator;
-use filmcraft_media::generators::GeneratorSource;
-use filmcraft_project::{
+use mortiflix_edit as edit;
+use mortiflix_edit::{Edge, TrimMode};
+use mortiflix_media::Generator;
+use mortiflix_media::generators::GeneratorSource;
+use mortiflix_project::{
     ClipId, ItemId, ItemKind, Label, Marker, MarkerId, MarkerKind, MediaClip, MediaRef, ParamValue, Project, SequenceSettings, Track, TrackId, TrackKind,
     Transition, TransitionId, resolve_auto_points,
 };
-use filmcraft_time::{FrameRate, TICKS_PER_SECOND, Tick, TimeRange, parse_timecode};
+use mortiflix_time::{FrameRate, TICKS_PER_SECOND, Tick, TimeRange, parse_timecode};
 use serde_json::{Value, json};
 
 use crate::{EngineError, Result, Session};
@@ -173,7 +173,7 @@ pub(crate) fn named_clips_missing(s: &Session, spec: &CommandSpec, p: &Value) ->
 pub(crate) fn named_items(s: &Session, spec: &CommandSpec, p: &Value) -> Option<Vec<ItemId>> {
     let root = s.project.root.id;
     let exists = |i: &ItemId| {
-        let b = filmcraft_project::BinId(i.0);
+        let b = mortiflix_project::BinId(i.0);
         s.project.item(*i).is_some() || (b != root && s.project.root.find_bin(b).is_some())
     };
     let items: Vec<ItemId> = named_ids(spec, p, "items", "item")?.into_iter().map(ItemId).filter(exists).collect();
@@ -278,20 +278,20 @@ pub(crate) fn clip_p(p: &Value, k: &str) -> Option<ClipId> {
 /// Effect by id or display name. Names shared by several definitions ("Invert", "Volume",
 /// "Channel Volume") resolve to an applicable (non-intrinsic) effect whose kind matches the
 /// target clips' tracks.
-fn resolve_effect_name(s: &Session, p: &Value, name: &str) -> Option<&'static filmcraft_project::EffectDef> {
-    if let Some(d) = filmcraft_project::find_effect(name) {
+fn resolve_effect_name(s: &Session, p: &Value, name: &str) -> Option<&'static mortiflix_project::EffectDef> {
+    if let Some(d) = mortiflix_project::find_effect(name) {
         return Some(d);
     }
     let n = name.to_ascii_lowercase();
-    let cands: Vec<_> = filmcraft_project::effect_defs().iter().filter(|e| e.name.to_ascii_lowercase() == n).collect();
+    let cands: Vec<_> = mortiflix_project::effect_defs().iter().filter(|e| e.name.to_ascii_lowercase() == n).collect();
     if cands.len() <= 1 {
-        return cands.first().copied().or_else(|| filmcraft_project::find_effect(&n));
+        return cands.first().copied().or_else(|| mortiflix_project::find_effect(&n));
     }
     let on_audio = s.active_sequence().is_some_and(|q| {
         let clips = clips_p(s, p);
         !clips.is_empty() && clips.iter().all(|c| q.find_item(*c).and_then(|(t, _)| q.track(t)).is_some_and(|t| t.kind == TrackKind::Audio))
     });
-    let want = if on_audio { filmcraft_project::EffectKind::Audio } else { filmcraft_project::EffectKind::Video };
+    let want = if on_audio { mortiflix_project::EffectKind::Audio } else { mortiflix_project::EffectKind::Video };
     cands.iter().find(|d| !d.intrinsic && d.kind == want).or_else(|| cands.iter().find(|d| !d.intrinsic)).or(cands.first()).copied()
 }
 
@@ -408,7 +408,7 @@ fn move_clips(s: &mut Session, p: &Value) -> Result<Value> {
     let before = spots(s);
     // Allocate destinations in the same transaction as the move: an invalid edit leaves
     // neither empty tracks nor history entries. Each source track keeps its clips together.
-    let prepare = |q: &mut filmcraft_project::Sequence, ctx: &mut edit::EditCtx<'_>| -> Result<Vec<(ClipId, TrackId, Tick)>> {
+    let prepare = |q: &mut mortiflix_project::Sequence, ctx: &mut edit::EditCtx<'_>| -> Result<Vec<(ClipId, TrackId, Tick)>> {
         let sources: Vec<_> = q.all_tracks().filter(|t| new_moves.iter().any(|m| m.1 == t.id)).map(|t| (t.id, t.kind, t.channels)).collect();
         for kind in [TrackKind::Video, TrackKind::Audio] {
             let added = sources.iter().filter(|s| s.1 == kind).count();
@@ -475,7 +475,7 @@ fn move_clips(s: &mut Session, p: &Value) -> Result<Value> {
 
 /// Slip clips together: the media delta of each clip is scaled down by the same factor so that the
 /// most constrained clip (media end or start) still moves, and no linked partner slips further.
-pub(crate) fn slip_together(q: &mut filmcraft_project::Sequence, ctx: &mut edit::EditCtx<'_>, deltas: &[(ClipId, Tick)]) -> Result<()> {
+pub(crate) fn slip_together(q: &mut mortiflix_project::Sequence, ctx: &mut edit::EditCtx<'_>, deltas: &[(ClipId, Tick)]) -> Result<()> {
     let mut scale = 1.0_f64;
     let mut any = false;
     for (c, d) in deltas {
@@ -537,7 +537,7 @@ pub fn audio_effect_targets(s: &Session, clips: &[ClipId]) -> Vec<ClipId> {
 /// Adjacent roll pairs that follow `left`/`right` when linked selection is on: the given cut, plus
 /// through-edits between the same pieces' linked partners at that same time (Premiere linked
 /// selection). Split edits (audio cut at another time) and unlinked clips are not added.
-pub fn linked_roll_pairs(seq: &filmcraft_project::Sequence, left: ClipId, right: ClipId, follow_links: bool) -> Vec<(ClipId, ClipId)> {
+pub fn linked_roll_pairs(seq: &mortiflix_project::Sequence, left: ClipId, right: ClipId, follow_links: bool) -> Vec<(ClipId, ClipId)> {
     let mut pairs = vec![(left, right)];
     if !follow_links {
         return pairs;
@@ -594,7 +594,7 @@ pub fn with_links(s: &Session, clips: &[ClipId]) -> Vec<ClipId> {
 
 /// The delta a trim of `clips` (a clip and its linked partners) can apply together: `delta`
 /// clamped by each one's media and neighbours.
-fn clamp_trim_linked(q: &filmcraft_project::Sequence, clips: &[ClipId], edge: Edge, mode: TrimMode, delta: Tick, ctx: &edit::EditCtx) -> Result<Tick> {
+fn clamp_trim_linked(q: &mortiflix_project::Sequence, clips: &[ClipId], edge: Edge, mode: TrimMode, delta: Tick, ctx: &edit::EditCtx) -> Result<Tick> {
     let mut d = delta;
     let mut any = false;
     for c in clips {
@@ -647,7 +647,7 @@ pub(crate) fn default_seq_settings_for(media: &MediaClip) -> SequenceSettings {
 }
 
 /// Import bytes as a media item (engine-level; the UI reads files through services).
-pub fn import_bytes(s: &mut Session, path: &str, bytes: std::sync::Arc<[u8]>, bin: Option<filmcraft_project::BinId>) -> Result<ItemId> {
+pub fn import_bytes(s: &mut Session, path: &str, bytes: std::sync::Arc<[u8]>, bin: Option<mortiflix_project::BinId>) -> Result<ItemId> {
     let name = std::path::Path::new(path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| path.to_string());
     let identity = crate::relink::identity_of_bytes(&bytes);
     let src = s.media.open_bytes(&name, bytes)?;
@@ -656,7 +656,7 @@ pub fn import_bytes(s: &mut Session, path: &str, bytes: std::sync::Arc<[u8]>, bi
 
 /// Import a media file through the host's random-access reader ([`crate::Services::reader`]):
 /// only the container index is read now (web `Blob`s are never copied whole for containers).
-pub fn import_streamed(s: &mut Session, path: &str, bin: Option<filmcraft_project::BinId>) -> Result<ItemId> {
+pub fn import_streamed(s: &mut Session, path: &str, bin: Option<mortiflix_project::BinId>) -> Result<ItemId> {
     let name = std::path::Path::new(path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| path.to_string());
     let identity = crate::relink::identity_of(&*s.services, path).map_err(|e| EngineError::Other(format!("{path}: {e}")))?;
     let src = s.media.open_file(path, &*s.services)?;
@@ -666,7 +666,7 @@ pub fn import_streamed(s: &mut Session, path: &str, bin: Option<filmcraft_projec
 /// Import the image sequence that the numbered still `path` starts (File ▸ Import with Image
 /// Sequence): one movie item at Settings ▸ Media ▸ Indeterminate Media Timebase. Returns the item,
 /// the frame count and the missing frame numbers (relative to the first).
-pub fn import_image_sequence(s: &mut Session, path: &str, bin: Option<filmcraft_project::BinId>) -> Result<(ItemId, usize, Vec<usize>)> {
+pub fn import_image_sequence(s: &mut Session, path: &str, bin: Option<mortiflix_project::BinId>) -> Result<(ItemId, usize, Vec<usize>)> {
     let name = std::path::Path::new(path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| path.to_string());
     let rate = crate::settings::timebase_rate(&s.prefs.media.indeterminate_timebase);
     let frames = crate::media_pool::image_sequence_frames(path, &*s.services)?;
@@ -679,22 +679,22 @@ pub fn import_image_sequence(s: &mut Session, path: &str, bin: Option<filmcraft_
 
 /// Settings ▸ Media ▸ Import image sequences: a single numbered still with later frames beside it.
 fn detect_image_sequence(s: &Session, path: &str) -> bool {
-    filmcraft_media::sequence::Numbered::parse(path).is_some() && crate::media_pool::image_sequence_frames(path, &*s.services).is_ok_and(|f| f.len() > 1)
+    mortiflix_media::sequence::Numbered::parse(path).is_some() && crate::media_pool::image_sequence_frames(path, &*s.services).is_ok_and(|f| f.len() > 1)
 }
 
 fn import_source(
     s: &mut Session,
     path: &str,
     name: String,
-    src: filmcraft_media::SharedSource,
-    identity: filmcraft_project::MediaIdentity,
-    bin: Option<filmcraft_project::BinId>,
+    src: mortiflix_media::SharedSource,
+    identity: mortiflix_project::MediaIdentity,
+    bin: Option<mortiflix_project::BinId>,
 ) -> Result<ItemId> {
     let mut info = src.info().clone();
     // Settings ▸ Labels ▸ Label Defaults
     let label = s.prefs.labels.for_media(info.kind, info.has_video(), info.has_audio());
     // Settings ▸ Media ▸ Indeterminate Media Timebase: the frame rate stills report
-    if info.kind == filmcraft_media::MediaKind::Still
+    if info.kind == mortiflix_media::MediaKind::Still
         && let Some(v) = info.video.as_mut()
     {
         v.frame_rate = crate::settings::timebase_rate(&s.prefs.media.indeterminate_timebase);
@@ -730,7 +730,7 @@ fn new_generator(s: &mut Session, g: Generator, name: &str, label: Label, p: &Va
     let name = str_p(p, "name").unwrap_or(name).to_string();
     let src = GeneratorSource::new(g, w, h, st.frame_rate, Tick::from_seconds_f64(secs));
     let pool = s.media.clone();
-    let par = filmcraft_project::sane_par(st.par);
+    let par = mortiflix_project::sane_par(st.par);
     let id = s.edit(&format!("New {name}"), |pr, st| {
         let id = crate::demo::add_generator(pr, &pool, src, &name, label, None);
         // made for the sequence: its pixels have the sequence's aspect, as in Premiere
@@ -749,7 +749,7 @@ fn new_generator(s: &mut Session, g: Generator, name: &str, label: Label, p: &Va
 /// panel). Every clip of the matte follows; undo brings the old color back.
 fn set_matte_color(s: &mut Session, p: &Value) -> Result<Value> {
     const CMD: &str = "project.matteColor";
-    let color = str_p(p, "color").and_then(filmcraft_color::parse_hex).ok_or_else(|| bad(CMD, "`color` must be #rrggbb"))?;
+    let color = str_p(p, "color").and_then(mortiflix_color::parse_hex).ok_or_else(|| bad(CMD, "`color` must be #rrggbb"))?;
     let is_matte = |s: &Session, id: ItemId| {
         s.project.item(id).is_some_and(|it| matches!(&it.kind, ItemKind::Media(m) if matches!(m.media, MediaRef::Generator(Generator::ColorMatte { .. }))))
     };
@@ -771,7 +771,7 @@ fn set_matte_color(s: &mut Session, p: &Value) -> Result<Value> {
         }
         Ok(())
     })?;
-    Ok(json!({"item": item.0, "color": filmcraft_color::to_hex(color)}))
+    Ok(json!({"item": item.0, "color": mortiflix_color::to_hex(color)}))
 }
 
 /// One audio clip of a placement: how many tracks below the destination it goes, and the source
@@ -797,7 +797,7 @@ pub(crate) fn audio_placement_specs(clips: &[Vec<u16>], streams: usize) -> Vec<A
     }));
     // Interpret Footage's channel map describes stream 0; further container streams keep their
     // own channel layouts and get one clip each, after any channel-map clips.
-    for stream in 1..streams.min(filmcraft_media::MAX_AUDIO_STREAMS) {
+    for stream in 1..streams.min(mortiflix_media::MAX_AUDIO_STREAMS) {
         if specs.len() >= crate::sequence_tools::MAX_TRACKS {
             break;
         }
@@ -1008,7 +1008,7 @@ pub(crate) fn place_item(
                 resolve_auto_points(e, frame, src_size);
             }
             // the picture's size at its display aspect, in sequence pixels
-            let shown = filmcraft_project::conformed_size(src_size, src_par.unwrap_or(seq_par), seq_par);
+            let shown = mortiflix_project::conformed_size(src_size, src_par.unwrap_or(seq_par), seq_par);
             if is_media && shown != (f64::from(frame.0), f64::from(frame.1)) {
                 crate::settings::apply_media_scaling(&mut v, &scaling, frame, shown);
             }
@@ -1072,11 +1072,11 @@ pub(crate) fn place_item(
 
 /// How long an item runs on the Timeline without In/Out marks: its duration, or for a still (and a
 /// generator without a length) Settings ▸ Timeline ▸ Still Image Default Duration.
-pub(crate) fn full_duration(s: &Session, pi: &filmcraft_project::ProjectItem) -> Tick {
+pub(crate) fn full_duration(s: &Session, pi: &mortiflix_project::ProjectItem) -> Tick {
     match &pi.kind {
         ItemKind::Media(m)
-            if matches!(m.info.kind, filmcraft_media::MediaKind::Still)
-                || (matches!(m.info.kind, filmcraft_media::MediaKind::Synthetic) && m.info.duration.0 <= 0) =>
+            if matches!(m.info.kind, mortiflix_media::MediaKind::Still)
+                || (matches!(m.info.kind, mortiflix_media::MediaKind::Synthetic) && m.info.duration.0 <= 0) =>
         {
             s.prefs.timeline.still_duration(s.sequence_rate())
         }
@@ -1088,7 +1088,7 @@ pub(crate) fn source_range(s: &Session) -> Option<(ItemId, TimeRange)> {
     let item = s.state.source_item?;
     let pi = s.project.item(item)?;
     let dur = match &pi.kind {
-        ItemKind::Media(m) if matches!(m.info.kind, filmcraft_media::MediaKind::Still) => s.prefs.timeline.still_duration(s.sequence_rate()),
+        ItemKind::Media(m) if matches!(m.info.kind, mortiflix_media::MediaKind::Still) => s.prefs.timeline.still_duration(s.sequence_rate()),
         _ => pi.duration(),
     };
     let (mi, mo) = match &pi.kind {
@@ -1138,7 +1138,7 @@ fn build() -> Vec<CommandSpec> {
         // ================= File =================
         cmd!("file.newProject", "Project…", ["File", "New"], Some("Cmd+Alt+N"), r#"{"name":str}"#, always, |s, p| {
             let name = str_p(p, "name").unwrap_or("Untitled").to_string();
-            s.project = std::sync::Arc::new(filmcraft_project::Project::new(&name));
+            s.project = std::sync::Arc::new(mortiflix_project::Project::new(&name));
             s.history = Default::default();
             s.history.limit = 200;
             s.state = crate::Session::default().state;
@@ -1254,7 +1254,7 @@ fn build() -> Vec<CommandSpec> {
         ),
         cmd!("file.newBin", "Bin", ["File", "New"], Some("Cmd+B"), r#"{"name":str,"parent":binId?}"#, always, |s, p| {
             let n = str_p(p, "name").unwrap_or("New Bin").to_string();
-            let parent = u64_p(p, "parent").map(filmcraft_project::BinId);
+            let parent = u64_p(p, "parent").map(mortiflix_project::BinId);
             let id = s.edit("New Bin", |pr, _| Ok(pr.add_bin(&n, parent)))?;
             Ok(json!({"bin": id.0}))
         }),
@@ -1288,7 +1288,7 @@ fn build() -> Vec<CommandSpec> {
             p
         )),
         cmd!("file.newColorMatte", "Color Matte…", ["File", "New"], None, r##"{"color":"#rrggbb","seconds":f64}"##, always, |s, p| {
-            let c = str_p(p, "color").and_then(filmcraft_color::parse_hex).unwrap_or([0.1, 0.1, 0.1, 1.0]);
+            let c = str_p(p, "color").and_then(mortiflix_color::parse_hex).unwrap_or([0.1, 0.1, 0.1, 1.0]);
             new_generator(s, Generator::ColorMatte { color: c }, "Color Matte", Label::Lavender, p)
         }),
         cmd!("project.matteColor", "Color Matte Color…", [], None, r##"{"item":id?,"color":"#rrggbb"}"##, always, set_matte_color),
@@ -1314,9 +1314,9 @@ fn build() -> Vec<CommandSpec> {
             r#"{"scene":"OceanSunset|Aurora|CityNight|Dunes|Plasma|Forest"}"#,
             always,
             |s, p| {
-                let scenes: Vec<filmcraft_media::DemoScene> = match str_p(p, "scene") {
-                    Some(n) => filmcraft_media::DemoScene::ALL.iter().copied().filter(|d| format!("{d:?}").eq_ignore_ascii_case(n)).collect(),
-                    None => filmcraft_media::DemoScene::ALL.to_vec(),
+                let scenes: Vec<mortiflix_media::DemoScene> = match str_p(p, "scene") {
+                    Some(n) => mortiflix_media::DemoScene::ALL.iter().copied().filter(|d| format!("{d:?}").eq_ignore_ascii_case(n)).collect(),
+                    None => mortiflix_media::DemoScene::ALL.to_vec(),
                 };
                 let pool = s.media.clone();
                 let ids = s.edit("Import Demo Footage", |pr, _| {
@@ -1329,7 +1329,7 @@ fn build() -> Vec<CommandSpec> {
             }
         ),
         cmd!("file.import", "Import…", ["File"], Some("Cmd+I"), r#"{"paths":[str],"bin":binId?,"imageSequence":bool?,"replace":bool?}"#, always, |s, p| {
-            let bin = u64_p(p, "bin").map(filmcraft_project::BinId);
+            let bin = u64_p(p, "bin").map(mortiflix_project::BinId);
             let paths: Vec<String> = match p.get("paths").and_then(Value::as_array) {
                 Some(a) => a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect(),
                 None => str_p(p, "path").map(|x| vec![x.to_string()]).unwrap_or_default(),
@@ -1362,7 +1362,7 @@ fn build() -> Vec<CommandSpec> {
                     continue;
                 }
                 // Media files through the host's reader (no whole-file read) when it has one.
-                let streamed = filmcraft_media::is_importable(std::path::Path::new(&path)) && s.services.reader(&path).is_some();
+                let streamed = mortiflix_media::is_importable(std::path::Path::new(&path)) && s.services.reader(&path).is_some();
                 let read = if streamed { Ok(Vec::new()) } else { s.services.read_file(&path) };
                 match read {
                     Ok(_) if streamed => match import_streamed(s, &path, bin) {
@@ -1562,7 +1562,7 @@ fn build() -> Vec<CommandSpec> {
         }),
         query!("file.listAutoSaves", "Browse Auto-Saves", "{}", |s, _| {
             let dir = auto_save_dir(s);
-            let files = filmcraft_format::autosave::list_auto_saves(&dir, &auto_save_name(s));
+            let files = mortiflix_format::autosave::list_auto_saves(&dir, &auto_save_name(s));
             Ok(json!({"dir": dir, "files": files.iter().rev().map(|p| p.to_string_lossy().into_owned()).collect::<Vec<_>>()}))
         }),
         query!("prefs.get", "Get Preferences", r#"{"key":str?}"#, |s, p| match str_p(p, "key") {
@@ -1806,14 +1806,14 @@ fn build() -> Vec<CommandSpec> {
                 let reverse = bool_p(p, "reverse").unwrap_or(false);
                 let ripple = bool_p(p, "ripple").unwrap_or(false);
                 let interp = match str_p(p, "interpolation") {
-                    Some(m) => Some(filmcraft_project::TimeInterpolation::from_name(m).ok_or_else(|| bad("clip.speedDuration", "unknown interpolation"))?),
+                    Some(m) => Some(mortiflix_project::TimeInterpolation::from_name(m).ok_or_else(|| bad("clip.speedDuration", "unknown interpolation"))?),
                     None => None,
                 };
                 let sel = with_links(s, &clips_p(s, p));
                 s.edit_sequence("Speed/Duration", |q, ctx, _| {
                     // a clip and its linked partners on other tracks change as one edit, so a ripple
                     // moves the later clips once
-                    let place = |q: &filmcraft_project::Sequence, c: ClipId| q.find_item(c).map(|(t, i)| (t, i.link));
+                    let place = |q: &mortiflix_project::Sequence, c: ClipId| q.find_item(c).map(|(t, i)| (t, i.link));
                     let mut groups: Vec<Vec<ClipId>> = Vec::new();
                     for c in &sel {
                         // a clip that is not there goes on alone, so the edit fails with "no such item"
@@ -1874,7 +1874,7 @@ fn build() -> Vec<CommandSpec> {
                     }
                 } else {
                     // each selected clip with its track kind, worked out once
-                    type Spec = (ClipId, filmcraft_project::ItemId, filmcraft_time::TimeRange);
+                    type Spec = (ClipId, mortiflix_project::ItemId, mortiflix_time::TimeRange);
                     let (mut v_clips, mut audio_specs): (Vec<Spec>, Vec<Spec>) = (Vec::new(), Vec::new());
                     for c in &sel {
                         if let Some((tid, i)) = q.find_item(*c) {
@@ -2194,7 +2194,7 @@ fn build() -> Vec<CommandSpec> {
                     None => None,
                 };
                 let working = match str_p(p, "workingSpace") {
-                    Some(w) => Some(filmcraft_color::WorkingSpace::parse(w).ok_or_else(|| bad(CMD, format!("unknown working space `{w}`")))?),
+                    Some(w) => Some(mortiflix_color::WorkingSpace::parse(w).ok_or_else(|| bad(CMD, format!("unknown working space `{w}`")))?),
                     None => None,
                 };
                 let drop_frame = bool_p(p, "dropFrame");
@@ -2864,7 +2864,7 @@ fn build() -> Vec<CommandSpec> {
                 let tr = track_p(s, p, "track", "timeline.setTrack")?.ok_or_else(|| bad("timeline.setTrack", "need `track`"))?;
                 let p = p.clone();
                 s.edit_sequence("Track Settings", |q, _, _| {
-                    let t = q.track_mut(tr).ok_or(filmcraft_edit::EditError::NoTrack(tr))?;
+                    let t = q.track_mut(tr).ok_or(mortiflix_edit::EditError::NoTrack(tr))?;
                     if let Some(v) = bool_p(&p, "locked") {
                         t.locked = v;
                     }
@@ -2922,19 +2922,19 @@ fn build() -> Vec<CommandSpec> {
         cmd!("effects.apply", "Apply Effect", [], None, r#"{"clips":[id]?,"effect":"gaussian_blur|Gaussian Blur|…"}"#, has_seq, |s, p| {
             let name = str_p(p, "effect").ok_or_else(|| bad("effects.apply", "need `effect`"))?;
             let def = resolve_effect_name(s, p, name).ok_or_else(|| bad("effects.apply", format!("unknown effect `{name}`")))?;
-            if filmcraft_project::graphic::is_layer_id(def.id) {
+            if mortiflix_project::graphic::is_layer_id(def.id) {
                 return Err(bad("effects.apply", "graphic layers are added with graphics.newText / graphics.newShape"));
             }
-            if matches!(def.kind, filmcraft_project::EffectKind::VideoTransition | filmcraft_project::EffectKind::AudioTransition) {
+            if matches!(def.kind, mortiflix_project::EffectKind::VideoTransition | mortiflix_project::EffectKind::AudioTransition) {
                 let mut q = p.clone();
                 q["effect"] = json!(def.id);
-                return apply_transition(s, &q, if def.kind == filmcraft_project::EffectKind::VideoTransition { TrackKind::Video } else { TrackKind::Audio });
+                return apply_transition(s, &q, if def.kind == mortiflix_project::EffectKind::VideoTransition { TrackKind::Video } else { TrackKind::Audio });
             }
             let clips = clips_p(s, p);
             if clips.is_empty() {
                 return Err(bad("effects.apply", "select clips first"));
             }
-            let is_audio = def.kind == filmcraft_project::EffectKind::Audio;
+            let is_audio = def.kind == mortiflix_project::EffectKind::Audio;
             // Audio effects belong on audio clips. A video clip in an A/V pair is retargeted to
             // its linked audio so double-click / drop on the picture still applies Parametric EQ.
             let clips = if is_audio { audio_effect_targets(s, &clips) } else { clips };
@@ -2977,7 +2977,7 @@ fn build() -> Vec<CommandSpec> {
                 crate::EffectSel::of(c, &rest, if i > idx { i - 1 } else { i })
             });
             s.edit_sequence("Remove Effect", |q, _, _| {
-                let (_, it) = q.find_item_mut(c).ok_or(filmcraft_edit::EditError::NoItem(c))?;
+                let (_, it) = q.find_item_mut(c).ok_or(mortiflix_edit::EditError::NoItem(c))?;
                 if it.effects.get(idx).and_then(|e| e.def()).is_some_and(|d| d.intrinsic) {
                     return Err(EngineError::Other("intrinsic effects cannot be removed".into()));
                 }
@@ -3029,7 +3029,7 @@ fn build() -> Vec<CommandSpec> {
                     s.history.merge_key = None;
                 }
                 let keyframes = s.edit_sequence_as("Change Effect Parameter", merge.as_deref(), |q, _, _| {
-                    let (_, it) = q.find_item_mut(c).ok_or(filmcraft_edit::EditError::NoItem(c))?;
+                    let (_, it) = q.find_item_mut(c).ok_or(mortiflix_edit::EditError::NoItem(c))?;
                     let mt = it.source_time_at(at.unwrap_or_else(|| ph.clamp(it.start, (it.end() - Tick(1)).max(it.start))));
                     let e = match &eff {
                         Value::Number(n) => it.effects.get_mut(n.as_u64().unwrap_or(0) as usize),
@@ -3041,7 +3041,7 @@ fn build() -> Vec<CommandSpec> {
                     let def = if pq.get("mask").is_none_or(Value::is_null) { e.def().and_then(|d| d.param(&pid)) } else { None };
                     // a choice takes its option name as well as its index, as transition parameters do
                     let val = match (def.map(|d| &d.kind), &val) {
-                        (Some(filmcraft_project::ParamKind::Choice(opts)), Value::String(name)) => {
+                        (Some(mortiflix_project::ParamKind::Choice(opts)), Value::String(name)) => {
                             let i = opts
                                 .iter()
                                 .position(|o| o.eq_ignore_ascii_case(name))
@@ -3060,7 +3060,7 @@ fn build() -> Vec<CommandSpec> {
                     if !e.params.contains_key(&pid)
                         && let Some(d) = e.def().and_then(|d| d.param(&pid))
                     {
-                        e.params.insert(pid.clone(), filmcraft_project::Param::new(d.default.clone()));
+                        e.params.insert(pid.clone(), mortiflix_project::Param::new(d.default.clone()));
                     }
                     let (keyframes, v) = {
                         let prm = crate::masks::target_param(e, &pq, &pid).ok_or_else(|| bad("effects.setParam", format!("no param `{pid}`")))?;
@@ -3078,14 +3078,14 @@ fn build() -> Vec<CommandSpec> {
                     if e.effect == "ultra_key"
                         && pid == "setting"
                         && let ParamValue::Choice(setting) = v
-                        && let Some(rows) = filmcraft_project::effect::ultra_key_setting(setting)
+                        && let Some(rows) = mortiflix_project::effect::ultra_key_setting(setting)
                     {
                         for (id, value) in rows {
                             if let Some(p) = e.param_mut(id) {
                                 p.value = ParamValue::Float(*value);
                                 p.keyframes.clear();
                             } else {
-                                e.params.insert((*id).to_string(), filmcraft_project::Param::new(ParamValue::Float(*value)));
+                                e.params.insert((*id).to_string(), mortiflix_project::Param::new(ParamValue::Float(*value)));
                             }
                         }
                     }
@@ -3101,7 +3101,7 @@ fn build() -> Vec<CommandSpec> {
             let eff = p.get("effect").cloned().unwrap_or(json!("motion"));
             let ph = s.playhead();
             s.edit_sequence("Toggle Animation", |q, _, _| {
-                let (_, it) = q.find_item_mut(c).ok_or(filmcraft_edit::EditError::NoItem(c))?;
+                let (_, it) = q.find_item_mut(c).ok_or(mortiflix_edit::EditError::NoItem(c))?;
                 let mt = it.source_time_at(ph.clamp(it.start, (it.end() - Tick(1)).max(it.start)));
                 let e = match &eff {
                     Value::Number(n) => it.effects.get_mut(n.as_u64().unwrap_or(0) as usize),
@@ -3118,7 +3118,7 @@ fn build() -> Vec<CommandSpec> {
             let c = clip_p(p, "clip").ok_or_else(|| bad("effects.toggleEnabled", "need `clip`"))?;
             let idx = u64_p(p, "index").unwrap_or(0) as usize;
             s.edit_sequence("Toggle Effect", |q, _, _| {
-                let (_, it) = q.find_item_mut(c).ok_or(filmcraft_edit::EditError::NoItem(c))?;
+                let (_, it) = q.find_item_mut(c).ok_or(mortiflix_edit::EditError::NoItem(c))?;
                 if let Some(e) = it.effects.get_mut(idx) {
                     e.enabled = !e.enabled;
                 }
@@ -3132,7 +3132,7 @@ fn build() -> Vec<CommandSpec> {
             let frame = s.active_sequence().map(|q| (q.settings.width, q.settings.height)).unwrap_or((1920, 1080));
             let ph = s.playhead();
             s.edit_sequence("Reset Effect", |q, _, _| {
-                let (_, it) = q.find_item_mut(c).ok_or(filmcraft_edit::EditError::NoItem(c))?;
+                let (_, it) = q.find_item_mut(c).ok_or(mortiflix_edit::EditError::NoItem(c))?;
                 let mt = it.source_time_at(ph.clamp(it.start, (it.end() - Tick(1)).max(it.start)));
                 if let Some(e) = it.effects.get_mut(idx) {
                     reset_params(e, None, frame, mt);
@@ -3148,7 +3148,7 @@ fn build() -> Vec<CommandSpec> {
             let frame = s.active_sequence().map(|q| (q.settings.width, q.settings.height)).unwrap_or((1920, 1080));
             let ph = s.playhead();
             s.edit_sequence("Reset Parameter", |q, _, _| {
-                let (_, it) = q.find_item_mut(c).ok_or(filmcraft_edit::EditError::NoItem(c))?;
+                let (_, it) = q.find_item_mut(c).ok_or(mortiflix_edit::EditError::NoItem(c))?;
                 let mt = it.source_time_at(ph.clamp(it.start, (it.end() - Tick(1)).max(it.start)));
                 let e = match &eff {
                     Value::Number(n) => it.effects.get_mut(n.as_u64().unwrap_or(0) as usize),
@@ -3225,15 +3225,15 @@ fn build() -> Vec<CommandSpec> {
                 .unwrap_or_else(|| s.state.project_selection.clone());
             // A bin named here goes with everything in it, as in the Project panel of any editor.
             let root = s.project.root.id;
-            let named: Vec<filmcraft_project::BinId> =
-                asked.iter().map(|i| filmcraft_project::BinId(i.0)).filter(|b| *b != root && s.project.root.find_bin(*b).is_some()).collect();
+            let named: Vec<mortiflix_project::BinId> =
+                asked.iter().map(|i| mortiflix_project::BinId(i.0)).filter(|b| *b != root && s.project.root.find_bin(*b).is_some()).collect();
             // a bin inside another named bin goes with that one
-            let bins: Vec<filmcraft_project::BinId> = named
+            let bins: Vec<mortiflix_project::BinId> = named
                 .iter()
                 .copied()
                 .filter(|b| !named.iter().any(|o| o != b && s.project.root.find_bin(*o).is_some_and(|o| o.find_bin(*b).is_some())))
                 .collect();
-            let mut items: Vec<ItemId> = asked.iter().copied().filter(|i| !named.contains(&filmcraft_project::BinId(i.0))).collect();
+            let mut items: Vec<ItemId> = asked.iter().copied().filter(|i| !named.contains(&mortiflix_project::BinId(i.0))).collect();
             for b in &bins {
                 if let Some(bin) = s.project.root.find_bin(*b) {
                     bin.all_items(&mut items);
@@ -3271,7 +3271,7 @@ fn build() -> Vec<CommandSpec> {
             let mut retained_subclips = Vec::new();
             for i in items {
                 let keep = used.contains(&i)
-                    && s.project.item(i).and_then(filmcraft_project::ProjectItem::as_media).is_some_and(|m| matches!(m.media, MediaRef::File { .. }));
+                    && s.project.item(i).and_then(mortiflix_project::ProjectItem::as_media).is_some_and(|m| matches!(m.media, MediaRef::File { .. }));
                 if keep {
                     offlined.push(i);
                 } else if used.contains(&i) && s.project.item(i).is_some_and(|item| matches!(item.kind, ItemKind::Subclip { .. })) {
@@ -3282,7 +3282,7 @@ fn build() -> Vec<CommandSpec> {
             }
             s.edit("Clear", |pr, st| {
                 for i in &offlined {
-                    if let Some(m) = pr.item_mut(*i).and_then(filmcraft_project::ProjectItem::as_media_mut) {
+                    if let Some(m) = pr.item_mut(*i).and_then(mortiflix_project::ProjectItem::as_media_mut) {
                         m.offline = true;
                     }
                 }
@@ -3291,7 +3291,7 @@ fn build() -> Vec<CommandSpec> {
                 }
                 for i in offlined.iter().chain(&retained_subclips) {
                     if pr.root.parent_of(*i).is_none() {
-                        pr.root.children.push(filmcraft_project::BinEntry::Item(*i));
+                        pr.root.children.push(mortiflix_project::BinEntry::Item(*i));
                     }
                 }
                 for i in &gone {
@@ -3303,7 +3303,7 @@ fn build() -> Vec<CommandSpec> {
                     if let Some(q) = pr.sequence_mut(sid) {
                         for t in q.all_tracks_mut() {
                             t.items.retain(|x| !gone.contains(&x.item));
-                            filmcraft_edit::remove_orphan_transitions(t);
+                            mortiflix_edit::remove_orphan_transitions(t);
                         }
                     }
                 }
@@ -3325,7 +3325,7 @@ fn build() -> Vec<CommandSpec> {
             if items.is_empty() {
                 return Err(bad("project.moveToBin", "need `items` (or a Project panel selection)"));
             }
-            let bin = u64_p(p, "bin").map(filmcraft_project::BinId);
+            let bin = u64_p(p, "bin").map(mortiflix_project::BinId);
             let moved = s.edit("Move to Bin", |pr, _| pr.move_to_bin(&items, bin).ok_or_else(|| bad("project.moveToBin", "no such bin")))?;
             Ok(json!({"moved": moved}))
         }),
@@ -3436,7 +3436,7 @@ fn build() -> Vec<CommandSpec> {
 /// buttons do: a parameter that is not animated gets its default as its static value, and an
 /// animated one keeps its keyframes and gets the default as a keyframe at media time `mt`.
 /// Masks are left alone. Returns whether any parameter was reset.
-fn reset_params(e: &mut filmcraft_project::EffectInstance, only: Option<&str>, frame: (u32, u32), mt: Tick) -> bool {
+fn reset_params(e: &mut mortiflix_project::EffectInstance, only: Option<&str>, frame: (u32, u32), mt: Tick) -> bool {
     let Some(d) = e.def() else { return false };
     let mut fresh = d.instance();
     resolve_auto_points(&mut fresh, frame, frame);
@@ -3477,7 +3477,7 @@ fn keyframe_op(s: &mut Session, p: &Value, op: &str) -> Result<Value> {
         s.history.merge_key = None;
     }
     s.edit_sequence_as(label, merge.as_deref(), |q, _, _| {
-        let (_, it) = q.find_item_mut(c).ok_or(filmcraft_edit::EditError::NoItem(c))?;
+        let (_, it) = q.find_item_mut(c).ok_or(mortiflix_edit::EditError::NoItem(c))?;
         let mt_now = it.source_time_at(ph.clamp(it.start, (it.end() - Tick(1)).max(it.start)));
         let e = match &eff {
             Value::Number(n) => it.effects.get_mut(n.as_u64().unwrap_or(0) as usize),
@@ -3526,13 +3526,13 @@ fn keyframe_op(s: &mut Session, p: &Value, op: &str) -> Result<Value> {
             _ => {
                 let at = mtime.unwrap_or(mt_now);
                 let kind = match interp.as_deref().unwrap_or("linear").to_ascii_lowercase().as_str() {
-                    "bezier" => filmcraft_project::Interpolation::Bezier,
-                    "autobezier" => filmcraft_project::Interpolation::AutoBezier,
-                    "continuousbezier" => filmcraft_project::Interpolation::ContinuousBezier,
-                    "hold" => filmcraft_project::Interpolation::Hold,
-                    "easein" => filmcraft_project::Interpolation::EaseIn,
-                    "easeout" => filmcraft_project::Interpolation::EaseOut,
-                    _ => filmcraft_project::Interpolation::Linear,
+                    "bezier" => mortiflix_project::Interpolation::Bezier,
+                    "autobezier" => mortiflix_project::Interpolation::AutoBezier,
+                    "continuousbezier" => mortiflix_project::Interpolation::ContinuousBezier,
+                    "hold" => mortiflix_project::Interpolation::Hold,
+                    "easein" => mortiflix_project::Interpolation::EaseIn,
+                    "easeout" => mortiflix_project::Interpolation::EaseOut,
+                    _ => mortiflix_project::Interpolation::Linear,
                 };
                 let k = prm.keyframes.iter_mut().find(|k| k.time == at).ok_or_else(|| bad("keyframe", "no keyframe at that time"))?;
                 k.interp = kind;
@@ -3589,10 +3589,10 @@ pub(crate) fn json_to_param(template: &ParamValue, v: &Value) -> Option<ParamVal
         ParamValue::Float(_) => ParamValue::Float(v.as_f64()?),
         ParamValue::Vec2(_) => {
             let a = v.as_array()?;
-            ParamValue::Vec2(filmcraft_geom::Vec2::new(a.first()?.as_f64()?, a.get(1)?.as_f64()?))
+            ParamValue::Vec2(mortiflix_geom::Vec2::new(a.first()?.as_f64()?, a.get(1)?.as_f64()?))
         }
         ParamValue::Color(_) => match v {
-            Value::String(s) => ParamValue::Color(filmcraft_color::parse_hex(s)?),
+            Value::String(s) => ParamValue::Color(mortiflix_color::parse_hex(s)?),
             Value::Array(a) => ParamValue::Color([
                 a.first()?.as_f64()? as f32,
                 a.get(1)?.as_f64()? as f32,
@@ -3691,9 +3691,9 @@ fn nest(s: &mut Session, p: &Value) -> Result<Value> {
     let sel = with_links(s, &s.state.selection.clone());
     let q = s.active_sequence().ok_or(EngineError::NoSequence)?.clone();
     let name = str_p(p, "name").filter(|n| !n.trim().is_empty()).map(str::to_string).unwrap_or_else(|| next_nested_name(s));
-    let mut items: Vec<(TrackKind, usize, filmcraft_project::TrackItem)> = Vec::new();
+    let mut items: Vec<(TrackKind, usize, mortiflix_project::TrackItem)> = Vec::new();
     // transitions go into the nest with their clips: those whose clips are all nested
-    let mut transitions: Vec<(TrackKind, usize, filmcraft_project::Transition)> = Vec::new();
+    let mut transitions: Vec<(TrackKind, usize, mortiflix_project::Transition)> = Vec::new();
     for (k, ts) in [(TrackKind::Video, &q.video_tracks), (TrackKind::Audio, &q.audio_tracks)] {
         // clips on a locked track stay where they are (they cannot be removed from it)
         for (ti, t) in ts.iter().enumerate().filter(|(_, t)| !t.locked) {
@@ -3766,7 +3766,7 @@ fn nest(s: &mut Session, p: &Value) -> Result<Value> {
             for ((k, ti, trn), fresh) in transitions.iter().zip(&fresh_transitions) {
                 let mut trn = trn.clone();
                 if let Some(id) = fresh {
-                    trn.id = filmcraft_project::TransitionId(*id);
+                    trn.id = mortiflix_project::TransitionId(*id);
                 }
                 (trn.from, trn.to) = (trn.from.map(copy), trn.to.map(copy));
                 trn.start -= start;
@@ -3821,7 +3821,7 @@ fn nest(s: &mut Session, p: &Value) -> Result<Value> {
                 Some(i) => i,
                 None => {
                     let (word, n) = (if kind == TrackKind::Video { "Video" } else { "Audio" }, tracks.len() + 1);
-                    tracks.push(filmcraft_project::Track::new(TrackId(new_track), kind, format!("{word} {n}")));
+                    tracks.push(mortiflix_project::Track::new(TrackId(new_track), kind, format!("{word} {n}")));
                     tracks.len() - 1
                 }
             };
@@ -3846,7 +3846,7 @@ fn list_effects(p: &Value) -> Value {
     let kind = str_p(p, "kind");
     let folder = str_p(p, "folder");
     let detail = p.get("detail").and_then(Value::as_bool).unwrap_or(false);
-    let out = filmcraft_project::effect_defs()
+    let out = mortiflix_project::effect_defs()
         .iter()
         .filter(|d| kind.is_none_or(|k| format!("{:?}", d.kind).eq_ignore_ascii_case(k)))
         .filter(|d| folder.is_none_or(|f| d.category.join("/").starts_with(f)))
@@ -3870,8 +3870,8 @@ fn list_effects(p: &Value) -> Value {
     Value::Array(out)
 }
 
-fn param_info(p: &filmcraft_project::ParamDef) -> Value {
-    use filmcraft_project::ParamKind as K;
+fn param_info(p: &mortiflix_project::ParamDef) -> Value {
+    use mortiflix_project::ParamKind as K;
     let mut j = json!({"id": p.id, "label": p.label, "animatable": p.animatable, "default": serde_json::to_value(&p.default).unwrap_or_default()});
     let ty = match &p.kind {
         K::Choice(opts) => {
@@ -3899,8 +3899,8 @@ fn param_info(p: &filmcraft_project::ParamDef) -> Value {
 
 /// Set transition parameters from a JSON object (`{"direction": 1}` or `{"direction": "From East"}`,
 /// colours as `"#rrggbb"` or `[r,g,b]`, points as `[x,y]`). Floats are clamped to their range.
-fn set_transition_params(e: &mut filmcraft_project::EffectInstance, params: &Value, cmd: &str) -> Result<()> {
-    use filmcraft_project::{ParamKind as K, ParamValue as V};
+fn set_transition_params(e: &mut mortiflix_project::EffectInstance, params: &Value, cmd: &str) -> Result<()> {
+    use mortiflix_project::{ParamKind as K, ParamValue as V};
     let Some(obj) = params.as_object() else { return Err(bad(cmd, "`params` must be an object")) };
     let def = e.def().ok_or_else(|| bad(cmd, "unknown transition"))?;
     for (k, v) in obj {
@@ -3919,7 +3919,7 @@ fn set_transition_params(e: &mut filmcraft_project::EffectInstance, params: &Val
         match e.param_mut(k) {
             Some(prm) => prm.value = val,
             None => {
-                e.params.insert(k.clone(), filmcraft_project::Param::new(val));
+                e.params.insert(k.clone(), mortiflix_project::Param::new(val));
             }
         }
     }
@@ -4164,8 +4164,8 @@ pub fn preview_transition(s: &Session, p: &Value, kind: TrackKind) -> Result<(Tr
     let eff_id = str_p(p, "effect")
         .map(str::to_string)
         .unwrap_or_else(|| if kind == TrackKind::Video { s.state.default_video_transition.clone() } else { s.state.default_audio_transition.clone() });
-    let ekind = if kind == TrackKind::Video { filmcraft_project::EffectKind::VideoTransition } else { filmcraft_project::EffectKind::AudioTransition };
-    let def = filmcraft_project::vtransition::find_transition(&eff_id, ekind).ok_or_else(|| bad("transition", format!("unknown transition `{eff_id}`")))?;
+    let ekind = if kind == TrackKind::Video { mortiflix_project::EffectKind::VideoTransition } else { mortiflix_project::EffectKind::AudioTransition };
+    let def = mortiflix_project::vtransition::find_transition(&eff_id, ekind).ok_or_else(|| bad("transition", format!("unknown transition `{eff_id}`")))?;
     let mut instance = def.instance();
     if let Some(params) = p.get("params") {
         set_transition_params(&mut instance, params, "transition")?;
@@ -4228,16 +4228,16 @@ pub fn preview_transition(s: &Session, p: &Value, kind: TrackKind) -> Result<(Tr
 /// JSON description of the project (bins, items) for agents.
 pub fn inspect_project(s: &Session) -> Value {
     let p = &s.project;
-    fn bin(b: &filmcraft_project::Bin, p: &filmcraft_project::Project) -> Value {
+    fn bin(b: &mortiflix_project::Bin, p: &mortiflix_project::Project) -> Value {
         json!({
             "id": b.id.0,
             "name": b.name,
             "children": b.children.iter().map(|c| match c {
-                filmcraft_project::BinEntry::Item(i) => {
+                mortiflix_project::BinEntry::Item(i) => {
                     let it = p.item(*i);
                     json!({"item": i.0, "name": it.map(|x| x.name.clone()), "type": it.map(|x| x.type_label()), "duration": it.map(|x| x.duration().0), "label": it.map(|x| x.label.name())})
                 }
-                filmcraft_project::BinEntry::Bin(b) => bin(b, p),
+                mortiflix_project::BinEntry::Bin(b) => bin(b, p),
             }).collect::<Vec<_>>()
         })
     }
@@ -4252,9 +4252,9 @@ pub fn inspect_project(s: &Session) -> Value {
     })
 }
 
-pub fn inspect_sequence(s: &Session, id: ItemId, q: &filmcraft_project::Sequence) -> Value {
+pub fn inspect_sequence(s: &Session, id: ItemId, q: &mortiflix_project::Sequence) -> Value {
     let rate = q.settings.frame_rate;
-    let tr = |t: &filmcraft_project::Track| {
+    let tr = |t: &mortiflix_project::Track| {
         json!({
             "id": t.id.0, "name": t.name, "locked": t.locked, "syncLock": t.sync_lock, "enabled": t.enabled, "muted": t.muted, "solo": t.solo,
             "items": t.items.iter().map(|i| json!({
@@ -4264,11 +4264,11 @@ pub fn inspect_sequence(s: &Session, id: ItemId, q: &filmcraft_project::Sequence
                 "enabled": i.enabled, "link": i.link, "label": i.label.name(),
                 "effects": i.effects.iter().map(|e| json!({"effect": e.effect, "enabled": e.enabled, "masks": e.masks.len(), "params": e.params.iter().map(|(k, p)| (k.clone(), json!({"value": format!("{:?}", p.value), "keyframes": p.keyframes.len()}))).collect::<serde_json::Map<_, _>>()})).collect::<Vec<_>>(),
             })).collect::<Vec<_>>(),
-            "transitions": t.transitions.iter().map(|x| json!({"id": x.id.0, "effect": x.effect.effect, "start": x.start.0, "duration": x.duration.0, "from": x.from.map(|c| c.0), "to": x.to.map(|c| c.0), "reverse": x.reverse, "align": filmcraft_edit::transitions::bounds(t, x).map(|b| filmcraft_edit::transitions::alignment(x, b.1, rate.frame_duration()).id()), "params": x.effect.params.iter().map(|(k, v)| (k.clone(), serde_json::to_value(&v.value).unwrap_or_default())).collect::<serde_json::Map<_, _>>()})).collect::<Vec<_>>(),
+            "transitions": t.transitions.iter().map(|x| json!({"id": x.id.0, "effect": x.effect.effect, "start": x.start.0, "duration": x.duration.0, "from": x.from.map(|c| c.0), "to": x.to.map(|c| c.0), "reverse": x.reverse, "align": mortiflix_edit::transitions::bounds(t, x).map(|b| mortiflix_edit::transitions::alignment(x, b.1, rate.frame_duration()).id()), "params": x.effect.params.iter().map(|(k, v)| (k.clone(), serde_json::to_value(&v.value).unwrap_or_default())).collect::<serde_json::Map<_, _>>()})).collect::<Vec<_>>(),
         })
     };
     // the frames export renders, a partial last frame included
-    let (f0, f1) = filmcraft_export::frame_span(rate, TimeRange::new(Tick::ZERO, q.duration()));
+    let (f0, f1) = mortiflix_export::frame_span(rate, TimeRange::new(Tick::ZERO, q.duration()));
     json!({
         "id": id.0,
         "name": s.project.item(id).map(|i| i.name.clone()),
@@ -4305,7 +4305,7 @@ fn project_name_for(path: &str) -> Option<String> {
     (!stem.is_empty()).then_some(stem)
 }
 
-fn name_project(p: &mut filmcraft_project::Project, name: String) {
+fn name_project(p: &mut mortiflix_project::Project, name: String) {
     p.root.name.clone_from(&name);
     p.name = name;
 }
@@ -4321,9 +4321,9 @@ fn write_project(s: &mut Session, path: &str, adopt: bool) -> Result<Value> {
     }
     // what is open (sequence tabs, how each is shown) goes into the file beside the project
     let view = s.project_view();
-    let bytes = filmcraft_format::encode_with_view(&s.project, Some(&view), false);
+    let bytes = mortiflix_format::encode_with_view(&s.project, Some(&view), false);
     let mut backup = None;
-    if adopt && s.path.as_deref() == Some(path) && s.loaded_schema < filmcraft_format::SCHEMA_VERSION {
+    if adopt && s.path.as_deref() == Some(path) && s.loaded_schema < mortiflix_format::SCHEMA_VERSION {
         let b = schema_backup_path(path, s.loaded_schema);
         if s.services.read_file(&b).is_err()
             && let Ok(old) = s.services.read_file(path)
@@ -4338,7 +4338,7 @@ fn write_project(s: &mut Session, path: &str, adopt: bool) -> Result<Value> {
         s.previews_follow_path();
         s.note_recent_project();
         s.saved_revision = s.revision;
-        s.loaded_schema = filmcraft_format::SCHEMA_VERSION;
+        s.loaded_schema = mortiflix_format::SCHEMA_VERSION;
     }
     Ok(json!({"path": path, "bytes": bytes.len(), "ms": t0.elapsed().as_secs_f64() * 1000.0, "backup": backup}))
 }
@@ -4349,7 +4349,7 @@ fn schema_backup_path(path: &str, schema: u32) -> String {
 }
 
 /// Make `proj` the session's project (fresh history, media pool and editor state).
-fn install_project(s: &mut Session, proj: filmcraft_project::Project, path: Option<String>, clean: bool) {
+fn install_project(s: &mut Session, proj: mortiflix_project::Project, path: Option<String>, clean: bool) {
     let proxies = s.media.use_proxies();
     s.media = std::sync::Arc::new(crate::MediaPool::default());
     s.media.set_use_proxies(proxies);
@@ -4370,13 +4370,13 @@ fn install_project(s: &mut Session, proj: filmcraft_project::Project, path: Opti
     s.revision += 1;
     // A recovered project is unsaved: its saved revision is one that never existed.
     s.saved_revision = if clean { s.revision } else { 0 };
-    s.loaded_schema = filmcraft_format::SCHEMA_VERSION;
+    s.loaded_schema = mortiflix_format::SCHEMA_VERSION;
     s.events.push(crate::Event::ProjectChanged { revision: s.revision });
 }
 
 fn open_project(s: &mut Session, path: &str) -> Result<Value> {
     let bytes = s.services.read_file(path).map_err(|e| EngineError::Other(format!("{path}: {e}")))?;
-    let loaded = filmcraft_format::decode(&bytes).map_err(|e| EngineError::Other(format!("{path}: {e}")))?;
+    let loaded = mortiflix_format::decode(&bytes).map_err(|e| EngineError::Other(format!("{path}: {e}")))?;
     let (from, migrated) = (loaded.schema_version, loaded.migrated());
     install_project(s, loaded.project, Some(path.to_string()), true);
     if let Some(view) = loaded.view.filter(|_| s.prefs.timeline.restore_open_sequences) {
@@ -4389,7 +4389,7 @@ fn open_project(s: &mut Session, path: &str) -> Result<Value> {
     s.note_recent_project();
     s.loaded_schema = from;
     if migrated {
-        s.toast(format!("Upgraded project from schema v{from} to v{}; the original is kept as a backup when you save", filmcraft_format::SCHEMA_VERSION));
+        s.toast(format!("Upgraded project from schema v{from} to v{}; the original is kept as a backup when you save", mortiflix_format::SCHEMA_VERSION));
     }
     let missing = crate::relink::on_open(s);
     Ok(json!({"path": path, "schemaVersion": from, "migrated": migrated, "missingMedia": missing}))
@@ -4427,9 +4427,9 @@ fn auto_save_dir(s: &Session) -> std::path::PathBuf {
         return std::path::PathBuf::from(d);
     }
     match (&s.path, &s.persistence) {
-        (Some(p), _) => filmcraft_format::autosave::auto_save_dir(std::path::Path::new(p)),
-        (None, Some(per)) => per.data_dir.join(filmcraft_format::autosave::AUTO_SAVE_DIR),
-        (None, None) => std::path::PathBuf::from(filmcraft_format::autosave::AUTO_SAVE_DIR),
+        (Some(p), _) => mortiflix_format::autosave::auto_save_dir(std::path::Path::new(p)),
+        (None, Some(per)) => per.data_dir.join(mortiflix_format::autosave::AUTO_SAVE_DIR),
+        (None, None) => std::path::PathBuf::from(mortiflix_format::autosave::AUTO_SAVE_DIR),
     }
 }
 

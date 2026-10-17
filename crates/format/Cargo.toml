@@ -1,6 +1,6 @@
 [package]
-name = "filmcraft-format"
-description = "FilmCraft .fcproj files: schema versions + migrations, atomic saves, auto-save naming and rotation"
+name = "mortiflix-format"
+description = "Mortiflix Studio .fcproj files: schema versions + migrations, atomic saves, auto-save naming and rotation"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -10,12 +10,12 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
-filmcraft-project = { workspace = true }
-filmcraft-media = { workspace = true }
+mortiflix-project = { workspace = true }
+mortiflix-media = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
-filmcraft-time = { workspace = true }
+mortiflix-time = { workspace = true }

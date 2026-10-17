@@ -2,15 +2,15 @@
 
 mod support;
 
-use filmcraft_interchange::aaf::{self, AafOptions};
-use filmcraft_interchange::essence::{AudioEssence, EssenceData, EssenceKey, MediaOptions, MixdownVideo, NeedOptions, NestNeeds, audio_needs};
-use filmcraft_interchange::omf::{self, OmfOptions};
-use filmcraft_interchange::{Format, ImportOptions, Imported, detect};
-use filmcraft_project::{
+use mortiflix_interchange::aaf::{self, AafOptions};
+use mortiflix_interchange::essence::{AudioEssence, EssenceData, EssenceKey, MediaOptions, MixdownVideo, NeedOptions, NestNeeds, audio_needs};
+use mortiflix_interchange::omf::{self, OmfOptions};
+use mortiflix_interchange::{Format, ImportOptions, Imported, detect};
+use mortiflix_project::{
     AudioChannels, Interpolation, ItemId, ItemKind, Keyframe, Label, Marker, MarkerId, MarkerKind, MediaRef, Param, ParamValue, Project, TrackKind,
     TransitionAlign,
 };
-use filmcraft_time::{FrameRate, Tick};
+use mortiflix_time::{FrameRate, Tick};
 use support::*;
 
 /// V1: a fade-in from black, a cross dissolve, a gap, a clip with a dip-to-black fade-out.
@@ -86,7 +86,7 @@ fn close(a: f64, b: f64) -> bool {
     (a - b).abs() < 1e-3
 }
 
-fn aaf_rt(p: &Project, s: ItemId, opts: &AafOptions) -> (Imported, Vec<filmcraft_interchange::ExtractedMedia>, filmcraft_interchange::Report) {
+fn aaf_rt(p: &Project, s: ItemId, opts: &AafOptions) -> (Imported, Vec<mortiflix_interchange::ExtractedMedia>, mortiflix_interchange::Report) {
     let (bytes, _) = aaf::export(p, s, opts).expect("export");
     assert!(aaf::sniff(&bytes));
     assert_eq!(detect(&bytes, Some("aaf")), Some(Format::Aaf));
@@ -120,7 +120,7 @@ fn aaf_round_trip_preserves_the_edit() {
         assert_eq!(k.keyframes.len(), 3);
         for (a, b) in k.keyframes.iter().zip(&want.keyframes) {
             // control points are stored in samples: keyframes not on a sample move to the nearest one
-            assert!((a.time - b.time).abs() <= Tick(filmcraft_time::TICKS_PER_SECOND / 48_000 / 2), "{rate:?}: {a:?} {b:?}");
+            assert!((a.time - b.time).abs() <= Tick(mortiflix_time::TICKS_PER_SECOND / 48_000 / 2), "{rate:?}: {a:?} {b:?}");
             assert!(close(a.value.as_f64().unwrap(), b.value.as_f64().unwrap()), "{a:?} {b:?}");
         }
         // media: paths, timecode, markers
@@ -147,10 +147,10 @@ fn aaf_small_sectors_and_generic_api() {
     let (p, s) = sample(FrameRate::FPS_25, false);
     let (b512, _) = aaf::export(&p, s, &AafOptions { small_sectors: true, ..Default::default() }).unwrap();
     assert_eq!(u16::from_le_bytes([b512[30], b512[31]]), 9);
-    let (imp, _) = filmcraft_interchange::import(&b512, Format::Aaf, None).unwrap();
+    let (imp, _) = mortiflix_interchange::import(&b512, Format::Aaf, None).unwrap();
     let n = only_seq(&imp);
     assert_eq!(structure(&imp.project, n, TrackKind::Video), structure(&p, s, TrackKind::Video));
-    let (bytes, _) = filmcraft_interchange::export(&p, s, Format::Aaf, &Default::default()).unwrap();
+    let (bytes, _) = mortiflix_interchange::export(&p, s, Format::Aaf, &Default::default()).unwrap();
     assert_eq!(u16::from_le_bytes([bytes[30], bytes[31]]), 12);
 }
 
@@ -199,7 +199,7 @@ fn aaf_embedded_trimmed_audio() {
     assert_eq!(a.end, FrameRate::FPS_25.tick_of(365));
     let mut essence = Vec::new();
     for (k, n) in needs.iter().enumerate() {
-        let frames = ((n.end - n.start).0 / (filmcraft_time::TICKS_PER_SECOND / 48_000)) as u64;
+        let frames = ((n.end - n.start).0 / (mortiflix_time::TICKS_PER_SECOND / 48_000)) as u64;
         essence.push(AudioEssence {
             key: n.key,
             channel: None,
@@ -217,7 +217,7 @@ fn aaf_embedded_trimmed_audio() {
     assert_eq!(extracted.len(), 3, "{rep}");
     let n = only_seq(&imp);
     for e in &extracted {
-        let (pcm, ch, sr, bits) = filmcraft_interchange::wav::parse_wav(&e.wav).unwrap();
+        let (pcm, ch, sr, bits) = mortiflix_interchange::wav::parse_wav(&e.wav).unwrap();
         assert_eq!((ch, sr, bits), (2, 48_000, 16));
         assert!(essence.iter().any(|x| matches!(&x.data, EssenceData::Embedded(d) if *d == pcm)));
         assert!(e.path.starts_with("/proj/rt Media/"), "{}", e.path);
@@ -289,7 +289,7 @@ fn omf_round_trip_audio_only() {
             .iter()
             .enumerate()
             .map(|(k, n)| {
-                let frames = ((n.end - n.start).0 / (filmcraft_time::TICKS_PER_SECOND / 48_000)) as u64;
+                let frames = ((n.end - n.start).0 / (mortiflix_time::TICKS_PER_SECOND / 48_000)) as u64;
                 AudioEssence {
                     key: n.key,
                     channel: None,
@@ -331,7 +331,7 @@ fn omf_round_trip_audio_only() {
         assert!(close(level(&imp.project, n, 0, 1).value.as_f64().unwrap(), -6.0));
         assert_eq!(level(&imp.project, n, 1, 0).keyframes.len(), 3);
         for e in &extracted {
-            let (pcm, ..) = filmcraft_interchange::wav::parse_wav(&e.wav).unwrap();
+            let (pcm, ..) = mortiflix_interchange::wav::parse_wav(&e.wav).unwrap();
             assert!(essence.iter().any(|x| matches!(&x.data, EssenceData::Embedded(d) if *d == pcm)));
         }
         // the media keeps its source timecode
@@ -436,7 +436,7 @@ fn empty_and_damaged_documents() {
 fn unsupported_clips_become_gaps_with_a_report() {
     let mut p = Project::new("g");
     let s = sequence(&mut p, "S", FrameRate::FPS_25, false);
-    let g = generator(&mut p, "Bars", filmcraft_media::Generator::BarsAndTone);
+    let g = generator(&mut p, "Bars", mortiflix_media::Generator::BarsAndTone);
     let a = media(&mut p, "/m/a.mov", true, true, FrameRate::FPS_25);
     clip(&mut p, s, TrackKind::Video, 0, g, 0, 25, 0);
     clip(&mut p, s, TrackKind::Video, 0, a, 25, 25, 0);
@@ -569,13 +569,13 @@ fn aaf_nested_sequence_of_another_rate_and_broken_out_to_mono() {
             assert_eq!(sound.len(), before.1.len());
             for (c, o) in sound[0].clips.iter().zip(&before.1[0].clips) {
                 assert_eq!((c.start, c.dur, &c.media), (o.start, o.dur, &o.media));
-                assert!((c.src - o.src).abs() <= Tick(filmcraft_time::TICKS_PER_SECOND / 44_100), "{c:?} {o:?}");
+                assert!((c.src - o.src).abs() <= Tick(mortiflix_time::TICKS_PER_SECOND / 44_100), "{c:?} {o:?}");
             }
         }
     }
 }
 
-/// A project that claims a sequence is inside itself (FilmCraft refuses to make one, a damaged
+/// A project that claims a sequence is inside itself (Mortiflix Studio refuses to make one, a damaged
 /// file may hold one) exports without looping: the clip is left as a gap and named in the report.
 #[test]
 fn a_sequence_inside_itself_exports_as_a_gap() {
@@ -635,7 +635,7 @@ fn omf_carries_the_rendered_sound_of_a_nested_sequence() {
         .iter()
         .enumerate()
         .map(|(k, n)| {
-            let frames = ((n.end - n.start).0 / (filmcraft_time::TICKS_PER_SECOND / 48_000)) as u64;
+            let frames = ((n.end - n.start).0 / (mortiflix_time::TICKS_PER_SECOND / 48_000)) as u64;
             AudioEssence {
                 key: n.key,
                 channel: None,
@@ -668,7 +668,7 @@ fn omf_carries_the_rendered_sound_of_a_nested_sequence() {
         EssenceData::Embedded(d) => d.clone(),
         EssenceData::File { .. } => unreachable!(),
     });
-    assert!(extracted.iter().any(|e| filmcraft_interchange::wav::parse_wav(&e.wav).map(|w| w.0) == nest_pcm));
+    assert!(extracted.iter().any(|e| mortiflix_interchange::wav::parse_wav(&e.wav).map(|w| w.0) == nest_pcm));
 
     // without the rendered sound the nest is a gap, and the report says which sequence
     let (bytes, rep) = omf::export(&p, outer, &OmfOptions::default()).unwrap();

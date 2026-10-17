@@ -18,7 +18,7 @@
 
 use std::collections::BTreeMap;
 
-use filmcraft_time::Tick;
+use mortiflix_time::Tick;
 use serde::{Deserialize, Serialize};
 
 use crate::effect::EffectInstance;
@@ -454,7 +454,7 @@ pub type SourceGraphics = BTreeMap<crate::ItemId, SourceGraphic>;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use filmcraft_time::TICKS_PER_SECOND;
+    use mortiflix_time::TICKS_PER_SECOND;
 
     fn sec(s: f64) -> Tick {
         Tick((s * TICKS_PER_SECOND as f64).round() as i64)

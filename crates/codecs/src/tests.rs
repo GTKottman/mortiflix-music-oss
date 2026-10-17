@@ -4,8 +4,8 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Arc;
 
-use filmcraft_media::FrameRequest;
-use filmcraft_time::{TICKS_PER_SECOND, Tick};
+use mortiflix_media::FrameRequest;
+use mortiflix_time::{TICKS_PER_SECOND, Tick};
 
 pub(crate) fn ffmpeg() -> Option<&'static str> {
     ["/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg", "/usr/bin/ffmpeg"].into_iter().find(|p| std::path::Path::new(p).exists())
@@ -56,7 +56,7 @@ fn mjpeg_mov_with_pcm() {
     let src = crate::open_bytes("red_mjpeg.mov", b).unwrap();
     let info = src.info().clone();
     assert_eq!(info.video.as_ref().unwrap().width, 320);
-    assert_eq!(info.video.as_ref().unwrap().frame_rate, filmcraft_time::FrameRate::FPS_24);
+    assert_eq!(info.video.as_ref().unwrap().frame_rate, mortiflix_time::FrameRate::FPS_24);
     let f = src.video_frame(FrameRequest::full(Tick(TICKS_PER_SECOND))).unwrap();
     let px = f.to_rgba8();
     let c = &px[(120 * 320 + 160) * 4..][..3];
@@ -288,10 +288,10 @@ pub(crate) fn reference_yuv(src: &std::path::Path, pix_fmt: &str) -> Option<Vec<
 }
 
 /// Planes of a decoded YUV frame as little-endian bytes (ffmpeg rawvideo layout).
-pub(crate) fn yuv_bytes(f: &filmcraft_frame::VideoFrame) -> Vec<u8> {
+pub(crate) fn yuv_bytes(f: &mortiflix_frame::VideoFrame) -> Vec<u8> {
     match &f.data {
-        filmcraft_frame::PixelData::Yuv8 { planes, .. } => planes.iter().flat_map(|p| p.iter().copied()).collect(),
-        filmcraft_frame::PixelData::Yuv16 { planes, .. } => planes.iter().flat_map(|p| p.iter().flat_map(|s| s.to_le_bytes())).collect(),
+        mortiflix_frame::PixelData::Yuv8 { planes, .. } => planes.iter().flat_map(|p| p.iter().copied()).collect(),
+        mortiflix_frame::PixelData::Yuv16 { planes, .. } => planes.iter().flat_map(|p| p.iter().flat_map(|s| s.to_le_bytes())).collect(),
         _ => panic!("not a YUV frame: {}", f.format_label()),
     }
 }
@@ -485,7 +485,7 @@ fn vp9_webm_alpha_layer_matches_libvpx() {
     for k in order {
         let f = src.video_frame(FrameRequest::full(rate.tick_of(k as i64))).unwrap();
         let r = &reference[k * frame_len..(k + 1) * frame_len];
-        let filmcraft_frame::PixelData::Yuv8 { planes, alpha, .. } = &f.data else { panic!("frame {k}: not 8-bit YUV: {}", f.format_label()) };
+        let mortiflix_frame::PixelData::Yuv8 { planes, alpha, .. } = &f.data else { panic!("frame {k}: not 8-bit YUV: {}", f.format_label()) };
         assert_eq!(planes[0].as_slice(), &r[..luma], "frame {k}: luma");
         let alpha = alpha.as_ref().unwrap_or_else(|| panic!("frame {k}: no alpha plane"));
         assert_eq!(alpha.as_slice(), &r[luma + 2 * chroma..], "frame {k}: alpha");
@@ -533,7 +533,7 @@ fn vp8_webm_random_access_matches_libvpx() {
     let v = info.video.as_ref().unwrap();
     assert_eq!(v.codec, "VP8");
     assert_eq!((v.width, v.height), (352, 288));
-    assert_eq!(v.color.matrix, filmcraft_color::Matrix::Bt601);
+    assert_eq!(v.color.matrix, mortiflix_color::Matrix::Bt601);
     assert_eq!(reference.len(), frames * 352 * 288 * 3 / 2);
     let frame_len = reference.len() / frames;
     let rate = info.frame_rate();
@@ -541,7 +541,7 @@ fn vp8_webm_random_access_matches_libvpx() {
     for k in order {
         let f = src.video_frame(FrameRequest::full(rate.tick_of(k as i64))).unwrap();
         assert_eq!((f.width, f.height), (352, 288));
-        assert_eq!(f.color.matrix, filmcraft_color::Matrix::Bt601);
+        assert_eq!(f.color.matrix, mortiflix_color::Matrix::Bt601);
         assert!(yuv_bytes(&f) == reference[k * frame_len..(k + 1) * frame_len], "frame {k} differs from libvpx");
     }
 }
@@ -597,7 +597,7 @@ fn vp8_webm_alpha_layer_matches_libvpx() {
     for k in order {
         let f = src.video_frame(FrameRequest::full(rate.tick_of(k as i64))).unwrap();
         let r = &reference[k * frame_len..(k + 1) * frame_len];
-        let filmcraft_frame::PixelData::Yuv8 { planes, alpha, .. } = &f.data else { panic!("frame {k}: not 8-bit YUV: {}", f.format_label()) };
+        let mortiflix_frame::PixelData::Yuv8 { planes, alpha, .. } = &f.data else { panic!("frame {k}: not 8-bit YUV: {}", f.format_label()) };
         assert_eq!(planes[0].as_slice(), &r[..luma], "frame {k}: luma");
         assert_eq!(planes[1].as_slice(), &r[luma..luma + chroma], "frame {k}: U");
         let alpha = alpha.as_ref().unwrap_or_else(|| panic!("frame {k}: no alpha plane"));
@@ -703,7 +703,7 @@ fn snr_db(reference: &[f32], test: &[f32]) -> f64 {
 }
 
 /// Interleaves `frames` of `src.audio` from `start` (48 kHz).
-fn read_interleaved(src: &filmcraft_media::SharedSource, start: i64, frames: usize) -> Vec<f32> {
+fn read_interleaved(src: &mortiflix_media::SharedSource, start: i64, frames: usize) -> Vec<f32> {
     let a = src.audio(start, frames, 48_000).expect("audio");
     let ch = a.channels.len();
     let mut v = vec![0f32; frames * ch];
@@ -799,14 +799,14 @@ fn opus_mp4_stereo() {
 
 #[test]
 fn apv_mp4_and_raw_bitstream_decode() {
-    use filmcraft_isobmff::{ApvConfig, Brand, Mp4Writer, SampleEntry, TrackConfig, WriteSample, WriterOptions};
+    use mortiflix_isobmff::{ApvConfig, Brand, Mp4Writer, SampleEntry, TrackConfig, WriteSample, WriterOptions};
 
     let (w, h) = (64u32, 32u32);
-    let mut fr = filmcraft_apv::Frame::new(w, h, filmcraft_apv::ChromaFormat::Yuv422, 10, false);
+    let mut fr = mortiflix_apv::Frame::new(w, h, mortiflix_apv::ChromaFormat::Yuv422, 10, false);
     for (i, y) in fr.y.iter_mut().enumerate() {
         *y = if (i as u32 % w) < w / 2 { 850 } else { 150 };
     }
-    let mut enc = filmcraft_apv::Encoder::new(filmcraft_apv::Profile::P422_10, w, h).expect("encoder");
+    let mut enc = mortiflix_apv::Encoder::new(mortiflix_apv::Profile::P422_10, w, h).expect("encoder");
     let au = enc.encode_raw_au(&fr).expect("encode_raw_au");
     let apvc = ApvConfig::parse(&enc.decoder_config_record()).expect("parse apvC");
 
@@ -838,9 +838,9 @@ fn apv_mp4_and_raw_bitstream_decode() {
 /// SPS VUI, and matches the same stream remuxed with `colr`.
 #[test]
 fn mp4_colour_comes_from_the_sps_without_colr() {
-    use filmcraft_color::{ColorSpace, Primaries, Range};
+    use mortiflix_color::{ColorSpace, Primaries, Range};
     let src = |name: &str, args: &[&str]| fixture(name, args).map(|b| crate::open_bytes(name, b).expect("open"));
-    let color = |s: &filmcraft_media::SharedSource| s.info().video.as_ref().expect("video").color;
+    let color = |s: &mortiflix_media::SharedSource| s.info().video.as_ref().expect("video").color;
     let lavfi = |size: &'static str| ["-f", "lavfi", "-i", size, "-t", "0.2"];
     let x265 = "colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:log-level=error";
     let mut pq = lavfi("testsrc2=s=640x360:r=25").to_vec();

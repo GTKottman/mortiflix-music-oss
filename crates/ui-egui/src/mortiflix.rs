@@ -1,16 +1,16 @@
-//! Mortiflix FilmCraft inside FilmCraft's window: the stage bar row, the `Mfx*` dock panels, the
+//! Mortiflix Studio inside Mortiflix Studio's window: the stage bar row, the `Mfx*` dock panels, the
 //! Stages menu and `stages.*` / `mortiflix.*` commands, and the stage ⇄ layout switch.
 //!
 //! Stages 1-4 use the "Mortiflix" workspace (chat left, preview and the stage's main panel, node
-//! area along the bottom) in Edit mode; stage 5 is FilmCraft's Edit mode in the user's own editing
-//! workspace with the Mortiflix chat docked right; stage 6 is Export mode. Clicking FilmCraft's Export
-//! tab lights stage 6 and Edit lights stage 5. The parts themselves live in `filmcraft-mortiflix-ui`.
+//! area along the bottom) in Edit mode; stage 5 is Mortiflix Studio's Edit mode in the user's own editing
+//! workspace with the Mortiflix chat docked right; stage 6 is Export mode. Clicking Mortiflix Studio's Export
+//! tab lights stage 6 and Edit lights stage 5. The parts themselves live in `mortiflix-ui`.
 
 use craft_ui::docking::Zone;
-use filmcraft_mortiflix_ui::{self as mfx, Mortiflix, Nav};
+use mortiflix_ui::{self as mfx, Mortiflix, Nav};
 use serde_json::{Value, json};
 
-use crate::FilmcraftApp;
+use crate::StudioApp;
 use crate::dock::PanelKind;
 use crate::menus::{MenuItem, UiCommand};
 use crate::state::Mode;
@@ -25,7 +25,7 @@ pub struct Host {
     pub core: Mortiflix,
     /// The loose preview's sequence and playback (doc 36, `mortiflix_preview.rs`).
     pub preview: crate::mortiflix_preview::HostPreview,
-    /// The FilmCraft workspace to return to on stages 5-6.
+    /// The Mortiflix Studio workspace to return to on stages 5-6.
     pub edit_workspace: String,
     /// Stage 6 Render: the Export page (part 39, `mortiflix_export.rs`).
     pub export: crate::mortiflix_export::ExportHost,
@@ -34,20 +34,20 @@ pub struct Host {
 }
 
 /// The document title the header shows (and the OS window gets) while a Mortiflix project is open:
-/// "<project title> – Mortiflix FilmCraft", not FilmCraft's own project name ("FilmCraft Demo").
-/// None = no Mortiflix project: FilmCraft's own title.
-pub fn doc_title(app: &FilmcraftApp) -> Option<String> {
+/// "<project title> – Mortiflix Studio", not Mortiflix Studio's own project name ("Mortiflix Studio Demo").
+/// None = no Mortiflix project: Mortiflix Studio's own title.
+pub fn doc_title(app: &StudioApp) -> Option<String> {
     let s = &app.mfx.core.state;
     if !s.active || s.project_id.is_none() {
         return None;
     }
     let name = s.project_title.trim();
-    Some(if name.is_empty() { "Mortiflix FilmCraft".to_string() } else { format!("{name} \u{2013} Mortiflix FilmCraft") })
+    Some(if name.is_empty() { "Mortiflix Studio".to_string() } else { format!("{name} \u{2013} Mortiflix Studio") })
 }
 
-/// The OS window title follows the header's (FilmCraft's unsaved mark kept).
-fn window_title(app: &mut FilmcraftApp, ctx: &egui::Context) {
-    let base = doc_title(app).unwrap_or_else(|| "Mortiflix FilmCraft".to_string());
+/// The OS window title follows the header's (Mortiflix Studio's unsaved mark kept).
+fn window_title(app: &mut StudioApp, ctx: &egui::Context) {
+    let base = doc_title(app).unwrap_or_else(|| "Mortiflix Studio".to_string());
     let title = if app.session.is_dirty() { tlf!("{name} - Edited", name = base) } else { base };
     if title != app.mfx.window_title {
         ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
@@ -60,7 +60,7 @@ const fn cmd(id: &'static str, label: &'static str, menu: &'static [&'static str
 }
 
 /// Stages ▸ … and the Mortiflix commands. Ctrl+Alt+Left/Right (doc 30's first pick) are taken in
-/// FilmCraft's keymap (Slip Left/Right in the Timeline, Font Size Down/Up), so Back/Next are
+/// Mortiflix Studio's keymap (Slip Left/Right in the Timeline, Font Size Down/Up), so Back/Next are
 /// Ctrl+Alt+Page Up/Page Down (Cmd+Option on a Mac). Rebindable in Keyboard Shortcuts.
 pub const COMMANDS: &[UiCommand] = &[
     cmd("stages.back", "Back", &["Stages"], Some("Cmd+Alt+PageUp")),
@@ -69,7 +69,7 @@ pub const COMMANDS: &[UiCommand] = &[
     cmd("stages.look", "Look", &["Stages"], Some("Cmd+Alt+2")),
     cmd("stages.shots", "Shots", &["Stages"], Some("Cmd+Alt+3")),
     cmd("stages.voiceMusic", "Voice & music", &["Stages"], Some("Cmd+Alt+4")),
-    cmd("stages.filmcraft", "FilmCraft", &["Stages"], Some("Cmd+Alt+5")),
+    cmd("stages.edit", "Edit", &["Stages"], Some("Cmd+Alt+5")),
     cmd("stages.render", "Render", &["Stages"], Some("Cmd+Alt+6")),
     cmd("stages.getVideo", "Get the video", &[], None),
     cmd("stages.editVideo", "Edit the video", &[], None),
@@ -85,10 +85,10 @@ pub const COMMANDS: &[UiCommand] = &[
     cmd("mortiflix.chooseFileAndSend", "Choose a File and Send It to Mortiflix", &[], None),
     cmd("mortiflix.reveal", "Show in Folder", &[], None),
     // The Script panel (stage 1): Ctrl/Cmd+Z there brings back the newest deleted line, saved or not
-    // (panel-scoped "Mortiflix Stage" in the engine's FILMCRAFT_PANEL table; a text field keeps its own).
+    // (panel-scoped "Mortiflix Stage" in the engine's MFX_STUDIO_PANEL table; a text field keeps its own).
     cmd("script.undo", "Undo in the Script", &[], None),
     // The node area (part 35): its keys are panel-scoped ("Mortiflix Nodes") in the engine's
-    // FILMCRAFT_PANEL table, so ←/→ walk the film there and step frames everywhere else.
+    // MFX_STUDIO_PANEL table, so ←/→ walk the film there and step frames everywhere else.
     cmd("nodes.prev", "Previous Node", &[], None),
     cmd("nodes.next", "Next Node", &[], None),
     cmd("nodes.up", "Node Above", &[], None),
@@ -137,9 +137,9 @@ pub const COMMANDS: &[UiCommand] = &[
     cmd("nodes.tidy", "Put Nodes Back in Film Order", &[], None),
     cmd("nodes.refresh", "Reload the Nodes", &[], None),
     cmd("nodes.state", "Node Area State", &[], None),
-    // Into FilmCraft (doc 38): crate::mortiflix_into
-    cmd("mortiflix.importEdit", "Bring the Video into FilmCraft", &[], None),
-    cmd("mortiflix.import.run", "Run the FilmCraft Import", &[], None),
+    // Into Edit (doc 38): crate::mortiflix_into
+    cmd("mortiflix.importEdit", "Bring the Video into Edit", &[], None),
+    cmd("mortiflix.import.run", "Run the Mortiflix Studio Import", &[], None),
     cmd("mortiflix.restartEdit", "Start the Edit Again from Mortiflix…", &["File"], None),
     cmd("mortiflix.useVersion", "Use This Version", &[], None),
     cmd("mortiflix.timelineEdit", "Mortiflix Timeline Edit", &[], None),
@@ -176,20 +176,20 @@ pub fn theme(t: &Tokens) -> mfx::MfxTheme {
 }
 
 /// Height of the stage bar this frame (0 when Mortiflix is off).
-pub fn bar_height(app: &FilmcraftApp) -> f32 {
+pub fn bar_height(app: &StudioApp) -> f32 {
     if app.mfx.core.state.active { mfx::STAGE_BAR_HEIGHT } else { 0.0 }
 }
 
-/// FilmCraft's Import / Edit / Export tabs show only on stages 5 and 6 (doc 30).
-pub fn hides_mode_tabs(app: &FilmcraftApp) -> bool {
-    app.mfx.core.state.active && app.mfx.core.state.stage < mfx::STAGE_FILMCRAFT
+/// Mortiflix Studio's Import / Edit / Export tabs show only on stages 5 and 6 (doc 30).
+pub fn hides_mode_tabs(app: &StudioApp) -> bool {
+    app.mfx.core.state.active && app.mfx.core.state.stage < mfx::STAGE_EDIT
 }
 
-/// Start of every frame: read the service, keep the stage in step with FilmCraft's mode tabs.
-pub fn frame_begin(app: &mut FilmcraftApp, ctx: &egui::Context) {
+/// Start of every frame: read the service, keep the stage in step with Mortiflix Studio's mode tabs.
+pub fn frame_begin(app: &mut StudioApp, ctx: &egui::Context) {
     app.mfx.core.service.set_waker(ctx);
     app.mfx.core.poll();
-    // Ctrl/Cmd+S saves unsaved script changes first (FilmCraft's own Save is for its project).
+    // Ctrl/Cmd+S saves unsaved script changes first (Mortiflix Studio's own Save is for its project).
     if app.mfx.core.state.script.unsaved() && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)) {
         let core = &mut app.mfx.core;
         mfx::script::save(&mut core.state.script, &mut core.service);
@@ -203,7 +203,7 @@ pub fn frame_begin(app: &mut FilmcraftApp, ctx: &egui::Context) {
     if !s.active {
         return;
     }
-    if s.stage < mfx::STAGE_FILMCRAFT && app.ui.mode == Mode::Edit {
+    if s.stage < mfx::STAGE_EDIT && app.ui.mode == Mode::Edit {
         if app.ui.workspace != WORKSPACE {
             apply_stage(app, app.mfx.core.state.stage);
         }
@@ -212,7 +212,7 @@ pub fn frame_begin(app: &mut FilmcraftApp, ctx: &egui::Context) {
     let s = &app.mfx.core.state;
     let follow = match app.ui.mode {
         Mode::Export if s.stage != mfx::STAGE_RENDER => Some("render"),
-        Mode::Edit if s.stage == mfx::STAGE_RENDER => Some("filmcraft"),
+        Mode::Edit if s.stage == mfx::STAGE_RENDER => Some("edit"),
         _ => None,
     };
     if let Some(key) = follow
@@ -223,7 +223,7 @@ pub fn frame_begin(app: &mut FilmcraftApp, ctx: &egui::Context) {
 }
 
 /// "Save your script changes?" was answered (saved and in, or discarded): carry on with what asked.
-fn script_go_on(app: &mut FilmcraftApp, ctx: &egui::Context) {
+fn script_go_on(app: &mut StudioApp, ctx: &egui::Context) {
     use mfx::script::Leave;
     let core = &mut app.mfx.core;
     // the New project window makes its project itself (dropped if the window was closed meanwhile)
@@ -253,9 +253,9 @@ fn script_go_on(app: &mut FilmcraftApp, ctx: &egui::Context) {
 }
 
 /// Quitting (the window's close request) with unsaved script changes asks first: Save / Discard /
-/// Keep editing. Returns whether the close must be cancelled. FilmCraft's own "Save changes to …?"
+/// Keep editing. Returns whether the close must be cancelled. Mortiflix Studio's own "Save changes to …?"
 /// comes after it, on the next close request.
-pub fn intercept_quit(app: &mut FilmcraftApp) -> bool {
+pub fn intercept_quit(app: &mut StudioApp) -> bool {
     let s = &mut app.mfx.core.state;
     !app.quit_confirmed && s.active && s.script.ask(mfx::script::Leave::Quit)
 }
@@ -275,7 +275,7 @@ fn leaves_project(id: &str, params: &Value) -> Option<mfx::script::Leave> {
 }
 
 /// Draw the stage bar in `rect`.
-pub fn stage_bar(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: egui::Rect) {
+pub fn stage_bar(app: &mut StudioApp, ui: &mut egui::Ui, rect: egui::Rect) {
     let theme = theme(&app.tokens);
     let mut c = app.mfx.core.ctx(theme);
     mfx::stagebar::show(ui, rect, &mut c);
@@ -284,7 +284,7 @@ pub fn stage_bar(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: egui::Rect) {
 }
 
 /// Draw a Mortiflix dock panel.
-pub fn panel(app: &mut FilmcraftApp, ui: &mut egui::Ui, p: PanelKind, rect: egui::Rect) {
+pub fn panel(app: &mut StudioApp, ui: &mut egui::Ui, p: PanelKind, rect: egui::Rect) {
     let theme = theme(&app.tokens);
     if p == PanelKind::MfxPreview {
         crate::mortiflix_preview::picture(app, ui, rect);
@@ -303,13 +303,13 @@ pub fn panel(app: &mut FilmcraftApp, ui: &mut egui::Ui, p: PanelKind, rect: egui
     finish(app, ui.ctx(), cmds, autos);
 }
 
-/// Whisper (captions) and Kokoro (natural voices), from FilmCraft's own catalogues, for the Setup
+/// Whisper (captions) and Kokoro (natural voices), from Mortiflix Studio's own catalogues, for the Setup
 /// window's Tools step (it asks before downloading them into `<data dir>/models`).
 pub fn model_packs() -> Vec<mfx::setup::ModelPack> {
-    use filmcraft_speech::models as speech;
-    use filmcraft_tts::catalog as kokoro;
     use mfx::setup::{ModelPack, PackFile};
-    let Some(dir) = filmcraft_engine::transcript::models_dir() else { return Vec::new() };
+    use mortiflix_speech::models as speech;
+    use mortiflix_tts::catalog as kokoro;
+    let Some(dir) = mortiflix_engine::transcript::models_dir() else { return Vec::new() };
     let mut packs = Vec::new();
     if let Some(m) = speech::find(speech::DEFAULT_MODEL) {
         packs.push(ModelPack {
@@ -319,7 +319,7 @@ pub fn model_packs() -> Vec<mfx::setup::ModelPack> {
             license: m.license.into(),
             source: m.source.into(),
             dir: speech::model_dir(&dir, m),
-            usable: filmcraft_engine::transcript::speech_available(),
+            usable: mortiflix_engine::transcript::speech_available(),
             files: m.files.iter().map(|f| PackFile { name: f.name.into(), url: f.url.into(), sha256: f.sha256.into(), size: f.size }).collect(),
         });
     }
@@ -331,14 +331,14 @@ pub fn model_packs() -> Vec<mfx::setup::ModelPack> {
         license: kokoro::LICENSE.into(),
         source: kokoro::SOURCE.into(),
         dir: kokoro::package_dir(&dir),
-        usable: !matches!(filmcraft_tts::voice_in(first, None), Err(filmcraft_tts::TtsError::Unavailable)),
+        usable: !matches!(mortiflix_tts::voice_in(first, None), Err(mortiflix_tts::TtsError::Unavailable)),
         files: kokoro::FILES.iter().map(|f| PackFile { name: f.name.into(), url: f.url.into(), sha256: f.sha256.into(), size: f.size }).collect(),
     });
     packs
 }
 
 /// The New project and Setup windows.
-pub fn dialogs(app: &mut FilmcraftApp, ctx: &egui::Context) {
+pub fn dialogs(app: &mut StudioApp, ctx: &egui::Context) {
     let theme = theme(&app.tokens);
     if app.mfx.core.state.show_setup && !mfx::setup::has_model_packs(ctx) {
         mfx::setup::set_model_packs(ctx, model_packs());
@@ -387,7 +387,7 @@ pub fn dialogs(app: &mut FilmcraftApp, ctx: &egui::Context) {
 }
 
 /// Register the parts' automation ids and run the commands they asked for.
-fn finish(app: &mut FilmcraftApp, ctx: &egui::Context, cmds: Vec<(String, Value)>, autos: Vec<(String, egui::Response, String)>) {
+fn finish(app: &mut StudioApp, ctx: &egui::Context, cmds: Vec<(String, Value)>, autos: Vec<(String, egui::Response, String)>) {
     for (id, resp, label) in &autos {
         app.auto.add_response(id, resp, label);
     }
@@ -399,7 +399,7 @@ fn finish(app: &mut FilmcraftApp, ctx: &egui::Context, cmds: Vec<(String, Value)
 }
 
 /// Stages ▸ ticks the stage on screen.
-pub fn menu(app: &FilmcraftApp, items: &mut [MenuItem]) {
+pub fn menu(app: &StudioApp, items: &mut [MenuItem]) {
     let key = format!("stages.{}", mfx::stage_key(app.mfx.core.state.stage));
     for it in items.iter_mut().filter(|it| it.path.first().is_some_and(|p| p == "Stages") && it.id != "stages.back" && it.id != "stages.next") {
         it.checked = Some(app.mfx.core.state.active && it.id == key);
@@ -407,7 +407,7 @@ pub fn menu(app: &FilmcraftApp, items: &mut [MenuItem]) {
 }
 
 /// `stages.*` and `mortiflix.*` commands.
-pub fn route(app: &mut FilmcraftApp, ctx: &egui::Context, id: &str, params: &Value) -> Option<Result<Value, String>> {
+pub fn route(app: &mut StudioApp, ctx: &egui::Context, id: &str, params: &Value) -> Option<Result<Value, String>> {
     if app.mfx.core.state.active
         && let Some(leave) = leaves_project(id, params)
         && app.mfx.core.state.script.ask(leave)
@@ -482,7 +482,7 @@ pub fn route(app: &mut FilmcraftApp, ctx: &egui::Context, id: &str, params: &Val
 /// dialog for a Mortiflix part; the chosen paths wait in `state.files_in` under `purpose` until that
 /// part takes them. `exts` defaults to every kind of asset (doc 32a). With `paths` (agents, tests) no
 /// dialog opens and those paths are delivered as if chosen.
-fn choose_files(app: &mut FilmcraftApp, params: &Value) -> Result<Value, String> {
+fn choose_files(app: &mut StudioApp, params: &Value) -> Result<Value, String> {
     let purpose =
         params.get("purpose").and_then(Value::as_str).filter(|p| !p.is_empty() && p.len() <= 200).ok_or("mortiflix.chooseFiles needs a `purpose`")?.to_string();
     if let Some(list) = params.get("paths").and_then(Value::as_array) {
@@ -511,7 +511,7 @@ fn choose_files(app: &mut FilmcraftApp, params: &Value) -> Result<Value, String>
 }
 
 /// Show a file in the OS file manager (`open: true` opens it in its own app instead).
-fn reveal(app: &mut FilmcraftApp, ctx: &egui::Context, params: &Value) -> Result<Value, String> {
+fn reveal(app: &mut StudioApp, ctx: &egui::Context, params: &Value) -> Result<Value, String> {
     let path = params.get("path").and_then(Value::as_str).filter(|p| !p.is_empty() && p.len() <= 4096).ok_or("mortiflix.reveal needs a `path`")?;
     let open = params.get("open").and_then(Value::as_bool).unwrap_or(false);
     crate::panels::menu_dialogs::open_path(app, ctx, path, !open)?;
@@ -519,10 +519,10 @@ fn reveal(app: &mut FilmcraftApp, ctx: &egui::Context, params: &Value) -> Result
 }
 
 /// Files dropped on the window during stages 1-4 (or with the New project window open) go to the
-/// Mortiflix parts (chat, Assets, New project) instead of FilmCraft's Project panel.
-pub fn take_drop(app: &mut FilmcraftApp, paths: &[String]) -> bool {
+/// Mortiflix parts (chat, Assets, New project) instead of Mortiflix Studio's Project panel.
+pub fn take_drop(app: &mut StudioApp, paths: &[String]) -> bool {
     let s = &app.mfx.core.state;
-    if !(s.show_new_project || (s.active && s.stage < mfx::STAGE_FILMCRAFT)) {
+    if !(s.show_new_project || (s.active && s.stage < mfx::STAGE_EDIT)) {
         return false;
     }
     app.mfx.core.state.push_files("drop", paths.to_vec());
@@ -532,7 +532,7 @@ pub fn take_drop(app: &mut FilmcraftApp, paths: &[String]) -> bool {
 /// `mortiflix.chooseFileAndSend {filter, exts, request: {type, params}, field}`: the OS file dialog (without
 /// stopping the frame loop), then the service request with the chosen path in `params[field]`. A
 /// part's Import… / Browse… button (Voice & music: Import a recording). Cancel sends nothing.
-fn choose_file_and_send(app: &mut FilmcraftApp, params: &Value) -> Result<Value, String> {
+fn choose_file_and_send(app: &mut StudioApp, params: &Value) -> Result<Value, String> {
     let ty = params
         .pointer("/request/type")
         .and_then(Value::as_str)
@@ -557,7 +557,7 @@ fn choose_file_and_send(app: &mut FilmcraftApp, params: &Value) -> Result<Value,
     Ok(json!({"dialog": "open"}))
 }
 
-fn stage_command(app: &mut FilmcraftApp, what: &str, params: &Value) -> Result<Value, String> {
+fn stage_command(app: &mut StudioApp, what: &str, params: &Value) -> Result<Value, String> {
     let force = params.get("force").and_then(Value::as_bool).unwrap_or(false);
     let key = if what == "set" {
         match params.get("stage") {
@@ -573,7 +573,7 @@ fn stage_command(app: &mut FilmcraftApp, what: &str, params: &Value) -> Result<V
     if let Nav::Moved { to, .. } = nav {
         apply_stage(app, to);
         if what == "getVideo" {
-            // bring the edit into FilmCraft without opening it (part 06), then Export renders it
+            // bring the edit into Edit without opening it (part 06), then Export renders it
             if let Some(Err(e)) = crate::mortiflix_into::route(app, "mortiflix.import.run", &json!({"open_edit": false})) {
                 app.ui.status = e;
             }
@@ -584,10 +584,10 @@ fn stage_command(app: &mut FilmcraftApp, what: &str, params: &Value) -> Result<V
     Ok(json!({"stage": s.stage, "key": mfx::stage_key(s.stage), "asked": nav == Nav::Asked}))
 }
 
-/// Stages 1-4 show only the Mortiflix panels (owner, 2026-10-16). A FilmCraft panel that lands in
+/// Stages 1-4 show only the Mortiflix panels (owner, 2026-10-16). A Mortiflix Studio panel that lands in
 /// the Mortiflix workspace (Window ▸ Timeline, Shift+3, a sequence opened, a saved layout) is closed
-/// again: FilmCraft's own panels are on stage 5 FilmCraft. Returns what it closed.
-pub fn keep_mortiflix_only(app: &mut FilmcraftApp) -> Vec<PanelKind> {
+/// again: Mortiflix Studio's own panels are on stage 5 Edit. Returns what it closed.
+pub fn keep_mortiflix_only(app: &mut StudioApp) -> Vec<PanelKind> {
     if app.ui.workspace != WORKSPACE {
         return Vec::new();
     }
@@ -601,14 +601,14 @@ pub fn keep_mortiflix_only(app: &mut FilmcraftApp) -> Vec<PanelKind> {
         }
     }
     if !extra.is_empty() {
-        app.ui.status = "FilmCraft's own panels open on stage 5 FilmCraft.".into();
+        app.ui.status = "Mortiflix Studio's own panels open on stage 5 Edit.".into();
     }
     extra
 }
 
-/// Switch FilmCraft's layout and mode for a stage.
-pub fn apply_stage(app: &mut FilmcraftApp, stage: u8) {
-    if stage < mfx::STAGE_FILMCRAFT {
+/// Switch Mortiflix Studio's layout and mode for a stage.
+pub fn apply_stage(app: &mut StudioApp, stage: u8) {
+    if stage < mfx::STAGE_EDIT {
         if app.ui.workspace != WORKSPACE {
             app.mfx.edit_workspace = app.ui.workspace.clone();
             app.set_workspace(WORKSPACE);
@@ -640,7 +640,7 @@ mod tests {
 
     #[test]
     fn choose_files_delivers_paths_to_the_part_and_refuses_bad_params() {
-        let mut app = FilmcraftApp::new(filmcraft_engine::Session::default());
+        let mut app = StudioApp::new(mortiflix_engine::Session::default());
         let ctx = egui::Context::default();
         let r = crate::menus::invoke(&mut app, &ctx, "mortiflix.chooseFiles", json!({"purpose": "newProject.assets", "paths": ["/a.png", 5, ""]})).unwrap();
         assert_eq!(r["paths"], 1);
@@ -655,22 +655,22 @@ mod tests {
     }
 
     #[test]
-    fn the_title_names_the_mortiflix_project_not_filmcrafts_demo() {
-        let mut app = FilmcraftApp::new(filmcraft_engine::Session::default());
+    fn the_title_names_the_mortiflix_project_not_studios_demo() {
+        let mut app = StudioApp::new(mortiflix_engine::Session::default());
         assert_eq!(doc_title(&app), None);
         app.mfx.core.activate();
         app.mfx.core.state.apply_service_message(&json!({"event": "status", "data": {"project": "p1", "title": "Why the Sky Is Blue"}}));
-        assert_eq!(doc_title(&app).as_deref(), Some("Why the Sky Is Blue \u{2013} Mortiflix FilmCraft"));
+        assert_eq!(doc_title(&app).as_deref(), Some("Why the Sky Is Blue \u{2013} Mortiflix Studio"));
         let ctx = egui::Context::default();
         window_title(&mut app, &ctx);
-        assert!(app.mfx.window_title.starts_with("Why the Sky Is Blue \u{2013} Mortiflix FilmCraft"));
+        assert!(app.mfx.window_title.starts_with("Why the Sky Is Blue \u{2013} Mortiflix Studio"));
     }
 
     #[test]
     fn stage_commands_switch_layout_and_mode() {
-        let mut app = FilmcraftApp::new(filmcraft_engine::Session::default());
+        let mut app = StudioApp::new(mortiflix_engine::Session::default());
         let ctx = egui::Context::default();
-        // off until a stage command (or the desktop app) turns it on: FilmCraft alone is untouched
+        // off until a stage command (or the desktop app) turns it on: Mortiflix Studio alone is untouched
         assert_eq!(bar_height(&app), 0.0);
         assert!(!hides_mode_tabs(&app));
         crate::menus::invoke(&mut app, &ctx, "stages.shots", json!({})).unwrap();
@@ -685,15 +685,15 @@ mod tests {
         assert!(!app.ui.dock.contains(PanelKind::Timeline));
         assert!(app.ui.dock.contains(PanelKind::MfxChat) && app.ui.dock.contains(PanelKind::MfxAssets));
         crate::menus::invoke(&mut app, &ctx, "stages.editVideo", json!({})).unwrap();
-        assert_eq!((app.mfx.core.state.stage, app.ui.mode), (mfx::STAGE_FILMCRAFT, Mode::Edit));
+        assert_eq!((app.mfx.core.state.stage, app.ui.mode), (mfx::STAGE_EDIT, Mode::Edit));
         assert_ne!(app.ui.workspace, WORKSPACE);
         assert!(app.ui.dock.contains(PanelKind::MfxChat) && app.ui.dock.contains(PanelKind::Timeline));
         crate::menus::invoke(&mut app, &ctx, "stages.next", json!({})).unwrap();
         assert_eq!((app.mfx.core.state.stage, app.ui.mode), (mfx::STAGE_RENDER, Mode::Export));
-        // FilmCraft's Edit tab lights stage 5 again
+        // Mortiflix Studio's Edit tab lights stage 5 again
         app.ui.mode = Mode::Edit;
         frame_begin(&mut app, &ctx);
-        assert_eq!(app.mfx.core.state.stage, mfx::STAGE_FILMCRAFT);
+        assert_eq!(app.mfx.core.state.stage, mfx::STAGE_EDIT);
         crate::menus::invoke(&mut app, &ctx, "stages.set", json!({"stage": 0})).unwrap();
         assert_eq!(app.ui.workspace, WORKSPACE);
         assert!(crate::menus::invoke(&mut app, &ctx, "stages.bogus", json!({})).is_err());
@@ -707,8 +707,8 @@ mod tests {
         assert!(crate::menus::invoke(&mut app, &ctx, "mortiflix.reveal", json!({"path": ""})).is_err());
         // drops go to Mortiflix on stages 1-4 only
         assert!(take_drop(&mut app, &["/x.png".into()]));
-        crate::menus::invoke(&mut app, &ctx, "stages.filmcraft", json!({})).unwrap();
-        assert!(!take_drop(&mut app, &["/y.png".into()]), "stage 5: FilmCraft imports it");
+        crate::menus::invoke(&mut app, &ctx, "stages.edit", json!({})).unwrap();
+        assert!(!take_drop(&mut app, &["/y.png".into()]), "stage 5: Mortiflix Studio imports it");
         let r = crate::menus::invoke(&mut app, &ctx, "mortiflix.request", json!({"type": "state.get"})).unwrap();
         let reply = crate::menus::invoke(&mut app, &ctx, "mortiflix.reply", json!({"id": r["id"]})).unwrap();
         assert_eq!(reply["error"]["code"], "not_running");

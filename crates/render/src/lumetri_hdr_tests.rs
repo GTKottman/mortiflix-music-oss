@@ -1,9 +1,9 @@
 //! Lumetri in HDR working spaces (known cd/m² values through PQ and HLG) and HSL Secondary ▸
 //! Refine (Denoise, Blur of the key).
 
-use filmcraft_color::{GradeSpace, REFERENCE_WHITE_NITS, WorkingSpace};
-use filmcraft_project::{EffectInstance, ParamValue, find_effect};
-use filmcraft_time::Tick;
+use mortiflix_color::{GradeSpace, REFERENCE_WHITE_NITS, WorkingSpace};
+use mortiflix_project::{EffectInstance, ParamValue, find_effect};
+use mortiflix_time::Tick;
 
 use crate::Image;
 use crate::effects::{FxCtx, apply};
@@ -147,7 +147,7 @@ fn key(denoise: f64, blur: f64) -> Image {
 
 #[test]
 fn hsl_refine_denoise_removes_speckles() {
-    let m = |img: &Image, x: usize, y: usize| filmcraft_color::linear_to_srgb(img.get(x, y)[1]);
+    let m = |img: &Image, x: usize, y: usize| mortiflix_color::linear_to_srgb(img.get(x, y)[1]);
     let raw = key(0.0, 0.0);
     assert!(m(&raw, 3, 3) > 0.9 && m(&raw, 20, 20) > 0.9 && m(&raw, 8, 20) < 0.01, "the key: speckles and square");
     let clean = key(100.0, 0.0);
@@ -169,7 +169,7 @@ fn hsl_refine_blur_softens_the_key() {
     let n = soft(&blurred);
     assert!(n >= 6, "soft edge pixels: {n}");
     // the key's total is kept (blur only moves it around)
-    let total = |img: &Image| (0..40 * 40).map(|i| filmcraft_color::linear_to_srgb(img.px[i * 4 + 1])).sum::<f32>();
+    let total = |img: &Image| (0..40 * 40).map(|i| mortiflix_color::linear_to_srgb(img.px[i * 4 + 1])).sum::<f32>();
     assert!((total(&blurred) - total(&hard)).abs() / total(&hard) < 0.05);
     // the correction follows the refined key: a hue shift inside, soft at the edge
     let mut img = keyed_image();

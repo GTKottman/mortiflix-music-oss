@@ -68,7 +68,7 @@ fn write_log(summary: &str) {
     let bt = std::backtrace::Backtrace::force_capture();
     let secs = web_time::SystemTime::now().duration_since(web_time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
     if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
-        let _ = writeln!(f, "=== {} FilmCraft {} (unix {secs})\n{summary}\n{bt}\n", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
+        let _ = writeln!(f, "=== {} Mortiflix Studio {} (unix {secs})\n{summary}\n{bt}\n", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
     }
 }
 
@@ -82,10 +82,10 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("fc-crash-{}", std::process::id()));
         super::install(Some(dir.clone()));
         let _ = super::take_last();
-        let r = std::thread::Builder::new().name("filmcraft-test-worker".into()).spawn(|| panic!("boom in a worker")).unwrap().join();
+        let r = std::thread::Builder::new().name("mortiflix-test-worker".into()).spawn(|| panic!("boom in a worker")).unwrap().join();
         assert!(r.is_err());
         let last = super::take_last().expect("recorded");
-        assert!(last.contains("boom in a worker") && last.contains("filmcraft-test-worker"), "{last}");
+        assert!(last.contains("boom in a worker") && last.contains("mortiflix-test-worker"), "{last}");
         let log = std::fs::read_to_string(super::log_path().unwrap()).unwrap();
         assert!(log.contains("boom in a worker"));
         let _ = std::fs::remove_dir_all(dir);

@@ -1,5 +1,5 @@
 [package]
-name = "filmcraft-matroska"
+name = "mortiflix-matroska"
 description = "Clean-room Matroska (MKV) and WebM demuxer and muxer"
 version.workspace = true
 edition.workspace = true
@@ -12,5 +12,5 @@ workspace = true
 [dependencies]
 
 [dev-dependencies]
-filmcraft-testkit = { workspace = true }
+mortiflix-testkit = { workspace = true }
 serde_json = { workspace = true }

@@ -3,8 +3,8 @@
 //! and each sequence's playhead). Premiere's tab behaviour was observed in Premiere Pro 26.5.2.
 
 use super::*;
-use filmcraft_project::SequenceView;
-use filmcraft_time::TICKS_PER_SECOND;
+use mortiflix_project::SequenceView;
+use mortiflix_time::TICKS_PER_SECOND;
 use serde_json::json;
 
 /// The demo project with two more sequences open: tabs [main, b, c], `c` active.
@@ -24,7 +24,7 @@ fn view(pps: f64, scroll: f64) -> SequenceView {
 }
 
 fn temp_dir(name: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("filmcraft-tabs-{name}-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("mortiflix-tabs-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir
@@ -203,7 +203,7 @@ fn a_damaged_view_in_a_project_file_is_cleaned_up_or_ignored() {
         ids
     });
     assert_eq!(t.state.playheads[&c], Tick::ZERO);
-    assert_eq!(t.state.playheads[&b], rate(b).snap(filmcraft_project::ProjectView::MAX_PLAYHEAD));
+    assert_eq!(t.state.playheads[&b], rate(b).snap(mortiflix_project::ProjectView::MAX_PLAYHEAD));
     assert_eq!(t.state.playheads[&main], rate(main).snap(Tick(TICKS_PER_SECOND + 1)));
 
     // not a view at all: the project opens as it does without one

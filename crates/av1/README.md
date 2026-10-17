@@ -1,8 +1,8 @@
-# filmcraft-av1
+# mortiflix-av1
 
 Clean-room, pure-Rust (no `unsafe`) AV1 decoder, implemented from the public **AV1 Bitstream &
 Decoding Process Specification, version 1.0.0 with Errata 1** (AOMediaCodec/av1-spec, git
-commit `5e04f3f`, 2023-06-12). It is an L0 crate: it depends only on `filmcraft-bitstream`,
+commit `5e04f3f`, 2023-06-12). It is an L0 crate: it depends only on `mortiflix-bitstream`,
 `thiserror` and (optional, feature `threads`) `rayon`, and builds for `wasm32-unknown-unknown`.
 
 All constant tables (default CDFs, scan orders, quantiser lookups, filter taps, …) and the
@@ -99,7 +99,7 @@ noisy; single-threaded figures use thread CPU time and are comparable.
 
 CPU cycles per frame counted by the kernel (`/usr/bin/time -l`, all threads summed; mean of two
 interleaved base / after rounds at load average 190-320) with
-`AV1_THREADS=n cargo run --release -p filmcraft-av1 --example av1dec -- in.ivf` on the
+`AV1_THREADS=n cargo run --release -p mortiflix-av1 --example av1dec -- in.ivf` on the
 `cargo xtask bench` decode clips (SVT-AV1 preset 10, CRF 35, keyint 48, testsrc2 + grain),
 bit-exact with libdav1d:
 
@@ -128,7 +128,7 @@ SVT-AV1's hierarchical GOPs that is the top layer, half of the frames.
 ## API
 
 ```rust
-let mut dec = filmcraft_av1::Decoder::new();
+let mut dec = mortiflix_av1::Decoder::new();
 for sample in samples {                  // one temporal unit (MP4 / Matroska sample) each
     for pic in dec.decode_pts(&sample, pts)? {   // shown frames ready so far, planar u16
         // pic.width, pic.height, pic.bit_depth, pic.planes[0..3], pic.pts

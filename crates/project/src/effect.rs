@@ -7,7 +7,7 @@
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
-use filmcraft_geom::Vec2;
+use mortiflix_geom::Vec2;
 use serde::{Deserialize, Serialize};
 
 use crate::keyframe::{Param, ParamValue};
@@ -130,10 +130,10 @@ impl EffectInstance {
     pub fn param_mut(&mut self, id: &str) -> Option<&mut Param> {
         self.params.get_mut(id)
     }
-    pub fn f64_at(&self, id: &str, t: filmcraft_time::Tick) -> f64 {
+    pub fn f64_at(&self, id: &str, t: mortiflix_time::Tick) -> f64 {
         self.params.get(id).map(|p| p.f64_at(t)).or_else(|| self.def().and_then(|d| d.param(id)).and_then(|p| p.default.as_f64())).unwrap_or(0.0)
     }
-    pub fn vec2_at(&self, id: &str, t: filmcraft_time::Tick) -> Vec2 {
+    pub fn vec2_at(&self, id: &str, t: mortiflix_time::Tick) -> Vec2 {
         self.params.get(id).map(|p| p.vec2_at(t)).unwrap_or_default()
     }
     pub fn is_animated(&self) -> bool {

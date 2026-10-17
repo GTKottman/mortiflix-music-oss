@@ -16,14 +16,14 @@ mod common;
 use std::time::Duration;
 
 use common::*;
-use filmcraft_codecs::VideoDecoder;
-use filmcraft_codecs::hw::NalStreamInfo;
-use filmcraft_platform::HybridDecoder;
-use filmcraft_platform::vaapi::VaDecoder;
+use mortiflix_codecs::VideoDecoder;
+use mortiflix_codecs::hw::NalStreamInfo;
+use mortiflix_platform::HybridDecoder;
+use mortiflix_platform::vaapi::VaDecoder;
 
 /// The hardware decoder for a stream, or `None` (skip) when this machine has none for it.
 fn hardware(s: &Stream) -> Option<Box<dyn VideoDecoder>> {
-    match filmcraft_platform::vaapi_factory(&s.entry) {
+    match mortiflix_platform::vaapi_factory(&s.entry) {
         Some(Ok(d)) => {
             assert!(d.name().starts_with("VA-API"), "{}", d.name());
             Some(d)
@@ -37,7 +37,7 @@ fn hardware(s: &Stream) -> Option<Box<dyn VideoDecoder>> {
 }
 
 fn software(s: &Stream) -> Box<dyn VideoDecoder> {
-    filmcraft_codecs::software_video_decoder(&s.entry).unwrap()
+    mortiflix_codecs::software_video_decoder(&s.entry).unwrap()
 }
 
 /// H.264 fixtures for the stream features the hardware path takes: (file, x264 profile, x264
@@ -124,7 +124,7 @@ fn parity(name: &str, s: &Stream) {
         let mut a = decode_all(hw.as_mut(), &s.samples[k..end]);
         let mut b = decode_all(sw.as_mut(), &s.samples[k..end]);
         assert_eq!(a.len(), b.len(), "{name} from sample {k}: pictures");
-        if info.codec == filmcraft_codecs::hw::NalCodec::H264 && !info.nal_types(&s.samples[k].0).contains(&5) {
+        if info.codec == mortiflix_codecs::hw::NalCodec::H264 && !info.nal_types(&s.samples[k].0).contains(&5) {
             let start = s.samples[k].1;
             a.retain(|f| f.pts >= start);
             b.retain(|f| f.pts >= start);
@@ -134,7 +134,7 @@ fn parity(name: &str, s: &Stream) {
     }
     // a flush in the middle of a GOP, then carrying on: H.264 only, where references survive a
     // flush (an HEVC flush ends the stream; the GOP cache always seeks after one)
-    if info.codec == filmcraft_codecs::hw::NalCodec::H264 {
+    if info.codec == mortiflix_codecs::hw::NalCodec::H264 {
         for d in [&mut hw, &mut sw] {
             d.reset();
         }
@@ -174,8 +174,8 @@ fn parity_streaming(name: &str, s: &Stream) {
         sw.reset();
         let (mut a, mut b) = (std::collections::VecDeque::new(), std::collections::VecDeque::new());
         let mut compared = 0usize;
-        let mut compare = |a: &mut std::collections::VecDeque<filmcraft_codecs::DecodedFrame>,
-                           b: &mut std::collections::VecDeque<filmcraft_codecs::DecodedFrame>| {
+        let mut compare = |a: &mut std::collections::VecDeque<mortiflix_codecs::DecodedFrame>,
+                           b: &mut std::collections::VecDeque<mortiflix_codecs::DecodedFrame>| {
             while !a.is_empty() && !b.is_empty() {
                 let (Some(x), Some(y)) = (a.pop_front(), b.pop_front()) else { break };
                 assert_same(&format!("{name} from sample {start}"), &[x], &[y]);
@@ -198,7 +198,7 @@ fn parity_streaming(name: &str, s: &Stream) {
 
 #[test]
 fn bit_exact_with_the_software_decoder() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let streams = small_streams(&ff);
     assert!(streams.len() > H264.len(), "fixtures");
     for (name, s) in streams {
@@ -207,7 +207,7 @@ fn bit_exact_with_the_software_decoder() {
 }
 
 fn large(size: &str) {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let (_, h) = size.split_once('x').unwrap();
     let src = format!("testsrc2=s={size}:r=24:d=2,noise=alls=12:allf=t");
     let args = [
@@ -237,7 +237,7 @@ fn h264_1080p_and_2160p_are_bit_exact() {
 }
 
 fn large_hevc(size: &str, pix_fmt: &str) {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let (_, h) = size.split_once('x').unwrap();
     let src = format!("testsrc2=s={size}:r=24:d=2,noise=alls=12:allf=t");
     let ten = pix_fmt.contains("10");
@@ -274,7 +274,7 @@ fn hevc_main_and_main10_1080p_and_2160p_are_bit_exact() {
 
 #[test]
 fn mid_stream_failure_continues_in_software() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     for (name, s) in small_streams(&ff) {
         let name = name.as_str();
         let info = NalStreamInfo::from_entry(&s.entry).unwrap().unwrap();
@@ -290,10 +290,10 @@ fn mid_stream_failure_continues_in_software() {
             let mut va = VaDecoder::new(info.clone()).unwrap();
             va.fail_after(fail_at as u64);
             let mut d = HybridDecoder::new(Box::new(va), s.entry.clone(), info.clone());
-            let before = filmcraft_codecs::hw::hw_stats().fallbacks;
+            let before = mortiflix_codecs::hw::hw_stats().fallbacks;
             let out = decode_all(&mut d, &s.samples);
             assert!(!d.is_hardware(), "{name}: switched to software");
-            assert!(filmcraft_codecs::hw::hw_stats().fallbacks > before, "{name}: fallback counted");
+            assert!(mortiflix_codecs::hw::hw_stats().fallbacks > before, "{name}: fallback counted");
             assert_same(&format!("{name} failing at sample {fail_at}"), &out, &reference);
             d.reset();
             assert_same(&format!("{name} after the fallback and a reset"), &decode_all(&mut d, &s.samples), &reference);
@@ -305,7 +305,7 @@ fn mid_stream_failure_continues_in_software() {
 /// and 10-bit H.264, and HEVC (not decoded through VA-API yet).
 #[test]
 fn declines_what_the_hardware_path_does_not_take() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let src = "testsrc2=s=640x360:r=24:d=1";
     let cases: [(&str, Vec<&str>); 2] = [
         ("va_h264_interlaced.mp4", vec!["-f", "lavfi", "-i", src, "-c:v", "libx264", "-x264-params", "interlaced=1:keyint=12", "-pix_fmt", "yuv420p"]),
@@ -315,19 +315,19 @@ fn declines_what_the_hardware_path_does_not_take() {
         // an ffmpeg whose x264 lacks 10-bit leaves the fixture out
         let Some(path) = fixture(&ff, name, &args) else { continue };
         let s = read_stream(&path);
-        assert!(filmcraft_platform::vaapi_factory(&s.entry).is_none(), "{name}: declined");
+        assert!(mortiflix_platform::vaapi_factory(&s.entry).is_none(), "{name}: declined");
     }
     let args = ["-f", "lavfi", "-i", src, "-c:v", "libx265", "-tag:v", "hvc1", "-x265-params", "log-level=error:keyint=12", "-pix_fmt", "yuv422p10le"];
     if let Some(path) = fixture(&ff, "va_hevc_422.mp4", &args) {
         let s = read_stream(&path);
-        assert!(filmcraft_platform::vaapi_factory(&s.entry).is_none(), "HEVC 4:2:2: declined");
+        assert!(mortiflix_platform::vaapi_factory(&s.entry).is_none(), "HEVC 4:2:2: declined");
     }
     // Settings ▸ Playback ▸ Hardware decoding Off
     let Some(path) = named(&ff, "h264_high.mp4") else { return };
     let s = read_stream(&path);
-    filmcraft_codecs::hw::set_hardware_decoding(false);
-    let off = filmcraft_platform::vaapi_factory(&s.entry).is_none();
-    filmcraft_codecs::hw::set_hardware_decoding(true);
+    mortiflix_codecs::hw::set_hardware_decoding(false);
+    let off = mortiflix_platform::vaapi_factory(&s.entry).is_none();
+    mortiflix_codecs::hw::set_hardware_decoding(true);
     assert!(off, "declined while hardware decoding is Off");
 }
 
@@ -347,7 +347,7 @@ fn bounded(what: &str, limit: Duration, f: impl FnOnce() + Send + 'static) {
 
 #[test]
 fn damaged_samples_and_parameter_sets_never_crash_or_hang() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     for (name, s) in small_streams(&ff) {
         let name = name.as_str();
         if hardware(&s).is_none() {
@@ -360,7 +360,7 @@ fn damaged_samples_and_parameter_sets_never_crash_or_hang() {
             let entry = s.entry.clone();
             bounded(&format!("{name} seed {seed}"), Duration::from_secs(60), move || {
                 let mut seed = seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1;
-                let mut d = filmcraft_platform::vaapi_factory(&entry).unwrap().unwrap();
+                let mut d = mortiflix_platform::vaapi_factory(&entry).unwrap().unwrap();
                 let info = NalStreamInfo::from_entry(&entry).unwrap().unwrap();
                 let mut raw = VaDecoder::new(info).unwrap();
                 for (i, (smp, pts)) in samples.iter().enumerate().take(40) {
@@ -390,7 +390,7 @@ fn damaged_samples_and_parameter_sets_never_crash_or_hang() {
             });
         }
         // damaged parameter sets: the decoder declines, errors or decodes; never crashes
-        let filmcraft_isobmff::CodecConfig::Avc(a) = &s.entry.codec else { continue };
+        let mortiflix_isobmff::CodecConfig::Avc(a) = &s.entry.codec else { continue };
         let rec = a.to_bytes();
         let mut seed = 0x1234_5678u64;
         for round in 0..24 {
@@ -424,7 +424,7 @@ fn damaged_samples_and_parameter_sets_never_crash_or_hang() {
 /// fails nor leaks VA-API objects into the next one.
 #[test]
 fn repeated_initialisation() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let Some(path) = named(&ff, "h264_high.mp4") else { return };
     let s = read_stream(&path);
     let reference = decode_all(software(&s).as_mut(), &s.samples[..13]);
@@ -440,7 +440,7 @@ fn repeated_initialisation() {
 /// pictures.
 #[test]
 fn concurrent_decoders() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let mut paths: Vec<_> = named(&ff, "h264_high.mp4").into_iter().collect();
     for (name, profile, params) in H264.iter().take(3) {
         paths.extend(h264_fixture(&ff, name, profile, params));
@@ -470,7 +470,7 @@ fn concurrent_decoders() {
 /// A decoder used and moved between threads (decoders migrate between frame workers).
 #[test]
 fn decoder_moves_between_threads() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let Some(path) = named(&ff, "h264_high.mp4") else { return };
     let s = read_stream(&path);
     let Some(mut hw) = hardware(&s) else { return };

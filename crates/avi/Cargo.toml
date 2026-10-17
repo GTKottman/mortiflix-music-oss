@@ -1,5 +1,5 @@
 [package]
-name = "filmcraft-avi"
+name = "mortiflix-avi"
 description = "Clean-room AVI (RIFF) and OpenDML demuxer"
 version.workspace = true
 edition.workspace = true
@@ -12,4 +12,4 @@ workspace = true
 [dependencies]
 
 [dev-dependencies]
-filmcraft-testkit = { workspace = true }
+mortiflix-testkit = { workspace = true }

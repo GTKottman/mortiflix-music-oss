@@ -141,7 +141,7 @@ pub struct Edit {
     pub version: Option<u32>,
 }
 
-/// The beat's FilmCraft label colour (fill) and its marker colour (the chip beside the number).
+/// The beat's Mortiflix Studio label colour (fill) and its marker colour (the chip beside the number).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BeatColour {
     pub fill: Color32,

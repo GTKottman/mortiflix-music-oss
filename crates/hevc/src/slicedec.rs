@@ -796,7 +796,7 @@ impl<'a, S: Sample> SliceDecoder<'a, S> {
         let (bl, bc) = (self.sps.pcm_bit_depth_luma, self.sps.pcm_bit_depth_chroma);
         let total_bits = n * n * bl as usize + 2 * (n / 2) * (n / 2) * bc as usize;
         ensure!(start + total_bits.div_ceil(8) <= data.len(), "PCM samples truncated");
-        let mut r = filmcraft_bitstream::BitReader::new(&data[start..]);
+        let mut r = mortiflix_bitstream::BitReader::new(&data[start..]);
         let (sy, sc) = (self.pic.bd_y - bl, self.pic.bd_c - bc);
         let w = self.pic.width;
         for y in 0..n {

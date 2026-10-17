@@ -3,12 +3,12 @@
 
 use egui::{Align2, Rect, pos2, vec2};
 
-use crate::FilmcraftApp;
+use crate::StudioApp;
 use crate::theme::Tokens;
 
 /// Feed the loudness meter with exactly the programme audio played since the last frame
 /// (consecutive, non-overlapping blocks, so gating and integration are correct). Seeks reset it.
-pub(crate) fn feed_loudness(app: &mut FilmcraftApp) {
+pub(crate) fn feed_loudness(app: &mut StudioApp) {
     if !app.playback.playing {
         return;
     }
@@ -20,7 +20,7 @@ pub(crate) fn feed_loudness(app: &mut FilmcraftApp) {
         None => true,
     };
     if fresh {
-        app.loudness = Some((filmcraft_audio_dsp::LoudnessMeter::new(sr as f64, 2), now));
+        app.loudness = Some((mortiflix_audio_dsp::LoudnessMeter::new(sr as f64, 2), now));
         return;
     }
     let next = app.loudness.as_ref().map_or(now, |l| l.1);
@@ -135,13 +135,13 @@ fn overlaps(a: Rect, b: Rect) -> bool {
     i.width() > 0.0 && i.height() > 0.0
 }
 
-pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
+pub fn show(app: &mut StudioApp, ui: &mut egui::Ui, rect: Rect) {
     let t = app.tokens;
     // levels of the Mix as it plays (fast attack, 20 dB/s release, peak hold)
-    let st = super::mixer::poll_meters(app, ui).get(&filmcraft_render::mixer::MASTER.0).cloned().unwrap_or_else(|| vec![[-90.0; 2]; 2]);
+    let st = super::mixer::poll_meters(app, ui).get(&mortiflix_render::mixer::MASTER.0).cloned().unwrap_or_else(|| vec![[-90.0; 2]; 2]);
     // one bar per channel of the Mix (2, or 6 for a 5.1 Mix)
-    let nch = app.session.active_sequence().map(|q| filmcraft_render::mixer::width_of(q.settings.audio_master)).unwrap_or(2);
-    let names = filmcraft_audio_dsp::channels::Layout::from_channels(nch).names();
+    let nch = app.session.active_sequence().map(|q| mortiflix_render::mixer::width_of(q.settings.audio_master)).unwrap_or(2);
+    let names = mortiflix_audio_dsp::channels::Layout::from_channels(nch).names();
     // Premiere: black meter area, scale 0 … −57 dB in 3 dB steps on the right, "dB" at the foot.
     // Loudness readout (BS.1770 / EBU R128) under the bars.
     let parts = parts(rect, names, |text, font| ui.painter().layout_no_wrap(text.to_string(), font, t.text).size());

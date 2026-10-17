@@ -1,9 +1,9 @@
-//! The Voice & music stage: hear it all before FilmCraft, per line / per cue (docs 34, 33b).
+//! The Voice & music stage: hear it all before Mortiflix Studio, per line / per cue (docs 34, 33b).
 //!
 //! Stage 4's main panel (PanelKind::MfxStage on stage 4), mockup `UI Layout/34a Voice and music
 //! stage.html`:
 //! - a header: the AI's live line, the tally ("7 of 13 lines OK · 2 of 5 cues OK") and the shared
-//!   transport (FilmCraft's own player: `playhead.set`, `playback.*`, the same one the loose preview
+//!   transport (Mortiflix Studio's own player: `playhead.set`, `playback.*`, the same one the loose preview
 //!   drives; doc 40 clash 3);
 //! - the selected line or cue (doc 34 "Right panel"): Play, words + Remake line, voice (all lines /
 //!   this line), takes + New take, Record it yourself (booth), Import a recording, timing ±0.1 s
@@ -241,7 +241,7 @@ fn seek_to(ctx: &mut MfxCtx, vm: &mut Vm, at: f64) {
     ctx.command("playhead.set", json!({"seconds": vm.cursor}));
 }
 
-/// Play from `at` in FilmCraft's player (the transport the loose preview shares).
+/// Play from `at` in Mortiflix Studio's player (the transport the loose preview shares).
 fn play_from(ctx: &mut MfxCtx, vm: &mut Vm, at: f64) {
     ctx.command("playback.stop", json!({}));
     seek_to(ctx, vm, at);
@@ -862,7 +862,7 @@ fn summary(ui: &mut egui::Ui, ctx: &mut MfxCtx, vm: &mut Vm) {
     let not_ok = vm.tl.not_ok();
     ui.add_space(4.0);
     if not_ok.is_empty() && !(vm.tl.lines.is_empty() && vm.tl.cues.is_empty()) {
-        ui.colored_label(t.ok, "✓ Everything has an OK. Get the video, or edit it in FilmCraft first.");
+        ui.colored_label(t.ok, "✓ Everything has an OK. Get the video, or edit it in Edit first.");
     } else if !not_ok.is_empty() {
         let shown: Vec<String> = not_ok.iter().take(24).cloned().collect();
         let more = if not_ok.len() > shown.len() { format!(" and {} more", not_ok.len() - shown.len()) } else { String::new() };
@@ -1036,8 +1036,8 @@ fn booth(ui: &mut egui::Ui, ctx: &mut MfxCtx, vm: &mut Vm) {
 }
 
 /// Doc 34's keys, while the pointer is over this stage and no text field has the keyboard:
-/// ← → previous / next line, Enter OK, R record it yourself. FilmCraft's own shortcuts run first,
-/// so a chord it binds globally (Space, J/K/L) stays FilmCraft's.
+/// ← → previous / next line, Enter OK, R record it yourself. Mortiflix Studio's own shortcuts run first,
+/// so a chord it binds globally (Space, J/K/L) stays Mortiflix Studio's.
 fn keys(ui: &egui::Ui, ctx: &mut MfxCtx, vm: &mut Vm) {
     if !ui.ui_contains_pointer() || ui.ctx().egui_wants_keyboard_input() || vm.booth.is_some() {
         return;

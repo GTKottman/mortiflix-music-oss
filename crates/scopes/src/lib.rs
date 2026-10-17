@@ -6,7 +6,7 @@
 //! values outside it are super-whites / sub-blacks of float or HDR frames), decimated to at most
 //! [`MAX_W`] × [`MAX_H`] samples by nearest-sample picking (no averaging, so flat colours and
 //! test patterns land on exact cells). Y'CbCr comes from the scope's colour space matrix
-//! (BT.601, BT.709 or BT.2020 NCL; `filmcraft_color::rgb_to_ycbcr`).
+//! (BT.601, BT.709 or BT.2020 NCL; `mortiflix_color::rgb_to_ycbcr`).
 //!
 //! | Scope | Grid | Columns × rows |
 //! |---|---|---|
@@ -27,8 +27,8 @@ pub mod summary;
 #[cfg(test)]
 mod tests;
 
-pub use filmcraft_color::Matrix;
-use filmcraft_color::rgb_to_ycbcr;
+pub use mortiflix_color::Matrix;
+use mortiflix_color::rgb_to_ycbcr;
 use serde::{Deserialize, Serialize};
 
 /// Largest decimated signal (a 1080p frame is sampled every 4th pixel both ways).
@@ -378,18 +378,18 @@ impl Signal {
 /// HDR scopes: 0..1 on the axis is 0..10 000 cd/m².
 pub fn linear_to_pq([r, g, b, a]: [f32; 4]) -> [f32; 3] {
     let a = if a > 1e-6 { a } else { 1.0 };
-    let f = |v: f32| filmcraft_color::pq_inverse_eotf(((v / a).max(0.0) * filmcraft_color::REFERENCE_WHITE_NITS as f32 / 10_000.0).clamp(0.0, 1.0));
+    let f = |v: f32| mortiflix_color::pq_inverse_eotf(((v / a).max(0.0) * mortiflix_color::REFERENCE_WHITE_NITS as f32 / 10_000.0).clamp(0.0, 1.0));
     [f(r), f(g), f(b)]
 }
 
 /// An SDR code value (BT.1886, 100 cd/m² white) on the PQ axis (the HDR scale of an SDR frame).
 pub fn sdr_to_pq(v: f32) -> f32 {
-    filmcraft_color::pq_inverse_eotf((v.clamp(0.0, 1.0).powf(2.4) * 100.0 / 10_000.0).clamp(0.0, 1.0))
+    mortiflix_color::pq_inverse_eotf((v.clamp(0.0, 1.0).powf(2.4) * 100.0 / 10_000.0).clamp(0.0, 1.0))
 }
 
 /// cd/m² → height on the PQ axis (0..1).
 pub fn nits_to_pq(nits: f32) -> f32 {
-    filmcraft_color::pq_inverse_eotf((nits / 10_000.0).clamp(0.0, 1.0))
+    mortiflix_color::pq_inverse_eotf((nits / 10_000.0).clamp(0.0, 1.0))
 }
 
 // ------------------------------------------------------------------------------------ grids
@@ -650,7 +650,7 @@ pub fn hls_point(rgb: [f32; 3], m: Matrix) -> [f32; 2] {
 
 #[inline]
 fn hls_at([r, g, b]: [f32; 3], red: f32) -> [f32; 2] {
-    let [h, s, _] = filmcraft_color::rgb_to_hsl(r, g, b);
+    let [h, s, _] = mortiflix_color::rgb_to_hsl(r, g, b);
     let a = (red + h * 360.0).to_radians();
     let rad = s.clamp(0.0, 1.0) * 0.5;
     [rad * a.cos(), rad * a.sin()]
@@ -665,7 +665,7 @@ pub fn vectorscope_hls(s: &Signal, p: &Params) -> Vectorscope {
     let dirs: Vec<[f32; 2]> = (0..=3600).map(|i| (red + i as f32 / 10.0).to_radians()).map(|a| [a.cos(), a.sin()]).collect();
     for &c in &s.rgb {
         let [r, g, b] = c.map(|x| x.clamp(0.0, 1.0));
-        let [h, sat, _] = filmcraft_color::rgb_to_hsl(r, g, b);
+        let [h, sat, _] = mortiflix_color::rgb_to_hsl(r, g, b);
         let [dx, dy] = dirs[((h * 3600.0).round() as usize).min(3600)];
         let rad = sat.clamp(0.0, 1.0) * 0.5;
         v.plot(rad * dx, rad * dy, &mut sum);

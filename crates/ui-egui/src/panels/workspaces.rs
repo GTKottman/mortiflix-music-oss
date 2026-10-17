@@ -7,7 +7,7 @@
 use egui::Align2;
 use serde_json::{Value, json};
 
-use crate::FilmcraftApp;
+use crate::StudioApp;
 use crate::dock::{self, is_builtin, slug};
 use crate::menus::MenuItem;
 use crate::state::WorkspaceDialog;
@@ -17,7 +17,7 @@ const ACTIONS: [&str; 6] = ["reset", "saveChanges", "saveAs", "edit", "rename", 
 
 /// `window.workspace.*`: switch (`window.workspace.<name>`), `reset`, `saveChanges`,
 /// `saveAs {name?}` (no name: open the dialog), `edit`, `rename {from, to}`, `delete {name}`.
-pub fn route(app: &mut FilmcraftApp, id: &str, params: &Value) -> Option<Result<Value, String>> {
+pub fn route(app: &mut StudioApp, id: &str, params: &Value) -> Option<Result<Value, String>> {
     let ws = id.strip_prefix("window.workspace.")?;
     let arg = |k: &str| params.get(k).and_then(Value::as_str).map(str::to_string);
     let r = match ws {
@@ -55,7 +55,7 @@ pub fn route(app: &mut FilmcraftApp, id: &str, params: &Value) -> Option<Result<
 }
 
 /// Save the current layout as the saved layout of `name`.
-fn save(app: &mut FilmcraftApp, name: &str) -> Result<(), String> {
+fn save(app: &mut StudioApp, name: &str) -> Result<(), String> {
     crate::dock::Layout { root: app.ui.dock.clone(), floating: app.ui.floating.clone() }.validate()?;
     let layout = serde_json::to_value(&app.ui.dock).map_err(|e| e.to_string())?;
     let floating = if app.ui.floating.is_empty() { serde_json::Value::Null } else { serde_json::to_value(&app.ui.floating).map_err(|e| e.to_string())? };
@@ -73,7 +73,7 @@ fn save(app: &mut FilmcraftApp, name: &str) -> Result<(), String> {
 }
 
 /// A trimmed new workspace name, or why it can't be used.
-fn new_name(app: &FilmcraftApp, name: &str) -> Result<String, String> {
+fn new_name(app: &StudioApp, name: &str) -> Result<String, String> {
     let name = name.trim();
     if name.is_empty() {
         return Err("the workspace needs a name".into());
@@ -87,14 +87,14 @@ fn new_name(app: &FilmcraftApp, name: &str) -> Result<String, String> {
     Ok(name.to_string())
 }
 
-fn save_new(app: &mut FilmcraftApp, name: &str) -> Result<Value, String> {
+fn save_new(app: &mut StudioApp, name: &str) -> Result<Value, String> {
     let name = new_name(app, name)?;
     save(app, &name)?;
     app.ui.workspace = name.clone();
     Ok(json!({"saved": name, "workspace": name}))
 }
 
-fn rename(app: &mut FilmcraftApp, from: &str, to: &str) -> Result<Value, String> {
+fn rename(app: &mut StudioApp, from: &str, to: &str) -> Result<Value, String> {
     if is_builtin(from) {
         return Err(format!("`{from}` is a built-in workspace and keeps its name"));
     }
@@ -117,7 +117,7 @@ fn rename(app: &mut FilmcraftApp, from: &str, to: &str) -> Result<Value, String>
 }
 
 /// Delete a user workspace; on a built-in, drop its saved changes (back to the original).
-fn delete(app: &mut FilmcraftApp, name: &str) -> Result<Value, String> {
+fn delete(app: &mut StudioApp, name: &str) -> Result<Value, String> {
     let mut next = app.workspaces.clone();
     let before = next.saved.len();
     next.saved.retain(|s| s.name != name);
@@ -133,17 +133,17 @@ fn delete(app: &mut FilmcraftApp, name: &str) -> Result<Value, String> {
 
 /// Rebuild the Window ▸ Workspaces submenu: every workspace (the current one checked), then the
 /// layout commands in table order.
-pub fn menu(app: &FilmcraftApp, items: &mut Vec<MenuItem>) {
+pub fn menu(app: &StudioApp, items: &mut Vec<MenuItem>) {
     splice(items, &app.workspaces, &app.session, Some(&app.ui.workspace), |n| app.ui.language.tr(n).to_string());
 }
 
 /// The same submenu without a running app: the built-in workspaces in English, none checked
 /// (`menus::default_menu_items`).
-pub fn default_menu(items: &mut Vec<MenuItem>, session: &filmcraft_engine::Session) {
+pub fn default_menu(items: &mut Vec<MenuItem>, session: &mortiflix_engine::Session) {
     splice(items, &dock::WorkspacePrefs::default(), session, None, str::to_string);
 }
 
-fn splice(items: &mut Vec<MenuItem>, prefs: &dock::WorkspacePrefs, session: &filmcraft_engine::Session, current: Option<&str>, tr: impl Fn(&str) -> String) {
+fn splice(items: &mut Vec<MenuItem>, prefs: &dock::WorkspacePrefs, session: &mortiflix_engine::Session, current: Option<&str>, tr: impl Fn(&str) -> String) {
     let is_ws = |it: &MenuItem| it.path.len() == 2 && it.path[0] == "Window" && it.path[1] == "Workspaces";
     let Some(at) = items.iter().position(is_ws) else { return };
     let actions: Vec<MenuItem> =
@@ -168,7 +168,7 @@ fn splice(items: &mut Vec<MenuItem>, prefs: &dock::WorkspacePrefs, session: &fil
 }
 
 /// Save as New Workspace… and Edit Workspaces… dialogs.
-pub fn dialogs(app: &mut FilmcraftApp, ctx: &egui::Context) {
+pub fn dialogs(app: &mut StudioApp, ctx: &egui::Context) {
     let Some(mut d) = app.ui.workspace_dialog.clone() else { return };
     let mut elems: Vec<(String, egui::Rect, String)> = Vec::new();
     let mut push = |id: &str, r: &egui::Response, label: &str| elems.push((id.to_string(), r.rect, label.to_string()));

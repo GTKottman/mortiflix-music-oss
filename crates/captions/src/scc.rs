@@ -19,7 +19,7 @@
 
 use std::collections::BTreeMap;
 
-use filmcraft_time::{FrameRate, Tick, fields_to_frames, frames_to_fields};
+use mortiflix_time::{FrameRate, Tick, fields_to_frames, frames_to_fields};
 
 use crate::cea608::{self, Encoded, misc};
 use crate::{Cue, Document, Error, Result};
@@ -252,7 +252,7 @@ pub fn decode_pairs(pairs: impl IntoIterator<Item = (i64, u8, u8)>, rate: FrameR
         dec.pair(f, b1, b2);
         last_frame = last_frame.max(f + 1);
     }
-    let one_second = rate.frame_at(Tick(filmcraft_time::TICKS_PER_SECOND)).max(1);
+    let one_second = rate.frame_at(Tick(mortiflix_time::TICKS_PER_SECOND)).max(1);
     if let Some((s, text)) = dec.open.take() {
         let end = last_frame.max(s + 1) + one_second;
         dec.cues.push((s, end, text));
@@ -336,7 +336,7 @@ pub fn wrap_rows(text: &str) -> Vec<String> {
 
 /// Byte pairs (without parity) that load `text` into non-displayed memory.
 fn load_pairs(text: &str) -> Vec<(u8, u8)> {
-    let plain = filmcraft_project::plain_text(text);
+    let plain = mortiflix_project::plain_text(text);
     let rows = wrap_rows(&plain);
     let mut out = vec![(0x14, misc::RCL), (0x14, misc::RCL), (0x14, misc::ENM), (0x14, misc::ENM)];
     let first_row = 16 - rows.len();

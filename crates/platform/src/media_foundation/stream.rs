@@ -3,7 +3,7 @@
 //! input. H.264 / HEVC (`avcC` / `hvcC`) go in as Annex B; VP9 frames and AV1 temporal units go in
 //! as they are in the container. Safe code, with the unit tests of what is declined.
 
-use filmcraft_codecs::hw::{FrameCodec, FrameStreamInfo, NalCodec, NalStreamInfo, StreamInfo};
+use mortiflix_codecs::hw::{FrameCodec, FrameStreamInfo, NalCodec, NalStreamInfo, StreamInfo};
 use windows::Win32::Graphics::Direct3D11::{
     D3D11_DECODER_PROFILE_AV1_VLD_PROFILE0, D3D11_DECODER_PROFILE_H264_VLD_NOFGT, D3D11_DECODER_PROFILE_HEVC_VLD_MAIN, D3D11_DECODER_PROFILE_HEVC_VLD_MAIN10,
     D3D11_DECODER_PROFILE_VP9_VLD_10BIT_PROFILE2, D3D11_DECODER_PROFILE_VP9_VLD_PROFILE0,
@@ -177,7 +177,7 @@ impl Stream {
         match self {
             Self::Nal(i) => Geometry { crop: i.crop, bits: format.bits(), color: i.color, par: i.par },
             Self::Frame(i) => {
-                Geometry { crop: (0, 0, i.size.0, i.size.1), bits: format.bits(), color: i.color.unwrap_or(filmcraft_color::ColorInfo::REC709), par: (1, 1) }
+                Geometry { crop: (0, 0, i.size.0, i.size.1), bits: format.bits(), color: i.color.unwrap_or(mortiflix_color::ColorInfo::REC709), par: (1, 1) }
             }
         }
     }
@@ -247,7 +247,7 @@ mod tests {
             bit_depth_chroma: bits,
             interlaced: false,
             profile_idc,
-            color: filmcraft_color::ColorInfo::REC709,
+            color: mortiflix_color::ColorInfo::REC709,
             par: (1, 1),
             reorder: 2,
         }

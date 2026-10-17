@@ -134,7 +134,7 @@ pub struct Piece {
     pub title: String,
     pub beat: Option<String>,
     pub beat_no: Option<u32>,
-    /// The beat's FilmCraft label fill (doc 11 §6).
+    /// The beat's Mortiflix Studio label fill (doc 11 §6).
     pub colour: Option<Color32>,
     pub start: f64,
     pub end: f64,

@@ -1,20 +1,20 @@
-//! Mortiflix FilmCraft: the Mortiflix layer on top of FilmCraft.
+//! Mortiflix Studio: the Mortiflix layer on top of Mortiflix Studio.
 //!
 //! The app walks a video through six stages (doc 30): 1 Script · 2 Look · 3 Shots · 4 Voice & music ·
-//! 5 FilmCraft · 6 Render. Stages 1-4 are Mortiflix panels docked in FilmCraft's window; stage 5 is
-//! FilmCraft's Edit mode with the Mortiflix chat docked right; stage 6 is FilmCraft's Export mode.
+//! 5 Edit · 6 Render. Stages 1-4 are Mortiflix panels docked in Mortiflix Studio's window; stage 5 is
+//! Mortiflix Studio's Edit mode with the Mortiflix chat docked right; stage 6 is Mortiflix Studio's Export mode.
 //!
 //! This crate owns the Mortiflix state ([`state::MfxState`]), the stage bar ([`stagebar`]), one module
 //! per part (each a `show(ui, ctx)`), and the supervisor of the Node "Mortiflix service" that does the AI
-//! work ([`service`], protocol in `docs/mortiflix/protocol.md`). `filmcraft-ui-egui` hosts it: it
+//! work ([`service`], protocol in `docs/mortiflix/protocol.md`). `mortiflix-ui-egui` hosts it: it
 //! builds an [`MfxCtx`] per call, then runs the commands and automation ids the parts left in it.
-//! Nothing here depends on FilmCraft's UI crate, so parts never touch FilmCraft code to draw.
+//! Nothing here depends on Mortiflix Studio's UI crate, so parts never touch Mortiflix Studio code to draw.
 
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable))]
 
 pub mod chat;
 pub mod export;
-pub mod into_filmcraft;
+pub mod into_edit;
 pub mod look;
 pub mod new_project;
 pub mod nodes;
@@ -36,19 +36,19 @@ pub use state::{MfxState, StageStatus, StatusKind};
 
 /// The six stages: (name shown, command key). Index = `MfxState::stage`.
 pub const STAGES: [(&str, &str); 6] =
-    [("Script", "script"), ("Look", "look"), ("Shots", "shots"), ("Voice & music", "voiceMusic"), ("FilmCraft", "filmcraft"), ("Render", "render")];
+    [("Script", "script"), ("Look", "look"), ("Shots", "shots"), ("Voice & music", "voiceMusic"), ("Edit", "edit"), ("Render", "render")];
 
 /// Stage index of Voice & music (the stage that shows Get the video / Edit the video).
 pub const STAGE_VOICE_MUSIC: u8 = 3;
-/// Stage index of FilmCraft (final edits in FilmCraft's Edit mode).
-pub const STAGE_FILMCRAFT: u8 = 4;
-/// Stage index of Render (FilmCraft's Export mode).
+/// Stage index of Mortiflix Studio (final edits in Mortiflix Studio's Edit mode).
+pub const STAGE_EDIT: u8 = 4;
+/// Stage index of Render (Mortiflix Studio's Export mode).
 pub const STAGE_RENDER: u8 = 5;
 
-/// Height of the stage bar row under FilmCraft's header (doc 30).
+/// Height of the stage bar row under Mortiflix Studio's header (doc 30).
 pub const STAGE_BAR_HEIGHT: f32 = 44.0;
 
-/// The colours the Mortiflix panels draw with, copied from FilmCraft's theme tokens each frame so
+/// The colours the Mortiflix panels draw with, copied from Mortiflix Studio's theme tokens each frame so
 /// the panels follow the user's appearance (dark, light, darkest).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct MfxTheme {
@@ -94,7 +94,7 @@ impl Default for MfxTheme {
     }
 }
 
-/// Everything a Mortiflix part may use while it draws. Parts never call FilmCraft directly: they push
+/// Everything a Mortiflix part may use while it draws. Parts never call Mortiflix Studio directly: they push
 /// a command id (`ctx.command("file.import", json!({...}))`) and the host runs it after the part
 /// returns, through the same `menus::invoke` the menus, shortcuts and control channel use.
 pub struct MfxCtx<'a> {
@@ -111,7 +111,7 @@ impl<'a> MfxCtx<'a> {
     pub fn new(state: &'a mut MfxState, service: &'a mut Service, theme: MfxTheme) -> Self {
         Self { state, service, theme, commands: Vec::new(), auto: Vec::new() }
     }
-    /// Run a FilmCraft or Mortiflix command after this part returns.
+    /// Run a Mortiflix Studio or Mortiflix command after this part returns.
     pub fn command(&mut self, id: &str, params: Value) {
         self.commands.push((id.to_string(), params));
     }
@@ -124,7 +124,7 @@ impl<'a> MfxCtx<'a> {
 /// What a stage command did.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Nav {
-    /// The stage changed: the host switches FilmCraft's layout / mode.
+    /// The stage changed: the host switches Mortiflix Studio's layout / mode.
     Moved { from: u8, to: u8 },
     /// Something still needs you: the pop-up asks first (`state.confirm_next`).
     Asked,
@@ -141,7 +141,7 @@ pub struct Mortiflix {
 
 impl Mortiflix {
     /// Turn Mortiflix on (the desktop app does at start): the stage bar shows and the stage
-    /// commands switch FilmCraft's layout. Off (tests, FilmCraft alone), nothing of it draws.
+    /// commands switch Mortiflix Studio's layout. Off (tests, Mortiflix Studio alone), nothing of it draws.
     pub fn activate(&mut self) {
         self.state.active = true;
     }
@@ -182,7 +182,7 @@ impl Mortiflix {
         Some(from)
     }
     /// The stage commands' logic (`stages.<what>`): `back`, `next`, `getVideo` (Voice & music
-    /// straight to Render), `editVideo` (to FilmCraft), or a stage key (`script` … `render`).
+    /// straight to Render), `editVideo` (to Mortiflix Studio), or a stage key (`script` … `render`).
     /// `force` skips the "still need you" question. None = unknown command.
     pub fn navigate(&mut self, what: &str, force: bool) -> Option<Nav> {
         let stage = self.state.stage;
@@ -217,7 +217,7 @@ impl Mortiflix {
             "getVideo" if ask(&mut self.state, true) => Nav::Asked,
             "getVideo" => moved(self, STAGE_RENDER, true),
             "editVideo" if ask(&mut self.state, false) => Nav::Asked,
-            "editVideo" => moved(self, STAGE_FILMCRAFT, true),
+            "editVideo" => moved(self, STAGE_EDIT, true),
             key => moved(self, stage_by_key(key)?, false),
         })
     }
@@ -243,14 +243,14 @@ pub fn stage_by_key(key: &str) -> Option<u8> {
 }
 
 /// PanelKind::MfxStage: the stage's main panel, by stage (Script, Look, Shots, Voice & music, then
-/// the Into FilmCraft and Render parts).
+/// the Into Edit and Render parts).
 pub fn show_stage(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     match ctx.state.stage {
         0 => script::show(ui, ctx),
         1 => look::show(ui, ctx),
         2 => nodes::show_stage(ui, ctx),
         3 => voice_music::show(ui, ctx),
-        4 => into_filmcraft::show(ui, ctx),
+        4 => into_edit::show(ui, ctx),
         _ => export::show(ui, ctx),
     }
 }

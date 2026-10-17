@@ -144,7 +144,7 @@ impl Default for Show {
     }
 }
 
-/// Mouse wheel: zoom (node editors) or scroll (FilmCraft's timeline). Doc 35 open question 3.
+/// Mouse wheel: zoom (node editors) or scroll (Mortiflix Studio's timeline). Doc 35 open question 3.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Wheel {
@@ -709,7 +709,7 @@ impl NodeArea {
         let connected = svc.status().is_connected();
         if connected && !self.was_connected {
             self.fetch_soon = true;
-            let id = svc.request("hello", json!({"client": "mortiflix-filmcraft-nodes"}));
+            let id = svc.request("hello", json!({"client": "mortiflix-studio-nodes"}));
             self.inflight.push((id, Sent::Hello));
         }
         self.was_connected = connected;

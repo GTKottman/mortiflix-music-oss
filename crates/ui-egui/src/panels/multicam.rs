@@ -21,11 +21,11 @@
 //!   `mcam.cameraNames.<clip|track|metadata>`, `mcam.processedBin`, `mcam.ok`, `mcam.cancel`.
 
 use egui::{Align2, Color32, Rect, RichText, Sense, Stroke, StrokeKind, pos2, vec2};
-use filmcraft_project::ItemId;
-use filmcraft_time::Tick;
+use mortiflix_project::ItemId;
+use mortiflix_time::Tick;
 use serde_json::{Value, json};
 
-use crate::FilmcraftApp;
+use crate::StudioApp;
 use crate::frames::{FrameKey, Target};
 use crate::state::SyncDraft;
 use crate::theme::Tokens;
@@ -33,14 +33,14 @@ use crate::theme::Tokens;
 type Elems = Vec<(String, Rect, String)>;
 
 /// Menu / shortcut entry points: the three dialogs (without params) and the view toggles.
-pub fn route(app: &mut FilmcraftApp, id: &str, params: &Value) -> Option<Result<Value, String>> {
+pub fn route(app: &mut StudioApp, id: &str, params: &Value) -> Option<Result<Value, String>> {
     match id {
         "multicam.toggleView" => {
             app.ui.program.multicam = params.get("enabled").and_then(Value::as_bool).unwrap_or(!app.ui.program.multicam);
             return Some(Ok(json!({"multicam": app.ui.program.multicam})));
         }
         "multicam.editCamerasDialog" => {
-            let Some(src) = filmcraft_engine::multicam::multicam_clip_at(&app.session, app.session.playhead()).map(|c| c.1.item) else {
+            let Some(src) = mortiflix_engine::multicam::multicam_clip_at(&app.session, app.session.playhead()).map(|c| c.1.item) else {
                 return Some(Err("no multi-camera clip at the playhead".into()));
             };
             let cams = app.session.project.sequence(src).map(|q| q.cameras()).unwrap_or_default();
@@ -67,7 +67,7 @@ pub fn route(app: &mut FilmcraftApp, id: &str, params: &Value) -> Option<Result<
         "clip.createMulticam" => "multicam",
         _ => return None,
     };
-    if let Err(e) = filmcraft_engine::find_command(id).map_or(Ok(()), |c| (c.enabled)(&app.session)) {
+    if let Err(e) = mortiflix_engine::find_command(id).map_or(Ok(()), |c| (c.enabled)(&app.session)) {
         return Some(Err(e));
     }
     let items: Vec<u64> = app.session.state.project_selection.iter().map(|i| i.0).collect();
@@ -91,7 +91,7 @@ fn methods() -> [(&'static str, &'static str); 5] {
 }
 
 /// Draw the open Synchronize / Merge Clips / Create Multi-Camera dialog.
-pub fn show_dialog(app: &mut FilmcraftApp, ctx: &egui::Context) {
+pub fn show_dialog(app: &mut StudioApp, ctx: &egui::Context) {
     let Some(mut d) = app.ui.sync_dialog.clone() else { return };
     crate::widgets::revert_drag_on_escape(ctx, egui::Id::new("sync-dialog-before-drag"), &mut d);
     let (title, pre) = match d.kind.as_str() {
@@ -274,7 +274,7 @@ pub fn show_dialog(app: &mut FilmcraftApp, ctx: &egui::Context) {
 
 /// A revision for grid frames: changes when the multi-camera source (or its cameras' media)
 /// changes, not with every edit of the cut (cuts recorded live must not throw away the grid).
-fn grid_revision(app: &FilmcraftApp, src: ItemId) -> u64 {
+fn grid_revision(app: &StudioApp, src: ItemId) -> u64 {
     use std::hash::{Hash, Hasher};
     let mut h = std::collections::hash_map::DefaultHasher::new();
     if let Some(q) = app.session.project.sequence(src) {
@@ -289,13 +289,13 @@ fn grid_revision(app: &FilmcraftApp, src: ItemId) -> u64 {
 }
 
 /// The angle grid of the Multi-Camera view in `area`.
-pub fn grid(app: &mut FilmcraftApp, ui: &mut egui::Ui, area: Rect) {
+pub fn grid(app: &mut StudioApp, ui: &mut egui::Ui, area: Rect) {
     let t = app.tokens;
     let ctx = ui.ctx().clone();
     ui.painter().rect_filled(area, 0.0, t.panel_bg);
     app.auto.add("program.multicam.grid", area, "Multi-Camera");
     let playhead = app.session.playhead();
-    let info = filmcraft_engine::multicam::inspect_at(&app.session, playhead);
+    let info = mortiflix_engine::multicam::inspect_at(&app.session, playhead);
     let Some(src) = info["source"].as_u64().map(ItemId) else {
         ui.painter().text(area.center(), Align2::CENTER_CENTER, tl!("No multi-camera clip at the playhead"), Tokens::ui(12.0), t.text_dim);
         return;
@@ -316,7 +316,7 @@ pub fn grid(app: &mut FilmcraftApp, ui: &mut egui::Ui, area: Rect) {
     // decode and composite at the cell's size (never more than the playback resolution; lower
     // while playing with Auto-Adjust Multi-Camera Playback Quality)
     let cell_px = cw * ctx.pixels_per_point();
-    let scale = crate::panels::monitor::quantize_scale(filmcraft_render::multicam::grid_cell_scale(
+    let scale = crate::panels::monitor::quantize_scale(mortiflix_render::multicam::grid_cell_scale(
         q.settings.width,
         cell_px,
         app.ui.program.res.scale(),
@@ -422,7 +422,7 @@ pub fn grid(app: &mut FilmcraftApp, ui: &mut egui::Ui, area: Rect) {
 }
 
 /// The Edit Cameras dialog: a thumbnail, name and on/off switch per camera (`multicam.editCameras`).
-pub fn show_edit_cameras(app: &mut FilmcraftApp, ctx: &egui::Context) {
+pub fn show_edit_cameras(app: &mut StudioApp, ctx: &egui::Context) {
     let Some(mut d) = app.ui.edit_cameras.clone() else { return };
     let src = ItemId(d.sequence);
     let Some(q) = app.session.project.sequence(src).cloned() else {
@@ -430,7 +430,7 @@ pub fn show_edit_cameras(app: &mut FilmcraftApp, ctx: &egui::Context) {
         return;
     };
     let rate = q.settings.frame_rate;
-    let mt = filmcraft_engine::multicam::inspect_at(&app.session, app.session.playhead())["sourceTime"].as_i64().unwrap_or(0);
+    let mt = mortiflix_engine::multicam::inspect_at(&app.session, app.session.playhead())["sourceTime"].as_i64().unwrap_or(0);
     let frame = rate.frame_at(Tick(mt));
     let rev = grid_revision(app, src);
     let mut elems: Elems = Vec::new();
@@ -521,17 +521,17 @@ pub fn show_edit_cameras(app: &mut FilmcraftApp, ctx: &egui::Context) {
 }
 
 /// Start a recording pass when playback starts in the Multi-Camera view.
-pub fn on_play(app: &mut FilmcraftApp) {
+pub fn on_play(app: &mut StudioApp) {
     if app.ui.program.multicam && app.ui.multicam_record && !app.session.mcrec.active() && (app.playback.speed - 1.0).abs() < 1e-9 {
         let t = app.session.playhead();
-        if filmcraft_engine::multicam::multicam_clip_at(&app.session, t).is_some() {
+        if mortiflix_engine::multicam::multicam_clip_at(&app.session, t).is_some() {
             let _ = app.session.execute("multicam.recordStart", json!({"time": t.0}));
         }
     }
 }
 
 /// End the recording pass (one undo step) when playback stops.
-pub fn on_stop(app: &mut FilmcraftApp) {
+pub fn on_stop(app: &mut StudioApp) {
     if app.session.mcrec.active() {
         let t = app.session.playhead();
         match app.session.execute("multicam.recordStop", json!({"time": t.0})) {

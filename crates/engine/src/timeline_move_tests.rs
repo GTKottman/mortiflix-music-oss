@@ -1,8 +1,8 @@
 //! `timeline.move`: linked partners follow, locked partners stay, the group stops together at the
 //! sequence start, and hostile times are refused.
 
-use filmcraft_project::{ClipId, TrackId, TrackItem};
-use filmcraft_time::Tick;
+use mortiflix_project::{ClipId, TrackId, TrackItem};
+use mortiflix_time::Tick;
 use serde_json::json;
 
 use crate::{EngineError, Session};
@@ -109,7 +109,7 @@ fn a_clip_on_a_locked_track_cannot_move_to_another_track() {
     s.execute("timeline.setTrack", json!({"track": "V1", "locked": true})).unwrap();
     let before = s.project.clone();
     let e = s.execute("timeline.move", json!({"moves": [{"clip": v.id.0, "track": "V2", "time": v.start.0}], "linked": false})).unwrap_err();
-    assert!(matches!(&e, EngineError::Edit(filmcraft_edit::EditError::Locked)), "{e:?}");
+    assert!(matches!(&e, EngineError::Edit(mortiflix_edit::EditError::Locked)), "{e:?}");
     assert_eq!(*s.project, *before);
     let q = s.active_sequence().unwrap();
     assert_eq!(q.find_item(v.id).map(|(t, _)| t), Some(v_track));
@@ -226,7 +226,7 @@ fn hostile_times_are_refused_or_clamped_never_a_panic() {
 fn a_move_that_lands_on_another_clip_reports_what_it_cut() {
     let mut s = demo();
     let (_, _, a_track, a1) = pair_in_an_empty_sequence(&mut s, 0.0);
-    let later = a1.end().0 as f64 / filmcraft_time::TICKS_PER_SECOND as f64 + 2.0;
+    let later = a1.end().0 as f64 / mortiflix_time::TICKS_PER_SECOND as f64 + 2.0;
     let item = a1.item.0;
     s.execute("timeline.place", json!({"item": item, "seconds": later})).unwrap();
     let a2 = s.active_sequence().unwrap().track(a_track).unwrap().items[1].clone();
@@ -401,7 +401,7 @@ fn new_track_moves_respect_the_track_limit() {
     let (_, v, _, _) = last_pair(&s);
     s.edit_sequence("Limit fixture", |q, ctx, _| {
         while q.video_tracks.len() < crate::sequence_tools::MAX_TRACKS {
-            q.video_tracks.push(filmcraft_project::Track::new(TrackId(ctx.alloc()), filmcraft_project::TrackKind::Video, "Limit".into()));
+            q.video_tracks.push(mortiflix_project::Track::new(TrackId(ctx.alloc()), mortiflix_project::TrackKind::Video, "Limit".into()));
         }
         Ok(())
     })

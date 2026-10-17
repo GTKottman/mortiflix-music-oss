@@ -1,6 +1,6 @@
 //! Blur & Sharpen effects.
 
-use filmcraft_project::EffectInstance;
+use mortiflix_project::EffectInstance;
 use rayon::prelude::*;
 
 use super::*;
@@ -150,11 +150,11 @@ pub fn compound(img: &mut Image, e: &EffectInstance, cx: &FxCtx) {
                     Vec2::new((x as f64 + 0.5) / iw * t.w as f64, (y as f64 + 0.5) / ih * t.h as f64)
                 };
                 let s = t.sample_bilinear_clamped(p.x as f32, p.y as f32);
-                filmcraft_color::linear_to_srgb(luma([s[0], s[1], s[2]]).clamp(0.0, 1.0))
+                mortiflix_color::linear_to_srgb(luma([s[0], s[1], s[2]]).clamp(0.0, 1.0))
             }
             None => {
                 let s = own.get(x, y);
-                filmcraft_color::linear_to_srgb(luma([s[0], s[1], s[2]]).clamp(0.0, 1.0))
+                mortiflix_color::linear_to_srgb(luma([s[0], s[1], s[2]]).clamp(0.0, 1.0))
             }
         };
         if invert { 1.0 - l } else { l }

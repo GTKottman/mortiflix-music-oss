@@ -31,7 +31,7 @@
 //! * **Channels.** Buses are 2 channels wide, or 6 (L, R, C, LFE, Ls, Rs) for 5.1 tracks, 5.1
 //!   submixes and a 5.1 Mix (`SequenceSettings::audio_master`). A strip feeding a 5.1 bus pans with
 //!   the 5.1 panner (lanes `pan51.x`, `pan51.y`, `pan51.center`, `pan51.lfe`;
-//!   [`filmcraft_audio_dsp::channels::pan51_matrix`]); a 5.1 strip feeding a stereo bus is folded
+//!   [`mortiflix_audio_dsp::channels::pan51_matrix`]); a 5.1 strip feeding a stereo bus is folded
 //!   with the ITU-R BS.775 downmix and then balanced. Sends convert between widths with the same
 //!   BS.775 matrices. [`mix_graph`] returns the Mix's width; [`crate::audio::mix_sequence`] always
 //!   returns stereo.
@@ -44,12 +44,12 @@ use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
-use filmcraft_audio_dsp::AudioEffect;
-use filmcraft_audio_dsp::channels::{self as chans, Layout, Mixdown, Pan51};
-use filmcraft_frame::AudioBuffer;
-use filmcraft_project::mixer::{LANE_MUTE, LANE_PAN, LANE_PAN51_CENTER, LANE_PAN51_LFE, LANE_PAN51_X, LANE_PAN51_Y, LANE_VOLUME, fx_lane, send_lane};
-use filmcraft_project::{AudioChannels, EffectInstance, InputMap, Param, ParamValue, Project, Sequence, Track, TrackId};
-use filmcraft_time::Tick;
+use mortiflix_audio_dsp::AudioEffect;
+use mortiflix_audio_dsp::channels::{self as chans, Layout, Mixdown, Pan51};
+use mortiflix_frame::AudioBuffer;
+use mortiflix_project::mixer::{LANE_MUTE, LANE_PAN, LANE_PAN51_CENTER, LANE_PAN51_LFE, LANE_PAN51_X, LANE_PAN51_Y, LANE_VOLUME, fx_lane, send_lane};
+use mortiflix_project::{AudioChannels, EffectInstance, InputMap, Param, ParamValue, Project, Sequence, Track, TrackId};
+use mortiflix_time::Tick;
 use rayon::prelude::*;
 
 use crate::SourceProvider;
@@ -57,7 +57,7 @@ use crate::audio::{pan_gains, track_input_at};
 use crate::audio_fx::{Mapping, mapping};
 
 /// Strip id of the Mix (master) track in [`LiveMix`] and commands.
-pub const MASTER: TrackId = filmcraft_project::mixer::MASTER_STRIP;
+pub const MASTER: TrackId = mortiflix_project::mixer::MASTER_STRIP;
 /// Effect parameters update on this absolute sample grid.
 pub const PARAM_BLOCK: i64 = 64;
 /// Longest pre-roll for a fresh graph (seconds).
@@ -202,7 +202,7 @@ pub fn balance(pan: f32) -> (f32, f32) {
 
 #[inline]
 fn db_gain(db: f64) -> f32 {
-    if db <= filmcraft_project::mixer::FADER_MIN_DB { 0.0 } else { 10f64.powf(db / 20.0) as f32 }
+    if db <= mortiflix_project::mixer::FADER_MIN_DB { 0.0 } else { 10f64.powf(db / 20.0) as f32 }
 }
 
 // ------------------------------------------------------------------------------------- lanes
@@ -220,7 +220,7 @@ impl<'a> Lane<'a> {
     fn new(track: &'a Track, strip: TrackId, key: &str, ovs: &HashMap<(TrackId, String), Override>) -> Self {
         let reads = track.mixer.mode.reads();
         let param = track.lane(key).filter(|p| reads && p.is_animated());
-        let hold = filmcraft_project::mixer::lane_info(key).is_some_and(|i| i.hold);
+        let hold = mortiflix_project::mixer::lane_info(key).is_some_and(|i| i.hold);
         Lane { param, stat: track.lane_static(key).unwrap_or(0.0), ov: ovs.get(&(strip, key.to_string())).copied(), hold }
     }
     fn auto(&self, t: Tick) -> f64 {
@@ -317,7 +317,7 @@ fn inserts<'a>(track: &'a Track, post: bool) -> Vec<Insert<'a>> {
         .effects
         .iter()
         .enumerate()
-        .take(filmcraft_project::mixer::MAX_INSERTS)
+        .take(mortiflix_project::mixer::MAX_INSERTS)
         .filter(|(_, e)| e.enabled && e.post_fader == post && !e.param("bypass").and_then(|p| p.value.as_bool()).unwrap_or(false))
         .filter_map(|(slot, e)| mapping(&e.effect).map(|m| (slot, e, m)))
         .map(|(slot, e, map)| {
@@ -369,7 +369,7 @@ impl<'a> Plan<'a> {
                 seq.master_effects
                     .iter()
                     .enumerate()
-                    .take(filmcraft_project::mixer::MAX_INSERTS)
+                    .take(mortiflix_project::mixer::MAX_INSERTS)
                     .filter(|(_, e)| e.enabled && e.post_fader == post)
                     .filter_map(|(slot, e)| {
                         mapping(&e.effect).map(|map| Insert { slot, effect: if reads { Cow::Borrowed(e) } else { Cow::Owned(strip_keyframes(e)) }, map })
@@ -406,7 +406,7 @@ impl<'a> Plan<'a> {
             }
             // submixes may only feed submixes after them (no feedback)
             let valid = |ti: usize| s.kind == Kind::Track || ti > si;
-            for (k, snd) in s.track.mixer.sends.iter().enumerate().take(filmcraft_project::mixer::MAX_SENDS) {
+            for (k, snd) in s.track.mixer.sends.iter().enumerate().take(mortiflix_project::mixer::MAX_SENDS) {
                 if let Some(ti) = index_of(snd.target).filter(|&ti| valid(ti)) {
                     routes.push(RouteSpec { src: si, tap: if snd.pre_fader { Tap::Pre } else { Tap::Post }, send: Some(k), target: ti });
                 }
@@ -545,7 +545,7 @@ struct GraphState {
 
 fn build_state(plan: &Plan, sr: u32) -> GraphState {
     let mk = |v: &[Insert], w: usize| -> Vec<Box<dyn AudioEffect>> {
-        v.iter().filter_map(|i| filmcraft_audio_dsp::create_effect(i.map.dsp, sr as f32, w)).collect()
+        v.iter().filter_map(|i| mortiflix_audio_dsp::create_effect(i.map.dsp, sr as f32, w)).collect()
     };
     let mut strips: Vec<StripState> = plan
         .strips
@@ -876,7 +876,7 @@ pub(crate) fn mix_graph_at(
     let ns = plan.strips.len();
     let mut bus: Vec<Option<Bus>> = (0..ns).map(|_| None).collect();
     let mut meters: Vec<(TrackId, Vec<f32>)> = Vec::new();
-    let range = filmcraft_time::TimeRange::from_bounds(Tick::from_units(x0, sr as i64), Tick::from_units(x0 + total as i64, sr as i64));
+    let range = mortiflix_time::TimeRange::from_bounds(Tick::from_units(x0, sr as i64), Tick::from_units(x0 + total as i64, sr as i64));
     // tracks: independent, in parallel
     let ntr = plan.strips.iter().take_while(|s| s.kind == Kind::Track).count();
     let (track_states, rest) = st.strips.split_at_mut(ntr);

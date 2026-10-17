@@ -1,4 +1,4 @@
-# filmcraft-ac3
+# mortiflix-ac3
 
 Clean-room AC-3 (Dolby Digital) and E-AC-3 (Dolby Digital Plus) audio decoder in pure Rust. Layer L0: depends only on
 `thiserror`. Builds for `wasm32-unknown-unknown`; no `unsafe`. No GPL/LGPL code (FFmpeg,
@@ -19,8 +19,8 @@ window (α = 5) and checked against Table 7.33 to 6·10⁻⁶. E-AC-3: Annex E �
 ## API
 
 ```rust
-let mut dec = filmcraft_ac3::Decoder::new();
-let h = filmcraft_ac3::parse_header(frame)?;   // rate, channels, frame size
+let mut dec = mortiflix_ac3::Decoder::new();
+let h = mortiflix_ac3::parse_header(frame)?;   // rate, channels, frame size
 let out = dec.decode(frame)?;                  // h.samples() per channel, WAV channel order
 dec.reset();                                    // before decoding from another position
 ```
@@ -87,7 +87,7 @@ FFmpeg's decode (worst channel SNR):
 
 The noise row shows the difference is dither: two of our own decodes with different dither
 sequences differ as much as we differ from FFmpeg. In MPEG-2 TS (AVCHD-style `.mts`) and VOB the
-maximum sample difference to FFmpeg is 2.3·10⁻³. E-AC-3 through `filmcraft-codecs`
+maximum sample difference to FFmpeg is 2.3·10⁻³. E-AC-3 through `mortiflix-codecs`
 (`tests/eac3_oracle.rs`): 5.1 in MP4 and Matroska 91.3 dB, stereo in QuickTime 87.0 dB and
 MPEG-TS 79.5 dB against FFmpeg's decode.
 

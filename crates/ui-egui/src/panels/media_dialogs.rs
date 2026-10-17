@@ -19,7 +19,7 @@ use serde_json::{Value, json};
 
 use crate::native_dialogs::FileDialog;
 use crate::state::{LinkMediaDraft, ProjectManagerDraft, ProxyDraft};
-use crate::{FilmcraftApp, RelinkHint};
+use crate::{RelinkHint, StudioApp};
 
 type Elems = Vec<(String, egui::Rect, String)>;
 
@@ -32,7 +32,7 @@ fn mb(b: u64) -> String {
 }
 
 /// Draw whichever media dialogs are open; open Link Media when a project needs it.
-pub fn show(app: &mut FilmcraftApp, ctx: &egui::Context) {
+pub fn show(app: &mut StudioApp, ctx: &egui::Context) {
     if app.session.offline.prompt && app.ui.link_media.is_none() {
         app.ui.link_media = Some(LinkMediaDraft::default());
     }
@@ -51,12 +51,12 @@ pub fn show(app: &mut FilmcraftApp, ctx: &egui::Context) {
 }
 
 /// Menu / shortcut entry points without params open a dialog. Returns None for other ids.
-pub fn route(app: &mut FilmcraftApp, id: &str, params: &Value) -> Option<Result<Value, String>> {
+pub fn route(app: &mut StudioApp, id: &str, params: &Value) -> Option<Result<Value, String>> {
     let empty = params.as_object().is_none_or(|m| m.is_empty());
     if !empty {
         return None;
     }
-    let enabled = |app: &FilmcraftApp, id: &str| filmcraft_engine::find_command(id).map_or(Ok(()), |c| (c.enabled)(&app.session));
+    let enabled = |app: &StudioApp, id: &str| mortiflix_engine::find_command(id).map_or(Ok(()), |c| (c.enabled)(&app.session));
     match id {
         "media.linkMedia" => {
             let r = app.session.execute("media.linkMedia", json!({})).map_err(|e| e.to_string());
@@ -75,13 +75,13 @@ pub fn route(app: &mut FilmcraftApp, id: &str, params: &Value) -> Option<Result<
         })),
         "media.createProxies" => Some(enabled(app, id).map(|_| {
             let items = app.session.state.project_selection.iter().map(|i| i.0).collect();
-            app.ui.create_proxies = Some(ProxyDraft { items, preset: filmcraft_engine::proxies::DEFAULT_PROXY_PRESET.into(), destination: String::new() });
+            app.ui.create_proxies = Some(ProxyDraft { items, preset: mortiflix_engine::proxies::DEFAULT_PROXY_PRESET.into(), destination: String::new() });
             json!({"dialog": "createProxies"})
         })),
         "media.attachProxies" | "media.reconnectFullRes" => {
             let item = app.session.state.project_selection.first().copied();
             let Some(item) = item else { return Some(Err("select a clip in the Project panel".into())) };
-            let exts: Vec<&str> = filmcraft_media::VIDEO_EXTENSIONS.to_vec();
+            let exts: Vec<&str> = mortiflix_media::VIDEO_EXTENSIONS.to_vec();
             let hint = RelinkHint { command: id.to_string(), params: json!({"item": item.0}) };
             let id = id.to_string();
             Some(app.pick(FileDialog::Relink { exts: exts.iter().map(|e| e.to_string()).collect(), hint }, move |app, paths| {
@@ -105,7 +105,7 @@ pub fn route(app: &mut FilmcraftApp, id: &str, params: &Value) -> Option<Result<
     }
 }
 
-fn missing_list(app: &FilmcraftApp) -> Vec<(u64, String, String, String, &'static str)> {
+fn missing_list(app: &StudioApp) -> Vec<(u64, String, String, String, &'static str)> {
     app.session
         .offline
         .missing
@@ -113,7 +113,7 @@ fn missing_list(app: &FilmcraftApp) -> Vec<(u64, String, String, String, &'stati
         .filter_map(|id| {
             let it = app.session.project.item(*id)?;
             let m = it.as_media()?;
-            let filmcraft_project::MediaRef::File { path } = &m.media else { return None };
+            let mortiflix_project::MediaRef::File { path } = &m.media else { return None };
             let fname = path.rsplit(['/', '\\']).next().unwrap_or(path).to_string();
             Some((id.0, it.name.clone(), fname, path.clone(), if m.offline { tl!("Offline") } else { tl!("Missing") }))
         })
@@ -128,14 +128,14 @@ fn match_params(d: &LinkMediaDraft) -> Value {
     })
 }
 
-fn preview_texture(app: &FilmcraftApp, ctx: &egui::Context, path: &str) -> Option<egui::TextureHandle> {
+fn preview_texture(app: &StudioApp, ctx: &egui::Context, path: &str) -> Option<egui::TextureHandle> {
     let key = egui::Id::new(("link-preview", path));
     if let Some(t) = ctx.data(|d| d.get_temp::<Option<egui::TextureHandle>>(key)) {
         return t;
     }
     let tex = app.session.media.open_file(path, &*app.session.services).ok().and_then(|src| {
-        let t = filmcraft_time::Tick(src.info().duration.0 / 3);
-        let f = src.video_frame(filmcraft_media::FrameRequest { time: t, scale: 0.25 }).ok()?;
+        let t = mortiflix_time::Tick(src.info().duration.0 / 3);
+        let f = src.video_frame(mortiflix_media::FrameRequest { time: t, scale: 0.25 }).ok()?;
         let img = egui::ColorImage::from_rgba_unmultiplied([f.width as usize, f.height as usize], &f.to_rgba8());
         Some(ctx.load_texture(format!("link-preview-{path}"), img, egui::TextureOptions::LINEAR))
     });
@@ -143,7 +143,7 @@ fn preview_texture(app: &FilmcraftApp, ctx: &egui::Context, path: &str) -> Optio
     tex
 }
 
-fn link_media(app: &mut FilmcraftApp, ctx: &egui::Context) {
+fn link_media(app: &mut StudioApp, ctx: &egui::Context) {
     let Some(mut d) = app.ui.link_media.clone() else { return };
     let rows: Vec<_> = missing_list(app).into_iter().filter(|r| !d.skipped.contains(&r.0)).collect();
     if rows.is_empty() {
@@ -300,7 +300,7 @@ fn link_media(app: &mut FilmcraftApp, ctx: &egui::Context) {
         action = Some("cancel");
     }
     let (item, ..) = rows[d.row].clone();
-    let relink = |app: &mut FilmcraftApp, d: &mut LinkMediaDraft, path: String| relink_to(app, d, &json!(item), path);
+    let relink = |app: &mut StudioApp, d: &mut LinkMediaDraft, path: String| relink_to(app, d, &json!(item), path);
     match action {
         Some("browse") => app.pick_ui(FileDialog::Folder { at: None }, |app, paths| {
             if let (Some(f), Some(d)) = (paths.into_iter().next(), app.ui.link_media.as_mut()) {
@@ -334,7 +334,7 @@ fn link_media(app: &mut FilmcraftApp, ctx: &egui::Context) {
         }
         Some("locate") => {
             let exts: Vec<&str> =
-                filmcraft_media::VIDEO_EXTENSIONS.iter().chain(filmcraft_media::AUDIO_EXTENSIONS).chain(filmcraft_media::STILL_EXTENSIONS).copied().collect();
+                mortiflix_media::VIDEO_EXTENSIONS.iter().chain(mortiflix_media::AUDIO_EXTENSIONS).chain(mortiflix_media::STILL_EXTENSIONS).copied().collect();
             let mut params = match_params(&d);
             params["item"] = json!(item);
             let hint = RelinkHint { command: "media.relink".into(), params };
@@ -364,7 +364,7 @@ fn link_media(app: &mut FilmcraftApp, ctx: &egui::Context) {
     app.ui.link_media = keep.then_some(d);
 }
 
-fn make_offline(app: &mut FilmcraftApp, ctx: &egui::Context) {
+fn make_offline(app: &mut StudioApp, ctx: &egui::Context) {
     let Some(mut delete) = app.ui.make_offline else { return };
     let mut elems: Elems = Vec::new();
     let mut keep = true;
@@ -409,7 +409,7 @@ fn make_offline(app: &mut FilmcraftApp, ctx: &egui::Context) {
     app.ui.make_offline = (keep && !crate::widgets::escape_closes(ctx)).then_some(delete);
 }
 
-fn create_proxies(app: &mut FilmcraftApp, ctx: &egui::Context) {
+fn create_proxies(app: &mut StudioApp, ctx: &egui::Context) {
     let Some(mut d) = app.ui.create_proxies.clone() else { return };
     let mut elems: Elems = Vec::new();
     let mut keep = true;
@@ -425,7 +425,7 @@ fn create_proxies(app: &mut FilmcraftApp, ctx: &egui::Context) {
             ui.label(tlf!("{n} clip(s) selected.", n = d.items.len()));
             ui.add_space(4.0);
             ui.label(RichText::new(tl!("Format and size")).strong());
-            for p in filmcraft_engine::proxies::PRESETS.iter().filter(|p| p.proxy) {
+            for p in mortiflix_engine::proxies::PRESETS.iter().filter(|p| p.proxy) {
                 let r = ui.radio(d.preset == p.id, p.label);
                 push(&mut elems, format!("proxies.preset.{}", p.id), &r, p.label);
                 if r.clicked() {
@@ -487,7 +487,7 @@ fn pm_params(d: &ProjectManagerDraft, dry: bool) -> Value {
     })
 }
 
-fn project_manager(app: &mut FilmcraftApp, ctx: &egui::Context) {
+fn project_manager(app: &mut StudioApp, ctx: &egui::Context) {
     let Some(mut d) = app.ui.project_manager.clone() else { return };
     crate::widgets::revert_drag_on_escape(ctx, egui::Id::new("project-manager-before-drag"), &mut d);
     let before = d.clone();
@@ -526,7 +526,7 @@ fn project_manager(app: &mut FilmcraftApp, ctx: &egui::Context) {
             }
             if d.mode == "consolidate" {
                 ui.indent("pm-presets", |ui| {
-                    for p in filmcraft_engine::proxies::PRESETS.iter().filter(|p| !p.proxy) {
+                    for p in mortiflix_engine::proxies::PRESETS.iter().filter(|p| !p.proxy) {
                         let r = ui.radio(d.preset == p.id, p.label);
                         push(&mut elems, format!("pm.preset.{}", p.id), &r, p.label);
                         if r.clicked() {
@@ -630,7 +630,7 @@ fn project_manager(app: &mut FilmcraftApp, ctx: &egui::Context) {
 }
 
 /// Link Media: relink `item` to `path` with the dialog's matching options; the result goes into `d`.
-fn relink_to(app: &mut FilmcraftApp, d: &mut LinkMediaDraft, item: &Value, path: String) {
+fn relink_to(app: &mut StudioApp, d: &mut LinkMediaDraft, item: &Value, path: String) {
     let mut p = match_params(d);
     p["item"] = item.clone();
     p["path"] = json!(path);

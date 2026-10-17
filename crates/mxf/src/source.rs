@@ -4,7 +4,7 @@ use std::io;
 use std::sync::Arc;
 
 /// Random-access, read-only byte source (file, in-memory buffer, web Blob…). Same shape as the
-/// other FilmCraft demuxers' `ByteSource`, so one adapter serves all of them.
+/// other Mortiflix Studio demuxers' `ByteSource`, so one adapter serves all of them.
 pub trait ByteSource {
     /// Total length in bytes.
     fn len(&self) -> u64;

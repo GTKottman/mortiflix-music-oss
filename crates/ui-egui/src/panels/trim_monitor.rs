@@ -5,7 +5,7 @@
 //! outgoing side, in the incoming picture the incoming side, between them rolls.
 //!
 //! J/K/L and Space are routed to dynamic trimming / loop playback in `menus::invoke`; the engine
-//! state machine (`filmcraft_engine::trim`) is advanced here once per frame with the UI clock.
+//! state machine (`mortiflix_engine::trim`) is advanced here once per frame with the UI clock.
 //!
 //! Automation ids: `trimMonitor.outgoing`, `trimMonitor.incoming`, `trimMonitor.roll`,
 //! `trimMonitor.outTimecode`, `trimMonitor.inTimecode`, `trimMonitor.outShift`,
@@ -14,12 +14,12 @@
 //! `trimMonitor.playAround`, `trimMonitor.exit`.
 
 use egui::{Align2, Color32, Rect, Sense, Stroke, StrokeKind, pos2, vec2};
-use filmcraft_edit::Edge;
-use filmcraft_project::{ClipId, ItemKind, Sequence, Track, TrackId};
-use filmcraft_time::{Tick, TimeDisplay, format_time};
+use mortiflix_edit::Edge;
+use mortiflix_project::{ClipId, ItemKind, Sequence, Track, TrackId};
+use mortiflix_time::{Tick, TimeDisplay, format_time};
 use serde_json::{Value, json};
 
-use crate::FilmcraftApp;
+use crate::StudioApp;
 use crate::frames::{FrameKey, Target};
 use crate::icons::{self, Icon};
 use crate::panels::timeline::{Layout, Row};
@@ -31,12 +31,12 @@ pub const RIPPLE_RED: Color32 = Color32::from_rgb(0xe5, 0x3e, 0x3e);
 pub const ROLL_YELLOW: Color32 = Color32::from_rgb(0xf2, 0xc4, 0x3d);
 
 /// True when J/K/L/Space should drive trim mode instead of normal playback.
-pub fn trim_mode(app: &FilmcraftApp) -> bool {
+pub fn trim_mode(app: &StudioApp) -> bool {
     !app.session.state.edit_points.is_empty() && app.ui.focused != crate::dock::PanelKind::Source
 }
 
 /// Advance dynamic trimming / loop playback to the current UI time (once per frame).
-pub fn advance(app: &mut FilmcraftApp, ctx: &egui::Context) {
+pub fn advance(app: &mut StudioApp, ctx: &egui::Context) {
     if !app.session.trim_play.active() {
         return;
     }
@@ -48,7 +48,7 @@ pub fn advance(app: &mut FilmcraftApp, ctx: &egui::Context) {
 }
 
 /// Route a transport command in trim mode (J/K/L/Space/Shift+K). `None` = not handled.
-pub fn route_transport(app: &mut FilmcraftApp, ctx: &egui::Context, id: &str) -> Option<Result<Value, String>> {
+pub fn route_transport(app: &mut StudioApp, ctx: &egui::Context, id: &str) -> Option<Result<Value, String>> {
     let clock = ctx.input(|i| i.time);
     let trimming = trim_mode(app);
     let (cmd, params) = match id {
@@ -66,8 +66,8 @@ pub fn route_transport(app: &mut FilmcraftApp, ctx: &egui::Context, id: &str) ->
 }
 
 /// Paint the selected edit points that sit on `tr` as brackets at the clip edges.
-pub fn paint_edit_points(app: &FilmcraftApp, p: &egui::Painter, seq: &Sequence, tr: &Track, row: &Row, layout: &Layout) {
-    use filmcraft_engine::trim::{TrimKind, roll_pair};
+pub fn paint_edit_points(app: &StudioApp, p: &egui::Painter, seq: &Sequence, tr: &Track, row: &Row, layout: &Layout) {
+    use mortiflix_engine::trim::{TrimKind, roll_pair};
     for ep in &app.session.state.edit_points {
         let mut marks = Vec::new(); // (clip on this track, out edge)
         if ep.kind == TrimKind::Roll
@@ -122,9 +122,9 @@ fn fit(area: Rect, w: f32, h: f32) -> Rect {
 }
 
 /// Draw one side's frame (the clip's media at `media_time`).
-fn picture(app: &mut FilmcraftApp, ui: &mut egui::Ui, area: Rect, side: &Value, tex_name: &str) -> Rect {
+fn picture(app: &mut StudioApp, ui: &mut egui::Ui, area: Rect, side: &Value, tex_name: &str) -> Rect {
     let t = app.tokens;
-    let item = filmcraft_project::ItemId(side["item"].as_u64().unwrap_or(0));
+    let item = mortiflix_project::ItemId(side["item"].as_u64().unwrap_or(0));
     let Some(pi) = app.session.project.item(item) else { return area };
     let size = match &pi.kind {
         ItemKind::Media(m) => m.info.video.as_ref().map(|v| (v.width, v.height)).unwrap_or((0, 0)),
@@ -172,9 +172,9 @@ fn shift_text(frames: i64) -> String {
 }
 
 /// The two-up Trim Monitor in the Program monitor's `rect`.
-pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
+pub fn show(app: &mut StudioApp, ui: &mut egui::Ui, rect: Rect) {
     let t = app.tokens;
-    let info = filmcraft_engine::trim::monitor_info(&app.session);
+    let info = mortiflix_engine::trim::monitor_info(&app.session);
     let Some(seq) = app.session.active_sequence() else { return };
     let rate = seq.settings.frame_rate;
     let df = seq.settings.drop_frame;
@@ -342,8 +342,8 @@ pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
 }
 
 /// A drag in the Trim Monitor: re-target the primary edit point to the dragged side, then trim.
-fn drag_trim(app: &mut FilmcraftApp, which: &str, frames: i64) {
-    use filmcraft_engine::trim::{TrimKind, sides};
+fn drag_trim(app: &mut StudioApp, which: &str, frames: i64) {
+    use mortiflix_engine::trim::{TrimKind, sides};
     let Some(seq) = app.session.active_sequence() else { return };
     let Some(ep) = app.session.state.edit_points.first().copied() else { return };
     let (out_c, in_c) = sides(seq, &ep);

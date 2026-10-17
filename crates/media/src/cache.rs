@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::hash::Hash;
 use std::sync::{Arc, Mutex};
 
-use filmcraft_frame::VideoFrame;
+use mortiflix_frame::VideoFrame;
 
 struct Entry {
     frame: Arc<VideoFrame>,

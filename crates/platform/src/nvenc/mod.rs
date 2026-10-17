@@ -18,7 +18,7 @@
 //! RGBA ──► BT.709 limited 4:2:0 (the software encoder's conversion) ──► NV12 input buffer ──NVENC──► …
 //!
 //! HDR (PQ / HLG) HEVC Main 10:
-//! encoded BT.2020 R'G'B' floats ──► 10-bit limited 4:2:0 (`filmcraft_export::rgbf_to_yuv420_10`)
+//! encoded BT.2020 R'G'B' floats ──► 10-bit limited 4:2:0 (`mortiflix_export::rgbf_to_yuv420_10`)
 //!    ──► P010 input buffer ──NVENC──► same path; VUI BT.2020 + transfer, HDR10 SEI on every IDR (PQ)
 //! ```
 //!
@@ -42,7 +42,7 @@ mod abi_tests;
 
 use std::collections::VecDeque;
 
-use filmcraft_isobmff::HevcConfig;
+use mortiflix_isobmff::HevcConfig;
 
 pub use self::session::{Caps, Codec, Params, Sei, Signal};
 use self::session::{Locked, Session, Submitted};
@@ -186,7 +186,7 @@ pub fn warm_hevc_probe() {
 
 /// Whether this system's NVENC can encode HEVC Main 10 (10-bit): HEVC works and a Main 10 session
 /// opened for a small picture, once (the answer is kept). What makes HDR H.265 exports possible:
-/// `filmcraft_export::hdr_available(Format::Hevc)`.
+/// `mortiflix_export::hdr_available(Format::Hevc)`.
 pub fn hevc_hdr_available() -> bool {
     *HEVC_HDR_AVAILABLE.get_or_init(|| {
         if !hevc_available() {

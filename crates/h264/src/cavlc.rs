@@ -2,7 +2,7 @@
 
 use crate::cavlc_tables::*;
 use crate::error::{Result, ensure};
-use filmcraft_bitstream::BitReader;
+use mortiflix_bitstream::BitReader;
 use std::sync::OnceLock;
 
 /// Prefix-code lookup keyed by (number of leading zeros, next 5 bits after the first one bit).
@@ -182,7 +182,7 @@ pub(crate) fn residual_block(r: &mut BitReader, coeff: &mut [i32], start_idx: us
 #[cfg(test)]
 mod tests {
     use super::*;
-    use filmcraft_bitstream::BitWriter;
+    use mortiflix_bitstream::BitWriter;
 
     fn kraft(codes: &[&str]) -> f64 {
         codes.iter().filter(|c| !c.is_empty()).map(|c| 0.5f64.powi(c.len() as i32)).sum()

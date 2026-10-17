@@ -1,8 +1,8 @@
 //! Golden-image tests: procedural projects rendered through the CPU compositor and compared with
-//! committed reference PNGs (`goldens/*.png`, made by this test with `FILMCRAFT_BLESS=1`), plus
+//! committed reference PNGs (`goldens/*.png`, made by this test with `MFX_STUDIO_BLESS=1`), plus
 //! GPU-vs-CPU parity on the same scenes when a GPU adapter is available.
 //!
-//! Tolerances (8-bit sRGB levels, see `filmcraft_testkit::golden`):
+//! Tolerances (8-bit sRGB levels, see `mortiflix_testkit::golden`):
 //! - CPU vs golden: `Tolerance::RENDER` — PSNR ≥ 45 dB, max abs ≤ 12, 99th percentile ≤ 2.
 //! - GPU vs CPU: 99th percentile of the per-pixel max channel difference ≤ 6 and mean < 1.5
 //!   (antialiased edges and half-float textures differ slightly; the CPU is the reference).
@@ -10,17 +10,17 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use filmcraft_color::{ColorInfo, ColorSpace, Gamut, Primaries, Transfer};
-use filmcraft_geom::Vec2;
-use filmcraft_media::generators::GeneratorSource;
-use filmcraft_media::{DemoScene, Generator, MediaSource, SharedSource};
-use filmcraft_project::{
+use mortiflix_color::{ColorInfo, ColorSpace, Gamut, Primaries, Transfer};
+use mortiflix_geom::Vec2;
+use mortiflix_media::generators::GeneratorSource;
+use mortiflix_media::{DemoScene, Generator, MediaSource, SharedSource};
+use mortiflix_project::{
     ClipId, EffectInstance, ItemId, ItemKind, Label, Mask, MaskMode, MaskPath, MediaClip, MediaRef, ParamValue, Project, SequenceSettings, TrackItem,
     TrackKind, Transition, TransitionId, find_effect,
 };
-use filmcraft_render::{RenderOptions, SourceMap, render_sequence};
-use filmcraft_testkit::golden::{Rgba8, Tolerance, assert_golden, diff};
-use filmcraft_time::{FrameRate, TICKS_PER_SECOND, Tick, TimeRange};
+use mortiflix_render::{RenderOptions, SourceMap, render_sequence};
+use mortiflix_testkit::golden::{Rgba8, Tolerance, assert_golden, diff};
+use mortiflix_time::{FrameRate, TICKS_PER_SECOND, Tick, TimeRange};
 
 const W: u32 = 320;
 const H: u32 = 180;
@@ -162,7 +162,7 @@ fn pt(x: f64, y: f64) -> ParamValue {
 }
 
 fn blend(name: &str) -> ParamValue {
-    ParamValue::Choice(filmcraft_project::effect::BLEND_MODES.iter().position(|b| *b == name).unwrap_or_else(|| panic!("blend {name}")) as u32)
+    ParamValue::Choice(mortiflix_project::effect::BLEND_MODES.iter().position(|b| *b == name).unwrap_or_else(|| panic!("blend {name}")) as u32)
 }
 
 /// A source that re-encodes another source's (sRGB) frames into a camera log or HDR colour space:
@@ -176,33 +176,33 @@ struct Encoded {
 }
 
 impl MediaSource for Encoded {
-    fn info(&self) -> &filmcraft_media::MediaInfo {
+    fn info(&self) -> &mortiflix_media::MediaInfo {
         self.inner.info()
     }
-    fn video_frame(&self, req: filmcraft_media::FrameRequest) -> filmcraft_media::Result<Arc<filmcraft_frame::VideoFrame>> {
+    fn video_frame(&self, req: mortiflix_media::FrameRequest) -> mortiflix_media::Result<Arc<mortiflix_frame::VideoFrame>> {
         let f = self.inner.video_frame(req)?;
         let rgba = f.to_rgba8();
-        let m = filmcraft_color::spaces::to_f32(&filmcraft_color::spaces::gamut_matrix(Gamut::Bt709, self.target.gamut()));
+        let m = mortiflix_color::spaces::to_f32(&mortiflix_color::spaces::gamut_matrix(Gamut::Bt709, self.target.gamut()));
         let curve = self.target.curve();
         let out: Vec<u8> = rgba
             .as_chunks::<4>()
             .0
             .iter()
             .flat_map(|p| {
-                let lin = [0, 1, 2].map(|k| filmcraft_color::srgb_to_linear(p[k] as f32 / 255.0) * self.gain);
-                let c = filmcraft_color::spaces::apply3(&m, lin);
+                let lin = [0, 1, 2].map(|k| mortiflix_color::srgb_to_linear(p[k] as f32 / 255.0) * self.gain);
+                let c = mortiflix_color::spaces::apply3(&m, lin);
                 let e = c
-                    .map(|v| (filmcraft_color::transform::encode_channel(v as f64, curve, filmcraft_color::Range::Full).clamp(0.0, 1.0) * 255.0).round() as u8);
+                    .map(|v| (mortiflix_color::transform::encode_channel(v as f64, curve, mortiflix_color::Range::Full).clamp(0.0, 1.0) * 255.0).round() as u8);
                 [e[0], e[1], e[2], p[3]]
             })
             .collect();
-        let mut nf = filmcraft_frame::VideoFrame::rgba8(f.width, f.height, out);
+        let mut nf = mortiflix_frame::VideoFrame::rgba8(f.width, f.height, out);
         if let Some(c) = self.flag {
             nf.color = c;
         }
         Ok(Arc::new(nf))
     }
-    fn audio(&self, start: i64, frames: usize, sample_rate: u32) -> filmcraft_media::Result<filmcraft_frame::AudioBuffer> {
+    fn audio(&self, start: i64, frames: usize, sample_rate: u32) -> mortiflix_media::Result<mortiflix_frame::AudioBuffer> {
         self.inner.audio(start, frames, sample_rate)
     }
 }
@@ -305,7 +305,7 @@ fn graphic_scene(bg: DemoScene, layers: Vec<EffectInstance>) -> Scene {
     let g = b.p.add_item("Graphic", Label::Rose, ItemKind::Graphic { width: W, height: H, rate: RATE }, None);
     let c = b.place(1, g, 0, 48);
     for mut l in layers {
-        filmcraft_project::resolve_auto_points(&mut l, (W, H), (W, H));
+        mortiflix_project::resolve_auto_points(&mut l, (W, H), (W, H));
         b.clip(c).effects.push(l);
     }
     b.at(12)
@@ -315,7 +315,7 @@ fn graphic_scene(bg: DemoScene, layers: Vec<EffectInstance>) -> Scene {
 /// editable properties overridden (name, slab and accent colours, hidden role line): checks the
 /// template's scaling, pins (the slab widens with the longer name) and the overrides.
 fn graphic_template() -> Scene {
-    use filmcraft_project::gtemplate::{builtin_templates, layer_uid};
+    use mortiflix_project::gtemplate::{builtin_templates, layer_uid};
     let t = builtin_templates().into_iter().find(|t| t.id == "builtin:lower-third-slab").unwrap();
     let (mut layers, meta) = t.instantiate((W, H));
     let mut over = |control: &str, v: ParamValue| {
@@ -341,8 +341,8 @@ fn graphic_template() -> Scene {
 /// Per-character styles (a bold, bigger, coloured word and an underlined one) and a rounded box
 /// pinned around the text on all four edges.
 fn graphic_rich_text() -> Scene {
-    use filmcraft_project::graphic::{new_shape_layer, new_text_layer};
-    use filmcraft_project::graphic_design::{CharStyle, LayerExtra, Pin, PinTarget, StyleRun};
+    use mortiflix_project::graphic::{new_shape_layer, new_text_layer};
+    use mortiflix_project::graphic_design::{CharStyle, LayerExtra, Pin, PinTarget, StyleRun};
     let mut text = new_text_layer("Mixed STYLES in one layer", Vec2::new(28.0, 100.0), 16.0);
     let runs = vec![
         StyleRun { start: 6, end: 12, style: CharStyle { size: Some(26.0), faux_bold: Some(true), fill: Some([1.0, 0.8, 0.1, 1.0]), ..Default::default() } },
@@ -363,7 +363,7 @@ fn graphic_rich_text() -> Scene {
 /// A title: bold centred text with an outer stroke and a soft drop shadow, a lower-third bar with
 /// rounded corners and a background-boxed caption line.
 fn graphic_title() -> Scene {
-    use filmcraft_project::graphic::{new_shape_layer, new_text_layer};
+    use mortiflix_project::graphic::{new_shape_layer, new_text_layer};
     let mut bar = new_shape_layer(0, Vec2::new(160.0, 150.0), Vec2::new(280.0, 34.0), vec![]);
     set(&mut bar, &[("corner_radius", fl(8.0)), ("fill_color", ParamValue::Color([0.12, 0.35, 0.8, 1.0])), ("opacity", fl(85.0))]);
     let mut title = new_text_layer("Night Drive", Vec2::new(160.0, 80.0), 44.0);
@@ -398,7 +398,7 @@ fn graphic_title() -> Scene {
 /// Shapes: ellipse with centre stroke, rotated polygon with inner stroke, a pen path, rotated
 /// boxed text with a background and 2 strokes.
 fn graphic_shapes() -> Scene {
-    use filmcraft_project::graphic::{new_shape_layer, new_text_layer};
+    use mortiflix_project::graphic::{new_shape_layer, new_text_layer};
     let mut ell = new_shape_layer(1, Vec2::new(70.0, 60.0), Vec2::new(100.0, 70.0), vec![]);
     set(
         &mut ell,
@@ -464,7 +464,7 @@ fn hdr_tone_map() -> Scene {
 fn lumetri_hdr_pq() -> Scene {
     let mut b = Builder::new(1);
     b.p.sequence_mut(b.seq).unwrap().settings.color =
-        filmcraft_color::ColorPipeline { working: filmcraft_color::WorkingSpace::Rec2100Pq, ..filmcraft_color::ColorPipeline::REC709 };
+        mortiflix_color::ColorPipeline { working: mortiflix_color::WorkingSpace::Rec2100Pq, ..mortiflix_color::ColorPipeline::REC709 };
     let pq = ColorInfo { transfer: Transfer::Pq, primaries: Primaries::Bt2020, ..ColorInfo::SRGB_FULL };
     let src = b.encoded(DemoScene::CityNight, ColorSpace::Rec2100Pq, 6.0, Some(pq), None);
     let c = b.place(0, src, 0, 48);
@@ -496,8 +496,8 @@ fn mask_color() -> Scene {
     let quad = MaskPath::polygon(&[Vec2::new(60.0, 40.0), Vec2::new(560.0, 70.0), Vec2::new(600.0, 320.0), Vec2::new(90.0, 300.0)]);
     b.mask(c, "black_white", quad, 0.0, |m| m.expansion.value = fl(12.0));
     let mut pen = MaskPath::polygon(&[Vec2::new(250.0, 110.0), Vec2::new(420.0, 160.0), Vec2::new(300.0, 270.0)]);
-    pen.vertices[0] = filmcraft_project::MaskVertex::smooth(Vec2::new(250.0, 110.0), Vec2::new(60.0, -30.0));
-    pen.vertices[2] = filmcraft_project::MaskVertex::smooth(Vec2::new(300.0, 270.0), Vec2::new(-80.0, -10.0));
+    pen.vertices[0] = mortiflix_project::MaskVertex::smooth(Vec2::new(250.0, 110.0), Vec2::new(60.0, -30.0));
+    pen.vertices[2] = mortiflix_project::MaskVertex::smooth(Vec2::new(300.0, 270.0), Vec2::new(-80.0, -10.0));
     b.mask(c, "black_white", pen, 16.0, |m| m.mode = MaskMode::Subtract);
     b.at(12)
 }
@@ -709,10 +709,10 @@ goldens!(
 );
 
 /// Effects panel ▸ Lumetri Presets thumbnail grid: every built-in preset graded by our Lumetri on
-/// the procedural preview picture (`filmcraft_render::lumetri_presets`).
+/// the procedural preview picture (`mortiflix_render::lumetri_presets`).
 #[test]
 fn lumetri_presets_grid() {
-    use filmcraft_render::lumetri_presets as lp;
+    use mortiflix_render::lumetri_presets as lp;
     let img = lp::grid(&lp::presets(), 6, 96, 54);
     let rgba = Rgba8::new(img.w as u32, img.h as u32, img.over_black_rgba8());
     let name = "lumetri_presets_grid";
@@ -750,14 +750,14 @@ fn gpu_matches_cpu_on_golden_scenes() {
         eprintln!("SKIPPED (gpu parity): no GPU adapter");
         return;
     };
-    let mut c = filmcraft_gpu::GpuCompositor::new(&dev, &q);
+    let mut c = mortiflix_gpu::GpuCompositor::new(&dev, &q);
     let mut failures = Vec::new();
     for (name, _, make) in scenes() {
         let s = make();
         let t = RATE.tick_of(s.frame);
         let cpu = render_cpu(&s);
-        let plan = filmcraft_render::plan::plan_frame(&s.project, s.seq, t, RenderOptions::default(), &s.sources);
-        let kind = if matches!(plan, filmcraft_render::plan::FramePlan::Layers { .. }) { "layers" } else { "cpu image" };
+        let plan = mortiflix_render::plan::plan_frame(&s.project, s.seq, t, RenderOptions::default(), &s.sources);
+        let kind = if matches!(plan, mortiflix_render::plan::FramePlan::Layers { .. }) { "layers" } else { "cpu image" };
         c.composite(&plan);
         let (gw, gh, mut px) = c.read_output().expect("GPU readback");
         px.as_chunks_mut::<4>().0.iter_mut().for_each(|p| p[3] = 255);
@@ -767,9 +767,9 @@ fn gpu_matches_cpu_on_golden_scenes() {
         let mean_rgb = d.mean_abs * 4.0 / 3.0;
         eprintln!("{name} ({kind}): GPU vs CPU {d}");
         if d.p99 > 6 || mean_rgb >= 1.5 {
-            let dir = filmcraft_testkit::golden::failures_dir();
-            let _ = filmcraft_testkit::golden::write_png(&dir.join(format!("{name}.gpu.png")), &gpu);
-            let _ = filmcraft_testkit::golden::write_png(&dir.join(format!("{name}.cpu.png")), &cpu);
+            let dir = mortiflix_testkit::golden::failures_dir();
+            let _ = mortiflix_testkit::golden::write_png(&dir.join(format!("{name}.gpu.png")), &gpu);
+            let _ = mortiflix_testkit::golden::write_png(&dir.join(format!("{name}.cpu.png")), &cpu);
             failures.push(format!("{name} ({kind}): {d}; images in {}", dir.display()));
         }
     }
@@ -779,8 +779,8 @@ fn gpu_matches_cpu_on_golden_scenes() {
 /// Per-pixel max RGB difference (99th percentile, mean) over the pixels at least 1.5 px from every
 /// plan layer's quad outline: the CPU resampler fades a layer's edge over one more pixel than the
 /// GPU rasterises, and with blend modes those edge pixels are a visible share of a 320×180 frame.
-fn interior_diff(plan: &filmcraft_render::plan::FramePlan, a: &Rgba8, b: &Rgba8) -> (u32, f64) {
-    let filmcraft_render::plan::FramePlan::Layers { width, layers, .. } = plan else { return (u32::MAX, f64::MAX) };
+fn interior_diff(plan: &mortiflix_render::plan::FramePlan, a: &Rgba8, b: &Rgba8) -> (u32, f64) {
+    let mortiflix_render::plan::FramePlan::Layers { width, layers, .. } = plan else { return (u32::MAX, f64::MAX) };
     let inv: Vec<_> = layers.iter().filter_map(|l| Some((l.matrix.inverse()?, l.size().0 as f64, l.size().1 as f64))).collect();
     let mut d: Vec<u32> = Vec::new();
     for (i, (pa, pb)) in a.px.chunks(4).zip(b.px.chunks(4)).enumerate() {
@@ -811,9 +811,9 @@ fn gpu_blend_modes_match_cpu_render() {
         eprintln!("SKIPPED (gpu blend parity): no GPU adapter");
         return;
     };
-    let mut c = filmcraft_gpu::GpuCompositor::new(&dev, &q);
+    let mut c = mortiflix_gpu::GpuCompositor::new(&dev, &q);
     let mut failures = Vec::new();
-    for mode in filmcraft_project::effect::BLEND_MODES {
+    for mode in mortiflix_project::effect::BLEND_MODES {
         let mut b = Builder::new(4);
         let bg = b.demo(DemoScene::OceanSunset);
         let (dunes, aurora, bars) = (b.demo(DemoScene::Dunes), b.demo(DemoScene::Aurora), b.media(Generator::BarsAndTone));
@@ -831,8 +831,8 @@ fn gpu_blend_modes_match_cpu_render() {
         let s = b.at(12);
         let t = RATE.tick_of(s.frame);
         let cpu = render_cpu(&s);
-        let plan = filmcraft_render::plan::plan_frame(&s.project, s.seq, t, RenderOptions::default(), &s.sources);
-        let filmcraft_render::plan::FramePlan::Layers { layers, .. } = &plan else {
+        let plan = mortiflix_render::plan::plan_frame(&s.project, s.seq, t, RenderOptions::default(), &s.sources);
+        let mortiflix_render::plan::FramePlan::Layers { layers, .. } = &plan else {
             failures.push(format!("{mode}: planned as a CPU image"));
             continue;
         };
@@ -869,10 +869,10 @@ fn gpu_transition_of_blended_clips_matches_cpu_render() {
     }
     b.transition(1, "cross_dissolve", ca, cb, 24, 12);
     let s = b.at(22);
-    let plan = filmcraft_render::plan::plan_frame(&s.project, s.seq, RATE.tick_of(s.frame), RenderOptions::default(), &s.sources);
-    let filmcraft_render::plan::FramePlan::Layers { layers, .. } = &plan else { panic!("planned as a CPU image") };
-    assert!(layers.iter().all(|l| l.blend == filmcraft_render::Blend::Normal));
-    let mut c = filmcraft_gpu::GpuCompositor::new(&dev, &q);
+    let plan = mortiflix_render::plan::plan_frame(&s.project, s.seq, RATE.tick_of(s.frame), RenderOptions::default(), &s.sources);
+    let mortiflix_render::plan::FramePlan::Layers { layers, .. } = &plan else { panic!("planned as a CPU image") };
+    assert!(layers.iter().all(|l| l.blend == mortiflix_render::Blend::Normal));
+    let mut c = mortiflix_gpu::GpuCompositor::new(&dev, &q);
     c.composite(&plan);
     let (gw, gh, mut px) = c.read_output().expect("GPU readback");
     px.as_chunks_mut::<4>().0.iter_mut().for_each(|p| p[3] = 255);
@@ -923,8 +923,8 @@ fn gpu_effect_chains_match_cpu_render() {
     b.fixed(v5, "motion", &[("scale", fl(25.0)), ("position", pt(60.0, 140.0))]);
     b.effect(v5, "emboss", &[]);
     let mut s = b.at(12);
-    let plan = filmcraft_render::plan::plan_frame(&s.project, s.seq, RATE.tick_of(s.frame), RenderOptions::default(), &s.sources);
-    let filmcraft_render::plan::FramePlan::Layers { layers, .. } = &plan else { panic!("planned as a CPU image") };
+    let plan = mortiflix_render::plan::plan_frame(&s.project, s.seq, RATE.tick_of(s.frame), RenderOptions::default(), &s.sources);
+    let mortiflix_render::plan::FramePlan::Layers { layers, .. } = &plan else { panic!("planned as a CPU image") };
     assert_eq!(layers.len(), 5);
     for (i, l) in layers.iter().take(4).enumerate() {
         let fx = l.fx.as_ref().unwrap_or_else(|| panic!("V{}: not a GPU effect layer", i + 1));
@@ -935,11 +935,11 @@ fn gpu_effect_chains_match_cpu_render() {
         eprintln!("SKIPPED (gpu effect parity): no GPU adapter");
         return;
     };
-    let mut c = filmcraft_gpu::GpuCompositor::new(&dev, &q);
+    let mut c = mortiflix_gpu::GpuCompositor::new(&dev, &q);
     let mut failures = Vec::new();
     for frame in [0, 12, 30] {
         s.frame = frame;
-        let plan = filmcraft_render::plan::plan_frame(&s.project, s.seq, RATE.tick_of(frame), RenderOptions::default(), &s.sources);
+        let plan = mortiflix_render::plan::plan_frame(&s.project, s.seq, RATE.tick_of(frame), RenderOptions::default(), &s.sources);
         c.composite(&plan);
         let (gw, gh, mut px) = c.read_output().expect("GPU readback");
         px.as_chunks_mut::<4>().0.iter_mut().for_each(|p| p[3] = 255);
@@ -949,16 +949,16 @@ fn gpu_effect_chains_match_cpu_render() {
         let (p99, mean) = interior_diff(&plan, &cpu, &gpu);
         eprintln!("effect chains @ {frame}: GPU vs CPU interior p99 {p99}, mean {mean:.3}; whole frame {d}");
         if p99 > 6 || mean >= 1.5 {
-            let dir = filmcraft_testkit::golden::failures_dir();
-            let _ = filmcraft_testkit::golden::write_png(&dir.join(format!("fx_chains_{frame}.gpu.png")), &gpu);
-            let _ = filmcraft_testkit::golden::write_png(&dir.join(format!("fx_chains_{frame}.cpu.png")), &cpu);
+            let dir = mortiflix_testkit::golden::failures_dir();
+            let _ = mortiflix_testkit::golden::write_png(&dir.join(format!("fx_chains_{frame}.gpu.png")), &gpu);
+            let _ = mortiflix_testkit::golden::write_png(&dir.join(format!("fx_chains_{frame}.cpu.png")), &cpu);
             failures.push(format!("frame {frame}: interior p99 {p99}, mean {mean}; {d}; images in {}", dir.display()));
         }
     }
     // ½ playback resolution: the working images (and the effects' pixel radii) shrink with it
     let opts = RenderOptions { scale: 0.5, ..RenderOptions::default() };
-    let plan = filmcraft_render::plan::plan_frame(&s.project, s.seq, RATE.tick_of(s.frame), opts, &s.sources);
-    let filmcraft_render::plan::FramePlan::Layers { layers, .. } = &plan else { panic!("½: planned as a CPU image") };
+    let plan = mortiflix_render::plan::plan_frame(&s.project, s.seq, RATE.tick_of(s.frame), opts, &s.sources);
+    let mortiflix_render::plan::FramePlan::Layers { layers, .. } = &plan else { panic!("½: planned as a CPU image") };
     assert!(layers.iter().take(4).all(|l| l.fx.is_some()));
     c.composite(&plan);
     let (gw, gh, mut px) = c.read_output().expect("GPU readback");

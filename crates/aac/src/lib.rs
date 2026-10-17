@@ -9,11 +9,11 @@
 //! HE-AAC (SBR/PS), Main/SSR/LTP profiles, coupling channels and 960-sample frames are not supported;
 //! for explicitly signalled HE-AAC only the AAC-LC core is decoded (at the core rate).
 //!
-//! Layer L0: depends only on `filmcraft-bitstream` (+ `thiserror`, optional `rayon`); no `unsafe`;
+//! Layer L0: depends only on `mortiflix-bitstream` (+ `thiserror`, optional `rayon`); no `unsafe`;
 //! builds for `wasm32-unknown-unknown`.
 //!
 //! ```
-//! use filmcraft_aac::{Decoder, Encoder, EncoderConfig};
+//! use mortiflix_aac::{Decoder, Encoder, EncoderConfig};
 //!
 //! let mut enc = Encoder::new(EncoderConfig::cbr(48_000, 2, 128_000))?;
 //! let left: Vec<f32> = (0..4800).map(|i| (i as f32 * 0.05).sin() * 0.5).collect();
@@ -28,7 +28,7 @@
 //!     let pcm = dec.decode(au)?; // planar, 1024 samples per channel
 //!     assert_eq!(pcm.len(), 2);
 //! }
-//! # Ok::<(), filmcraft_aac::Error>(())
+//! # Ok::<(), mortiflix_aac::Error>(())
 //! ```
 
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable))]
@@ -65,8 +65,8 @@ pub enum Error {
     Eof,
 }
 
-impl From<filmcraft_bitstream::BitError> for Error {
-    fn from(_: filmcraft_bitstream::BitError) -> Self {
+impl From<mortiflix_bitstream::BitError> for Error {
+    fn from(_: mortiflix_bitstream::BitError) -> Self {
         Error::Eof
     }
 }

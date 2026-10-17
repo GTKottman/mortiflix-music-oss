@@ -1,7 +1,7 @@
 use crate::{Session, keyboard};
-use filmcraft_media::{DemoScene, Generator, generators::GeneratorSource};
-use filmcraft_project::{ItemId, Label};
-use filmcraft_time::{FrameRate, TICKS_PER_SECOND, Tick};
+use mortiflix_media::{DemoScene, Generator, generators::GeneratorSource};
+use mortiflix_project::{ItemId, Label};
+use mortiflix_time::{FrameRate, TICKS_PER_SECOND, Tick};
 use serde_json::json;
 use std::sync::Arc;
 
@@ -29,20 +29,20 @@ fn frame_export_selects_the_correct_monitor_time_and_original_media() {
     let proxy = dir.join("proxy.png");
     image::RgbaImage::from_pixel(16, 9, image::Rgba([255, 0, 0, 255])).save(&proxy).unwrap();
     Arc::make_mut(&mut s.project).item_mut(item).unwrap().as_media_mut().unwrap().proxy =
-        Some(filmcraft_project::MediaRef::File { path: proxy.to_string_lossy().into_owned() });
+        Some(mortiflix_project::MediaRef::File { path: proxy.to_string_lossy().into_owned() });
     s.media.set_use_proxies(true);
     s.state.source_playhead = FrameRate::FPS_24.tick_of(20);
     s.set_playhead(FrameRate::FPS_24.tick_of(35));
     let before = s.project.to_json();
     let revision = s.revision;
     let provider = s.media.full_res_provider(s.project.clone(), s.services.clone());
-    let expected_source = filmcraft_render::render_item(&s.project, item, s.state.source_playhead, 1.0, &provider).unwrap().to_rgba8();
+    let expected_source = mortiflix_render::render_item(&s.project, item, s.state.source_playhead, 1.0, &provider).unwrap().to_rgba8();
     let preview_provider = s.media.provider(s.project.clone(), s.services.clone());
-    let preview = filmcraft_render::render_item(&s.project, item, s.state.source_playhead, 1.0, &preview_provider).unwrap().to_rgba8();
+    let preview = mortiflix_render::render_item(&s.project, item, s.state.source_playhead, 1.0, &preview_provider).unwrap().to_rgba8();
     assert_ne!(preview, expected_source, "the preview really uses the red proxy");
     let seq = s.state.active_sequence.unwrap();
     let expected_program =
-        filmcraft_render::render_sequence(&s.project, seq, s.playhead(), filmcraft_render::RenderOptions { captions: true, ..Default::default() }, &provider)
+        mortiflix_render::render_sequence(&s.project, seq, s.playhead(), mortiflix_render::RenderOptions { captions: true, ..Default::default() }, &provider)
             .to_rgba8();
     assert_ne!(expected_source, expected_program);
     for (target, time, expected) in [("source", s.state.source_playhead, expected_source), ("program", s.playhead(), expected_program)] {
@@ -103,19 +103,19 @@ fn frame_export_snapshots_are_independent_of_later_monitor_selection() {
 }
 
 /// A source whose pictures are still on their way, as a WebCodecs decode or a Blob read on the web.
-struct Loading(filmcraft_media::MediaInfo);
+struct Loading(mortiflix_media::MediaInfo);
 
-impl filmcraft_media::MediaSource for Loading {
-    fn info(&self) -> &filmcraft_media::MediaInfo {
+impl mortiflix_media::MediaSource for Loading {
+    fn info(&self) -> &mortiflix_media::MediaInfo {
         &self.0
     }
-    fn video_frame(&self, _: filmcraft_media::FrameRequest) -> filmcraft_media::Result<Arc<filmcraft_frame::VideoFrame>> {
-        filmcraft_media::pending::mark();
-        Err(filmcraft_media::MediaError::Decode("still decoding".into()))
+    fn video_frame(&self, _: mortiflix_media::FrameRequest) -> mortiflix_media::Result<Arc<mortiflix_frame::VideoFrame>> {
+        mortiflix_media::pending::mark();
+        Err(mortiflix_media::MediaError::Decode("still decoding".into()))
     }
-    fn audio(&self, _: i64, _: usize, _: u32) -> filmcraft_media::Result<filmcraft_frame::AudioBuffer> {
-        filmcraft_media::pending::mark();
-        Err(filmcraft_media::MediaError::Decode("still loading".into()))
+    fn audio(&self, _: i64, _: usize, _: u32) -> mortiflix_media::Result<mortiflix_frame::AudioBuffer> {
+        mortiflix_media::pending::mark();
+        Err(mortiflix_media::MediaError::Decode("still loading".into()))
     }
 }
 
@@ -146,9 +146,9 @@ fn a_frame_still_loading_is_reported_not_saved_blank() {
 #[test]
 fn an_earlier_deferred_read_does_not_fail_the_export() {
     let (mut s, _) = session();
-    filmcraft_media::pending::mark();
+    mortiflix_media::pending::mark();
     let path = std::env::temp_dir().join(format!("fc-frame-stale-pending-{}.png", std::process::id()));
     s.execute("file.exportFrame", json!({"target":"program","path":path.to_string_lossy()})).unwrap();
-    assert!(!filmcraft_media::pending::is_set());
+    assert!(!mortiflix_media::pending::is_set());
     std::fs::remove_file(path).unwrap();
 }

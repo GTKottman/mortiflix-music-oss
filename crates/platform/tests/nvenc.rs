@@ -3,8 +3,8 @@
 //! Skips without an NVIDIA GPU / driver with NVENC.
 #![cfg(any(target_os = "windows", all(target_os = "linux", target_pointer_width = "64")))]
 
-use filmcraft_isobmff::{AvcConfig, SampleEntry};
-use filmcraft_platform::nvenc::{Config, NvencH264, Packet, Profile};
+use mortiflix_isobmff::{AvcConfig, SampleEntry};
+use mortiflix_platform::nvenc::{Config, NvencH264, Packet, Profile};
 
 /// A moving test picture: gradient background, a moving box, a little texture.
 fn rgba(w: usize, h: usize, i: usize) -> Vec<u8> {
@@ -52,7 +52,7 @@ fn encode_all(cfg: &Config, frames: usize) -> Option<(NvencH264, Vec<Packet>, Ve
     let (mut y, mut u, mut v) = (Vec::new(), Vec::new(), Vec::new());
     let (mut packets, mut sources) = (Vec::new(), Vec::new());
     for i in 0..frames {
-        filmcraft_export::rgba_to_yuv420_8(&rgba(w, h, i), w, h, &mut y, &mut u, &mut v);
+        mortiflix_export::rgba_to_yuv420_8(&rgba(w, h, i), w, h, &mut y, &mut u, &mut v);
         sources.push((y.clone(), u.clone(), v.clone()));
         packets.extend(enc.encode(&y, &u, &v, i as u64).unwrap());
     }
@@ -87,7 +87,7 @@ fn the_stream_decodes_to_the_source() {
     // the avcC parses and our decoder decodes the samples
     let (sps, pps) = enc.parameter_sets();
     let entry = SampleEntry::avc(AvcConfig::new(vec![sps.to_vec()], vec![pps.to_vec()], 4), w as u16, h as u16);
-    let mut dec = filmcraft_codecs::software_video_decoder(&entry).unwrap();
+    let mut dec = mortiflix_codecs::software_video_decoder(&entry).unwrap();
     let mut out = Vec::new();
     for p in &packets {
         out.extend(dec.decode(&p.data, p.pts).unwrap());
@@ -97,7 +97,7 @@ fn the_stream_decodes_to_the_source() {
     let mut worst = 99.0f64;
     for f in &out {
         let src = &sources[f.pts as usize];
-        let filmcraft_frame::PixelData::Yuv8 { planes, .. } = &f.frame.data else { panic!("8-bit planes") };
+        let mortiflix_frame::PixelData::Yuv8 { planes, .. } = &f.frame.data else { panic!("8-bit planes") };
         worst = worst.min(psnr(&planes[0], &src.0));
         assert!(psnr(&planes[1], &src.1) > 33.0 && psnr(&planes[2], &src.2) > 33.0, "chroma of picture {}", f.pts);
     }

@@ -2,10 +2,10 @@
 //! are resolved as placing a clip resolves them, the anchor once the media's real size is known,
 //! and a project saved after an import opens again. Also how the media they name are linked.
 
-use filmcraft_geom::Vec2;
-use filmcraft_media::DemoScene;
-use filmcraft_project::{ItemId, ParamValue, Project, TrackItem};
-use filmcraft_time::Tick;
+use mortiflix_geom::Vec2;
+use mortiflix_media::DemoScene;
+use mortiflix_project::{ItemId, ParamValue, Project, TrackItem};
+use mortiflix_time::Tick;
 use serde_json::json;
 
 use crate::Session;
@@ -106,7 +106,7 @@ fn a_project_saved_after_an_interchange_import_opens_again() {
     s.execute("file.saveAs", json!({"path": path})).unwrap();
     let mut t = Session::default();
     t.execute("file.open", json!({"path": path})).unwrap();
-    assert_eq!(filmcraft_format::encode(&t.project, false), filmcraft_format::encode(&s.project, false));
+    assert_eq!(mortiflix_format::encode(&t.project, false), mortiflix_format::encode(&s.project, false));
     assert_eq!(auto_points(&t.project), ["motion.anchor"]);
     assert_eq!(motion_point(&first_clip(&t, seq), "position"), Vec2::new(960.0, 540.0));
     // without a link step the import is one undo step
@@ -204,7 +204,7 @@ fn relinking_later_resolves_the_anchor_that_waited_for_the_real_size() {
     // one undo step takes the link and the anchor back together
     let linked = t.project.clone();
     t.execute("edit.undo", json!({})).unwrap();
-    assert_eq!(filmcraft_format::encode(&t.project, false), filmcraft_format::encode(&waiting, false));
+    assert_eq!(mortiflix_format::encode(&t.project, false), mortiflix_format::encode(&waiting, false));
     assert_eq!(auto_points(&t.project), ["motion.anchor"]);
     t.execute("edit.redo", json!({})).unwrap();
     assert_eq!(*t.project, *linked);
@@ -240,7 +240,7 @@ fn an_interchange_import_links_media_without_reading_the_files_whole() {
         fn read_range(&self, path: &str, offset: u64, len: usize) -> std::io::Result<Vec<u8>> {
             crate::FsServices.read_range(path, offset, len)
         }
-        fn reader(&self, path: &str) -> Option<std::io::Result<filmcraft_media::SharedReader>> {
+        fn reader(&self, path: &str) -> Option<std::io::Result<mortiflix_media::SharedReader>> {
             crate::FsServices.reader(path)
         }
     }

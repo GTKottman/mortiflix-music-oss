@@ -2,17 +2,17 @@
 //! reference decoder (never linked).
 #![allow(dead_code)]
 
-use filmcraft_prores::{ChromaFormat, Frame};
+use mortiflix_prores::{ChromaFormat, Frame};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-/// ffmpeg, or `None` after printing `SKIPPED` (see `filmcraft_testkit::oracle`).
+/// ffmpeg, or `None` after printing `SKIPPED` (see `mortiflix_testkit::oracle`).
 pub fn ffmpeg() -> Option<PathBuf> {
-    filmcraft_testkit::ffmpeg_or_skip("prores oracle")
+    mortiflix_testkit::ffmpeg_or_skip("prores oracle")
 }
 
 pub fn fixture_dir() -> PathBuf {
-    filmcraft_testkit::fixtures_dir("prores")
+    mortiflix_testkit::fixtures_dir("prores")
 }
 
 fn run(ff: &Path, args: &[&str]) {
@@ -40,7 +40,7 @@ impl Spec {
 pub fn make(ff: &Path, spec: &Spec) -> PathBuf {
     let path = fixture_dir().join(format!("{}.mov", spec.name));
     if !path.exists() {
-        let tmp = filmcraft_testkit::temp_path(&path);
+        let tmp = mortiflix_testkit::temp_path(&path);
         let frames = spec.frames.to_string();
         let mut args = vec!["-f", "lavfi", "-i", spec.lavfi.as_str(), "-frames:v", frames.as_str()];
         args.extend(spec.enc.iter().copied());

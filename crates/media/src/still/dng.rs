@@ -1,4 +1,4 @@
-//! DNG camera raw stills and CinemaDNG frames (decoded by `filmcraft-dng`).
+//! DNG camera raw stills and CinemaDNG frames (decoded by `mortiflix-dng`).
 //!
 //! The raw image is developed the way the DNG specification describes (linearisation, black and
 //! white levels, the camera's as-shot white balance, demosaic, default crop, colour matrices and
@@ -11,16 +11,16 @@
 
 use std::sync::Arc;
 
-use filmcraft_color::{ColorInfo, Transfer};
-use filmcraft_frame::VideoFrame;
-use filmcraft_time::FrameRate;
+use mortiflix_color::{ColorInfo, Transfer};
+use mortiflix_frame::VideoFrame;
+use mortiflix_time::FrameRate;
 
 use super::{DEFAULT_STILL_DURATION, StillSource};
 use crate::{MediaError, MediaInfo, MediaKind, Result, VideoStreamInfo};
 
 /// Whether `b` is a DNG file.
 pub fn sniff(b: &[u8]) -> bool {
-    filmcraft_dng::sniff(b)
+    mortiflix_dng::sniff(b)
 }
 
 /// The colour of developed frames: scene-linear light, Rec. 709 primaries.
@@ -32,19 +32,19 @@ pub struct Decoded {
     pub frame: VideoFrame,
     /// For the media info, e.g. "Bayer 12-bit raw (lossless JPEG)".
     pub pixel_format: String,
-    pub info: filmcraft_dng::Info,
+    pub info: mortiflix_dng::Info,
 }
 
-fn error(name: &str, e: filmcraft_dng::Error) -> MediaError {
+fn error(name: &str, e: mortiflix_dng::Error) -> MediaError {
     match e {
-        filmcraft_dng::Error::Unsupported(m) => MediaError::Unsupported(format!("{name}: {m}")),
+        mortiflix_dng::Error::Unsupported(m) => MediaError::Unsupported(format!("{name}: {m}")),
         e => MediaError::Decode(format!("{name}: {e}")),
     }
 }
 
 /// Develop a DNG file.
 pub fn decode(name: &str, bytes: &[u8]) -> Result<Decoded> {
-    let img = filmcraft_dng::decode(bytes).map_err(|e| error(name, e))?;
+    let img = mortiflix_dng::decode(bytes).map_err(|e| error(name, e))?;
     let (w, h) = (u32::try_from(img.width), u32::try_from(img.height));
     let (Ok(w), Ok(h)) = (w, h) else { return Err(MediaError::Decode(format!("{name}: picture too large"))) };
     let i = &img.info;
@@ -84,11 +84,11 @@ pub fn still(name: &str, bytes: &[u8]) -> Result<StillSource> {
 
 /// The frame rate and start time code (in frames at that rate) of a CinemaDNG sequence whose first
 /// frame is `info`: the FrameRate tag when present (else `default`), the TimeCodes tag when present.
-pub fn sequence_timing(info: &filmcraft_dng::Info, default: FrameRate) -> (FrameRate, Option<i64>) {
+pub fn sequence_timing(info: &mortiflix_dng::Info, default: FrameRate) -> (FrameRate, Option<i64>) {
     let rate = info.frame_rate.map(|(n, d)| FrameRate::new(n, d).sane()).unwrap_or(default);
     let tc = info.timecode.map(|t| {
         let drop = t.drop_frame && rate.supports_drop_frame();
-        filmcraft_time::fields_to_frames(i64::from(t.hours), i64::from(t.minutes), i64::from(t.seconds), i64::from(t.frames), rate, drop)
+        mortiflix_time::fields_to_frames(i64::from(t.hours), i64::from(t.minutes), i64::from(t.seconds), i64::from(t.frames), rate, drop)
     });
     (rate, tc)
 }
@@ -97,9 +97,9 @@ pub fn sequence_timing(info: &filmcraft_dng::Info, default: FrameRate) -> (Frame
 mod tests {
     use std::collections::HashMap;
 
-    use filmcraft_dng::tiff::tags;
-    use filmcraft_dng::writer::{Compression, Options, Value, write};
-    use filmcraft_frame::PixelData;
+    use mortiflix_dng::tiff::tags;
+    use mortiflix_dng::writer::{Compression, Options, Value, write};
+    use mortiflix_frame::PixelData;
 
     use super::*;
     use crate::sequence::{FrameLoader, ImageSequenceSource};
@@ -145,7 +145,7 @@ mod tests {
         assert_eq!((v.width, v.height, v.codec.as_str(), v.has_alpha), (16, 12, "DNG", false));
         assert_eq!(v.pixel_format, "Bayer 12-bit raw (lossless JPEG)");
         assert_eq!(v.color.transfer, Transfer::Linear);
-        let frame = src.video_frame(FrameRequest::full(filmcraft_time::Tick(0))).unwrap();
+        let frame = src.video_frame(FrameRequest::full(mortiflix_time::Tick(0))).unwrap();
         assert_eq!(frame.color.transfer, Transfer::Linear);
         assert!((red(&frame) - 0.5).abs() < 1e-3, "{}", red(&frame));
         assert!(crate::STILL_EXTENSIONS.contains(&"dng"));
@@ -197,12 +197,12 @@ mod tests {
 
     #[test]
     fn timing_without_cinemadng_tags_is_the_callers() {
-        let info = filmcraft_dng::probe(&grey_dng(0.5, vec![])).unwrap();
+        let info = mortiflix_dng::probe(&grey_dng(0.5, vec![])).unwrap();
         assert_eq!(sequence_timing(&info, FrameRate::FPS_25), (FrameRate::FPS_25, None));
         // drop frame only where the rate has it
         let mut i = info.clone();
         i.frame_rate = Some((30_000, 1001));
-        i.timecode = Some(filmcraft_dng::Timecode { hours: 0, minutes: 1, seconds: 0, frames: 2, drop_frame: true });
+        i.timecode = Some(mortiflix_dng::Timecode { hours: 0, minutes: 1, seconds: 0, frames: 2, drop_frame: true });
         assert_eq!(sequence_timing(&i, FrameRate::FPS_25), (FrameRate::FPS_29_97, Some(1800)));
         i.frame_rate = Some((25, 1));
         assert_eq!(sequence_timing(&i, FrameRate::FPS_24), (FrameRate::FPS_25, Some(1502)));

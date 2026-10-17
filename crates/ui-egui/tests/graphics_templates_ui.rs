@@ -1,18 +1,18 @@
 //! Essential Graphics ▸ Browse (Graphics Templates), the template properties in the Edit tab and
 //! the Export As Motion Graphics Template / Replace Fonts dialogs, driven headless through the
-//! control channel (like `graphics_ui.rs`). With `FILMCRAFT_UI_SHOTS=<dir>` it also renders the
+//! control channel (like `graphics_ui.rs`). With `MFX_STUDIO_UI_SHOTS=<dir>` it also renders the
 //! UI with wgpu and writes PNGs there for review.
 
 use std::sync::mpsc::{Sender, channel};
 
 use egui_kittest::Harness;
-use filmcraft_engine::Session;
-use filmcraft_ui_egui::FilmcraftApp;
-use filmcraft_ui_egui::control::ControlRequest;
+use mortiflix_engine::Session;
+use mortiflix_ui_egui::StudioApp;
+use mortiflix_ui_egui::control::ControlRequest;
 use serde_json::{Value, json};
 
 struct Driver {
-    harness: Harness<'static, FilmcraftApp>,
+    harness: Harness<'static, StudioApp>,
     tx: Sender<ControlRequest>,
     shots: Option<std::path::PathBuf>,
 }
@@ -21,12 +21,12 @@ impl Driver {
     fn demo(data: &str) -> Self {
         let mut session = Session::default();
         session.execute("file.openDemoProject", json!({})).expect("demo project");
-        let dir = std::env::temp_dir().join(format!("filmcraft-gfx-ui-{data}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("mortiflix-gfx-ui-{data}-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         session.prefs_path = Some(dir.join("prefs.json"));
         let (tx, rx) = channel();
-        let app = FilmcraftApp::new(session).with_control(rx);
-        let shots = std::env::var_os("FILMCRAFT_UI_SHOTS").map(std::path::PathBuf::from);
+        let app = StudioApp::new(session).with_control(rx);
+        let shots = std::env::var_os("MFX_STUDIO_UI_SHOTS").map(std::path::PathBuf::from);
         let mut b = Harness::builder().with_size(egui::vec2(1600.0, 980.0)).with_max_steps(10_000);
         if shots.is_some() {
             b = b.wgpu().with_pixels_per_point(1.0);
@@ -204,12 +204,12 @@ fn type_tool_selection_styles_characters() {
     assert_eq!(hist["undo"].as_array().unwrap().last().unwrap(), "Character Style");
 }
 
-/// #611: installing a file FilmCraft refuses (a ZIP — EffectCraft's template package renamed
+/// #611: installing a file Mortiflix Studio refuses (a ZIP — EffectCraft's template package renamed
 /// to .fcgt) from the Browse panel must say why on the status bar, not do nothing.
 #[test]
 fn install_refused_shows_the_reason_on_the_status_bar() {
     let mut d = Driver::demo("install-refused");
-    let file = std::env::temp_dir().join(format!("filmcraft-gfx-ui-zip-{}.fcgt", std::process::id()));
+    let file = std::env::temp_dir().join(format!("mortiflix-gfx-ui-zip-{}.fcgt", std::process::id()));
     std::fs::write(&file, [0x50u8, 0x4b, 0x03, 0x04]).unwrap();
     let picked = file.to_string_lossy().to_string();
     d.harness.state_mut().hooks.pick_open_file = Some(Box::new(move |_, _| Some(picked.clone())));

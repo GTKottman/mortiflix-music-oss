@@ -1,4 +1,4 @@
-//! Support for hardware (OS) video decoders registered by `filmcraft-platform`: the
+//! Support for hardware (OS) video decoders registered by `mortiflix-platform`: the
 //! Settings ▸ Playback ▸ Hardware decoding switch, the hardware counters `perf.stats` reports, and
 //! what such a decoder needs from an `avcC` / `hvcC` sample entry to behave exactly like our
 //! software decoder for the same stream (parameter sets, cropping, colour, pixel aspect, reorder
@@ -10,7 +10,7 @@
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
-use filmcraft_isobmff::{CodecConfig, SampleEntry};
+use mortiflix_isobmff::{CodecConfig, SampleEntry};
 
 pub use crate::hw_frame::{FrameCodec, FrameStreamInfo, PictureParams};
 use crate::video::{avcc_length_size, h264_disposable, hevc_disposable, hvcc_length_size_and_tid, sar_par, vui_color};
@@ -32,7 +32,7 @@ pub fn hardware_decoding() -> bool {
 
 static BACKEND: std::sync::Mutex<Option<&'static str>> = std::sync::Mutex::new(None);
 
-/// Record the OS decoder backend `filmcraft_platform::register` put in front of our decoders
+/// Record the OS decoder backend `mortiflix_platform::register` put in front of our decoders
 /// ("VideoToolbox", "Media Foundation"), for `perf.stats`.
 pub fn set_hw_backend(name: &'static str) {
     *BACKEND.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(name);
@@ -126,7 +126,7 @@ pub struct NalStreamInfo {
     /// H.264 `profile_idc` / HEVC `general_profile_idc`.
     pub profile_idc: u8,
     /// Colour of every output picture, as the software decoder reports it.
-    pub color: filmcraft_color::ColorInfo,
+    pub color: mortiflix_color::ColorInfo,
     /// Pixel aspect ratio, as the software decoder reports it.
     pub par: (u32, u32),
     /// Pictures that may precede a picture in decoding order and follow it in output order
@@ -251,7 +251,7 @@ impl NalStreamInfo {
         if sets.len() == nsps {
             return Err(CodecError::Decode("avcC has no PPS".into()));
         }
-        let sps = filmcraft_h264::params::Sps::parse(&filmcraft_bitstream::unescape_rbsp(sps_nal.get(1..).unwrap_or_default()))
+        let sps = mortiflix_h264::params::Sps::parse(&mortiflix_bitstream::unescape_rbsp(sps_nal.get(1..).unwrap_or_default()))
             .map_err(|e| CodecError::Decode(e.to_string()))?;
         let crop = sps.crop_rect();
         let vui = sps.vui.clone().unwrap_or_default();
@@ -297,7 +297,7 @@ impl NalStreamInfo {
         if !sets.iter().any(|n| nal_type(n) == Some(32)) || !sets.iter().any(|n| nal_type(n) == Some(34)) {
             return Err(CodecError::Decode("hvcC lacks a VPS or PPS".into()));
         }
-        let sps = filmcraft_hevc::params::Sps::parse(&filmcraft_bitstream::unescape_rbsp(sps_nal.get(2..).unwrap_or_default()))
+        let sps = mortiflix_hevc::params::Sps::parse(&mortiflix_bitstream::unescape_rbsp(sps_nal.get(2..).unwrap_or_default()))
             .map_err(|e| CodecError::Decode(e.to_string()))?;
         let crop = sps.crop_rect();
         let vui = sps.vui.clone().unwrap_or_default();
@@ -424,7 +424,7 @@ mod tests {
             bit_depth_chroma: 8,
             interlaced: false,
             profile_idc: 1,
-            color: filmcraft_color::ColorInfo::REC709,
+            color: mortiflix_color::ColorInfo::REC709,
             par: (1, 1),
             reorder: 0,
         }

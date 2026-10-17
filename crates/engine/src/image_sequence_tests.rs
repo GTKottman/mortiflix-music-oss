@@ -3,9 +3,9 @@
 
 use std::path::Path;
 
-use filmcraft_media::{FrameRequest, MediaKind};
-use filmcraft_project::{ClipId, ItemId};
-use filmcraft_time::FrameRate;
+use mortiflix_media::{FrameRequest, MediaKind};
+use mortiflix_project::{ClipId, ItemId};
+use mortiflix_time::FrameRate;
 use serde_json::{Value, json};
 
 use crate::Session;
@@ -15,7 +15,7 @@ use crate::media_test_util::tmp_dir;
 fn import_accepts_uppercase_extensions() {
     let dir = tmp_dir("import-uppercase");
     let wav = dir.join("TONE.WAV");
-    std::fs::write(&wav, filmcraft_media::wav::write_wav16(&[0.1; 4800], 2, 48_000)).unwrap();
+    std::fs::write(&wav, mortiflix_media::wav::write_wav16(&[0.1; 4800], 2, 48_000)).unwrap();
     let mut s = Session::default();
     let r = s.execute("file.import", json!({"paths": [wav.to_string_lossy()]})).unwrap();
     assert_eq!(r["items"].as_array().unwrap().len(), 1);
@@ -26,7 +26,7 @@ fn import_accepts_uppercase_extensions() {
 fn import_replace_starts_from_an_empty_project() {
     let dir = tmp_dir("import-replace");
     let wav = dir.join("tone.wav");
-    std::fs::write(&wav, filmcraft_media::wav::write_wav16(&[0.1; 4800], 2, 48_000)).unwrap();
+    std::fs::write(&wav, mortiflix_media::wav::write_wav16(&[0.1; 4800], 2, 48_000)).unwrap();
     let mut s = demo();
     let demo_items = s.project.items.len();
     assert!(demo_items > 1);
@@ -63,7 +63,7 @@ fn red_at(s: &Session, item: ItemId, frame: i64) -> u8 {
     let rate = src.info().frame_rate();
     let f = src.video_frame(FrameRequest::full(rate.tick_of(frame))).unwrap();
     match &f.data {
-        filmcraft_frame::PixelData::Rgba8(p) => p[0],
+        mortiflix_frame::PixelData::Rgba8(p) => p[0],
         _ => panic!("rgba frames"),
     }
 }
@@ -141,8 +141,8 @@ fn import_image_sequences_setting_detects_a_numbered_still() {
 /// A CinemaDNG frame: 24 × 16 RGGB, 12-bit lossless JPEG behind a preview, a flat grey at `level`
 /// (white balanced by the as-shot neutral), 23.976 fps, time code 01:00:00:00 + `frame`.
 fn cinemadng_frame(level: f64, frame: u8) -> Vec<u8> {
-    use filmcraft_dng::tiff::tags;
-    use filmcraft_dng::writer::{Compression, Options, Value, write};
+    use mortiflix_dng::tiff::tags;
+    use mortiflix_dng::writer::{Compression, Options, Value, write};
     let (w, h) = (24, 16);
     let neutral = [0.6, 1.0, 0.7];
     let px: Vec<u16> =
@@ -189,7 +189,7 @@ fn import_cinemadng_folder_as_one_clip() {
     let src = s.media.source_for(&s.project, id, &*s.services).unwrap();
     for i in 0..4 {
         let f = src.video_frame(FrameRequest::full(FrameRate::FPS_23_976.tick_of(i))).unwrap();
-        let filmcraft_frame::PixelData::RgbaF32(px) = &f.data else { panic!("linear float frames") };
+        let mortiflix_frame::PixelData::RgbaF32(px) = &f.data else { panic!("linear float frames") };
         let want = 0.1 + 0.2 * i as f32;
         for k in 0..3 {
             assert!((px[(8 * 24 + 8) * 4 + k] - want).abs() < 2e-3, "frame {i} channel {k}: {}", px[(8 * 24 + 8) * 4 + k]);

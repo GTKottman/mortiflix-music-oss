@@ -14,8 +14,8 @@
 
 use std::collections::{HashMap, HashSet};
 
-use filmcraft_render::gpufx::FxOp;
-use filmcraft_render::plan::LayerFx;
+use mortiflix_render::gpufx::FxOp;
+use mortiflix_render::plan::LayerFx;
 
 /// Working texture format.
 pub(crate) const FX_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba32Float;
@@ -213,7 +213,7 @@ fn steps(op: &FxOp) -> Vec<Step> {
             let w0 = 1.0 - wh * 0.15;
             let sh_k = sh * 0.35;
             let hl_k = hl * 0.35;
-            let vround_aspect = filmcraft_render::gpufx::lumetri_vignette_aspect(*aspect, *vround);
+            let vround_aspect = mortiflix_render::gpufx::lumetri_vignette_aspect(*aspect, *vround);
             let st_k = [(st[0] - 0.5) * 0.3, (st[1] - 0.5) * 0.3, (st[2] - 0.5) * 0.3];
             let ht_k = [(ht[0] - 0.5) * 0.3, (ht[1] - 0.5) * 0.3, (ht[2] - 0.5) * 0.3];
 
@@ -263,7 +263,7 @@ impl FxStage {
 
     pub(crate) fn new(device: &wgpu::Device, composite: &wgpu::ShaderModule, layer_bgl: &wgpu::BindGroupLayout) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("filmcraft-fx"),
+            label: Some("mortiflix-fx"),
             source: wgpu::ShaderSource::Wgsl(include_str!("fx.wgsl").into()),
         });
         let tex = |binding| wgpu::BindGroupLayoutEntry {
@@ -356,7 +356,7 @@ impl FxStage {
         let v = self.pool.entry(size).or_default();
         while v.len() < n {
             let t = device.create_texture(&wgpu::TextureDescriptor {
-                label: Some("filmcraft-fx"),
+                label: Some("mortiflix-fx"),
                 size: wgpu::Extent3d { width: size.0, height: size.1, depth_or_array_layers: 1 },
                 mip_level_count: 1,
                 sample_count: 1,

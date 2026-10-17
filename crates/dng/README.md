@@ -1,4 +1,4 @@
-# filmcraft-dng
+# mortiflix-dng
 
 Clean-room DNG and CinemaDNG camera RAW decoder in pure Rust. Layer L0: depends only on
 `thiserror` and (optional, feature `threads`, default on) `rayon`. Builds for
@@ -26,13 +26,13 @@ when it is installed, never linked.
 ## API
 
 ```rust
-if filmcraft_dng::sniff(&bytes) {
-    let dng = filmcraft_dng::Dng::parse(&bytes)?;
+if mortiflix_dng::sniff(&bytes) {
+    let dng = mortiflix_dng::Dng::parse(&bytes)?;
     let info = dng.info()?;     // size after crop, bits, CFA or LinearRaw, frame rate, time code, camera, reel
     let raw = dng.raw()?;       // the stored samples (u16), bit-exact
     let img = dng.develop()?;   // linear Rec. 709 RGBA f32 (alpha 1), info.width × info.height
 }
-let img = filmcraft_dng::decode(&bytes)?; // parse + develop
+let img = mortiflix_dng::decode(&bytes)?; // parse + develop
 ```
 
 `writer` (feature `writer`, tests only) writes synthetic DNGs: uncompressed at any depth or
@@ -54,7 +54,7 @@ the raw image in a SubIFD, and arbitrary extra tags.
   8 × 8), DefaultCrop, the DNG colour model to XYZ D50 and Bradford to linear Rec. 709, and
   BaselineExposure. LinearRaw (3 samples) skips the demosaic; monochrome LinearRaw is grey.
 - **Output:** scene-linear Rec. 709 floats: a white the sensor clipped is 1.0 × 2^BaselineExposure;
-  brighter values are kept (FilmCraft's compositor works in linear float). Negative results of the
+  brighter values are kept (Mortiflix Studio's compositor works in linear float). Negative results of the
   colour matrix are clipped to 0. Black levels scale per pixel by (white − black).
 - **White balance without a ForwardMatrix** follows the specification: the camera matrix takes the
   values to XYZ and a Bradford adaptation moves the as-shot white to D50. Decoders in the dcraw

@@ -1,4 +1,4 @@
-//! GPU-vs-CPU parity of the blend modes (`filmcraft_render::blend::composite` is the reference).
+//! GPU-vs-CPU parity of the blend modes (`mortiflix_render::blend::composite` is the reference).
 //!
 //! Tolerances: the composited 8-bit output uses the compositor's parity criterion (99th percentile
 //! of the per-pixel max channel difference ≤ 6, mean < 1.5; antialiased edges and half-float
@@ -7,8 +7,8 @@
 //! flip a pixel whose blend lands on its 0.5 threshold.
 
 use super::*;
-use filmcraft_geom::{Affine, Vec2};
-use filmcraft_render::plan::execute_cpu;
+use mortiflix_geom::{Affine, Vec2};
+use mortiflix_render::plan::execute_cpu;
 
 pub(crate) fn device() -> Option<(wgpu::Device, wgpu::Queue)> {
     let instance = wgpu::Instance::default();
@@ -25,7 +25,7 @@ pub(crate) fn yuv_frame(w: u32, h: u32) -> Arc<VideoFrame> {
         width: w,
         height: h,
         data: PixelData::Yuv8 { planes: [Arc::new(y), Arc::new(u), Arc::new(v)], chroma: Chroma::C420, alpha: None },
-        color: filmcraft_color::ColorInfo::REC709,
+        color: mortiflix_color::ColorInfo::REC709,
         par: (1, 1),
         pts: Default::default(),
     })
@@ -144,13 +144,13 @@ fn gpu_blend_modes_match_cpu() {
     };
     let mut c = GpuCompositor::new(&dev, &q);
     let (w, h) = (320usize, 180usize);
-    let pixels = filmcraft_media::generators::render(
-        &filmcraft_media::Generator::Demo(filmcraft_media::DemoScene::Dunes),
+    let pixels = mortiflix_media::generators::render(
+        &mortiflix_media::Generator::Demo(mortiflix_media::DemoScene::Dunes),
         320,
         180,
         1.0,
         24,
-        filmcraft_time::FrameRate::FPS_24,
+        mortiflix_time::FrameRate::FPS_24,
     );
     let demo = Arc::new(VideoFrame::rgba8(320, 180, pixels));
     let base = ramp_layer(200, 180, 3);

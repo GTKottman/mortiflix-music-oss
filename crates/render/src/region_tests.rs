@@ -4,11 +4,11 @@
 //! (the path every clip takes when no shortcut applies).
 
 use super::*;
-use filmcraft_frame::{AudioBuffer, Chroma};
-use filmcraft_media::generators::GeneratorSource;
-use filmcraft_media::{Generator, MediaInfo, MediaSource};
-use filmcraft_project::{Label, MediaClip, MediaRef, SequenceSettings, TrackKind, find_effect};
-use filmcraft_time::{FrameRate, TICKS_PER_SECOND, TimeRange};
+use mortiflix_frame::{AudioBuffer, Chroma};
+use mortiflix_media::generators::GeneratorSource;
+use mortiflix_media::{Generator, MediaInfo, MediaSource};
+use mortiflix_project::{Label, MediaClip, MediaRef, SequenceSettings, TrackKind, find_effect};
+use mortiflix_time::{FrameRate, TICKS_PER_SECOND, TimeRange};
 
 const FPS: FrameRate = FrameRate::FPS_24;
 
@@ -21,16 +21,16 @@ impl MediaSource for Still {
     fn info(&self) -> &MediaInfo {
         &self.info
     }
-    fn video_frame(&self, _req: FrameRequest) -> filmcraft_media::Result<Arc<VideoFrame>> {
+    fn video_frame(&self, _req: FrameRequest) -> mortiflix_media::Result<Arc<VideoFrame>> {
         Ok(self.frame.clone())
     }
-    fn audio(&self, _start: i64, frames: usize, sample_rate: u32) -> filmcraft_media::Result<AudioBuffer> {
+    fn audio(&self, _start: i64, frames: usize, sample_rate: u32) -> mortiflix_media::Result<AudioBuffer> {
         Ok(AudioBuffer::silence(sample_rate, 2, frames))
     }
 }
 
 fn frame(w: usize, h: usize, data: PixelData) -> Arc<VideoFrame> {
-    Arc::new(VideoFrame { width: w as u32, height: h as u32, data, color: filmcraft_color::ColorInfo::REC709, par: (1, 1), pts: Tick::ZERO })
+    Arc::new(VideoFrame { width: w as u32, height: h as u32, data, color: mortiflix_color::ColorInfo::REC709, par: (1, 1), pts: Tick::ZERO })
 }
 
 /// A camera-like picture: 8-bit 4:2:0, no alpha.
@@ -305,7 +305,7 @@ fn a_region_layer_expands_to_the_whole_layer() {
 /// third of real time), and the plan still renders what the reference renderer does.
 #[test]
 fn hdr_media_is_planned_for_the_gpu_with_its_colour_management() {
-    use filmcraft_color::{ColorInfo, Matrix, Primaries, Range, Transfer};
+    use mortiflix_color::{ColorInfo, Matrix, Primaries, Range, Transfer};
     let hdr = |transfer| ColorInfo { matrix: Matrix::Bt2020Ncl, transfer, primaries: Primaries::Bt2020, range: Range::Limited };
     for (name, color) in
         [("HLG", hdr(Transfer::Hlg)), ("PQ", hdr(Transfer::Pq)), ("BT.2020 SDR", ColorInfo { primaries: Primaries::Bt2020, ..ColorInfo::REC709 })]

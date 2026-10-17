@@ -1,4 +1,4 @@
-# filmcraft-cfb
+# mortiflix-cfb
 
 A clean-room reader and writer for the Compound File Binary format (Microsoft "structured
 storage"), the low-level container of AAF files. Layer L0: no dependencies beyond `std`, no
@@ -15,7 +15,7 @@ structured storage code, libgsf, olefile, POI…) was consulted.
 
 ```rust
 let bytes = std::fs::read("sequence.aaf")?;
-let cf = filmcraft_cfb::CompoundFile::open(&bytes)?;
+let cf = mortiflix_cfb::CompoundFile::open(&bytes)?;
 let header = cf.find("Header-2")?;                      // a storage
 println!("{:02x?}", cf.entries[header].clsid);          // its class id
 let props = cf.read_path("Header-2/properties")?;       // a stream
@@ -32,9 +32,9 @@ for &child in &cf.entries[header].children { /* sorted siblings */ }
 ## Writing
 
 ```rust
-let mut w = filmcraft_cfb::Writer::new(filmcraft_cfb::Version::V4);
-w.set_clsid(filmcraft_cfb::Writer::ROOT, root_class);
-let h = w.storage(filmcraft_cfb::Writer::ROOT, "Header-2", header_class)?;
+let mut w = mortiflix_cfb::Writer::new(mortiflix_cfb::Version::V4);
+w.set_clsid(mortiflix_cfb::Writer::ROOT, root_class);
+let h = w.storage(mortiflix_cfb::Writer::ROOT, "Header-2", header_class)?;
 w.stream(h, "properties", bytes)?;
 let file: Vec<u8> = w.finish();
 ```

@@ -16,9 +16,9 @@
 //!    ([`crate::effects::apply`]), so the result is an ordinary, editable grade. A small penalty
 //!    on the parameters keeps the grade minimal when the statistics are already close.
 
-use filmcraft_geom::Vec2;
-use filmcraft_project::{EffectInstance, ParamValue};
-use filmcraft_time::Tick;
+use mortiflix_geom::Vec2;
+use mortiflix_project::{EffectInstance, ParamValue};
+use mortiflix_time::Tick;
 
 use crate::Image;
 use crate::effects::{FxCtx, apply};
@@ -166,7 +166,7 @@ pub struct Match {
 fn set_params(base: &EffectInstance, x: &[f32; 10]) -> EffectInstance {
     let mut e = base.clone();
     let mut put = |id: &str, v: ParamValue| {
-        let prm = e.params.entry(id.to_string()).or_insert_with(|| filmcraft_project::Param::new(v.clone()));
+        let prm = e.params.entry(id.to_string()).or_insert_with(|| mortiflix_project::Param::new(v.clone()));
         prm.value = v;
     };
     put("wheel_shadows", ParamValue::Vec2(Vec2::new(x[0] as f64, x[1] as f64)));
@@ -193,7 +193,7 @@ fn graded_stats(img: &Image, base: &EffectInstance, x: &[f32; 10], skin_protect:
         project: None,
         env: None,
         frame_rate: 24.0,
-        working: filmcraft_color::WorkingSpace::Rec709,
+        working: mortiflix_color::WorkingSpace::Rec709,
     };
     apply(&mut g, &set_params(base, x), &cx);
     stats(&g, skin_protect)
@@ -327,7 +327,7 @@ fn solve_linear(mut a: [[f64; 10]; 10], mut b: [f64; 10]) -> Option<[f64; 10]> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use filmcraft_project::find_effect;
+    use mortiflix_project::find_effect;
 
     /// A synthetic frame: a lightness ramp with colour patches and a skin-tone block.
     fn frame(skin: bool) -> Image {
@@ -363,7 +363,7 @@ mod tests {
             project: None,
             env: None,
             frame_rate: 24.0,
-            working: filmcraft_color::WorkingSpace::Rec709,
+            working: mortiflix_color::WorkingSpace::Rec709,
         };
         apply(&mut g, &set_params(base, &x), &cx);
         g

@@ -11,9 +11,9 @@
 //! A mask has a keyframable *Mask Path* (vertex-wise interpolation when the vertex counts match,
 //! hold otherwise), *Feather* (falloff width in pixels, centred on the edge), *Opacity* (%),
 //! *Expansion* (pixels, grows/shrinks the shape by signed distance), *Inverted*, and a combine
-//! [`MaskMode`] with the masks above it. Coverage is computed by `filmcraft_render::mask`.
+//! [`MaskMode`] with the masks above it. Coverage is computed by `mortiflix_render::mask`.
 
-use filmcraft_geom::{Affine, Vec2};
+use mortiflix_geom::{Affine, Vec2};
 use serde::{Deserialize, Serialize};
 
 use crate::effect::{ParamDef, ParamKind};
@@ -427,7 +427,7 @@ impl Mask {
             _ => None,
         }
     }
-    pub fn path_at(&self, t: filmcraft_time::Tick) -> MaskPath {
+    pub fn path_at(&self, t: mortiflix_time::Tick) -> MaskPath {
         match self.path.value_at(t) {
             ParamValue::Path(p) => p,
             _ => MaskPath::default(),
@@ -467,7 +467,7 @@ pub fn mask_param_defs() -> &'static [ParamDef] {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use filmcraft_time::Tick;
+    use mortiflix_time::Tick;
 
     #[test]
     fn ellipse_flattens_onto_the_ellipse() {

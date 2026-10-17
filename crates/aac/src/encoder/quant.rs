@@ -4,7 +4,7 @@
 //! Coefficients are kept in bitstream order ("interleaved": group → band → window → line), so every
 //! (group, band) is a contiguous slice and short-window grouping needs no special casing.
 
-use filmcraft_bitstream::BitWriter;
+use mortiflix_bitstream::BitWriter;
 
 use crate::huffman::{self, ZERO_HCB};
 use crate::ics::IcsInfo;
@@ -363,7 +363,7 @@ mod tests {
     use crate::ics::WindowSequence;
     use crate::mdct::WindowShape;
     use crate::tables::swb_offsets_long;
-    use filmcraft_bitstream::BitWriter;
+    use mortiflix_bitstream::BitWriter;
 
     #[test]
     fn bit_count_matches_written_bits() {

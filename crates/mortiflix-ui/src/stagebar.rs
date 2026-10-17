@@ -1,4 +1,4 @@
-//! The stage bar (doc 30, mockup `UI Layout/30b Stage bar.html`): one 44 px row under FilmCraft's
+//! The stage bar (doc 30, mockup `UI Layout/30b Stage bar.html`): one 44 px row under Mortiflix Studio's
 //! header on every project screen. `‹ Back: <stage>` · six stages with their status · one hint ·
 //! `Next: <stage> ›`. On 4 Voice & music the Next slot holds Edit the video + Get the video (owner
 //! answer 1). Every click is a command (`stages.*`), so menus, shortcuts and agents do the same.
@@ -24,7 +24,7 @@ pub fn hint(ctx: &MfxCtx) -> String {
         0 => "Click any line to change it, Save, then press Next.",
         1 => "Pick the look you like, then press Next.",
         2 => "Check each shot: OK, Fix or Cut it.",
-        3 => "Listen with the shots. Get the video, or edit it in FilmCraft first.",
+        3 => "Listen with the shots. Get the video, or edit it in Edit first.",
         4 => "Make any final edits, then press Next.",
         _ => "Pick where the video goes and render it.",
     }

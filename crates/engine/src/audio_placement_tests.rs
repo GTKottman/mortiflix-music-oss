@@ -1,8 +1,8 @@
 //! Multi-clip audio placement: `audio_placement_specs` and dynamic audio track allocation.
 
-use filmcraft_media::MediaSource;
-use filmcraft_project::{AudioChannels, ItemId, TrackKind};
-use filmcraft_time::{FrameRate, Tick, TimeRange};
+use mortiflix_media::MediaSource;
+use mortiflix_project::{AudioChannels, ItemId, TrackKind};
+use mortiflix_time::{FrameRate, Tick, TimeRange};
 
 use serde_json::json;
 
@@ -54,14 +54,14 @@ fn placing_media_with_two_streams_expands_tracks_and_keeps_stream_indices() {
     let mut p = (*s.project).clone();
     let rate = FrameRate::FPS_24;
     let seq = p.new_sequence("Two streams", Default::default(), 1, 1, None);
-    let source = filmcraft_media::generators::GeneratorSource::new(filmcraft_media::Generator::BarsAndTone, 32, 32, rate, rate.tick_of(24));
+    let source = mortiflix_media::generators::GeneratorSource::new(mortiflix_media::Generator::BarsAndTone, 32, 32, rate, rate.tick_of(24));
     let mut info = source.info().clone();
     info.audio_streams.push(info.audio_streams[0].clone());
     let item = p.add_item(
         "two streams",
-        filmcraft_project::Label::Iris,
-        filmcraft_project::ItemKind::Media(filmcraft_project::MediaClip {
-            media: filmcraft_project::MediaRef::Generator(filmcraft_media::Generator::BarsAndTone),
+        mortiflix_project::Label::Iris,
+        mortiflix_project::ItemKind::Media(mortiflix_project::MediaClip {
+            media: mortiflix_project::MediaRef::Generator(mortiflix_media::Generator::BarsAndTone),
             info,
             interpret: Default::default(),
             mark_in: None,
@@ -100,14 +100,14 @@ fn clip_peaks_measure_the_stream_the_clip_plays() {
     let mut p = (*s.project).clone();
     let rate = FrameRate::FPS_24;
     let seq = p.new_sequence("Two streams", Default::default(), 1, 1, None);
-    let source = filmcraft_media::generators::GeneratorSource::new(filmcraft_media::Generator::BarsAndTone, 32, 32, rate, rate.tick_of(24));
+    let source = mortiflix_media::generators::GeneratorSource::new(mortiflix_media::Generator::BarsAndTone, 32, 32, rate, rate.tick_of(24));
     let mut info = source.info().clone();
     info.audio_streams.push(info.audio_streams[0].clone());
     let item = p.add_item(
         "two streams",
-        filmcraft_project::Label::Iris,
-        filmcraft_project::ItemKind::Media(filmcraft_project::MediaClip {
-            media: filmcraft_project::MediaRef::Generator(filmcraft_media::Generator::BarsAndTone),
+        mortiflix_project::Label::Iris,
+        mortiflix_project::ItemKind::Media(mortiflix_project::MediaClip {
+            media: mortiflix_project::MediaRef::Generator(mortiflix_media::Generator::BarsAndTone),
             info,
             interpret: Default::default(),
             mark_in: None,
@@ -132,7 +132,7 @@ fn clip_peaks_measure_the_stream_the_clip_plays() {
     let (a, b) = (q.audio_tracks[0].items[0].id, q.audio_tracks[1].items[0].id);
     assert!(ids.contains(&a) && ids.contains(&b));
     let peaks = crate::mixer::clip_peaks(&s, &[a, b]);
-    let db = |c: filmcraft_project::ClipId| peaks.iter().find(|(id, _)| *id == c).map(|(_, d)| *d).unwrap();
+    let db = |c: mortiflix_project::ClipId| peaks.iter().find(|(id, _)| *id == c).map(|(_, d)| *d).unwrap();
     // The generator only has stream 0, so the clip playing stream 1 is silent, not a copy of stream 0.
     assert!(db(a) > -30.0, "{peaks:?}");
     assert!(db(b) < -100.0, "{peaks:?}");
@@ -171,7 +171,7 @@ fn missing_audio_tracks_are_cloned_from_the_destination() {
 /// #823: a container with two PCM tracks imports both streams, and overwrite places linked clips.
 #[test]
 fn import_keeps_every_audio_stream_and_places_linked_clips() {
-    use filmcraft_isobmff::{Brand, Mp4Writer, PcmConfig, SampleEntry, TrackConfig, WriteSample, WriterOptions};
+    use mortiflix_isobmff::{Brand, Mp4Writer, PcmConfig, SampleEntry, TrackConfig, WriteSample, WriterOptions};
     let mut mux = Mp4Writer::new(std::io::Cursor::new(Vec::new()), WriterOptions::new(Brand::Mov)).unwrap();
     for (rate, value) in [(48_000u32, 8192i16), (24_000, -16384)] {
         let entry = SampleEntry::pcm(PcmConfig { bits: 16, float: false, big_endian: false, signed: true, channels: 1, sample_rate: rate as f64 });

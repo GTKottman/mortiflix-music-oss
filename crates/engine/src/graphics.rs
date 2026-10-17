@@ -1,17 +1,17 @@
 //! Graphics commands (`graphics.*`, `fonts.list`): graphic clips with text and shape layers.
 //!
 //! A graphic clip's layers are the `graphic_text` / `graphic_shape` effect instances on the clip
-//! (see `filmcraft_project::graphic`). Commands address a clip by `clip` (default: the first
+//! (see `mortiflix_project::graphic`). Commands address a clip by `clip` (default: the first
 //! selected graphic clip, else the topmost graphic clip under the playhead) and a layer by
 //! `layer` = index among the clip's graphic layers, 0 = back (default: the selected layer, else
 //! the frontmost). Property values are keyframe-aware: on an animated property they set the value
 //! at the playhead.
 
-use filmcraft_geom::Vec2;
-use filmcraft_project::graphic::{self, LayerContent, SHAPE_OPTS, eval_layer, layer_display_name, layer_indices, new_shape_layer, new_text_layer};
-use filmcraft_project::{ClipId, EffectInstance, ItemId, ItemKind, Label, Param, ParamValue, Sequence, TrackKind};
-use filmcraft_render::graphic_clip::{item_layer_specs, layer_local_bounds, layer_quad, text_layout};
-use filmcraft_time::{Tick, TimeRange};
+use mortiflix_geom::Vec2;
+use mortiflix_project::graphic::{self, LayerContent, SHAPE_OPTS, eval_layer, layer_display_name, layer_indices, new_shape_layer, new_text_layer};
+use mortiflix_project::{ClipId, EffectInstance, ItemId, ItemKind, Label, Param, ParamValue, Sequence, TrackKind};
+use mortiflix_render::graphic_clip::{item_layer_specs, layer_local_bounds, layer_quad, text_layout};
+use mortiflix_time::{Tick, TimeRange};
 use serde_json::{Value, json};
 
 use crate::commands::{CommandSpec, always, bad, bool_p, f64_p, has_seq, str_p, time_p, u64_p};
@@ -85,7 +85,7 @@ pub(crate) fn vec2_p(p: &Value, k: &str) -> Option<Vec2> {
 
 /// Find or create the graphic source item for the active sequence's frame size (source graphics
 /// have their own items and are never reused here).
-pub(crate) fn graphic_source(p: &mut filmcraft_project::Project, w: u32, h: u32, rate: filmcraft_time::FrameRate) -> ItemId {
+pub(crate) fn graphic_source(p: &mut mortiflix_project::Project, w: u32, h: u32, rate: mortiflix_time::FrameRate) -> ItemId {
     if let Some((id, _)) = p.items.iter().find(|(id, i)| {
         !p.source_graphics.contains_key(id) && matches!(i.kind, ItemKind::Graphic { width, height, rate: r } if width == w && height == h && r == rate)
     }) {
@@ -96,7 +96,7 @@ pub(crate) fn graphic_source(p: &mut filmcraft_project::Project, w: u32, h: u32,
 
 /// Place a new graphic clip holding `layer` at the playhead: on the first video track above the
 /// topmost clip at the playhead that is free for the duration (a track is added if needed).
-fn new_graphic_clip(s: &mut Session, cmd: &str, layer: filmcraft_project::EffectInstance, name: &str, p: &Value) -> Result<ClipId> {
+fn new_graphic_clip(s: &mut Session, cmd: &str, layer: mortiflix_project::EffectInstance, name: &str, p: &Value) -> Result<ClipId> {
     let seconds = f64_p(p, "seconds").unwrap_or(5.0).max(0.01);
     // Here `seconds` is duration, not the generic time parser's placement alias.
     let mut placement = p.clone();
@@ -118,8 +118,8 @@ pub(crate) fn place_video_clip(
     name: &str,
     p: &Value,
     label: &str,
-    extra: Vec<filmcraft_project::EffectInstance>,
-    source: impl FnOnce(&mut filmcraft_project::Project, (u32, u32, filmcraft_time::FrameRate)) -> (ItemId, Tick),
+    extra: Vec<mortiflix_project::EffectInstance>,
+    source: impl FnOnce(&mut mortiflix_project::Project, (u32, u32, mortiflix_time::FrameRate)) -> (ItemId, Tick),
 ) -> Result<ClipId> {
     let seq_id = s.state.active_sequence.ok_or(EngineError::NoSequence)?;
     let t = time_p(s, p, "").unwrap_or_else(|| s.playhead());
@@ -139,13 +139,13 @@ pub(crate) fn place_video_clip(
         ti.name = name;
         ti.effects.extend(extra);
         for e in &mut ti.effects {
-            filmcraft_project::resolve_auto_points(e, (w, h), src_size);
+            mortiflix_project::resolve_auto_points(e, (w, h), src_size);
         }
         let id = ti.id;
-        let track_id = filmcraft_project::TrackId(pr.alloc_id());
+        let track_id = mortiflix_project::TrackId(pr.alloc_id());
         let q = pr.sequence_mut(seq_id).ok_or(EngineError::NoSequence)?;
         let range = TimeRange::new(t, dur);
-        let free = |tr: &filmcraft_project::Track| !tr.items.iter().any(|i| i.range().overlaps(&range));
+        let free = |tr: &mortiflix_project::Track| !tr.items.iter().any(|i| i.range().overlaps(&range));
         let idx = match want_track {
             Some(i) if i < q.video_tracks.len() && free(&q.video_tracks[i]) => i,
             Some(i) if i < q.video_tracks.len() => return Err(bad(cmd, format!("V{} is not free here", i + 1))),
@@ -155,7 +155,7 @@ pub(crate) fn place_video_clip(
                     Some(i) => i,
                     None => {
                         let n = q.video_tracks.len() + 1;
-                        q.video_tracks.push(filmcraft_project::Track::new(track_id, TrackKind::Video, format!("Video {n}")));
+                        q.video_tracks.push(mortiflix_project::Track::new(track_id, TrackKind::Video, format!("Video {n}")));
                         q.video_tracks.len() - 1
                     }
                 }
@@ -171,11 +171,11 @@ pub(crate) fn place_video_clip(
 }
 
 /// Add a layer to an existing graphic clip; returns the new layer index.
-fn add_layer(s: &mut Session, clip: ClipId, mut layer: filmcraft_project::EffectInstance) -> Result<usize> {
+fn add_layer(s: &mut Session, clip: ClipId, mut layer: mortiflix_project::EffectInstance) -> Result<usize> {
     let frame = s.active_sequence().map(|q| (q.settings.width, q.settings.height)).unwrap_or((1920, 1080));
-    filmcraft_project::resolve_auto_points(&mut layer, frame, frame);
+    mortiflix_project::resolve_auto_points(&mut layer, frame, frame);
     s.edit_sequence("Add Graphic Layer", |q, _, st| {
-        let (_, it) = q.find_item_mut(clip).ok_or(filmcraft_edit::EditError::NoItem(clip))?;
+        let (_, it) = q.find_item_mut(clip).ok_or(mortiflix_edit::EditError::NoItem(clip))?;
         // new layers go in front: after the last graphic layer
         let pos = layer_indices(&it.effects).last().map_or(it.effects.len(), |l| l + 1);
         it.effects.insert(pos, layer);
@@ -233,7 +233,7 @@ pub(crate) fn to_param(template: &ParamValue, id: &str, v: &Value) -> Option<Par
 /// the parameter existed.
 fn param_entry<'a>(e: &'a mut EffectInstance, id: &str) -> Option<&'a mut Param> {
     if !e.params.contains_key(id) {
-        let d = filmcraft_project::find_effect(&e.effect)?.param(id)?.default.clone();
+        let d = mortiflix_project::find_effect(&e.effect)?.param(id)?.default.clone();
         e.params.insert(id.to_string(), Param::new(d));
     }
     e.params.get_mut(id)
@@ -255,7 +255,7 @@ fn apply_props(e: &mut EffectInstance, props: &serde_json::Map<String, Value>, m
         if let (ParamValue::Text(a), ParamValue::Text(b), "text") = (&old, &pv, id)
             && let Some(x) = e.layer.as_mut()
         {
-            x.runs = filmcraft_project::graphic_design::adjust_runs(a, b, &x.runs);
+            x.runs = mortiflix_project::graphic_design::adjust_runs(a, b, &x.runs);
         }
     }
     Ok(())
@@ -275,7 +275,7 @@ pub(crate) fn set_props(
 ) -> Result<()> {
     let props = props.clone();
     s.edit_sequence_as(label, merge, |q, _, _| {
-        let (_, it) = q.find_item_mut(clip).ok_or(filmcraft_edit::EditError::NoItem(clip))?;
+        let (_, it) = q.find_item_mut(clip).ok_or(mortiflix_edit::EditError::NoItem(clip))?;
         let mt = it.source_time_at(tl.clamp(it.start, it.end() - Tick(1)));
         let e = it.effects.get_mut(eidx).ok_or_else(|| bad("graphics.set", "no such layer"))?;
         apply_props(e, &props, mt)?;
@@ -349,7 +349,7 @@ fn set_text_type(s: &mut Session, p: &Value) -> Result<Value> {
         (-origin_x(tp.box_width), -all.lines.first().map_or(0.0, |l| l.baseline))
     };
     s.edit_sequence("Text Layer Type", |q, _, _| {
-        let (_, it) = q.find_item_mut(clip).ok_or(filmcraft_edit::EditError::NoItem(clip))?;
+        let (_, it) = q.find_item_mut(clip).ok_or(mortiflix_edit::EditError::NoItem(clip))?;
         let e = it.effects.get_mut(ei).ok_or_else(|| bad(ID, "no such layer"))?;
         apply_props(e, &props, mt)?;
         if let Some(a) = param_entry(e, "anchor") {
@@ -468,7 +468,7 @@ fn layers_p(s: &Session, clip: ClipId, p: &Value) -> Result<Vec<usize>> {
 pub(crate) fn move_layers(s: &mut Session, clip: ClipId, moves: Vec<(usize, Vec2)>, label: &str) -> Result<()> {
     let tl = s.playhead();
     s.edit_sequence(label, |q, _, _| {
-        let (_, it) = q.find_item_mut(clip).ok_or(filmcraft_edit::EditError::NoItem(clip))?;
+        let (_, it) = q.find_item_mut(clip).ok_or(mortiflix_edit::EditError::NoItem(clip))?;
         let mt = it.source_time_at(tl.clamp(it.start, it.end() - Tick(1)));
         for (ei, pos) in &moves {
             let Some(e) = it.effects.get_mut(*ei) else { continue };
@@ -537,7 +537,7 @@ fn has_graphic_or_clip(s: &Session) -> std::result::Result<(), String> {
 fn align_clips(s: &mut Session, clips: &[ClipId], how: &str, mode: AlignTo) -> Result<Value> {
     let seq = s.active_sequence().ok_or(EngineError::NoSequence)?;
     let t = s.playhead();
-    let at = |it: &filmcraft_project::TrackItem| it.source_time_at(t.min(it.end() - Tick(1)).max(it.start));
+    let at = |it: &mortiflix_project::TrackItem| it.source_time_at(t.min(it.end() - Tick(1)).max(it.start));
     let frame = [0.0, 0.0, seq.settings.width as f64, seq.settings.height as f64];
     let mut boxes = Vec::new();
     for (i, &c) in clips.iter().enumerate() {
@@ -545,7 +545,7 @@ fn align_clips(s: &mut Session, clips: &[ClipId], how: &str, mode: AlignTo) -> R
         let Some(src) = s.project.source_size(it.item) else { continue };
         let Some(motion) = it.effect("motion") else { continue };
         let mt = at(it);
-        let m = filmcraft_render::motion_matrix(seq, it, src, s.project.source_par(it.item), mt);
+        let m = mortiflix_render::motion_matrix(seq, it, src, s.project.source_par(it.item), mt);
         let (w, h) = (src.0 as f64, src.1 as f64);
         let corners = [(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)].map(|(x, y)| m.apply(Vec2::new(x, y)));
         let b = corners.iter().fold([f64::MAX, f64::MAX, f64::MIN, f64::MIN], |b, p| [b[0].min(p.x), b[1].min(p.y), b[2].max(p.x), b[3].max(p.y)]);
@@ -647,7 +647,7 @@ fn arrange_layer(s: &mut Session, p: &Value, to: Value) -> Result<Value> {
     let clip = target_clip(s, p).ok_or_else(|| bad("graphics.arrangeLayer", "no graphic clip"))?;
     let (l, _) = layer_effect_index(s, clip, p)?;
     let dest = s.edit_sequence("Arrange Graphic Layer", |q, _, st| {
-        let (_, it) = q.find_item_mut(clip).ok_or(filmcraft_edit::EditError::NoItem(clip))?;
+        let (_, it) = q.find_item_mut(clip).ok_or(mortiflix_edit::EditError::NoItem(clip))?;
         let idx = layer_indices(&it.effects);
         let last = idx.len() - 1;
         let dest = match &to {
@@ -909,12 +909,12 @@ fn menu_commands() -> Vec<CommandSpec> {
                     None => s.state.graphic_layers.clone(),
                 };
                 let n = s.edit_sequence("Reset All Parameters", |q, _, _| {
-                    let (_, it) = q.find_item_mut(clip).ok_or(filmcraft_edit::EditError::NoItem(clip))?;
+                    let (_, it) = q.find_item_mut(clip).ok_or(mortiflix_edit::EditError::NoItem(clip))?;
                     let mut n = 0;
                     for (l, ei) in layer_indices(&it.effects).into_iter().enumerate() {
                         if want.is_empty() || want.contains(&l) {
                             graphic::reset_layer_params(&mut it.effects[ei]);
-                            filmcraft_project::resolve_auto_points(&mut it.effects[ei], frame, frame);
+                            mortiflix_project::resolve_auto_points(&mut it.effects[ei], frame, frame);
                             n += 1;
                         }
                     }
@@ -936,8 +936,8 @@ fn menu_commands() -> Vec<CommandSpec> {
                 let d = s.edit_sequence("Reset Duration", |q, _, _| {
                     let rate = q.settings.frame_rate;
                     let want = rate.snap_nearest(Tick::from_seconds_f64(seconds)).max(rate.frame_duration());
-                    let tr = q.video_tracks.iter_mut().find(|tr| tr.items.iter().any(|i| i.id == clip)).ok_or(filmcraft_edit::EditError::NoItem(clip))?;
-                    let i = tr.items.iter().position(|i| i.id == clip).ok_or(filmcraft_edit::EditError::NoItem(clip))?;
+                    let tr = q.video_tracks.iter_mut().find(|tr| tr.items.iter().any(|i| i.id == clip)).ok_or(mortiflix_edit::EditError::NoItem(clip))?;
+                    let i = tr.items.iter().position(|i| i.id == clip).ok_or(mortiflix_edit::EditError::NoItem(clip))?;
                     let start = tr.items[i].start;
                     let limit = tr.items.get(i + 1).map_or(want, |n| n.start - start);
                     let d = want.min(limit).max(rate.frame_duration());
@@ -1093,7 +1093,7 @@ pub fn commands() -> Vec<CommandSpec> {
             let clip = target_clip(s, p).ok_or_else(|| bad("graphics.deleteLayer", "no graphic clip"))?;
             let (_, ei) = layer_effect_index(s, clip, p)?;
             s.edit_sequence("Delete Graphic Layer", |q, _, st| {
-                let (_, it) = q.find_item_mut(clip).ok_or(filmcraft_edit::EditError::NoItem(clip))?;
+                let (_, it) = q.find_item_mut(clip).ok_or(mortiflix_edit::EditError::NoItem(clip))?;
                 it.effects.remove(ei);
                 st.graphic_layers.clear();
                 Ok(())
@@ -1148,9 +1148,9 @@ pub fn commands() -> Vec<CommandSpec> {
         }),
         query("fonts.list", "List Fonts", r#"{"system":bool=true (scan the system font folders)}"#, |_, p| {
             if p.get("system").and_then(Value::as_bool).unwrap_or(true) {
-                filmcraft_text::fonts::scan_system();
+                mortiflix_text::fonts::scan_system();
             }
-            Ok(json!(filmcraft_text::families().into_iter().map(|(f, st)| json!({"family": f, "styles": st})).collect::<Vec<_>>()))
+            Ok(json!(mortiflix_text::families().into_iter().map(|(f, st)| json!({"family": f, "styles": st})).collect::<Vec<_>>()))
         }),
     ];
     v.extend(menu_commands());

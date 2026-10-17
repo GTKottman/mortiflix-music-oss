@@ -1,17 +1,17 @@
 //! External oracle: LibRaw's `unprocessed_raw` sample program (an independent DNG reader) must
 //! read the raw samples of our synthetic DNGs exactly as written and as we decode them: packed
 //! uncompressed data at every depth in both byte orders, and lossless JPEG with every predictor.
-//! Skipped when `unprocessed_raw` is not installed (or `FILMCRAFT_UNPROCESSED_RAW` names it).
+//! Skipped when `unprocessed_raw` is not installed (or `MFX_STUDIO_UNPROCESSED_RAW` names it).
 //! LibRaw is only run, never linked or read.
 
 use std::path::PathBuf;
 use std::process::Command;
 
-use filmcraft_dng::Dng;
-use filmcraft_dng::writer::{Compression, Layout, Options, write};
+use mortiflix_dng::Dng;
+use mortiflix_dng::writer::{Compression, Layout, Options, write};
 
 fn tool() -> Option<String> {
-    let t = std::env::var("FILMCRAFT_UNPROCESSED_RAW").unwrap_or_else(|_| "unprocessed_raw".into());
+    let t = std::env::var("MFX_STUDIO_UNPROCESSED_RAW").unwrap_or_else(|_| "unprocessed_raw".into());
     Command::new(&t).arg("-q").output().ok().map(|_| t)
 }
 
@@ -54,7 +54,7 @@ fn libraw_reads_our_raw_samples() {
         eprintln!("SKIPPED: unprocessed_raw (LibRaw samples) not installed");
         return;
     };
-    let dir: PathBuf = std::env::temp_dir().join(format!("filmcraft-dng-oracle-{}", std::process::id()));
+    let dir: PathBuf = std::env::temp_dir().join(format!("mortiflix-dng-oracle-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let (w, h) = (40, 26);
     let mut cases: Vec<(String, Options, u32)> = Vec::new();

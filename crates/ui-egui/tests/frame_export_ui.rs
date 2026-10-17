@@ -1,11 +1,11 @@
 use egui_kittest::Harness;
-use filmcraft_engine::Session;
-use filmcraft_time::{FrameRate, Tick};
-use filmcraft_ui_egui::{FilmcraftApp, dock::PanelKind, menus};
+use mortiflix_engine::Session;
+use mortiflix_time::{FrameRate, Tick};
+use mortiflix_ui_egui::{StudioApp, dock::PanelKind, menus};
 use serde_json::json;
 use std::sync::{Arc, Mutex};
 
-fn step(h: &mut Harness<'static, FilmcraftApp>) {
+fn step(h: &mut Harness<'static, StudioApp>) {
     let ctx = h.ctx.clone();
     let mut raw = std::mem::take(h.input_mut());
     eframe::App::raw_input_hook(h.state_mut(), &ctx, &mut raw);
@@ -13,32 +13,32 @@ fn step(h: &mut Harness<'static, FilmcraftApp>) {
     ctx.request_repaint();
     h.step();
 }
-fn harness() -> Harness<'static, FilmcraftApp> {
+fn harness() -> Harness<'static, StudioApp> {
     let mut s = Session::default();
     s.execute("file.newSequence", json!({"name":"Program clip","width":128,"height":72,"fps":24})).unwrap();
-    let item = filmcraft_engine::demo::add_generator(
+    let item = mortiflix_engine::demo::add_generator(
         Arc::make_mut(&mut s.project),
         &s.media,
-        filmcraft_media::generators::GeneratorSource::new(
-            filmcraft_media::Generator::Demo(filmcraft_media::DemoScene::Aurora),
+        mortiflix_media::generators::GeneratorSource::new(
+            mortiflix_media::Generator::Demo(mortiflix_media::DemoScene::Aurora),
             128,
             72,
             FrameRate::FPS_24,
             Tick::from_seconds_f64(5.0),
         ),
         "Source clip",
-        filmcraft_project::Label::Iris,
+        mortiflix_project::Label::Iris,
         None,
     );
     s.execute("source.open", json!({"item":item.0})).unwrap();
-    let mut h = Harness::builder().with_size(egui::vec2(1600.0, 980.0)).build_eframe(move |_cc| FilmcraftApp::new(s));
+    let mut h = Harness::builder().with_size(egui::vec2(1600.0, 980.0)).build_eframe(move |_cc| StudioApp::new(s));
     for _ in 0..3 {
         step(&mut h);
     }
     h
 }
-fn click(h: &mut Harness<'static, FilmcraftApp>, id: &str) {
-    fn center(h: &Harness<'static, FilmcraftApp>, id: &str) -> egui::Pos2 {
+fn click(h: &mut Harness<'static, StudioApp>, id: &str) {
+    fn center(h: &Harness<'static, StudioApp>, id: &str) -> egui::Pos2 {
         let e = h.state().auto.elements.iter().find(|e| e.id == id).or_else(|| h.state().auto.find(id)).unwrap_or_else(|| {
             panic!(
                 "missing {id}; available {:?}",
@@ -60,7 +60,7 @@ fn click(h: &mut Harness<'static, FilmcraftApp>, id: &str) {
     }
     step(h);
 }
-fn has(h: &Harness<'static, FilmcraftApp>, id: &str) -> bool {
+fn has(h: &Harness<'static, StudioApp>, id: &str) -> bool {
     h.state().auto.elements.iter().any(|e| e.id == id)
 }
 
@@ -278,7 +278,7 @@ fn clicking_outside_dismisses_without_export_and_dropdowns_stay_open() {
         assert_eq!(h.state().auto.elements.iter().find(|e| e.id == "exportFrame.depth").unwrap().label, "16 Bit");
         click(&mut h, "header.mode.export");
         assert!(!has(&h, "exportFrame.name"));
-        assert_eq!(h.state().ui.mode, filmcraft_ui_egui::state::Mode::Export);
+        assert_eq!(h.state().ui.mode, mortiflix_ui_egui::state::Mode::Export);
         assert_eq!(h.state().session.project.items.len(), count);
     }
     let mut h = harness();

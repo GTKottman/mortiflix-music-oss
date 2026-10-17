@@ -1,6 +1,6 @@
 //! MPEG transport / program streams against ffmpeg: ffmpeg writes the files and decodes them as
 //! the oracle. Video: frame count and display order exact, PTS exact against ffprobe, H.264 /
-//! HEVC bit-exact, MPEG-2 within the IDCT tolerance of `filmcraft-mpeg2v` (±4, PSNR ≥ 58 dB);
+//! HEVC bit-exact, MPEG-2 within the IDCT tolerance of `mortiflix-mpeg2v` (±4, PSNR ≥ 58 dB);
 //! random seeks give the frames of the sequential decode. Audio: LPCM sample-exact, MPEG audio
 //! and AAC within a float-decoder tolerance, starting at the same sample.
 
@@ -9,8 +9,8 @@ mod common;
 use std::path::{Path, PathBuf};
 
 use common::*;
-use filmcraft_codecs::MpegSource;
-use filmcraft_media::{FrameRequest, MediaError, MediaSource};
+use mortiflix_codecs::MpegSource;
+use mortiflix_media::{FrameRequest, MediaError, MediaSource};
 
 /// Stereo test audio with different content per channel (tones and a chirp).
 const NOISE: &[&str] =
@@ -192,7 +192,7 @@ fn open(p: &Path) -> MpegSource {
 /// ffprobe's video frames in display order: PTS (90 kHz). A program-stream picture
 /// need not carry its own PTS; use the decoder's presentation timestamp for that picture.
 fn ffprobe_frame_pts(file: &Path) -> Option<Vec<i64>> {
-    let fp = filmcraft_testkit::ffprobe_or_skip("MPEG video frame presentation timestamps")?;
+    let fp = mortiflix_testkit::ffprobe_or_skip("MPEG video frame presentation timestamps")?;
     let o = std::process::Command::new(fp)
         .args(["-v", "error", "-select_streams", "v:0", "-show_entries", "frame=pts,best_effort_timestamp", "-of", "json"])
         .arg(file)
@@ -255,9 +255,9 @@ fn check_video(ff: &Path, file: &Path, tol: u16, seeks: usize) -> (u16, f64) {
     let src = open(file);
     let v = src.info().video.clone().unwrap();
     let (w, h) = (v.width as usize, v.height as usize);
-    let first = src.video_frame(FrameRequest::full(filmcraft_time::Tick::ZERO)).unwrap();
+    let first = src.video_frame(FrameRequest::full(mortiflix_time::Tick::ZERO)).unwrap();
     let (cw, ch, pix) = match &first.data {
-        filmcraft_frame::PixelData::Yuv8 { chroma: filmcraft_frame::Chroma::C422, .. } => (w / 2, h, "yuv422p"),
+        mortiflix_frame::PixelData::Yuv8 { chroma: mortiflix_frame::Chroma::C422, .. } => (w / 2, h, "yuv422p"),
         _ => (w.div_ceil(2), h.div_ceil(2), "yuv420p"),
     };
     let raw = ffmpeg_frames(ff, file, pix);
@@ -364,7 +364,7 @@ fn check_audio(ff: &Path, file: &Path, tol: f32) -> f32 {
 
 #[test]
 fn transport_stream_mpeg2_and_mp2() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let f = make(&ff, "ts_mpeg2_mp2.ts");
     let src = open(&f);
     let v = src.info().video.clone().unwrap();
@@ -383,7 +383,7 @@ fn transport_stream_mpeg2_and_mp2() {
 
 #[test]
 fn transport_stream_h264_and_aac() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let f = make(&ff, "ts_h264_aac.ts");
     let src = open(&f);
     assert_eq!(src.info().video.as_ref().unwrap().codec, "H.264");
@@ -394,7 +394,7 @@ fn transport_stream_h264_and_aac() {
 
 #[test]
 fn bdav_h264_with_lpcm_sample_exact() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let f = make(&ff, "m2ts_h264_lpcm.m2ts");
     let src = open(&f);
     assert_eq!(src.info().container, "MPEG-2 TS (BDAV/AVCHD)");
@@ -406,12 +406,12 @@ fn bdav_h264_with_lpcm_sample_exact() {
 
 #[test]
 fn avchd_ac3_audio() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let f = make(&ff, "m2ts_h264_ac3.mts");
     let src = open(&f);
     check_video(&ff, &f, 0, 6);
     let a = src.info().audio().cloned().unwrap();
-    if filmcraft_codecs::audio::AC3_DECODER {
+    if mortiflix_codecs::audio::AC3_DECODER {
         assert_eq!((a.codec.as_str(), a.channels), ("AC-3", 2));
         // AC-3 zero-bit mantissas carry decoder-specific dither (A/52 §7.3.4)
         let e = check_audio(&ff, &f, 5e-3);
@@ -427,7 +427,7 @@ fn avchd_ac3_audio() {
 
 #[test]
 fn transport_stream_hevc_and_latm() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let f = make(&ff, "ts_hevc_latm.ts");
     let src = open(&f);
     assert_eq!(src.info().video.as_ref().unwrap().codec, "HEVC");
@@ -439,7 +439,7 @@ fn transport_stream_hevc_and_latm() {
 
 #[test]
 fn program_streams() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let f = make(&ff, "ps_mpeg2_mp2.vob");
     let src = open(&f);
     assert_eq!(src.info().container, "MPEG-2 PS");
@@ -476,9 +476,9 @@ fn program_streams() {
 
 #[test]
 fn video_elementary_stream() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let f = make(&ff, "es_mpeg2.m2v");
-    let src = filmcraft_codecs::open_bytes("es_mpeg2.m2v", bytes(&f)).unwrap();
+    let src = mortiflix_codecs::open_bytes("es_mpeg2.m2v", bytes(&f)).unwrap();
     assert_eq!(src.info().container, "MPEG video elementary stream");
     let raw = ffmpeg_frames(&ff, &f, "yuv420p");
     let fsize = 352 * 288 * 3 / 2;
@@ -494,10 +494,10 @@ fn video_elementary_stream() {
 
 #[test]
 fn mpeg2_in_quicktime_mp4_and_matroska() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     for (name, chroma) in [("mov_xdcam_hd422.mov", (2, 1)), ("mp4_mpeg2.mp4", (2, 2)), ("mkv_mpeg2.mkv", (2, 2))] {
         let f = make(&ff, name);
-        let src = filmcraft_codecs::open_bytes(name, bytes(&f)).unwrap();
+        let src = mortiflix_codecs::open_bytes(name, bytes(&f)).unwrap();
         let v = src.info().video.clone().unwrap();
         let (w, h) = (v.width as usize, v.height as usize);
         let (cw, ch) = (w / chroma.0, h / chroma.1);
@@ -515,9 +515,9 @@ fn mpeg2_in_quicktime_mp4_and_matroska() {
 
 #[test]
 fn standalone_mp2_file() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let f = make(&ff, "audio.mp2");
-    let src = filmcraft_codecs::open_bytes("audio.mp2", bytes(&f)).unwrap();
+    let src = mortiflix_codecs::open_bytes("audio.mp2", bytes(&f)).unwrap();
     let a = src.info().audio().cloned().unwrap();
     assert_eq!((a.sample_rate, a.channels), (48_000, 2));
     let want = ffmpeg_audio_f32(&ff, &f, &[]);
@@ -531,7 +531,7 @@ fn standalone_mp2_file() {
 /// symphonia rejects the bit rate / mode combinations ISO/IEC 11172-3 does not allow.
 #[test]
 fn mono_mp2_at_ffmpegs_default_bit_rate() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let f = make(&ff, "audio_mono.mp2");
     assert_eq!(std::fs::read(&f).unwrap()[2] >> 4, 14, "384 kbit/s");
     let worst = check_audio(&ff, &make(&ff, "ts_mpeg2_mono_mp2.ts"), 2e-4);
@@ -544,13 +544,13 @@ fn mono_mp2_at_ffmpegs_default_bit_rate() {
     for name in ["audio_mono.mp2", "mkv_mono_mp2.mkv"] {
         let f = make(&ff, name);
         let file = bytes(&f);
-        let src = filmcraft_codecs::open_bytes(name, file.clone()).unwrap();
+        let src = mortiflix_codecs::open_bytes(name, file.clone()).unwrap();
         let a = src.info().audio().cloned().unwrap();
         assert_eq!((a.sample_rate, a.channels), (48_000, 1), "{name}");
         let want = ffmpeg_audio_f32(&ff, &f, &[]);
         let (delay, lags): (usize, Vec<i64>) = match name.ends_with(".mkv") {
             true => {
-                let mkv = filmcraft_matroska::open(file).unwrap();
+                let mkv = mortiflix_matroska::open(file).unwrap();
                 let ns = mkv.tracks.first().map_or(0, |t| t.codec_delay_ns);
                 let delay = ((ns * 48_000 + 500_000_000) / 1_000_000_000) as usize;
                 assert!(delay > 0, "{name}: no CodecDelay");
@@ -576,7 +576,7 @@ fn mono_mp2_at_ffmpegs_default_bit_rate() {
 
 #[test]
 fn truncated_and_corrupt_files_never_panic() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     for name in ["ts_mpeg2_mp2.ts", "ps_mpeg2_mp2.vob", "ts_h264_aac.ts"] {
         let f = make(&ff, name);
         let full = std::fs::read(&f).unwrap();
@@ -612,10 +612,10 @@ fn truncated_and_corrupt_files_never_panic() {
 #[test]
 #[ignore]
 fn generate_fixtures() {
-    let Some(ff) = filmcraft_testkit::ffmpeg_or_skip("codecs mpeg fixtures") else { return };
+    let Some(ff) = mortiflix_testkit::ffmpeg_or_skip("codecs mpeg fixtures") else { return };
     for name in ALL {
         let out = [dir().join(name)];
-        filmcraft_testkit::fixtures::generate_and_report(&format!("codecs/{name}"), &out, || {
+        mortiflix_testkit::fixtures::generate_and_report(&format!("codecs/{name}"), &out, || {
             let args = spec(name);
             let refs: Vec<&str> = args.iter().map(String::as_str).collect();
             fixture(&ff, name, &refs)

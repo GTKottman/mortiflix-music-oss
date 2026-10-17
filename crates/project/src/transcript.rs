@@ -3,13 +3,13 @@
 //! A [`Transcript`] belongs to one media item (`Project::transcripts`, keyed by the item id) and
 //! lists the spoken [`Word`]s with their **media-time** bounds, so it stays valid however the clip
 //! is trimmed, moved or reused: the sequence transcript is derived from the clip transcripts by
-//! mapping each word through the track items that show it (`filmcraft_edit::transcript`).
+//! mapping each word through the track items that show it (`mortiflix_edit::transcript`).
 //!
 //! Speakers are numbered per transcript (`Word::speaker` indexes [`Transcript::speakers`]); the
 //! Text panel shows and renames them by name, so two clips whose speakers share a name read as one
 //! speaker in the sequence transcript.
 
-use filmcraft_time::{Tick, TimeRange};
+use mortiflix_time::{Tick, TimeRange};
 use serde::{Deserialize, Serialize};
 
 /// One transcribed word.

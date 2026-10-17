@@ -2,14 +2,14 @@
 
 use std::sync::Arc;
 
-use filmcraft_frame::{AudioBuffer, VideoFrame};
-use filmcraft_media::{AudioStreamInfo, FrameRequest, MediaError, MediaInfo, MediaKind, MediaSource};
-use filmcraft_project::mixer::{LANE_MUTE, LANE_PAN, LANE_VOLUME, send_lane};
-use filmcraft_project::{
+use mortiflix_frame::{AudioBuffer, VideoFrame};
+use mortiflix_media::{AudioStreamInfo, FrameRequest, MediaError, MediaInfo, MediaKind, MediaSource};
+use mortiflix_project::mixer::{LANE_MUTE, LANE_PAN, LANE_VOLUME, send_lane};
+use mortiflix_project::{
     AudioChannels, AutomationMode, ItemId, ItemKind, Keyframe, Label, MediaClip, MediaRef, ParamValue, Project, SequenceSettings, TrackKind, TrackSend,
     Transition, TransitionId,
 };
-use filmcraft_time::{FrameRate, TICKS_PER_SECOND, Tick, TimeRange};
+use mortiflix_time::{FrameRate, TICKS_PER_SECOND, Tick, TimeRange};
 
 use crate::mixer::{LiveMix, balance, graph_latency, mix_graph, pan_law_mono};
 use crate::{SourceMap, mixer};
@@ -35,13 +35,13 @@ fn audio_clips_from_one_container_mix_distinct_streams() {
         fn info(&self) -> &MediaInfo {
             &self.0
         }
-        fn video_frame(&self, _: FrameRequest) -> filmcraft_media::Result<Arc<VideoFrame>> {
+        fn video_frame(&self, _: FrameRequest) -> mortiflix_media::Result<Arc<VideoFrame>> {
             Err(MediaError::NoStream("video"))
         }
-        fn audio(&self, start: i64, frames: usize, sr: u32) -> filmcraft_media::Result<AudioBuffer> {
+        fn audio(&self, start: i64, frames: usize, sr: u32) -> mortiflix_media::Result<AudioBuffer> {
             self.audio_stream(0, start, frames, sr)
         }
-        fn audio_stream(&self, stream: usize, _start: i64, frames: usize, sr: u32) -> filmcraft_media::Result<AudioBuffer> {
+        fn audio_stream(&self, stream: usize, _start: i64, frames: usize, sr: u32) -> mortiflix_media::Result<AudioBuffer> {
             let v = match stream {
                 0 => 0.25,
                 1 => -0.125,
@@ -174,7 +174,7 @@ fn effect_and_pan_automation_on_the_block_grid() {
     let mut r = Rig::new(&[dc]);
     {
         let t = r.track(0);
-        let mut amp = filmcraft_project::find_effect("amplify").unwrap().instance();
+        let mut amp = mortiflix_project::find_effect("amplify").unwrap().instance();
         let g = amp.param_mut("gain").unwrap();
         g.keyframes = vec![kf(0, 0.0), kf(4800, 6.0)];
         t.effects.push(amp);
@@ -296,7 +296,7 @@ fn impulse(i: i64, _: usize) -> f32 {
 fn latency_compensation_aligns_paths() {
     // A1 goes through a look-ahead limiter (latency), A2 is dry; both carry the same impulse.
     let mut r = Rig::new(&[impulse, impulse]);
-    let mut lim = filmcraft_project::find_effect("hard_limiter").unwrap().instance();
+    let mut lim = mortiflix_project::find_effect("hard_limiter").unwrap().instance();
     lim.param_mut("max").unwrap().value = ParamValue::Float(0.0);
     r.track(0).effects.push(lim.clone());
     let lat = graph_latency(r.p.sequence(r.seq).unwrap());
@@ -315,7 +315,7 @@ fn latency_compensation_aligns_paths() {
     assert!(close(peak.1, 0.75, 2e-3), "{}", peak.1);
     // automation is evaluated at content time: a volume step on A1 at the impulse applies to it
     r.track(0).lane_mut(LANE_VOLUME).unwrap().keyframes = vec![kf(0, 0.0), kf(9_999, 0.0), kf(10_000, -96.0)];
-    r.track(0).lane_mut(LANE_VOLUME).unwrap().keyframes[1].interp = filmcraft_project::Interpolation::Hold;
+    r.track(0).lane_mut(LANE_VOLUME).unwrap().keyframes[1].interp = mortiflix_project::Interpolation::Hold;
     let [l, _] = r.mix(9_000, 2_000);
     assert!(close(l[1000], 0.5, 2e-3), "A1 silenced exactly at its content sample: {}", l[1000]);
 }
@@ -421,7 +421,7 @@ fn audio_transition_on_a_cut_crossfades_through_the_handles() {
     let sec = |s: f64| Tick::from_seconds_f64(s);
     let a = r.p.make_track_item(a_src, TrackKind::Audio, Tick::ZERO, TimeRange::new(Tick::ZERO, sec(1.0)), FrameRate::FPS_24).unwrap();
     let b = r.p.make_track_item(b_src, TrackKind::Audio, sec(1.0), TimeRange::new(sec(2.0), sec(1.0)), FrameRate::FPS_24).unwrap();
-    let effect = filmcraft_project::vtransition::find_transition("constant_gain", filmcraft_project::EffectKind::AudioTransition).unwrap().instance();
+    let effect = mortiflix_project::vtransition::find_transition("constant_gain", mortiflix_project::EffectKind::AudioTransition).unwrap().instance();
     let tr = Transition {
         id: TransitionId(1),
         effect,
@@ -467,7 +467,7 @@ fn mix_all(r: &Rig, start: i64, n: usize) -> Vec<Vec<f32>> {
 
 #[test]
 fn stereo_and_mono_tracks_into_a_51_mix_use_the_51_panner() {
-    use filmcraft_project::mixer::{LANE_PAN51_CENTER, LANE_PAN51_LFE, LANE_PAN51_X, LANE_PAN51_Y};
+    use mortiflix_project::mixer::{LANE_PAN51_CENTER, LANE_PAN51_LFE, LANE_PAN51_X, LANE_PAN51_Y};
     let mut r = Rig::new(&[chan_dc]);
     set_master_51(&mut r);
     // stereo track at the default puck (front centre): L → L, R → R, nothing else
@@ -531,8 +531,8 @@ fn a_51_track_passes_through_a_51_mix_and_folds_into_stereo() {
         0,
         256,
         &r.map,
-        filmcraft_audio_dsp::channels::Layout::Stereo,
-        filmcraft_audio_dsp::channels::Mixdown::Front,
+        mortiflix_audio_dsp::channels::Layout::Stereo,
+        mortiflix_audio_dsp::channels::Mixdown::Front,
     );
     assert!(close(front.channels[0][9], 0.1 + k * 0.3, 1e-6));
     // meters: one per channel of the strip
@@ -570,7 +570,7 @@ fn stereo_track_through_a_51_submix_into_a_stereo_mix() {
     r.track(0).mixer.output = Some(sub);
     // puck hard left at the front: source L on L, source R at front centre (C); folded into stereo
     // L = L + k·C, R = k·C
-    r.track(0).set_lane_static(filmcraft_project::mixer::LANE_PAN51_X, -100.0);
+    r.track(0).set_lane_static(mortiflix_project::mixer::LANE_PAN51_X, -100.0);
     let st = mix_all(&r, 0, 128);
     let k = std::f32::consts::FRAC_1_SQRT_2;
     assert!(close(st[0][50], 0.1 + k * 0.2, 1e-6) && close(st[1][50], k * 0.2, 1e-6), "{} {}", st[0][50], st[1][50]);
@@ -578,7 +578,7 @@ fn stereo_track_through_a_51_submix_into_a_stereo_mix() {
 
 #[test]
 fn pan51_automation_is_block_invariant() {
-    use filmcraft_project::mixer::LANE_PAN51_X;
+    use mortiflix_project::mixer::LANE_PAN51_X;
     let mut r = Rig::new(&[noise]);
     set_master_51(&mut r);
     let p = r.track(0).lane_mut(LANE_PAN51_X).unwrap();
@@ -639,10 +639,10 @@ impl MediaSource for Tone {
     fn info(&self) -> &MediaInfo {
         &self.info
     }
-    fn video_frame(&self, _: FrameRequest) -> filmcraft_media::Result<Arc<VideoFrame>> {
+    fn video_frame(&self, _: FrameRequest) -> mortiflix_media::Result<Arc<VideoFrame>> {
         Err(MediaError::Unsupported("audio only".into()))
     }
-    fn audio(&self, start: i64, frames: usize, sample_rate: u32) -> filmcraft_media::Result<AudioBuffer> {
+    fn audio(&self, start: i64, frames: usize, sample_rate: u32) -> mortiflix_media::Result<AudioBuffer> {
         let ch: Vec<f32> = (0..frames).map(|i| self.at((start + i as i64) as f64 / sample_rate as f64)).collect();
         Ok(AudioBuffer { sample_rate, channels: vec![ch.clone(), ch] })
     }

@@ -1,4 +1,4 @@
-//! `cargo run -p filmcraft-tts --release --features kokoro --example kokoro_say -- <model dir> <voice.pt> "<phonemes>" out.wav [speed]`
+//! `cargo run -p mortiflix-tts --release --features kokoro --example kokoro_say -- <model dir> <voice.pt> "<phonemes>" out.wav [speed]`
 //!
 //! Speaks Kokoro phonemes with a voice pack and writes a 24 kHz mono 32-bit float WAV.
 
@@ -10,12 +10,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let speed: f64 = a.get(5).and_then(|s| s.parse().ok()).unwrap_or(1.0);
     let t0 = std::time::Instant::now();
-    let k = filmcraft_tts::kokoro::Kokoro::load(std::path::Path::new(dir))?;
-    let v = filmcraft_tts::kokoro::VoicePack::load(std::path::Path::new(voice))?;
+    let k = mortiflix_tts::kokoro::Kokoro::load(std::path::Path::new(dir))?;
+    let v = mortiflix_tts::kokoro::VoicePack::load(std::path::Path::new(voice))?;
     let t1 = std::time::Instant::now();
     let s = k.speak(ph, &v, speed, 1)?;
     let t2 = std::time::Instant::now();
-    let rate = filmcraft_tts::kokoro::KOKORO_RATE;
+    let rate = mortiflix_tts::kokoro::KOKORO_RATE;
     let mut w = Vec::with_capacity(44 + s.len() * 4);
     let data = (s.len() * 4) as u32;
     w.extend_from_slice(b"RIFF");

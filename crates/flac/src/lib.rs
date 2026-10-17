@@ -11,11 +11,11 @@
 //!
 //! Lossless at every compression level; the level (0–8) only trades encoding time for size.
 //!
-//! Layer L0: depends only on `filmcraft-bitstream` (+ `thiserror`); no `unsafe`; builds for
+//! Layer L0: depends only on `mortiflix-bitstream` (+ `thiserror`); no `unsafe`; builds for
 //! `wasm32-unknown-unknown`.
 //!
 //! ```
-//! use filmcraft_flac::{Encoder, EncoderConfig, STREAMINFO_OFFSET};
+//! use mortiflix_flac::{Encoder, EncoderConfig, STREAMINFO_OFFSET};
 //!
 //! let left: Vec<i32> = (0..48_000).map(|i| ((i as f64 * 0.05).sin() * 20_000.0) as i32).collect();
 //! let right = left.clone();
@@ -27,7 +27,7 @@
 //! file[at..at + 34].copy_from_slice(&enc.streaminfo());
 //! assert_eq!(&file[..4], b"fLaC");
 //! assert!(file.len() < 48_000 * 2 * 2 / 2); // well under half of 16-bit PCM
-//! # Ok::<(), filmcraft_flac::Error>(())
+//! # Ok::<(), mortiflix_flac::Error>(())
 //! ```
 
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable))]
@@ -121,7 +121,7 @@ impl Encoder {
         let mut v = b"fLaC".to_vec();
         v.extend_from_slice(&[0, 0, 0, 34]);
         v.extend_from_slice(&self.streaminfo_with(0, 0, 0, [0; 16]));
-        let vendor = concat!("filmcraft-flac ", env!("CARGO_PKG_VERSION"));
+        let vendor = concat!("mortiflix-flac ", env!("CARGO_PKG_VERSION"));
         let len = 4 + vendor.len() + 4;
         // last metadata block, type 4 (VORBIS_COMMENT), little-endian lengths inside
         v.push(0x84);
@@ -138,7 +138,7 @@ impl Encoder {
     }
 
     fn streaminfo_with(&self, min_frame: u32, max_frame: u32, total: u64, md5: [u8; 16]) -> [u8; 34] {
-        let mut w = filmcraft_bitstream::BitWriter::new();
+        let mut w = mortiflix_bitstream::BitWriter::new();
         let bs = u32::from(self.cfg.block_size);
         w.write_bits(bs, 16);
         w.write_bits(bs, 16);

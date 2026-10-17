@@ -1,8 +1,8 @@
 //! Colour, keying and matte effects.
 
-use filmcraft_color::{Matrix, hsl_to_rgb, rgb_to_hsl, rgb_to_ycbcr};
-use filmcraft_project::EffectInstance;
-use filmcraft_project::effect::LIGHT_IDS;
+use mortiflix_color::{Matrix, hsl_to_rgb, rgb_to_hsl, rgb_to_ycbcr};
+use mortiflix_project::EffectInstance;
+use mortiflix_project::effect::LIGHT_IDS;
 use rayon::prelude::*;
 
 use super::*;
@@ -161,7 +161,7 @@ pub fn ultra_key(img: &mut Image, e: &EffectInstance, cx: &FxCtx) {
     let k = rgb_to_ycbcr(kc[0], kc[1], kc[2], Matrix::Bt709);
     let kmag2 = (k[1] * k[1] + k[2] * k[2]).max(1e-6);
     let setting = chv(e, "setting");
-    let preset = filmcraft_project::effect::ultra_key_setting(setting);
+    let preset = mortiflix_project::effect::ultra_key_setting(setting);
     let pf = |id: &str, fallback: f32| preset.and_then(|rows| rows.iter().find(|(k, _)| *k == id).map(|(_, v)| *v as f32)).unwrap_or(fallback);
     let transparency = pf("transparency", fv(e, "transparency", cx)) / 100.0;
     let highlight = pf("highlight", fv(e, "highlight", cx)) / 100.0;
@@ -245,7 +245,7 @@ pub fn ultra_key(img: &mut Image, e: &EffectInstance, cx: &FxCtx) {
         let l = dec(v);
         match output {
             1 => {
-                let g = filmcraft_color::srgb_to_linear(a);
+                let g = mortiflix_color::srgb_to_linear(a);
                 p.copy_from_slice(&[g * src_a, g * src_a, g * src_a, src_a]);
             }
             2 => p.copy_from_slice(&[l[0] * src_a, l[1] * src_a, l[2] * src_a, src_a]),
@@ -276,7 +276,7 @@ pub(crate) fn apply_matte(img: &mut Image, matte: &Image, m: &Affine, use_luma: 
         for x in 0..w {
             let o = m.apply(Vec2::new(x as f64 + 0.5, y as f64 + 0.5));
             let s = matte.sample_bilinear(o.x as f32, o.y as f32);
-            let mut v = if use_luma { filmcraft_color::linear_to_srgb(luma([s[0], s[1], s[2]]).clamp(0.0, 1.0)) } else { s[3] };
+            let mut v = if use_luma { mortiflix_color::linear_to_srgb(luma([s[0], s[1], s[2]]).clamp(0.0, 1.0)) } else { s[3] };
             if reverse {
                 v = 1.0 - v;
             }

@@ -5,10 +5,10 @@
 
 use std::sync::Arc;
 
-use filmcraft_geom::Vec2;
-use filmcraft_project::{ItemId, Project};
-use filmcraft_render::{Image, RenderOptions, SourceProvider};
-use filmcraft_time::FrameRate;
+use mortiflix_geom::Vec2;
+use mortiflix_project::{ItemId, Project};
+use mortiflix_render::{Image, RenderOptions, SourceProvider};
+use mortiflix_time::FrameRate;
 use rayon::prelude::*;
 
 use crate::settings::{ExportEffects, Placement, Scaling, TextOverlay};
@@ -122,7 +122,7 @@ pub(crate) struct Pipeline {
     pub hdr_out: bool,
     /// Keep straight alpha in the RGBA8 output instead of flattening over black.
     alpha: bool,
-    out_tf: Option<filmcraft_color::OutputTransform>,
+    out_tf: Option<mortiflix_color::OutputTransform>,
     effects: ExportEffects,
     overlay: Option<Image>,
     start_tc: i64,
@@ -134,13 +134,13 @@ pub(crate) struct Pipeline {
 
 impl Drop for Pipeline {
     /// The export is over, however it ended (done, failed, cancelled, dropped half way). The float
-    /// images its frames left on the `filmcraft_frame::pool` float shelf are the size of its
+    /// images its frames left on the `mortiflix_frame::pool` float shelf are the size of its
     /// frames, which nothing else asks for, so free them instead of holding up to 320 MiB idle. A
     /// job still rendering at that moment allocates a few images again; the pool is only a cache.
     /// Parts of a larger job (render-preview segments, proxies) keep them for the next part.
     fn drop(&mut self) {
         if self.trim_pool {
-            filmcraft_frame::pool::trim_f32();
+            mortiflix_frame::pool::trim_f32();
         }
     }
 }
@@ -151,19 +151,19 @@ impl Pipeline {
         q.settings.validate().map_err(ExportError::Unsupported)?;
         settings.validate()?;
         let r = settings.resolve(q.settings.width, q.settings.height, q.settings.frame_rate, q.settings.sample_rate);
-        filmcraft_project::validate_frame_size(r.width, r.height).map_err(ExportError::Unsupported)?;
+        mortiflix_project::validate_frame_size(r.width, r.height).map_err(ExportError::Unsupported)?;
         let geom = Geometry::new(settings, q.settings.width, q.settings.height, r.width, r.height);
         if let Some((w, h)) = geom.content {
             let w = u32::try_from(w).map_err(|_| ExportError::Unsupported("scaled picture width is too large".into()))?;
             let h = u32::try_from(h).map_err(|_| ExportError::Unsupported("scaled picture height is too large".into()))?;
-            filmcraft_project::validate_frame_size(w, h).map_err(ExportError::Unsupported)?;
+            mortiflix_project::validate_frame_size(w, h).map_err(ExportError::Unsupported)?;
         }
-        let (w, h) = filmcraft_render::output_size(q, geom.render_scale);
+        let (w, h) = mortiflix_render::output_size(q, geom.render_scale);
         let w = u32::try_from(w).map_err(|_| ExportError::Unsupported("rendered picture width is too large".into()))?;
         let h = u32::try_from(h).map_err(|_| ExportError::Unsupported("rendered picture height is too large".into()))?;
-        filmcraft_project::validate_frame_size(w, h).map_err(ExportError::Unsupported)?;
+        mortiflix_project::validate_frame_size(w, h).map_err(ExportError::Unsupported)?;
         let pipe = q.settings.color;
-        let out_tf = hdr_out.then(|| filmcraft_color::OutputTransform::new(&pipe, pipe.working.output_space()));
+        let out_tf = hdr_out.then(|| mortiflix_color::OutputTransform::new(&pipe, pipe.working.output_space()));
         let opts = RenderOptions { scale: geom.render_scale, captions: settings.burn_captions, working_output: hdr_out, ..Default::default() };
         let effects = settings.effects.clone();
         let overlay = if effects.image_overlay.enabled && !effects.image_overlay.path.is_empty() {
@@ -217,7 +217,7 @@ impl Pipeline {
         // planner hands back as one CPU image anyway (an adjustment layer, a complex transition,
         // HDR) does not take a pooled renderer: it would render on the CPU inside the pool, as
         // many frames at a time as there are renderers instead of one per export thread.
-        let pool = self.renderer.as_ref().filter(|_| !filmcraft_render::plan::is_cpu_frame(&self.project, self.seq, t));
+        let pool = self.renderer.as_ref().filter(|_| !mortiflix_render::plan::is_cpu_frame(&self.project, self.seq, t));
         let gpu = match pool {
             Some(pool) => {
                 let asked = web_time::Instant::now();
@@ -238,7 +238,7 @@ impl Pipeline {
                 if self.renderer.is_some() {
                     note_gpu_fallback();
                 }
-                filmcraft_render::render_sequence(&self.project, self.seq, t, self.opts, sources)
+                mortiflix_render::render_sequence(&self.project, self.seq, t, self.opts, sources)
             }
         };
         let mut img = self.place(img);
@@ -255,12 +255,12 @@ impl Pipeline {
                 limit_f32(&mut out, lim.min_percent, lim.max_percent);
             }
             // the float image is not needed any more: its buffer serves the next frame's layers
-            filmcraft_frame::pool::recycle_f32(img.px);
+            mortiflix_frame::pool::recycle_f32(img.px);
             return (Vec::new(), out);
         }
         let mut rgba = if self.alpha { img.to_rgba8() } else { img.over_black_rgba8() };
         // the float image is not needed any more: its buffer serves the next frame's layers
-        filmcraft_frame::pool::recycle_f32(img.px);
+        mortiflix_frame::pool::recycle_f32(img.px);
         if lim.enabled {
             limit_rgba8(&mut rgba, lim.min_percent, lim.max_percent);
         }
@@ -296,7 +296,7 @@ impl Pipeline {
         out
     }
 
-    fn overlays(&self, img: &mut Image, t: filmcraft_time::Tick) {
+    fn overlays(&self, img: &mut Image, t: mortiflix_time::Tick) {
         let fx = &self.effects;
         if let Some(ov) = &self.overlay {
             let o = &fx.image_overlay;
@@ -308,7 +308,7 @@ impl Pipeline {
         }
         if fx.timecode_overlay.enabled {
             let frame = self.seq_rate.frame_at(t) + self.start_tc;
-            let tc = filmcraft_time::format_timecode_frames(frame, self.seq_rate, self.drop_frame);
+            let tc = mortiflix_time::format_timecode_frames(frame, self.seq_rate, self.drop_frame);
             let text = if fx.timecode_overlay.text.trim().is_empty() { tc } else { format!("{} {tc}", fx.timecode_overlay.text.trim()) };
             self.text(img, &fx.timecode_overlay, &text);
         }
@@ -317,21 +317,21 @@ impl Pipeline {
     /// White text on a translucent black box (the Timecode / Clip Name burn-in look).
     fn text(&self, img: &mut Image, o: &TextOverlay, text: &str) {
         let px = (img.h as f32 * o.size_percent.clamp(1.0, 50.0) / 100.0).max(6.0);
-        let family = filmcraft_text::fonts::DEFAULT_FAMILY;
-        let st = filmcraft_text::TextStyle { family: family.into(), style: "Regular".into(), size: px, ..Default::default() };
-        let l = filmcraft_text::layout(text, &st, &filmcraft_text::ParagraphStyle::default());
+        let family = mortiflix_text::fonts::DEFAULT_FAMILY;
+        let st = mortiflix_text::TextStyle { family: family.into(), style: "Regular".into(), size: px, ..Default::default() };
+        let l = mortiflix_text::layout(text, &st, &mortiflix_text::ParagraphStyle::default());
         let pad = px * 0.25;
         let (bw, bh) = (l.bounds[2] - l.bounds[0] + 2.0 * pad, px * 1.1 + 2.0 * pad);
         let (x, y) = anchor(o.placement, o.offset, img.w as f32, img.h as f32, bw, bh);
         let centre = Vec2::new((x + bw / 2.0) as f64, (y + bh / 2.0) as f64);
         let op = (o.opacity / 100.0).clamp(0.0, 1.0);
         if op >= 0.999 {
-            filmcraft_render::graphics::burn_text(img, text, family, centre, px, 0.6);
+            mortiflix_render::graphics::burn_text(img, text, family, centre, px, 0.6);
             return;
         }
         // draw on a transparent layer, then composite it at the overlay's opacity
         let mut layer = Image::new(img.w, img.h);
-        filmcraft_render::graphics::burn_text(&mut layer, text, family, centre, px, 0.6);
+        mortiflix_render::graphics::burn_text(&mut layer, text, family, centre, px, 0.6);
         composite(img, &layer, 0, 0, op);
     }
 }
@@ -382,7 +382,7 @@ fn load_overlay(path: &str, width: f32) -> Result<Image> {
     for (o, p) in img.px.as_chunks_mut::<4>().0.iter_mut().zip(rgba.as_raw().as_chunks::<4>().0) {
         let a = p[3] as f32 / 255.0;
         for c in 0..3 {
-            o[c] = filmcraft_color::srgb_to_linear(p[c] as f32 / 255.0) * a;
+            o[c] = mortiflix_color::srgb_to_linear(p[c] as f32 / 255.0) * a;
         }
         o[3] = a;
     }

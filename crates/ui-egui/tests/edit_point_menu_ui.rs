@@ -5,14 +5,14 @@
 use std::sync::mpsc::{Sender, channel};
 
 use egui_kittest::Harness;
-use filmcraft_engine::Session;
-use filmcraft_engine::project::{ClipId, Sequence};
-use filmcraft_ui_egui::FilmcraftApp;
-use filmcraft_ui_egui::control::ControlRequest;
+use mortiflix_engine::Session;
+use mortiflix_engine::project::{ClipId, Sequence};
+use mortiflix_ui_egui::StudioApp;
+use mortiflix_ui_egui::control::ControlRequest;
 use serde_json::{Value, json};
 
 struct Driver {
-    harness: Harness<'static, FilmcraftApp>,
+    harness: Harness<'static, StudioApp>,
     tx: Sender<ControlRequest>,
 }
 
@@ -21,7 +21,7 @@ impl Driver {
         let mut s = Session::default();
         s.execute("file.openDemoProject", json!({})).unwrap();
         let (tx, rx) = channel();
-        let app = FilmcraftApp::new(s).with_control(rx);
+        let app = StudioApp::new(s).with_control(rx);
         let harness = Harness::builder().with_size(egui::vec2(1600.0, 980.0)).with_max_steps(10_000).build_eframe(move |_cc| app);
         let mut d = Driver { harness, tx };
         d.frames(4);
@@ -134,7 +134,7 @@ fn join_through_edits_joins_only_the_right_clicked_cut() {
     let mut d = Driver::new();
     let first = d.seq().video_tracks[0].items[0].clone();
     // two through edits inside the first clip on V1
-    let secs = |t: i64| t as f64 / filmcraft_time::TICKS_PER_SECOND as f64;
+    let secs = |t: i64| t as f64 / mortiflix_time::TICKS_PER_SECOND as f64;
     let (start, len) = (secs(first.start.0), secs(first.duration.0));
     for f in [0.3, 0.6] {
         d.exec("playhead.set", json!({"seconds": start + len * f}));

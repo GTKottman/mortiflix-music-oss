@@ -4,18 +4,18 @@
 //! sequences of fillers, source clips and transitions, where a transition *overlaps* the end of
 //! the segment before it and the start of the segment after it (the sequence's length is the sum of
 //! its segment lengths minus its transition lengths). Source clips reference media through master
-//! mobs and file source mobs. [`from_project`] turns a FilmCraft sequence into that shape;
-//! [`to_project`] builds FilmCraft sequences and media from it. All times are ticks; the format
+//! mobs and file source mobs. [`from_project`] turns a Mortiflix Studio sequence into that shape;
+//! [`to_project`] builds Mortiflix Studio sequences and media from it. All times are ticks; the format
 //! serialisers convert to and from edit units.
 
 use std::collections::HashMap;
 
-use filmcraft_media::MediaKind;
-use filmcraft_project::{
+use mortiflix_media::MediaKind;
+use mortiflix_project::{
     AudioChannels, ClipId, Interpolation, ItemId, ItemKind, Keyframe, Label, Marker, MarkerId, MarkerKind, MediaRef, Param, ParamValue, Project, Sequence,
     Track, TrackItem, TrackKind, Transition, TransitionAlign, TransitionId, find_effect,
 };
-use filmcraft_time::{FrameRate, TICKS_PER_SECOND, Tick};
+use mortiflix_time::{FrameRate, TICKS_PER_SECOND, Tick};
 
 use crate::common::{Builder, MediaSpec, base_item, db_to_gain, file_name, file_stem, gain_to_db, param, set_param, settings_for, transition_effect};
 use crate::essence::{EssenceData, EssenceKey, MediaOptions};
@@ -120,7 +120,7 @@ pub(crate) struct CTransition {
     pub len: Tick,
     /// Where the cut lies, from the transition start.
     pub cut: Tick,
-    /// FilmCraft effect id.
+    /// Mortiflix Studio effect id.
     pub effect: String,
 }
 
@@ -175,7 +175,7 @@ impl Source {
 }
 
 // ---------------------------------------------------------------------------------------------
-// FilmCraft → composition
+// Mortiflix Studio → composition
 // ---------------------------------------------------------------------------------------------
 
 /// How a transition sits on a clip.
@@ -664,7 +664,7 @@ fn marker_in(b: &mut Builder, m: &CMarker) -> Marker {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Composition → FilmCraft
+// Composition → Mortiflix Studio
 // ---------------------------------------------------------------------------------------------
 
 /// Media a document embeds, to be written next to it by the caller (the item's path).
@@ -791,7 +791,7 @@ pub(crate) fn to_project(doc: Document, opts: &ImportOptions, report: &mut Repor
 fn build_sequence(
     b: &mut Builder,
     comp: &Composition,
-    settings: filmcraft_project::SequenceSettings,
+    settings: mortiflix_project::SequenceSettings,
     sources: &[Source],
     item_of: &HashMap<usize, ItemId>,
     report: &mut Report,
@@ -837,7 +837,7 @@ fn build_track(b: &mut Builder, track: &mut Track, kind: TrackKind, t: &CTrack, 
     let mut clips: Vec<TrackItem> = Vec::new();
     for it in &t.items {
         if pos.0.abs() > 4 * MAX_TIME.0 {
-            report.warn("a track longer than FilmCraft supports was cut short");
+            report.warn("a track longer than Mortiflix Studio supports was cut short");
             break;
         }
         match it {
@@ -914,7 +914,7 @@ fn build_track(b: &mut Builder, track: &mut Track, kind: TrackKind, t: &CTrack, 
         };
         let audio = kind == TrackKind::Audio;
         let effect = match find_effect(effect) {
-            Some(d) if d.kind == if audio { filmcraft_project::EffectKind::AudioTransition } else { filmcraft_project::EffectKind::VideoTransition } => {
+            Some(d) if d.kind == if audio { mortiflix_project::EffectKind::AudioTransition } else { mortiflix_project::EffectKind::VideoTransition } => {
                 d.instance()
             }
             _ => transition_effect(effect, audio, report),

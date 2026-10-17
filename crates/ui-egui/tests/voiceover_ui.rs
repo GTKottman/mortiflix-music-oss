@@ -5,13 +5,13 @@
 use std::sync::mpsc::{Sender, channel};
 
 use egui_kittest::Harness;
-use filmcraft_engine::Session;
-use filmcraft_ui_egui::FilmcraftApp;
-use filmcraft_ui_egui::control::ControlRequest;
+use mortiflix_engine::Session;
+use mortiflix_ui_egui::StudioApp;
+use mortiflix_ui_egui::control::ControlRequest;
 use serde_json::{Value, json};
 
 struct Driver {
-    harness: Harness<'static, FilmcraftApp>,
+    harness: Harness<'static, StudioApp>,
     tx: Sender<ControlRequest>,
 }
 
@@ -20,7 +20,7 @@ impl Driver {
         let mut session = Session::default();
         session.execute("file.openDemoProject", json!({})).expect("demo project");
         let (tx, rx) = channel();
-        let app = FilmcraftApp::new(session).with_control(rx);
+        let app = StudioApp::new(session).with_control(rx);
         let harness = Harness::builder().with_size(egui::vec2(1600.0, 980.0)).with_max_steps(10_000).build_eframe(move |_cc| app);
         let mut d = Driver { harness, tx };
         d.frames(4);
@@ -78,7 +78,7 @@ impl Driver {
 fn a_failed_take_can_be_discarded_from_the_settings_dialog() {
     let mut d = Driver::demo();
     d.exec("audio.voiceover.start", json!({"track":"A1","time":0,"preroll":0}));
-    let blocker = std::env::temp_dir().join(format!("filmcraft-voiceover-ui-blocker-{}", std::process::id()));
+    let blocker = std::env::temp_dir().join(format!("mortiflix-voiceover-ui-blocker-{}", std::process::id()));
     std::fs::write(&blocker, b"not a directory").unwrap();
     let failure = d.call("engine.execute", json!({"command":"audio.voiceover.stop","params":{"seconds":1,"dir":blocker}}));
     assert_eq!(failure["ok"], false);
@@ -137,7 +137,7 @@ fn settings_dialog_from_the_track_header_persists_on_ok() {
 #[test]
 fn microphone_button_records_onto_its_track() {
     let mut d = Driver::demo();
-    let dir = std::env::temp_dir().join(format!("filmcraft-vo-ui-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("mortiflix-vo-ui-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     d.exec("file.projectSettings.scratchDisks", json!({"captured": dir.to_string_lossy()}));
     d.exec("audio.voiceover.settings", json!({"prerollSeconds": 0.5}));
@@ -178,7 +178,7 @@ fn microphone_button_records_onto_its_track() {
 #[test]
 fn recording_past_the_end_of_the_timeline_starts_there_not_at_the_beginning() {
     let mut d = Driver::demo();
-    let dir = std::env::temp_dir().join(format!("filmcraft-vo-ui-end-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("mortiflix-vo-ui-end-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     d.exec("file.projectSettings.scratchDisks", json!({"captured": dir.to_string_lossy()}));
     d.exec("audio.voiceover.settings", json!({"prerollSeconds": 0.5}));

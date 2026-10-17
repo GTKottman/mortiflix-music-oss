@@ -1,4 +1,4 @@
-# filmcraft-mpegts
+# mortiflix-mpegts
 
 Clean-room MPEG-2 Systems demuxer: transport streams and program streams. Layer L0: depends only
 on `thiserror`. Builds for `wasm32-unknown-unknown`; no `unsafe`. No GPL/LGPL code (FFmpeg,
@@ -19,7 +19,7 @@ oracle.
 ## What it does
 
 ```rust
-let file = filmcraft_mpegts::open(&bytes)?;           // any ByteSource (file, memory)
+let file = mortiflix_mpegts::open(&bytes)?;           // any ByteSource (file, memory)
 for (i, s) in file.streams.iter().enumerate() {
     println!("{:?} {} {} units", s.id, s.codec.name(), s.units.len());
 }
@@ -67,7 +67,7 @@ let au: Vec<u8> = file.read_unit(&bytes, v, 0)?;      // the first access unit
   rates), MPEG-2 and MPEG-1 PES headers.
 - `crates/codecs/tests/mpeg_oracle.rs`: FFmpeg-written TS / M2TS / VOB / MPEG-1 system files —
   frame counts and every frame's PTS equal ffprobe's, decoded media against FFmpeg (see
-  `filmcraft-codecs`).
+  `mortiflix-codecs`).
 
 ## Gaps
 

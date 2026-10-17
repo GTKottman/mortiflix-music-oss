@@ -1,8 +1,8 @@
 use serde_json::json;
 
 use crate::Session;
-use filmcraft_project::ClipId;
-use filmcraft_time::{TICKS_PER_SECOND, Tick};
+use mortiflix_project::ClipId;
+use mortiflix_time::{TICKS_PER_SECOND, Tick};
 
 fn demo() -> Session {
     let mut s = Session::default();
@@ -59,8 +59,8 @@ fn captions_import_edit_export_and_burn_in() {
         let path = dir.join(format!("out.{ext}")).to_string_lossy().to_string();
         let r = s.execute("captions.export", json!({"path": path})).unwrap();
         assert_eq!(r["captions"], 3, "{ext}: {r}");
-        let back = filmcraft_captions::parse(&std::fs::read(&path).unwrap(), filmcraft_captions::Format::from_name(ext).unwrap()).unwrap();
-        let texts: Vec<String> = back.cues.iter().map(|c| filmcraft_project::plain_text(&c.text)).collect();
+        let back = mortiflix_captions::parse(&std::fs::read(&path).unwrap(), mortiflix_captions::Format::from_name(ext).unwrap()).unwrap();
+        let texts: Vec<String> = back.cues.iter().map(|c| mortiflix_project::plain_text(&c.text)).collect();
         assert_eq!(texts.len(), 3, "{ext}");
         assert_eq!(texts[0], "Hi!", "{ext}");
     }
@@ -76,14 +76,14 @@ fn captions_import_edit_export_and_burn_in() {
     let top_diff = with.px[..half].iter().zip(&without.px[..half]).filter(|(a, b)| (*a - *b).abs() > 0.05).count();
     assert_eq!(top_diff, 0, "bottom-anchored captions stay in the lower half");
     s.execute("captions.showAll", json!({})).unwrap();
-    let plan = filmcraft_render::plan::plan_frame(
+    let plan = mortiflix_render::plan::plan_frame(
         &s.project,
         s.state.active_sequence.unwrap(),
         s.playhead(),
-        filmcraft_render::RenderOptions { scale: 0.25, captions: true, ..Default::default() },
+        mortiflix_render::RenderOptions { scale: 0.25, captions: true, ..Default::default() },
         &s.media.provider(s.project.clone(), s.services.clone()),
     );
-    let cpu = filmcraft_render::plan::execute_cpu(&plan);
+    let cpu = mortiflix_render::plan::execute_cpu(&plan);
     let pd = cpu.px.iter().zip(&with.px).filter(|(a, b)| (*a - *b).abs() > 0.02).count();
     assert!(pd < cpu.px.len() / 200, "the GPU plan matches the CPU render ({pd})");
 

@@ -12,8 +12,8 @@
 
 use std::sync::Arc;
 
-use filmcraft_frame::{AudioBuffer, VideoFrame};
-use filmcraft_time::FrameRate;
+use mortiflix_frame::{AudioBuffer, VideoFrame};
+use mortiflix_time::FrameRate;
 
 use crate::{FrameCache, FrameRequest, MediaError, MediaInfo, MediaKind, MediaSource, Result, VideoStreamInfo};
 
@@ -203,7 +203,7 @@ impl MediaSource for ImageSequenceSource {
 
     fn video_frame(&self, req: FrameRequest) -> Result<Arc<VideoFrame>> {
         let n = self.frames.len();
-        let want = self.info.frame_rate().frame_at(req.time.max(filmcraft_time::Tick::ZERO)).clamp(0, n as i64 - 1) as usize;
+        let want = self.info.frame_rate().frame_at(req.time.max(mortiflix_time::Tick::ZERO)).clamp(0, n as i64 - 1) as usize;
         // the wanted frame, else the nearest earlier present frame, else the nearest later one
         let candidates = (0..=want).rev().chain(want + 1..n);
         let mut last_err = None;
@@ -224,7 +224,7 @@ impl MediaSource for ImageSequenceSource {
 /// Decode one frame file: OpenEXR, Radiance HDR and DNG camera raw as linear floats (DNG with its metadata, for
 /// the sequence's timing), every other format through the still decoders as RGBA8. Returns the
 /// frame, whether it has alpha, and its pixel format for the media info.
-fn decode_frame(name: &str, bytes: &[u8]) -> Result<(VideoFrame, bool, String, Option<filmcraft_dng::Info>)> {
+fn decode_frame(name: &str, bytes: &[u8]) -> Result<(VideoFrame, bool, String, Option<mortiflix_dng::Info>)> {
     if crate::still::exr::sniff(bytes) {
         let d = crate::still::exr::decode(name, bytes)?;
         return Ok((d.frame, d.has_alpha, d.pixel_format, None));
@@ -305,7 +305,7 @@ mod tests {
         let s = ImageSequenceSource::new("w1.webp", vec![Some("w1.webp".into()), Some("w2.webp".into())], FrameRate::FPS_24, loader).unwrap();
         for (i, want) in [a, b].iter().enumerate() {
             match &s.video_frame(FrameRequest::full(FrameRate::FPS_24.tick_of(i as i64))).unwrap().data {
-                filmcraft_frame::PixelData::Rgba8(p) => assert_eq!(&p[..], &want[..]),
+                mortiflix_frame::PixelData::Rgba8(p) => assert_eq!(&p[..], &want[..]),
                 _ => panic!(),
             }
         }
@@ -326,7 +326,7 @@ mod tests {
         assert_eq!(s.info().duration, FrameRate::FPS_25.tick_of(4));
         assert_eq!(s.missing_frames(), vec![2]);
         let px = |i: i64| match &s.video_frame(FrameRequest::full(FrameRate::FPS_25.tick_of(i))).unwrap().data {
-            filmcraft_frame::PixelData::Rgba8(p) => p[0],
+            mortiflix_frame::PixelData::Rgba8(p) => p[0],
             _ => panic!(),
         };
         assert_eq!(px(0), 10);

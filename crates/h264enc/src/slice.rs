@@ -1,6 +1,6 @@
 //! Slice encoding: macroblock analysis, mode decision, residual coding, reconstruction and entropy coding.
 
-use filmcraft_bitstream::BitWriter;
+use mortiflix_bitstream::BitWriter;
 
 use crate::cabac::{BinSink, CabacEncoder, CabacEstimator, Contexts, CostTable};
 use crate::dsp::{sad, sad16, satd, ssd};

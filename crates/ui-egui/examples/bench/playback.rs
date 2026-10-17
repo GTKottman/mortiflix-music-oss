@@ -4,7 +4,7 @@
 //!
 //! ```sh
 //! cargo xtask bench-playback                      # all scenarios, GPU path, Full + Half
-//! cargo run --release -p filmcraft-ui-egui --example bench_playback -- --scenario stack3 --res full --cpu
+//! cargo run --release -p mortiflix-ui-egui --example bench_playback -- --scenario stack3 --res full --cpu
 //! ```
 //!
 //! Each play simulates display refreshes at `--refresh` Hz on the wall clock (as the app does
@@ -20,10 +20,10 @@ use std::path::Path;
 use std::process::Command;
 use std::time::{Duration, Instant};
 
-use filmcraft_engine::Session;
-use filmcraft_project::{ItemId, ParamValue, Project, SequenceSettings, TrackKind, find_effect, resolve_auto_points};
-use filmcraft_time::{FrameRate, Tick, TimeRange};
-use filmcraft_ui_egui::frames::{FrameKey, FrameServer, JobRecord, PREROLL_TIMEOUT_S, PlaybackMeter, Target, process_cpu_time, thread_cpu_time};
+use mortiflix_engine::Session;
+use mortiflix_project::{ItemId, ParamValue, Project, SequenceSettings, TrackKind, find_effect, resolve_auto_points};
+use mortiflix_time::{FrameRate, Tick, TimeRange};
+use mortiflix_ui_egui::frames::{FrameKey, FrameServer, JobRecord, PREROLL_TIMEOUT_S, PlaybackMeter, Target, process_cpu_time, thread_cpu_time};
 use serde_json::{Value, json};
 
 use crate::fixtures::fixture;
@@ -48,7 +48,7 @@ pub fn build_sequence_fx(s: &mut Session, w: u32, h: u32, layers: &[(ItemId, f64
     let sizes: Vec<(u32, u32)> = layers
         .iter()
         .map(|l| match s.project.item(l.0).map(|i| &i.kind) {
-            Some(filmcraft_project::ItemKind::Media(m)) => m.info.video.as_ref().map(|v| (v.width, v.height)).unwrap_or((w, h)),
+            Some(mortiflix_project::ItemKind::Media(m)) => m.info.video.as_ref().map(|v| (v.width, v.height)).unwrap_or((w, h)),
             _ => (w, h),
         })
         .collect();
@@ -66,7 +66,7 @@ pub fn build_sequence_fx(s: &mut Session, w: u32, h: u32, layers: &[(ItemId, f64
                     x.value = ParamValue::Float(scale);
                 }
                 if let (Some(x), Some((px, py))) = (m.params.get_mut("position"), pos) {
-                    x.value = ParamValue::Vec2(filmcraft_geom::Vec2::new(px, py));
+                    x.value = ParamValue::Vec2(mortiflix_geom::Vec2::new(px, py));
                 }
                 if let Some(x) = m.params.get_mut("rotation") {
                     x.value = ParamValue::Float(rot);
@@ -109,7 +109,7 @@ pub fn build_sequence_fx(s: &mut Session, w: u32, h: u32, layers: &[(ItemId, f64
 /// The UI side of a monitor: presents the frame it gets (GPU composite or texture conversion)
 /// and times that work, as `gpu_present` / `texture_for` do in the app.
 pub struct Display {
-    gpu: Option<(filmcraft_gpu::GpuCompositor, eframe::wgpu::Device)>,
+    gpu: Option<(mortiflix_gpu::GpuCompositor, eframe::wgpu::Device)>,
     last: Option<FrameKey>,
     present: Vec<Duration>,
     ui_cpu: Duration,
@@ -122,7 +122,7 @@ impl Display {
             let instance = eframe::wgpu::Instance::default();
             let adapter = pollster::block_on(instance.request_adapter(&eframe::wgpu::RequestAdapterOptions::default())).ok();
             adapter.and_then(|a| pollster::block_on(a.request_device(&eframe::wgpu::DeviceDescriptor::default())).ok()).map(|(d, q)| {
-                let c = filmcraft_gpu::GpuCompositor::new(&d, &q);
+                let c = mortiflix_gpu::GpuCompositor::new(&d, &q);
                 (c, d)
             })
         } else {
@@ -206,7 +206,7 @@ pub struct PlayReport {
     pub wasted_jobs: usize,
     pub cancelled_jobs: usize,
     pub preview_jobs: usize,
-    pub gop: filmcraft_codecs::GopStats,
+    pub gop: mortiflix_codecs::GopStats,
     pub uploaded_mb: f64,
     pub load: String,
     pub preroll_ms: f64,
@@ -261,7 +261,7 @@ impl Bench {
         let mut meter = PlaybackMeter::default();
         meter.start(1.0);
         self.server.take_records();
-        let gop0 = filmcraft_codecs::gop_stats();
+        let gop0 = mortiflix_codecs::gop_stats();
         let (p0, ui0, up0) = (process_cpu_time().unwrap_or_default(), display.ui_cpu, display.uploaded);
         display.present.clear();
         let period = Duration::from_secs_f64(1.0 / self.refresh_hz);
@@ -327,7 +327,7 @@ impl Bench {
             process_cpu,
             ui_cpu: ms(display.ui_cpu - ui0),
             jobs: recs.len(),
-            gop: filmcraft_codecs::gop_stats() - gop0,
+            gop: mortiflix_codecs::gop_stats() - gop0,
             uploaded_mb: (display.uploaded - up0) as f64 / 1e6,
             load: load_avg(),
             preroll_ms,
@@ -380,7 +380,7 @@ impl Bench {
         let target = display.target(seq);
         let size = (scale * 1000.0) as u32;
         self.server.take_records();
-        let gop0 = filmcraft_codecs::gop_stats();
+        let gop0 = mortiflix_codecs::gop_stats();
         let p0 = process_cpu_time().unwrap_or_default();
         let t0 = Instant::now();
         let mut rng = 0x2545_f491_4f6c_dd1du64;
@@ -424,7 +424,7 @@ impl Bench {
             rep.src_cpu.push(ms(r.source_cpu));
         }
         rep.shown = rep.on_time as u64;
-        rep.gop = filmcraft_codecs::gop_stats() - gop0;
+        rep.gop = mortiflix_codecs::gop_stats() - gop0;
         rep.load = load_avg();
         rep
     }
@@ -453,7 +453,7 @@ impl Bench {
         let target = display.target(seq);
         let size = (scale * 1000.0) as u32;
         let period = Duration::from_secs_f64(1.0 / self.refresh_hz);
-        let gop0 = filmcraft_codecs::gop_stats();
+        let gop0 = mortiflix_codecs::gop_stats();
         let p0 = process_cpu_time().unwrap_or_default();
         let mut rep = ScrubReport { load: load_avg(), ..Default::default() };
         let mut rng = 0x9e37_79b9_7f4a_7c15u64;
@@ -503,7 +503,7 @@ impl Bench {
         self.server.retain_queue(|_| false);
         std::thread::sleep(Duration::from_millis(50));
         rep.process_cpu_ms = ms(process_cpu_time().unwrap_or_default().saturating_sub(p0));
-        rep.gop = filmcraft_codecs::gop_stats() - gop0;
+        rep.gop = mortiflix_codecs::gop_stats() - gop0;
         rep
     }
 }
@@ -517,7 +517,7 @@ pub struct ScrubReport {
     pub drag_steps: usize,
     pub drag_shown: usize,
     pub process_cpu_ms: f64,
-    pub gop: filmcraft_codecs::GopStats,
+    pub gop: mortiflix_codecs::GopStats,
     pub load: String,
 }
 
@@ -686,7 +686,7 @@ pub fn scenario_session(name: &str) -> Option<(Session, ItemId)> {
                 s.edit("blend modes", |p, _| {
                     let q = p.sequence_mut(seq).expect("seq");
                     for (track, mode) in [(1, "Screen"), (2, "Overlay")] {
-                        let i = filmcraft_project::effect::BLEND_MODES.iter().position(|b| *b == mode).expect("blend mode") as u32;
+                        let i = mortiflix_project::effect::BLEND_MODES.iter().position(|b| *b == mode).expect("blend mode") as u32;
                         for it in &mut q.video_tracks[track].items {
                             if let Some(b) = it.effect_mut("opacity").and_then(|o| o.params.get_mut("blend")) {
                                 b.value = ParamValue::Choice(i);
@@ -768,7 +768,7 @@ pub fn cli_main() {
     let args = parse_args();
     let cores = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
     println!(
-        "FilmCraft playback bench: {} path, {} frame workers, {} cores, refresh {} Hz, {} s per play; load avg {}",
+        "Mortiflix Studio playback bench: {} path, {} frame workers, {} cores, refresh {} Hz, {} s per play; load avg {}",
         if args.gpu { "GPU" } else { "CPU" },
         args.workers,
         cores,

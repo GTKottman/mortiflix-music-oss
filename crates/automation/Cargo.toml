@@ -1,6 +1,6 @@
 [package]
-name = "filmcraft-automation"
-description = "MCP server (rmcp) over the FilmCraft engine, plus a bridge to the running app's control channel"
+name = "mortiflix-automation"
+description = "MCP server (rmcp) over the Mortiflix Studio engine, plus a bridge to the running app's control channel"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -10,8 +10,8 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
-filmcraft-engine = { workspace = true }
-filmcraft-time = { workspace = true }
+mortiflix-engine = { workspace = true }
+mortiflix-time = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

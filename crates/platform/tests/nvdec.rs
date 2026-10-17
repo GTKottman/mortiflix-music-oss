@@ -12,13 +12,13 @@ mod common;
 use std::time::Duration;
 
 use common::*;
-use filmcraft_codecs::VideoDecoder;
-use filmcraft_codecs::hw::{NalCodec, NalStreamInfo};
-use filmcraft_platform::HybridDecoder;
-use filmcraft_platform::nvdec::NvDecoder;
+use mortiflix_codecs::VideoDecoder;
+use mortiflix_codecs::hw::{NalCodec, NalStreamInfo};
+use mortiflix_platform::HybridDecoder;
+use mortiflix_platform::nvdec::NvDecoder;
 
 fn hardware(s: &Stream) -> Option<Box<dyn VideoDecoder>> {
-    match filmcraft_platform::nvdec_factory(&s.entry) {
+    match mortiflix_platform::nvdec_factory(&s.entry) {
         Some(Ok(d)) => Some(d),
         Some(Err(e)) => panic!("factory error: {e}"),
         None => {
@@ -29,7 +29,7 @@ fn hardware(s: &Stream) -> Option<Box<dyn VideoDecoder>> {
 }
 
 fn software(s: &Stream) -> Box<dyn VideoDecoder> {
-    filmcraft_codecs::software_video_decoder(&s.entry).unwrap()
+    mortiflix_codecs::software_video_decoder(&s.entry).unwrap()
 }
 
 fn streams(ff: &std::path::Path) -> Vec<(String, Stream)> {
@@ -53,7 +53,7 @@ fn streams(ff: &std::path::Path) -> Vec<(String, Stream)> {
 
 #[test]
 fn bit_exact_with_the_software_decoder() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     for (name, s) in streams(&ff) {
         let Some(mut hw) = hardware(&s) else { continue };
         let mut sw = software(&s);
@@ -87,7 +87,7 @@ fn bit_exact_with_the_software_decoder() {
 
 #[test]
 fn mid_stream_failure_continues_in_software() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     for (name, s) in streams(&ff) {
         let info = NalStreamInfo::from_entry(&s.entry).unwrap().unwrap();
         if NvDecoder::new(info.clone()).is_err() {
@@ -109,7 +109,7 @@ fn mid_stream_failure_continues_in_software() {
 
 #[test]
 fn declines_what_the_hardware_path_does_not_take() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let src = "testsrc2=s=640x360:r=24:d=1";
     let cases: [(&str, Vec<&str>); 3] = [
         ("va_h264_interlaced.mp4", vec!["-c:v", "libx264", "-x264-params", "interlaced=1:keyint=12", "-pix_fmt", "yuv420p"]),
@@ -119,19 +119,19 @@ fn declines_what_the_hardware_path_does_not_take() {
     for (name, enc) in cases {
         let args: Vec<&str> = ["-f", "lavfi", "-i", src].into_iter().chain(enc).collect();
         let Some(path) = fixture(&ff, name, &args) else { continue };
-        assert!(filmcraft_platform::nvdec_factory(&read_stream(&path).entry).is_none(), "{name}: declined");
+        assert!(mortiflix_platform::nvdec_factory(&read_stream(&path).entry).is_none(), "{name}: declined");
     }
     let Some(path) = named(&ff, "h264_high.mp4") else { return };
     let s = read_stream(&path);
-    filmcraft_codecs::hw::set_hardware_decoding(false);
-    let off = filmcraft_platform::nvdec_factory(&s.entry).is_none();
-    filmcraft_codecs::hw::set_hardware_decoding(true);
+    mortiflix_codecs::hw::set_hardware_decoding(false);
+    let off = mortiflix_platform::nvdec_factory(&s.entry).is_none();
+    mortiflix_codecs::hw::set_hardware_decoding(true);
     assert!(off, "declined while hardware decoding is Off");
 }
 
 #[test]
 fn damaged_samples_never_crash_or_hang() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     for (name, s) in streams(&ff).into_iter().take(3) {
         if hardware(&s).is_none() {
             continue;
@@ -143,7 +143,7 @@ fn damaged_samples_never_crash_or_hang() {
                 let r = std::panic::catch_unwind(move || {
                     let mut seed = seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1;
                     // through the hybrid, and straight into the hardware decoder (no fallback)
-                    let mut d = filmcraft_platform::nvdec_factory(&entry).unwrap().unwrap();
+                    let mut d = mortiflix_platform::nvdec_factory(&entry).unwrap().unwrap();
                     let mut raw = NvDecoder::new(NalStreamInfo::from_entry(&entry).unwrap().unwrap()).unwrap();
                     for (i, (smp, pts)) in samples.iter().enumerate().take(40) {
                         let mut m = smp.clone();

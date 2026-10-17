@@ -3,7 +3,7 @@
 //! Premiere Pro 26.5.2 (a 1280x720 nest in a 1920x1080 sequence).
 
 use super::*;
-use filmcraft_project::TrackItem;
+use mortiflix_project::TrackItem;
 use serde_json::json;
 
 /// The demo's 1920x1080 sequence with a 1280x720 sequence nested on V3 after its last clip.
@@ -37,7 +37,7 @@ fn a_nest_of_another_size_comes_in_at_its_own_size() {
     let (s, nest) = small_nest();
     let it = clip(&s, nest);
     assert!((motion(&it, "scale") - 100.0).abs() < 1e-9 && !it.scale_to_frame);
-    assert_eq!(filmcraft_render::source_size(&s.project, it.item), Some((1280, 720)));
+    assert_eq!(mortiflix_render::source_size(&s.project, it.item), Some((1280, 720)));
 }
 
 #[test]
@@ -62,12 +62,12 @@ fn scale_to_frame_size_on_a_nest_fills_the_frame_and_leaves_scale_alone() {
     assert!(it.scale_to_frame && (motion(&it, "scale") - 100.0).abs() < 1e-9);
     // the picture: the nest's corner is now the frame's corner
     let provider = s.media.full_res_provider(s.project.clone(), s.services.clone());
-    let opts = filmcraft_render::RenderOptions { scale: 0.25, ..Default::default() };
+    let opts = mortiflix_render::RenderOptions { scale: 0.25, ..Default::default() };
     let t = it.start + Tick(it.duration.0 / 2);
-    let filled = filmcraft_render::render_sequence(&s.project, s.state.active_sequence.unwrap(), t, opts, &provider);
+    let filled = mortiflix_render::render_sequence(&s.project, s.state.active_sequence.unwrap(), t, opts, &provider);
     assert!(filled.get(2, 2)[3] > 0.98 && filled.get(filled.w - 3, filled.h - 3)[3] > 0.98);
     // a toggle: off again, the nest is back in the middle with nothing in the corners
     s.execute("clip.scaleToFrameSize", json!({})).unwrap();
-    let centred = filmcraft_render::render_sequence(&s.project, s.state.active_sequence.unwrap(), t, opts, &provider);
+    let centred = mortiflix_render::render_sequence(&s.project, s.state.active_sequence.unwrap(), t, opts, &provider);
     assert!(centred.get(2, 2)[3] < 0.02 && centred.get(centred.w / 2, centred.h / 2)[3] > 0.98);
 }

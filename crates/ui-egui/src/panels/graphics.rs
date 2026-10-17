@@ -23,14 +23,14 @@
 
 use crate::widgets::CenteredDialog as _;
 use egui::{Align2, Color32, Pos2, Rect, Sense, Stroke, StrokeKind, pos2, vec2};
-use filmcraft_geom::{Affine, Vec2};
-use filmcraft_project::graphic::{self, LayerContent, LayerSpec, eval_layer, layer_display_name, layer_indices};
-use filmcraft_project::{ClipId, EffectInstance, ItemKind, ParamValue, TrackItem};
-use filmcraft_render::graphic_clip::{layer_local_bounds, layer_matrix, text_layout};
-use filmcraft_time::Tick;
+use mortiflix_geom::{Affine, Vec2};
+use mortiflix_project::graphic::{self, LayerContent, LayerSpec, eval_layer, layer_display_name, layer_indices};
+use mortiflix_project::{ClipId, EffectInstance, ItemKind, ParamValue, TrackItem};
+use mortiflix_render::graphic_clip::{layer_local_bounds, layer_matrix, text_layout};
+use mortiflix_time::Tick;
 use serde_json::{Value, json};
 
-use crate::FilmcraftApp;
+use crate::StudioApp;
 use crate::icons::{self, Icon};
 use crate::state::{GfxEdit, TextPropsDialog, Tool};
 use crate::theme::Tokens;
@@ -74,7 +74,7 @@ fn screen_scale(a: &Affine) -> f32 {
 }
 
 /// Whether a clip id is a graphic clip in the active sequence.
-pub fn is_graphic_clip(app: &FilmcraftApp, c: ClipId) -> bool {
+pub fn is_graphic_clip(app: &StudioApp, c: ClipId) -> bool {
     app.session
         .active_sequence()
         .and_then(|q| q.find_item(c))
@@ -83,7 +83,7 @@ pub fn is_graphic_clip(app: &FilmcraftApp, c: ClipId) -> bool {
 }
 
 /// The selected graphic clip, if any.
-pub fn selected_graphic(app: &FilmcraftApp) -> Option<(ClipId, TrackItem)> {
+pub fn selected_graphic(app: &StudioApp) -> Option<(ClipId, TrackItem)> {
     let q = app.session.active_sequence()?;
     app.session.state.selection.iter().copied().find(|c| is_graphic_clip(app, *c)).and_then(|c| q.find_item(c).map(|(_, it)| (c, it.clone())))
 }
@@ -97,7 +97,7 @@ pub(crate) fn frame_to_screen(pic: Rect, frame: (u32, u32)) -> Affine {
     Affine::translate(pic.min.x as f64, pic.min.y as f64).then_apply(&Affine::scale(kx, ky))
 }
 
-pub fn visible_layers(app: &FilmcraftApp, pic: Rect, frame: (u32, u32)) -> Vec<LayerView> {
+pub fn visible_layers(app: &StudioApp, pic: Rect, frame: (u32, u32)) -> Vec<LayerView> {
     let Some(seq) = app.session.active_sequence() else { return Vec::new() };
     let t = app.session.playhead();
     let screen = frame_to_screen(pic, frame);
@@ -113,7 +113,7 @@ pub fn visible_layers(app: &FilmcraftApp, pic: Rect, frame: (u32, u32)) -> Vec<L
         let Some(ItemKind::Graphic { width, height, .. }) = app.session.project.item(it.item).map(|p| &p.kind) else { continue };
         let size = (*width, *height);
         let mt = it.source_time_at(t);
-        let base = screen.then_apply(&filmcraft_render::motion_matrix(seq, it, size, None, mt));
+        let base = screen.then_apply(&mortiflix_render::motion_matrix(seq, it, size, None, mt));
         let idx = layer_indices(&it.effects);
         for (li, &ei) in idx.iter().enumerate().rev() {
             if let Some(spec) = eval_layer(&it.effects[ei], mt, size).filter(|s| s.enabled) {
@@ -127,7 +127,7 @@ pub fn visible_layers(app: &FilmcraftApp, pic: Rect, frame: (u32, u32)) -> Vec<L
 
 /// Screen → graphic-canvas mapping for new layers: the selected graphic clip under the playhead
 /// (its Motion applies), else the sequence frame.
-fn canvas_target(app: &FilmcraftApp, pic: Rect, frame: (u32, u32)) -> (Option<ClipId>, Affine) {
+fn canvas_target(app: &StudioApp, pic: Rect, frame: (u32, u32)) -> (Option<ClipId>, Affine) {
     let screen = frame_to_screen(pic, frame);
     let t = app.session.playhead();
     if let Some((c, it)) = selected_graphic(app)
@@ -135,7 +135,7 @@ fn canvas_target(app: &FilmcraftApp, pic: Rect, frame: (u32, u32)) -> (Option<Cl
         && let Some(seq) = app.session.active_sequence()
         && let Some(ItemKind::Graphic { width, height, .. }) = app.session.project.item(it.item).map(|p| &p.kind)
     {
-        let m = screen.then_apply(&filmcraft_render::motion_matrix(seq, &it, (*width, *height), None, it.source_time_at(t)));
+        let m = screen.then_apply(&mortiflix_render::motion_matrix(seq, &it, (*width, *height), None, it.source_time_at(t)));
         return (Some(c), m);
     }
     (None, screen)
@@ -145,7 +145,7 @@ fn to_canvas(m: &Affine, p: Pos2) -> Vec2 {
     m.inverse().map(|i| i.apply(Vec2::new(p.x as f64, p.y as f64))).unwrap_or_default()
 }
 
-fn text_of(spec: &LayerSpec) -> Option<&filmcraft_project::graphic::TextProps> {
+fn text_of(spec: &LayerSpec) -> Option<&mortiflix_project::graphic::TextProps> {
     match &spec.content {
         LayerContent::Text(t) => Some(t),
         _ => None,
@@ -406,7 +406,7 @@ impl HandleDrag {
 }
 
 /// Paragraph text: wrapped in a box (vertical text never is).
-fn is_paragraph(t: &filmcraft_project::graphic::TextProps) -> bool {
+fn is_paragraph(t: &mortiflix_project::graphic::TextProps) -> bool {
     t.box_width > 0.0 && !t.vertical
 }
 
@@ -477,7 +477,7 @@ pub(crate) fn unscale(m: &Affine, off: egui::Vec2) -> Vec2 {
 
 /// `graphics.newText` for the Type tool: point text at `at`, or paragraph text in the box from
 /// `at` to `corner`.
-fn new_text_action(app: &FilmcraftApp, pic: Rect, frame: (u32, u32), at: Pos2, corner: Option<Pos2>) -> (String, Value) {
+fn new_text_action(app: &StudioApp, pic: Rect, frame: (u32, u32), at: Pos2, corner: Option<Pos2>) -> (String, Value) {
     let (into, m) = canvas_target(app, pic, frame);
     let a = to_canvas(&m, at);
     let size = 100.0 * frame.1 as f64 / 1080.0;
@@ -498,7 +498,7 @@ fn new_text_action(app: &FilmcraftApp, pic: Rect, frame: (u32, u32), at: Pos2, c
 
 const TEXT_EDIT_ID: &str = "gfx-text-edit";
 
-fn end_edit(app: &mut FilmcraftApp, ui: &egui::Ui) {
+fn end_edit(app: &mut StudioApp, ui: &egui::Ui) {
     app.ui.gfx_edit = None;
     ui.memory_mut(|m| m.surrender_focus(egui::Id::new(TEXT_EDIT_ID)));
     ui.data_mut(|d| d.remove::<crate::dock::PanelKind>(egui::Id::new(TEXT_EDIT_ID).with("panel")));
@@ -506,7 +506,7 @@ fn end_edit(app: &mut FilmcraftApp, ui: &egui::Ui) {
 
 /// A click on the Program monitor's empty space (the picture's, or around it): end the text edit
 /// and let go of the selected graphic layers and mask (#683).
-pub(crate) fn deselect_on_monitor(app: &mut FilmcraftApp, ui: &egui::Ui) {
+pub(crate) fn deselect_on_monitor(app: &mut StudioApp, ui: &egui::Ui) {
     end_edit(app, ui);
     app.session.state.graphic_layers.clear();
     if app.session.state.selected_mask.is_some()
@@ -517,7 +517,7 @@ pub(crate) fn deselect_on_monitor(app: &mut FilmcraftApp, ui: &egui::Ui) {
 }
 
 /// Draw the overlay and handle graphics tools on the Program monitor picture `pic`.
-pub fn monitor_overlay(app: &mut FilmcraftApp, ui: &mut egui::Ui, pic: Rect, frame: (u32, u32)) {
+pub fn monitor_overlay(app: &mut StudioApp, ui: &mut egui::Ui, pic: Rect, frame: (u32, u32)) {
     let t = app.tokens;
     let views = visible_layers(app, pic, frame);
     let tool = app.ui.tool;
@@ -933,7 +933,7 @@ pub fn monitor_overlay(app: &mut FilmcraftApp, ui: &mut egui::Ui, pic: Rect, fra
     }
 }
 
-fn layer_display_name_view(app: &FilmcraftApp, v: &LayerView) -> String {
+fn layer_display_name_view(app: &StudioApp, v: &LayerView) -> String {
     app.session
         .active_sequence()
         .and_then(|q| q.find_item(v.clip))
@@ -941,7 +941,7 @@ fn layer_display_name_view(app: &FilmcraftApp, v: &LayerView) -> String {
         .unwrap_or_default()
 }
 
-fn finish_pen(app: &mut FilmcraftApp, pic: Rect, frame: (u32, u32), actions: &mut Vec<(String, Value)>) {
+fn finish_pen(app: &mut StudioApp, pic: Rect, frame: (u32, u32), actions: &mut Vec<(String, Value)>) {
     let pts = std::mem::take(&mut app.ui.pen_points);
     if pts.len() < 3 {
         return;
@@ -960,7 +960,7 @@ fn finish_pen(app: &mut FilmcraftApp, pic: Rect, frame: (u32, u32), actions: &mu
     actions.push(("graphics.newShape".into(), p));
 }
 
-fn start_edit_at(app: &mut FilmcraftApp, ui: &egui::Ui, v: &LayerView, p: Pos2, actions: &mut Vec<(String, Value)>) {
+fn start_edit_at(app: &mut StudioApp, ui: &egui::Ui, v: &LayerView, p: Pos2, actions: &mut Vec<(String, Value)>) {
     let Some(tp) = text_of(&v.spec) else { return };
     let l = text_layout(tp);
     let caret = v.to_local(p).map_or(tp.text.len(), |(x, y)| l.hit(x, y));
@@ -973,7 +973,7 @@ fn start_edit_at(app: &mut FilmcraftApp, ui: &egui::Ui, v: &LayerView, p: Pos2, 
 /// Edit ▸ Select All while text is edited on the monitor selects all of that text, not the
 /// timeline clips: on macOS the native menu takes Cmd+A before the text sees the key (#1102).
 /// False when no text is being edited.
-pub(crate) fn select_all_edited_text(app: &mut FilmcraftApp) -> bool {
+pub(crate) fn select_all_edited_text(app: &mut StudioApp) -> bool {
     let Some((clip, layer)) = app.ui.gfx_edit.as_ref().map(|e| (e.clip, e.layer)) else { return false };
     let t = app.session.playhead();
     let Some((_, it)) = app.session.active_sequence().and_then(|q| q.find_item(ClipId(clip))) else { return false };
@@ -986,7 +986,7 @@ pub(crate) fn select_all_edited_text(app: &mut FilmcraftApp) -> bool {
 }
 
 /// Keyboard handling while a text layer is being edited.
-fn text_edit(app: &mut FilmcraftApp, ui: &mut egui::Ui, v: &LayerView, mut ed: GfxEdit, resp: &egui::Response, actions: &mut Vec<(String, Value)>) {
+fn text_edit(app: &mut StudioApp, ui: &mut egui::Ui, v: &LayerView, mut ed: GfxEdit, resp: &egui::Response, actions: &mut Vec<(String, Value)>) {
     let _ = resp;
     // moving to another panel ends the edit; Properties and Essential Graphics style the text
     // being edited, so working there keeps it (#683). Only a move counts: an edit started with
@@ -1323,12 +1323,12 @@ impl Ctx<'_> {
     }
 }
 
-fn section(ui: &mut egui::Ui, app: &mut FilmcraftApp, name: &str, t: &Tokens) -> bool {
+fn section(ui: &mut egui::Ui, app: &mut StudioApp, name: &str, t: &Tokens) -> bool {
     section_header(ui, app, name, t).0
 }
 
 /// A collapsible section's header row: whether the section is open, and the row.
-fn section_header(ui: &mut egui::Ui, app: &mut FilmcraftApp, name: &str, t: &Tokens) -> (bool, Rect) {
+fn section_header(ui: &mut egui::Ui, app: &mut StudioApp, name: &str, t: &Tokens) -> (bool, Rect) {
     ui.add_space(4.0);
     let key = format!("gfx:{name}");
     let open = !app.ui.collapsed_fx.contains(&key);
@@ -1439,12 +1439,12 @@ fn letter_button(ui: &mut egui::Ui, text: &str, tip: &str, on: bool, t: &Tokens,
 }
 
 /// Whether the Properties panel should show the graphic editor.
-pub fn graphic_selected(app: &FilmcraftApp) -> bool {
+pub fn graphic_selected(app: &StudioApp) -> bool {
     selected_graphic(app).is_some()
 }
 
 /// The graphic editor (Properties panel / Essential Graphics ▸ Edit).
-pub fn properties(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
+pub fn properties(app: &mut StudioApp, ui: &mut egui::Ui, rect: Rect) {
     let t = app.tokens;
     let Some((clip, it)) = selected_graphic(app) else {
         crate::dock::placeholder(ui, rect, &t, tl!("Select a graphic clip, or use the Type tool (T) on the Program monitor"));
@@ -1637,11 +1637,11 @@ pub fn properties(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
                 ParamValue::Text(f) => f,
                 _ => String::new(),
             };
-            let fams = filmcraft_text::families();
+            let fams = mortiflix_text::families();
             let (_, mut vui) = cx.row(ui, tl!("Font"));
             let r = egui::ComboBox::from_id_salt(("gfx-font", clip.0, l)).selected_text(&family).width(170.0).height(400.0).show_ui(&mut vui, |ui| {
-                if !filmcraft_text::fonts::system_scanned() {
-                    filmcraft_text::fonts::scan_system();
+                if !mortiflix_text::fonts::system_scanned() {
+                    mortiflix_text::fonts::scan_system();
                 }
                 for (f, _) in &fams {
                     if ui.selectable_label(*f == family, f).clicked() {
@@ -1817,7 +1817,7 @@ pub fn properties(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
 }
 
 /// Text Properties (the wrench in the Text section): Text Layer Type and Text Styling.
-pub fn dialogs(app: &mut FilmcraftApp, ctx: &egui::Context) {
+pub fn dialogs(app: &mut StudioApp, ctx: &egui::Context) {
     let Some(mut d) = app.ui.text_props_dialog.clone() else { return };
     let mut elems: Vec<(String, Rect, &str)> = Vec::new();
     let mut close = crate::widgets::escape_closes(ctx);

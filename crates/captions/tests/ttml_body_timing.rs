@@ -1,7 +1,7 @@
 //! TTML / DFXP inherited timing: `begin`, `end` and `dur` on `body` and `div` time containers
 //! offset and clip the paragraphs inside them (#895).
 
-use filmcraft_captions::{Format, WriteOptions, parse, write};
+use mortiflix_captions::{Format, WriteOptions, parse, write};
 
 /// (start, end, text) of every cue, in seconds; panics on a parse error.
 fn cues(xml: &str, format: Format) -> Vec<(f64, f64, String)> {
@@ -85,7 +85,7 @@ fn inherited_times_survive_export() {
     for format in [Format::Ttml, Format::Dfxp] {
         let doc = parse(xml.as_bytes(), format).unwrap();
         let back = parse(&write(&doc, format, WriteOptions::default()), format).unwrap();
-        let times = |d: &filmcraft_captions::Document| d.cues.iter().map(|c| (c.start, c.end, c.text.clone())).collect::<Vec<_>>();
+        let times = |d: &mortiflix_captions::Document| d.cues.iter().map(|c| (c.start, c.end, c.text.clone())).collect::<Vec<_>>();
         assert_eq!(times(&back), times(&doc), "{format:?}");
         assert_eq!((back.cues[0].start.seconds(), back.cues[0].end.seconds()), (7.0, 9.0), "{format:?}");
     }

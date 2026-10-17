@@ -21,7 +21,7 @@ use serde_json::Value;
 use crate::effect::{EffectInstance, find_effect};
 use crate::keyframe::ParamValue;
 use crate::{Param, TrackItem};
-use filmcraft_time::Tick;
+use mortiflix_time::Tick;
 
 /// Clip audio type.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]

@@ -1,4 +1,4 @@
-//! Mask coverage (CPU reference; `filmcraft_gpu::GpuMask` runs the same math in WGSL).
+//! Mask coverage (CPU reference; `mortiflix_gpu::GpuMask` runs the same math in WGSL).
 //!
 //! Each [`Mask`] is flattened to a polygon in working-image pixels (chord error ≤ 0.05 px). For
 //! a pixel centre `p` the signed distance `sd` to the polygon (positive inside, nonzero winding)
@@ -20,8 +20,8 @@
 //! premultiplied working image: a masked effect is `lerp(original, effected, coverage)` per
 //! channel, an opacity mask scales the layer's premultiplied pixels.
 
-use filmcraft_project::{EffectInstance, Mask, MaskMode};
-use filmcraft_time::Tick;
+use mortiflix_project::{EffectInstance, Mask, MaskMode};
+use mortiflix_time::Tick;
 use rayon::prelude::*;
 
 use crate::image::Image;
@@ -201,7 +201,7 @@ pub fn apply_effect(img: &mut Image, e: &EffectInstance, cx: &crate::effects::Fx
 }
 
 /// Apply the masks of an item's Opacity effect to its layer (before Motion), if any.
-pub fn apply_opacity_masks(img: &mut Image, item: &filmcraft_project::TrackItem, t: Tick, px_scale: f32) {
+pub fn apply_opacity_masks(img: &mut Image, item: &mortiflix_project::TrackItem, t: Tick, px_scale: f32) {
     let Some(op) = item.effect("opacity").filter(|e| e.enabled && !e.masks.is_empty()) else { return };
     if let Some(cov) = effect_coverage(&op.masks, t, px_scale, img.w, img.h) {
         scale_by(img, &cov);
@@ -240,12 +240,12 @@ pub fn coverage_at(masks: &[FlatMask], x: f32, y: f32) -> Option<f32> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use filmcraft_geom::Vec2;
-    use filmcraft_project::MaskPath;
+    use mortiflix_geom::Vec2;
+    use mortiflix_project::MaskPath;
 
     fn mask(path: MaskPath, feather: f64) -> Mask {
         let mut m = Mask::new("m", path);
-        m.feather.value = filmcraft_project::ParamValue::Float(feather);
+        m.feather.value = mortiflix_project::ParamValue::Float(feather);
         m
     }
 
@@ -286,12 +286,12 @@ mod tests {
     #[test]
     fn expansion_inverted_opacity_modes() {
         let mut m = mask(MaskPath::rect(10.0, 10.0, 20.0, 20.0), 0.0);
-        m.expansion.value = filmcraft_project::ParamValue::Float(5.0);
+        m.expansion.value = mortiflix_project::ParamValue::Float(5.0);
         let c = effect_coverage(std::slice::from_ref(&m), Tick(0), 1.0, 30, 30).unwrap();
         assert_eq!(c[15 * 30 + 6], 1.0, "expanded by 5");
         assert_eq!(c[15 * 30 + 4], 0.0);
         m.inverted = true;
-        m.opacity.value = filmcraft_project::ParamValue::Float(50.0);
+        m.opacity.value = mortiflix_project::ParamValue::Float(50.0);
         let c = effect_coverage(&[m.clone()], Tick(0), 1.0, 30, 30).unwrap();
         assert_eq!(c[15 * 30 + 15], 0.0);
         assert_eq!(c[2], 0.5);
@@ -308,7 +308,7 @@ mod tests {
     #[test]
     fn row_algorithm_matches_brute_force() {
         let mut a = mask(MaskPath::ellipse(Vec2::new(30.0, 25.0), Vec2::new(20.0, 12.0)), 6.0);
-        a.expansion.value = filmcraft_project::ParamValue::Float(-2.0);
+        a.expansion.value = mortiflix_project::ParamValue::Float(-2.0);
         let mut b = mask(MaskPath::polygon(&[Vec2::new(5.0, 5.0), Vec2::new(50.0, 10.0), Vec2::new(20.0, 45.0)]), 0.0);
         b.mode = MaskMode::Difference;
         b.inverted = true;

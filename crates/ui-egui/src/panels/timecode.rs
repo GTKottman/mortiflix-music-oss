@@ -9,16 +9,16 @@
 //! State: `ui.panels.timecode`.
 
 use egui::{Align2, Rect, Sense, pos2, vec2};
-use filmcraft_project::ItemKind;
-use filmcraft_time::{FrameRate, Tick, TimeDisplay, format_time};
+use mortiflix_project::ItemKind;
+use mortiflix_time::{FrameRate, Tick, TimeDisplay, format_time};
 
-use crate::FilmcraftApp;
+use crate::StudioApp;
 use crate::dock::PanelKind;
 use crate::panels::panel_state::{TcMode, TcSource, TimecodeRow};
 use crate::theme::Tokens;
 
 /// What a row shows: (value text, caption).
-pub fn row_text(app: &FilmcraftApp, row: &TimecodeRow) -> (String, String) {
+pub fn row_text(app: &StudioApp, row: &TimecodeRow) -> (String, String) {
     let s = &app.session;
     let source = match row.source {
         TcSource::Active if matches!(app.ui.focused, PanelKind::Source) && s.state.source_item.is_some() => TcSource::Source,
@@ -101,7 +101,7 @@ pub fn row_text(app: &FilmcraftApp, row: &TimecodeRow) -> (String, String) {
     (value, format!("{src} · {} · {}", crate::i18n::t(row.mode.label()), v.name))
 }
 
-pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
+pub fn show(app: &mut StudioApp, ui: &mut egui::Ui, rect: Rect) {
     let t = app.tokens;
     let rows = app.ui.panels.timecode.rows.clone();
     let show_name = app.ui.panels.timecode.show_name;

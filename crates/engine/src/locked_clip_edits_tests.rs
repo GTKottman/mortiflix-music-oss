@@ -2,7 +2,7 @@
 //! refuses `timeline.move`.
 
 use super::*;
-use filmcraft_project::ClipId;
+use mortiflix_project::ClipId;
 use serde_json::json;
 
 fn fixture() -> (Session, u64) {
@@ -16,7 +16,7 @@ fn fixture() -> (Session, u64) {
     (s, clip)
 }
 
-fn v1_clip(s: &Session, id: u64) -> filmcraft_project::TrackItem {
+fn v1_clip(s: &Session, id: u64) -> mortiflix_project::TrackItem {
     s.active_sequence().unwrap().find_item(ClipId(id)).unwrap().1.clone()
 }
 

@@ -1,8 +1,8 @@
-# filmcraft-aac
+# mortiflix-aac
 
 A clean-room AAC-LC encoder and decoder (ISO/IEC 14496-3, MPEG-4 Audio, Low Complexity profile),
 written from the standard and the public psychoacoustics literature. Layer L0: it depends only on
-`filmcraft-bitstream` and `thiserror` (plus optional `rayon`), has no `unsafe`, and builds for
+`mortiflix-bitstream` and `thiserror` (plus optional `rayon`), has no `unsafe`, and builds for
 `wasm32-unknown-unknown`.
 
 No FFmpeg/FAAC/FDK-AAC/libfaad or other GPL/LGPL code was read or ported. ffmpeg is used only as an
@@ -11,7 +11,7 @@ external **test oracle** (decoding our streams, producing reference streams).
 ## API
 
 ```rust
-use filmcraft_aac::{Decoder, Encoder, EncoderConfig, BitrateMode, AdtsHeader, split_adts};
+use mortiflix_aac::{Decoder, Encoder, EncoderConfig, BitrateMode, AdtsHeader, split_adts};
 
 // Encoder: planar f32 (±1.0) → raw access units
 let mut enc = Encoder::new(EncoderConfig::cbr(48_000, 2, 128_000))?;   // or EncoderConfig::vbr(48_000, 2, 3.0)
@@ -101,7 +101,7 @@ checked: malformed access units return `Err`, never panic.
 
 ## Test results
 
-All produced by `cargo test -p filmcraft-aac -- --nocapture` (ffmpeg 9.0 at `/opt/homebrew/bin` as
+All produced by `cargo test -p mortiflix-aac -- --nocapture` (ffmpeg 9.0 at `/opt/homebrew/bin` as
 oracle; tests skip when it is absent). Fixtures go to `target/fixtures/aac/`.
 
 ### Encoder quality / bitrate (2 s synthetic signals, decoded by ffmpeg)

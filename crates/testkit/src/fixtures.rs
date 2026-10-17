@@ -1,7 +1,7 @@
 //! Fixture locations and race-free generation.
 //!
 //! Fixtures live in `<workspace>/target/fixtures/<crate>/` whatever `CARGO_TARGET_DIR` is, so
-//! parallel agents with private target dirs share one generated set. `FILMCRAFT_FIXTURES_DIR`
+//! parallel agents with private target dirs share one generated set. `MFX_STUDIO_FIXTURES_DIR`
 //! overrides the root. Media is never committed.
 
 use std::path::{Path, PathBuf};
@@ -14,9 +14,9 @@ pub fn workspace_root() -> PathBuf {
     root.canonicalize().unwrap_or_else(|_| root.to_path_buf())
 }
 
-/// Root of all generated fixtures: `$FILMCRAFT_FIXTURES_DIR` or `<workspace>/target/fixtures`.
+/// Root of all generated fixtures: `$MFX_STUDIO_FIXTURES_DIR` or `<workspace>/target/fixtures`.
 pub fn fixtures_root() -> PathBuf {
-    match std::env::var_os("FILMCRAFT_FIXTURES_DIR").filter(|v| !v.is_empty()) {
+    match std::env::var_os("MFX_STUDIO_FIXTURES_DIR").filter(|v| !v.is_empty()) {
         Some(d) => PathBuf::from(d),
         None => workspace_root().join("target").join("fixtures"),
     }
@@ -122,7 +122,7 @@ mod tests {
 
     #[test]
     fn generate_is_cached_and_atomic() {
-        let dir = std::env::temp_dir().join(format!("filmcraft-testkit-gen-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("mortiflix-testkit-gen-{}", std::process::id()));
         let out = dir.join("f.bin");
         let _ = std::fs::remove_file(&out);
         assert!(generate(&out, |_| false).is_none());

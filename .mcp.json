@@ -1,11 +1,11 @@
 {
   "mcpServers": {
-    "filmcraft": {
-      "command": "target/release/filmcraft-cli",
+    "mortiflix-studio": {
+      "command": "target/release/mortiflix-studio-cli",
       "args": ["mcp", "--bridge", "127.0.0.1:9876"]
     },
-    "filmcraft-headless": {
-      "command": "target/release/filmcraft-cli",
+    "mortiflix-headless": {
+      "command": "target/release/mortiflix-studio-cli",
       "args": ["mcp", "--demo"]
     }
   }

@@ -1,9 +1,9 @@
 //! Decode speed (ignored by default; run with
-//! `cargo test --release -p filmcraft-hevc --test perf -- --ignored --nocapture`).
+//! `cargo test --release -p mortiflix-hevc --test perf -- --ignored --nocapture`).
 
 mod common;
 
-use filmcraft_hevc::Decoder;
+use mortiflix_hevc::Decoder;
 use std::time::Instant;
 
 fn bench(data: &[u8], threads: usize, iters: usize) -> (usize, f64) {

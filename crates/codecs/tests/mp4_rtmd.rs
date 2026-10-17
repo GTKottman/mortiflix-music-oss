@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use filmcraft_time::FrameRate;
+use mortiflix_time::FrameRate;
 
 /// Minimal ISO-BMFF box writer (the demuxer only needs headers and sample tables here).
 #[derive(Default)]
@@ -215,18 +215,18 @@ fn rtmd_sample(h: u8, m: u8, s: u8, f: u8, drop: u8) -> Vec<u8> {
 #[test]
 fn rtmd_start_timecode_is_read() {
     let file = file_with_rtmd(&rtmd_sample(3, 37, 12, 34, 0));
-    let src = filmcraft_codecs::open_bytes("fx3.mp4", Arc::from(file.into_boxed_slice())).unwrap();
+    let src = mortiflix_codecs::open_bytes("fx3.mp4", Arc::from(file.into_boxed_slice())).unwrap();
     let rate = FrameRate::new(60000, 1001);
     let tc = src.info().start_timecode.expect("rtmd start timecode");
     assert_eq!(tc, 781_954);
-    assert_eq!(filmcraft_time::format_timecode_frames(tc, rate, false), "03:37:12:34");
+    assert_eq!(mortiflix_time::format_timecode_frames(tc, rate, false), "03:37:12:34");
 }
 
 #[test]
 fn rtmd_without_usable_sample_is_ignored() {
     // Too short to carry the timecode block: no start timecode, and no panic.
     let file = file_with_rtmd(&[0u8; 6]);
-    let src = filmcraft_codecs::open_bytes("short.mp4", Arc::from(file.into_boxed_slice())).unwrap();
+    let src = mortiflix_codecs::open_bytes("short.mp4", Arc::from(file.into_boxed_slice())).unwrap();
     assert_eq!(src.info().start_timecode, None);
 }
 
@@ -235,7 +235,7 @@ fn huge_claimed_rtmd_sample_does_not_exhaust_memory() {
     // The stsz size claims 16 MiB but only the header bytes exist: only the fixed-size header is
     // read, so a corrupt size cannot drive a huge allocation during open (issue #460 review).
     let file = file_with_rtmd_claimed(&rtmd_sample(1, 2, 3, 4, 0), 16 * 1024 * 1024);
-    let src = filmcraft_codecs::open_bytes("big.mp4", Arc::from(file.into_boxed_slice())).unwrap();
+    let src = mortiflix_codecs::open_bytes("big.mp4", Arc::from(file.into_boxed_slice())).unwrap();
     assert_eq!(src.info().start_timecode, Some(223_384)); // 01:02:03:04 at 59.94
 }
 
@@ -243,7 +243,7 @@ fn huge_claimed_rtmd_sample_does_not_exhaust_memory() {
 fn damaged_timecode_fields_are_not_published() {
     // Frame 60 at 59.94 fps (valid range is 0–59): unusable metadata, not a fabricated time.
     let file = file_with_rtmd(&rtmd_sample(3, 37, 12, 60, 0));
-    let src = filmcraft_codecs::open_bytes("bad.mp4", Arc::from(file.into_boxed_slice())).unwrap();
+    let src = mortiflix_codecs::open_bytes("bad.mp4", Arc::from(file.into_boxed_slice())).unwrap();
     assert_eq!(src.info().start_timecode, None);
 }
 
@@ -252,10 +252,10 @@ fn drop_frame_skipped_labels_are_not_published() {
     // 00:01:00;00 at 59.94 fps: frames 00-03 of a non-tenth minute don't exist in drop-frame
     // counting, so this metadata is unusable rather than a start time.
     let file = file_with_rtmd(&rtmd_sample(0, 1, 0, 0, 1));
-    let src = filmcraft_codecs::open_bytes("df_bad.mp4", Arc::from(file.into_boxed_slice())).unwrap();
+    let src = mortiflix_codecs::open_bytes("df_bad.mp4", Arc::from(file.into_boxed_slice())).unwrap();
     assert_eq!(src.info().start_timecode, None);
     // The first real label of that minute (frame 04) is accepted.
     let file = file_with_rtmd(&rtmd_sample(0, 1, 0, 4, 1));
-    let src = filmcraft_codecs::open_bytes("df_ok.mp4", Arc::from(file.into_boxed_slice())).unwrap();
+    let src = mortiflix_codecs::open_bytes("df_ok.mp4", Arc::from(file.into_boxed_slice())).unwrap();
     assert_eq!(src.info().start_timecode, Some(3600));
 }

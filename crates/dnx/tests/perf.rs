@@ -1,6 +1,6 @@
-//! Throughput: `cargo test --release -p filmcraft-dnx --test perf -- --ignored --nocapture`.
+//! Throughput: `cargo test --release -p mortiflix-dnx --test perf -- --ignored --nocapture`.
 
-use filmcraft_dnx::{ChromaFormat, DecodeOptions, Encoder, EncoderConfig, Frame, Profile, decode_frame_with};
+use mortiflix_dnx::{ChromaFormat, DecodeOptions, Encoder, EncoderConfig, Frame, Profile, decode_frame_with};
 use std::time::Instant;
 
 fn busy(w: u32, h: u32, chroma: ChromaFormat, depth: u8) -> Frame {

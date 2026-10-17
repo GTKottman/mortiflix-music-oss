@@ -4,7 +4,7 @@
 # Clean-room: every entry was written from the plain meaning of the English text using ordinary
 # Japanese computing and video-editing vocabulary (クリップ, シーケンス, トラック, 再生ヘッド, ぼかし ...). No
 # proprietary localisation resource, string table or product UI was consulted or copied; add entries
-# the same way. Product and technology names (FilmCraft, ArtCraft, Lumetri, ProRes, LUFS ...) keep
+# the same way. Product and technology names (Mortiflix Studio, ArtCraft, Lumetri, ProRes, LUFS ...) keep
 # their spelling.
 #
 # House style, so new entries read like the rest:
@@ -16,7 +16,7 @@
 #     (not 効果), ぼかし, 音量, ビデオ, 再生ヘッド, イン点/アウト点.
 #   - "Horizontal"/"Vertical" are 水平/垂直 (guides, blur, axes); vertical text is "Vertical Text".
 
-	About FilmCraft	FilmCraft について
+	About Mortiflix Studio	Mortiflix Studio について
 	Add Audio Submix Track	オーディオサブミックストラックを追加
 	Add Caption at Playhead	再生ヘッドの位置にキャプションを追加
 	Add Chapter Marker…	チャプターマーカーを追加…
@@ -135,9 +135,8 @@
 	File	ファイル
 	File…	ファイル…
 	Fill frame	フレームを埋める
-	FilmCraft Help…	FilmCraft ヘルプ…
-	FilmCraft on GitHub	GitHub の FilmCraft
-	FilmCraft on getartcraft.com	getartcraft.com の FilmCraft
+	Mortiflix Studio Help…	Mortiflix Studio ヘルプ…
+	Mortiflix Studio on mortiflix.com	mortiflix.com の Mortiflix Studio
 	Find Next	次を検索
 	Find…	検索…
 	Fit	合わせる
@@ -309,7 +308,7 @@
 	Select Previous Graphic	前のグラフィックを選択
 	Select Previous Layer	前のレイヤーを選択
 	Selection Follows Playhead	選択範囲が再生ヘッドに追従
-	Selection as FilmCraft Project…	選択項目を FilmCraft プロジェクトとして書き出し…
+	Selection as Mortiflix Studio Project…	選択項目を Mortiflix Studio プロジェクトとして書き出し…
 	Selection…	選択項目…
 	Send Backward	背面へ
 	Send to Back	最背面へ
@@ -416,7 +415,6 @@
 	Version {version}	バージョン {version}
 	A clean-room, pure-Rust non-linear video editor. Part of the ArtCraft family.	Rust だけで書かれた、クリーンルーム設計のノンリニアビデオ編集ソフトです。ArtCraft ファミリーの一員です。
 	Join the ArtCraft Discord	ArtCraft の Discord に参加
-	Source code on GitHub	GitHub のソースコード
 	Report an issue	問題を報告
 	MIT OR Apache-2.0. Fonts: Inter, Noto Serif and JetBrains Mono (SIL OFL 1.1).	MIT OR Apache-2.0。フォント: Inter、Noto Serif、JetBrains Mono (SIL OFL 1.1)。
 	just now	たった今
@@ -435,8 +433,8 @@
 	No background jobs.	バックグラウンドジョブはありません。
 	Recover Unsaved Changes	未保存の変更を復元
 	Untitled	名称未設定
-	FilmCraft was closed while “{name}” had unsaved changes.	「{name}」に未保存の変更がある状態で FilmCraft が終了しました。
-	FilmCraft quit unexpectedly while “{name}” had unsaved changes.	「{name}」に未保存の変更がある状態で FilmCraft が予期せず終了しました。
+	Mortiflix Studio was closed while “{name}” had unsaved changes.	「{name}」に未保存の変更がある状態で Mortiflix Studio が終了しました。
+	Mortiflix Studio quit unexpectedly while “{name}” had unsaved changes.	「{name}」に未保存の変更がある状態で Mortiflix Studio が予期せず終了しました。
 	Recover unsaved changes from {when}?	{when} の未保存の変更を復元しますか？
 	The project had not been saved yet.	このプロジェクトはまだ保存されていませんでした。
 	{n} sessions have unsaved changes:	{n} 件のセッションに未保存の変更があります:
@@ -962,7 +960,7 @@
 	Font family	フォントファミリー
 	Label Colors	ラベルカラー
 	Decoded frames held for the monitors and thumbnails: {used} of {budget}.	モニターとサムネイル用に保持するデコード済みフレームに、{budget} のうち {used} を使用しています。
-	FilmCraft keeps the rest of the RAM free for other applications.	FilmCraft は残りの RAM をほかのアプリケーション用に空けておきます。
+	Mortiflix Studio keeps the rest of the RAM free for other applications.	Mortiflix Studio は残りの RAM をほかのアプリケーション用に空けておきます。
 	not available in this session	このセッションでは利用できません
 	Currently: {loc} — {files} file(s), {size}	現在: {loc} — {files} 個のファイル、{size}
 	 ({ch} output channels)	 (出力 {ch} チャンネル)
@@ -1071,7 +1069,7 @@
 	Video Frame	ビデオフレーム
 	Pin To	固定先
 	Pinned Edges	固定する辺
-	FilmCraft Graphics Template	FilmCraft グラフィックステンプレート
+	Mortiflix Studio Graphics Template	Mortiflix Studio グラフィックステンプレート
 	{n} Font	{n} のフォント
 	{n} Size	{n} のサイズ
 	{n} Color	{n} の色
@@ -1081,7 +1079,7 @@
 	Export As Motion Graphics Template	モーショングラフィックステンプレートとして書き出し
 	Category:	カテゴリ:
 	Editable properties:	編集可能なプロパティ:
-	Saved as a FilmCraft graphics template (.fcgt) in your templates folder.	テンプレートフォルダーに FilmCraft グラフィックステンプレート (.fcgt) として保存されます。
+	Saved as a Mortiflix Studio graphics template (.fcgt) in your templates folder.	テンプレートフォルダーに Mortiflix Studio グラフィックステンプレート (.fcgt) として保存されます。
 	Exported graphics template to {path}	グラフィックステンプレートを {path} に書き出しました
 	Replace Fonts in Projects	プロジェクト内のフォントを置換
 	Fonts used in the project:	プロジェクトで使用されているフォント:
@@ -1451,7 +1449,7 @@
 	Center of Sphere	球の中心
 	Cents	セント
 	Change to Color	指定色に変更
-	Changes are copied in the background a moment after each edit. If FilmCraft quits unexpectedly, they are offered the next time it starts.	変更内容は、編集のたびに少し遅れてバックグラウンドでコピーされます。FilmCraft が予期せず終了した場合は、次回の起動時に復元できます。
+	Changes are copied in the background a moment after each edit. If Mortiflix Studio quits unexpectedly, they are offered the next time it starts.	変更内容は、編集のたびに少し遅れてバックグラウンドでコピーされます。Mortiflix Studio が予期せず終了した場合は、次回の起動時に復元できます。
 	Channel	チャンネル
 	Channel Blur	チャンネルぼかし
 	Channel Mix	チャンネルミックス
@@ -1824,7 +1822,7 @@
 	Hard Limiter	ハードリミッター
 	Hard Mix	ハードミックス
 	Hardware decoding	ハードウェアデコード
-	Hardware decoding: Auto uses the system's video decoder (VideoToolbox on macOS, Media Foundation on Windows, VA-API or NVDEC for H.264 and HEVC on Linux) for the streams it supports, and FilmCraft's own decoder for everything else or if the hardware fails. Media that is already open keeps its decoder until it is reopened.	ハードウェアデコード: 「自動」では、対応しているストリームにはシステムのビデオデコーダー (macOS では VideoToolbox、Windows では Media Foundation、Linux では H.264・HEVC 用の VA-API または NVDEC) を使用し、それ以外のストリームや、ハードウェアで失敗した場合は FilmCraft 独自のデコーダーを使用します。すでに開いているメディアは、開き直すまで現在のデコーダーを使い続けます。
+	Hardware decoding: Auto uses the system's video decoder (VideoToolbox on macOS, Media Foundation on Windows, VA-API or NVDEC for H.264 and HEVC on Linux) for the streams it supports, and Mortiflix Studio's own decoder for everything else or if the hardware fails. Media that is already open keeps its decoder until it is reopened.	ハードウェアデコード: 「自動」では、対応しているストリームにはシステムのビデオデコーダー (macOS では VideoToolbox、Windows では Media Foundation、Linux では H.264・HEVC 用の VA-API または NVDEC) を使用し、それ以外のストリームや、ハードウェアで失敗した場合は Mortiflix Studio 独自のデコーダーを使用します。すでに開いているメディアは、開き直すまで現在のデコーダーを使い続けます。
 	Head Size	頭部サイズ
 	Heart	ハート
 	Height	高さ
@@ -2094,7 +2092,7 @@
 	Night	夜
 	No Motion	動きなし
 	No Scroll	スクロールなし
-	No plugins are installed. Changes will take effect the next time you start FilmCraft.	プラグインはインストールされていません。変更は次回 FilmCraft の起動時に反映されます。
+	No plugins are installed. Changes will take effect the next time you start Mortiflix Studio.	プラグインはインストールされていません。変更は次回 Mortiflix Studio の起動時に反映されます。
 	Noise	ノイズ
 	Noise & Grain	ノイズ・グレイン
 	Noise (Legacy)	ノイズ (従来版)
@@ -2525,7 +2523,7 @@
 	Template Properties	テンプレートのプロパティ
 	Text Animator	テキストアニメーター
 	Text Color	テキストの色
-	The media cache holds render previews of unsaved projects and other files FilmCraft can recreate. Deleting them is always safe; FilmCraft rebuilds them as needed.	メディアキャッシュには、未保存のプロジェクトのレンダリングプレビューなど、FilmCraft が再作成できるファイルが保存されています。これらはいつ削除しても問題ありません。FilmCraft が必要に応じて再構築します。
+	The media cache holds render previews of unsaved projects and other files Mortiflix Studio can recreate. Deleting them is always safe; Mortiflix Studio rebuilds them as needed.	メディアキャッシュには、未保存のプロジェクトのレンダリングプレビューなど、Mortiflix Studio が再作成できるファイルが保存されています。これらはいつ削除しても問題ありません。Mortiflix Studio が必要に応じて再構築します。
 	Thickness	太さ
 	Tile Gradient	タイル状に配置
 	Tilt	チルト
@@ -2735,7 +2733,7 @@
 	System Compatibility Report	システム互換性レポート
 	no GPU adapter: the CPU compositor is used	GPU アダプターがありません: CPU コンポジターを使用します
 	Avid Log Exchange	Avid Log Exchange
-	FilmCraft Project	FilmCraft プロジェクト
+	Mortiflix Studio Project	Mortiflix Studio プロジェクト
 	{name} Selection.fcproj	{name} 選択項目.fcproj
 	{name} (Simplified)	{name} (単純化済み)
 	Find in:	検索場所:
@@ -2875,7 +2873,7 @@
 	Start Queue	キューを開始
 	Stop	停止
 	Clear Finished	終了した項目をクリア
-	Not supported by FilmCraft's encoders yet	FilmCraft のエンコーダーはまだ対応していません
+	Not supported by Mortiflix Studio's encoders yet	Mortiflix Studio のエンコーダーはまだ対応していません
 	Sequence name	シーケンス名
 	Folder	フォルダー
 	Preset	プリセット
@@ -2964,7 +2962,7 @@
 	Drag a clip to slide it between its neighbours.	クリップをドラッグすると、前後のクリップの間でスライドします。
 	Drag to scroll the timeline.	ドラッグしてタイムラインをスクロールします。
 	Click to zoom in; Opt-click to zoom out.	クリックでズームイン、Opt+クリックでズームアウトします。
-	FilmCraft hit an error	FilmCraft でエラーが発生しました
+	Mortiflix Studio hit an error	Mortiflix Studio でエラーが発生しました
 	Details: {path}	詳細: {path}
 	Opened {url}	{url} を開きました
 	(empty)	(空)
@@ -3224,7 +3222,7 @@
 	QuickTime, ProRes 4444 (4:4:4) with alpha channel, 24-bit 48 kHz PCM	QuickTime、ProRes 4444 (4:4:4) アルファチャンネル付き、24-bit 48 kHz PCM
 	QuickTime, ProRes 4444 XQ (4:4:4), 24-bit 48 kHz PCM	QuickTime、ProRes 4444 XQ (4:4:4)、24-bit 48 kHz PCM
 	QuickTime, ProRes 422, 24-bit 48 kHz PCM	QuickTime、ProRes 422、24-bit 48 kHz PCM
-	Quit FilmCraft	FilmCraft を終了
+	Quit Mortiflix Studio	Mortiflix Studio を終了
 	Rate Stretch Tool	レートストレッチツール
 	Razor Tool	カミソリツール
 	Rectangle Tool	長方形ツール
@@ -3535,8 +3533,8 @@
 	Composite in Linear Color	リニアカラーで合成
 	Auto Tone Map Media (HDR and log into SDR)	メディアの自動トーンマッピング (HDR と log を SDR に変換)
 	Configure…	設定…
-	Not supported in FilmCraft yet	FilmCraft ではまだサポートされていません
-	FilmCraft always composites in linear light	FilmCraft は常にリニアライトで合成します
+	Not supported in Mortiflix Studio yet	Mortiflix Studio ではまだサポートされていません
+	Mortiflix Studio always composites in linear light	Mortiflix Studio は常にリニアライトで合成します
 	Loop marked range	マークした範囲をループ
 	Play Source	ソースを再生
 	Source Play/Stop	ソースの再生/停止
@@ -3606,16 +3604,15 @@
 	Opens in your web browser: {url}	ウェブブラウザーで開きます：{url}
 	Saves this session's log and shows it in your file manager.	このセッションのログを保存し、ファイルマネージャーで表示します。
 	Shows a report on this computer.	このコンピューターのレポートを表示します。
-	Shows the version, community links and credits in a FilmCraft window.	バージョン、コミュニティへのリンク、クレジットを FilmCraft のウィンドウに表示します。
+	Shows the version, community links and credits in a Mortiflix Studio window.	バージョン、コミュニティへのリンク、クレジットを Mortiflix Studio のウィンドウに表示します。
 	Couldn't open your web browser	ウェブブラウザーを開けませんでした
 	Open this address in your browser yourself:	このアドレスをご自身でブラウザーで開いてください：
-# Mortiflix FilmCraft: Stages menu and panels
+# Mortiflix Studio: Stages menu and panels
 	Back	戻る
 	Next	次へ
 	Script	台本
 	Shots	ショット
 	Voice & music	声と音楽
-	FilmCraft	FilmCraft
 	Render	レンダリング
 	Mortiflix Chat	Mortiflix チャット
 	Mortiflix Preview	Mortiflix プレビュー
@@ -3637,7 +3634,7 @@
 	Choose Files for Mortiflix	Mortiflix 用のファイルを選択
 	Choose a File and Send It to Mortiflix	ファイルを選んで Mortiflix に送る
 	Show in Folder	フォルダーに表示
-# Mortiflix FilmCraft: node area commands (part 03)
+# Mortiflix Studio: node area commands (part 03)
 	Previous Node	前のノード
 	Next Node	次のノード
 	Node Above	上のノード
@@ -3685,7 +3682,7 @@
 	Frame Beat 8	ビート8を表示
 	Frame Beat 9	ビート9を表示
 	Nodes	ノード
-# Mortiflix FilmCraft: loose preview (doc 36)
+# Mortiflix Studio: loose preview (doc 36)
 	Play the Loose Preview	ラフプレビューを再生
 	Play or Pause the Loose Preview	ラフプレビューを再生／一時停止
 	Pause the Loose Preview	ラフプレビューを一時停止
@@ -3697,10 +3694,10 @@
 	Follow the Playhead	再生ヘッドに追従
 	Rebuild the Loose Preview	ラフプレビューを作り直す
 	Show the Shot's File	ショットのファイルを表示
-# Mortiflix FilmCraft: Into FilmCraft (doc 38)
-	Bring the Video into FilmCraft	動画を FilmCraft に取り込む
+# Mortiflix Studio: Into Edit (doc 38)
+	Bring the Video into Edit	動画を編集に取り込む
 	Start the Edit Again from Mortiflix…	Mortiflix から編集をやり直す…
-	Run the FilmCraft Import	FilmCraft への取り込みを実行
+	Run the Mortiflix Studio Import	Mortiflix Studio への取り込みを実行
 	Mortiflix Timeline Edit	Mortiflix タイムライン編集
-# Mortiflix FilmCraft: Script panel (stage 1)
+# Mortiflix Studio: Script panel (stage 1)
 	Undo in the Script	台本で取り消し

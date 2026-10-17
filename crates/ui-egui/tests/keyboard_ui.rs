@@ -4,15 +4,15 @@
 use std::sync::mpsc::{Sender, channel};
 
 use egui_kittest::Harness;
-use filmcraft_engine::Session;
-use filmcraft_engine::shortcut_presets as presets;
-use filmcraft_engine::shortcuts::{PREMIERE_PRESET, Platform};
-use filmcraft_ui_egui::FilmcraftApp;
-use filmcraft_ui_egui::control::ControlRequest;
+use mortiflix_engine::Session;
+use mortiflix_engine::shortcut_presets as presets;
+use mortiflix_engine::shortcuts::{PREMIERE_PRESET, Platform};
+use mortiflix_ui_egui::StudioApp;
+use mortiflix_ui_egui::control::ControlRequest;
 use serde_json::{Value, json};
 
 struct Driver {
-    harness: Harness<'static, FilmcraftApp>,
+    harness: Harness<'static, StudioApp>,
     tx: Sender<ControlRequest>,
 }
 
@@ -21,7 +21,7 @@ impl Driver {
         let mut s = Session::default();
         s.execute("file.openDemoProject", json!({})).unwrap();
         let (tx, rx) = channel();
-        let mut app = FilmcraftApp::new(s).with_control(rx);
+        let mut app = StudioApp::new(s).with_control(rx);
         app.hooks.open_path = Some(Box::new(|_, _| Ok(())));
         let harness = Harness::builder().with_size(egui::vec2(1600.0, 980.0)).with_max_steps(10_000).build_eframe(move |_cc| app);
         let mut d = Driver { harness, tx };
@@ -66,29 +66,29 @@ impl Driver {
         self.frames(2);
     }
 
-    fn app(&self) -> &FilmcraftApp {
+    fn app(&self) -> &StudioApp {
         self.harness.state()
     }
 }
 
 /// Ids added for keyboard parity (engine + UI).
 fn new_ids() -> Vec<String> {
-    let mut v: Vec<String> = filmcraft_engine::keyboard::commands().iter().map(|c| c.id.to_string()).collect();
-    v.extend(filmcraft_ui_egui::panels::keyboard::COMMANDS.iter().map(|c| c.id.to_string()));
+    let mut v: Vec<String> = mortiflix_engine::keyboard::commands().iter().map(|c| c.id.to_string()).collect();
+    v.extend(mortiflix_ui_egui::panels::keyboard::COMMANDS.iter().map(|c| c.id.to_string()));
     v
 }
 
 #[test]
 fn premiere_table_has_no_dangling_ids_or_new_conflicts() {
-    let ui: Vec<String> = filmcraft_ui_egui::menus::external_commands().into_iter().map(|c| c.id).collect();
+    let ui: Vec<String> = mortiflix_ui_egui::menus::external_commands().into_iter().map(|c| c.id).collect();
     for (id, keys, panel) in presets::premiere() {
-        assert!(filmcraft_engine::find_command(id).is_some() || ui.iter().any(|u| u == id), "Premiere table: `{id}` ({keys} {panel}) is not a command");
+        assert!(mortiflix_engine::find_command(id).is_some() || ui.iter().any(|u| u == id), "Premiere table: `{id}` ({keys} {panel}) is not a command");
     }
-    for (id, _, _) in presets::FILMCRAFT_PANEL.iter().chain(presets::PREMIERE_PANEL) {
-        assert!(filmcraft_engine::find_command(id).is_some() || ui.iter().any(|u| u == id), "panel table: `{id}` is not a command");
+    for (id, _, _) in presets::MFX_STUDIO_PANEL.iter().chain(presets::PREMIERE_PANEL) {
+        assert!(mortiflix_engine::find_command(id).is_some() || ui.iter().any(|u| u == id), "panel table: `{id}` is not a command");
     }
     let mut s = Session::default();
-    s.shortcuts.register_external(filmcraft_ui_egui::menus::external_commands());
+    s.shortcuts.register_external(mortiflix_ui_egui::menus::external_commands());
     let new = new_ids();
     for preset in [None, Some(PREMIERE_PRESET)] {
         if let Some(p) = preset {
@@ -140,7 +140,7 @@ fn new_keys_work_in_the_app() {
 
     // Shift+` maximizes the focused frame, again restores it
     d.key("Shift+`");
-    assert_eq!(d.app().ui.keys.maximized, Some(filmcraft_ui_egui::dock::PanelKind::Timeline));
+    assert_eq!(d.app().ui.keys.maximized, Some(mortiflix_ui_egui::dock::PanelKind::Timeline));
     let r = d.ok("ui.elements", json!({"prefix": "panel."}));
     let frames: Vec<&Value> = r.as_array().unwrap().iter().filter(|e| e["id"].as_str().is_some_and(|i| !i["panel.".len()..].contains('.'))).collect();
     assert_eq!(frames.len(), 1, "only the maximized panel is laid out: {r}");
@@ -156,12 +156,12 @@ fn new_keys_work_in_the_app() {
 
     // Ctrl+Shift+. cycles panel focus
     d.key("Ctrl+Shift+.");
-    assert_ne!(d.app().ui.focused, filmcraft_ui_egui::dock::PanelKind::Timeline);
+    assert_ne!(d.app().ui.focused, mortiflix_ui_egui::dock::PanelKind::Timeline);
 
     // Project panel: Down moves the selection; Shift+\ toggles the view
     d.focus("Project");
     // the Icon view shows a bin's clips (sub-bins are folder cards): open the first bin in place
-    let bin = d.app().session.project.root.children.iter().find_map(|e| if let filmcraft_project::BinEntry::Bin(b) = e { Some(b.id.0) } else { None }).unwrap();
+    let bin = d.app().session.project.root.children.iter().find_map(|e| if let mortiflix_project::BinEntry::Bin(b) = e { Some(b.id.0) } else { None }).unwrap();
     d.ok("ui.menu.invoke", json!({"id": "projectPanel.openBin", "params": {"bin": bin, "how": "inPlace"}}));
     d.exec("project.select", json!({"items": []}));
     d.key("Down");

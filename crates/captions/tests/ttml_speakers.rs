@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
-use filmcraft_captions::{Cue, Document, Format, WriteOptions, parse, write};
-use filmcraft_time::FrameRate;
+use mortiflix_captions::{Cue, Document, Format, WriteOptions, parse, write};
+use mortiflix_time::FrameRate;
 
 const TT: &str = "http://www.w3.org/ns/ttml";
 const META: &str = "http://www.w3.org/ns/ttml#metadata";
@@ -90,7 +90,7 @@ fn imports_multiple_agent_names_in_reference_order() {
 }
 
 #[test]
-fn keeps_legacy_filmcraft_speaker_references_readable() {
+fn keeps_legacy_mortiflix_speaker_references_readable() {
     let xml = format!(
         r#"<tt xmlns="{TT}" xmlns:ttm="{META}"><body><div>
         <p begin="1s" end="2s" ttm:agent="Ann_Lee">Hello</p>

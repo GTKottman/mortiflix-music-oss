@@ -1,4 +1,4 @@
-//! Bit-level reading and writing shared by FilmCraft's codec crates.
+//! Bit-level reading and writing shared by Mortiflix Studio's codec crates.
 //!
 //! - [`BitReader`]: MSB-first reader with Exp-Golomb (`ue(v)`, `se(v)`), as used by H.264/HEVC/AV1 headers.
 //! - [`BitWriter`]: the matching writer (for encoders and header rewriting).

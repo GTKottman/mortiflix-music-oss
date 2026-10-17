@@ -1,13 +1,13 @@
-# filmcraft-prores
+# mortiflix-prores
 
 Clean-room Apple ProRes decoder and encoder in pure Rust, written from the public SMPTE RDD 36
-bitstream description. Layer L0: depends only on `filmcraft-bitstream`, `thiserror` and (optional,
+bitstream description. Layer L0: depends only on `mortiflix-bitstream`, `thiserror` and (optional,
 feature `threads`, default on) `rayon`. Builds for `wasm32-unknown-unknown`; no `unsafe`.
 
 ## API
 
 ```rust
-use filmcraft_prores::*;
+use mortiflix_prores::*;
 
 // Decode one QuickTime sample (one ProRes frame).
 let frame: Frame = decode_frame(&sample)?;                 // 10-bit 4:2:2 / 12-bit 4:4:4
@@ -97,7 +97,7 @@ of the target.
 
 ## Performance
 
-Measured with `cargo test --release -p filmcraft-prores --test perf -- --ignored --nocapture` on
+Measured with `cargo test --release -p mortiflix-prores --test perf -- --ignored --nocapture` on
 an M4 Pro (14 cores) that was heavily loaded by other jobs, so these are lower bounds. A 1080p HQ
 frame at the full nominal rate (918 KB) decoded at up to 318 fps threaded and 53 fps on one
 thread. A prores_ks HQ mandelbrot frame (657 KB) decoded at 390 fps threaded. Encoding a 1080p
@@ -111,4 +111,4 @@ HQ frame takes about 40 ms threaded.
 - The 4:2:2 decoder output is fixed at the coded 10-bit precision unless another depth is
   requested; there is no direct output of packed formats (v210, etc.).
 - No container handling: frames are QuickTime samples, and demuxing/muxing lives in
-  `filmcraft-isobmff`.
+  `mortiflix-isobmff`.

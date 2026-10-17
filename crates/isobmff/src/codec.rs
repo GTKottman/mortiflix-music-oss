@@ -2,7 +2,7 @@
 
 use crate::bytes::{BoxBuf, Cur, FourCc, boxes};
 use crate::error::{Error, Result};
-use filmcraft_bitstream::BitReader;
+use mortiflix_bitstream::BitReader;
 
 /// One sample description (an entry of `stsd`).
 #[derive(Clone, Debug, PartialEq)]

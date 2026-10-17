@@ -11,13 +11,13 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex, OnceLock};
 
-use filmcraft_geom::{Affine, Vec2};
-use filmcraft_project::graphic::{LayerContent, LayerSpec, LinearGradient, ShapeProps, TextProps, eval_layer};
-use filmcraft_project::graphic_design::{GraphicMeta, PinNode, remap_time, resolve_pins, roll_offset};
-use filmcraft_project::{EffectInstance, TrackItem};
-use filmcraft_text::raster::{Xform, apply, fill_into, xform_scale};
-use filmcraft_text::{Align, Caps, Layout, Mask, ParagraphStyle, StrokeKind, StyleRun, TextStyle, layout_rich, mask, render};
-use filmcraft_time::Tick;
+use mortiflix_geom::{Affine, Vec2};
+use mortiflix_project::graphic::{LayerContent, LayerSpec, LinearGradient, ShapeProps, TextProps, eval_layer};
+use mortiflix_project::graphic_design::{GraphicMeta, PinNode, remap_time, resolve_pins, roll_offset};
+use mortiflix_project::{EffectInstance, TrackItem};
+use mortiflix_text::raster::{Xform, apply, fill_into, xform_scale};
+use mortiflix_text::{Align, Caps, Layout, Mask, ParagraphStyle, StrokeKind, StyleRun, TextStyle, layout_rich, mask, render};
+use mortiflix_time::Tick;
 use rayon::prelude::*;
 
 use crate::graphics::{premul_linear, premul_linear_lerp};
@@ -38,7 +38,7 @@ pub fn layer_matrix(spec: &LayerSpec) -> Affine {
 pub fn text_styles(t: &TextProps) -> (TextStyle, ParagraphStyle) {
     (
         TextStyle {
-            family: if t.font.is_empty() { filmcraft_text::fonts::DEFAULT_FAMILY.into() } else { t.font.clone() },
+            family: if t.font.is_empty() { mortiflix_text::fonts::DEFAULT_FAMILY.into() } else { t.font.clone() },
             style: if t.style.is_empty() { "Regular".into() } else { t.style.clone() },
             size: t.size,
             tracking: t.tracking,
@@ -105,10 +105,10 @@ pub fn text_layout(t: &TextProps) -> Arc<Layout> {
 }
 
 /// A shape layer's outline in layer pixels (centred on the layer origin).
-pub fn shape_path(s: &ShapeProps) -> filmcraft_text::Path {
+pub fn shape_path(s: &ShapeProps) -> mortiflix_text::Path {
     let (w, h) = (s.size.0 / 2.0, s.size.1 / 2.0);
     match s.shape {
-        1 => filmcraft_text::Path::ellipse(0.0, 0.0, w, h),
+        1 => mortiflix_text::Path::ellipse(0.0, 0.0, w, h),
         2 => {
             let n = s.sides.max(3);
             let pts: Vec<(f32, f32)> = (0..n)
@@ -117,10 +117,10 @@ pub fn shape_path(s: &ShapeProps) -> filmcraft_text::Path {
                     (a.cos() * w, a.sin() * h)
                 })
                 .collect();
-            filmcraft_text::Path::polygon(&pts)
+            mortiflix_text::Path::polygon(&pts)
         }
-        3 if s.points.len() >= 3 => filmcraft_text::Path::polygon(&s.points.iter().map(|p| (p[0], p[1])).collect::<Vec<_>>()),
-        _ => filmcraft_text::Path::round_rect(-w, -h, w, h, s.corner_radius),
+        3 if s.points.len() >= 3 => mortiflix_text::Path::polygon(&s.points.iter().map(|p| (p[0], p[1])).collect::<Vec<_>>()),
+        _ => mortiflix_text::Path::round_rect(-w, -h, w, h, s.corner_radius),
     }
 }
 
@@ -366,7 +366,7 @@ pub fn raster_layer(spec: &LayerSpec, m: &Xform, cw: usize, ch: usize) -> Option
     }
     let strokes: Vec<(Mask, [f32; 4])> = ap.strokes.iter().map(|(c, sw, k)| (mask::stroke(&cover, sw * s, stroke_kind(*k)), *c)).collect();
     let bg = ap.background.map(|(c, pad, r)| {
-        let p = filmcraft_text::Path::round_rect(lb[0] - pad, lb[1] - pad, lb[2] + pad, lb[3] + pad, r).transformed(m);
+        let p = mortiflix_text::Path::round_rect(lb[0] - pad, lb[1] - pad, lb[2] + pad, lb[3] + pad, r).transformed(m);
         let mut bm = Mask::new(w, h);
         fill_into(&p, &mut bm, -x0 as f32, -y0 as f32);
         (bm, c)
@@ -527,7 +527,7 @@ pub fn apply_pins(specs: &mut [LayerSpec], canvas: (u32, u32)) {
 /// Evaluated layers of a graphic clip's effect list at clip time `t`, in paint order, with pins
 /// resolved.
 pub fn graphic_specs(effects: &[EffectInstance], t: Tick, canvas: (u32, u32)) -> Vec<LayerSpec> {
-    let mut v: Vec<LayerSpec> = effects.iter().filter(|e| filmcraft_project::graphic::is_layer(e)).filter_map(|e| eval_layer(e, t, canvas)).collect();
+    let mut v: Vec<LayerSpec> = effects.iter().filter(|e| mortiflix_project::graphic::is_layer(e)).filter_map(|e| eval_layer(e, t, canvas)).collect();
     apply_pins(&mut v, canvas);
     v
 }
@@ -570,7 +570,7 @@ pub fn item_layer_specs(item: &TrackItem, mt: Tick, canvas: (u32, u32)) -> Vec<(
     let mut idx = Vec::new();
     let mut specs = Vec::new();
     for (i, e) in item.effects.iter().enumerate() {
-        if filmcraft_project::graphic::is_layer(e)
+        if mortiflix_project::graphic::is_layer(e)
             && let Some(s) = eval_layer(e, t, canvas)
         {
             idx.push(i);
@@ -586,7 +586,7 @@ pub fn item_layer_specs(item: &TrackItem, mt: Tick, canvas: (u32, u32)) -> Vec<(
 
 /// Move every layer by the roll / crawl offset at clip time `u` of a clip `d` long.
 pub fn apply_roll(meta: &GraphicMeta, specs: &mut [LayerSpec], u: Tick, d: Tick, canvas: (u32, u32)) {
-    if meta.roll.mode == filmcraft_project::RollMode::Off {
+    if meta.roll.mode == mortiflix_project::RollMode::Off {
         return;
     }
     let Some(cb) = content_bounds(specs) else { return };
@@ -638,8 +638,8 @@ pub fn render_graphic_tight(item: &TrackItem, mt: Tick, canvas: (u32, u32), m: &
 #[cfg(test)]
 mod tests {
     use super::*;
-    use filmcraft_project::graphic::{new_shape_layer, new_text_layer};
-    use filmcraft_project::{ParamValue, find_effect};
+    use mortiflix_project::graphic::{new_shape_layer, new_text_layer};
+    use mortiflix_project::{ParamValue, find_effect};
 
     fn set(e: &mut EffectInstance, k: &str, v: ParamValue) {
         e.params.get_mut(k).unwrap_or_else(|| panic!("{k}")).value = v;
@@ -647,11 +647,11 @@ mod tests {
 
     /// A 5 s graphic clip holding `layers` (canvas 400×300 at 25 fps).
     fn graphic_item(layers: Vec<EffectInstance>) -> TrackItem {
-        let mut p = filmcraft_project::Project::new("t");
-        let rate = filmcraft_time::FrameRate::FPS_25;
-        let g = p.add_item("G", filmcraft_project::Label::Rose, filmcraft_project::ItemKind::Graphic { width: 400, height: 300, rate }, None);
+        let mut p = mortiflix_project::Project::new("t");
+        let rate = mortiflix_time::FrameRate::FPS_25;
+        let g = p.add_item("G", mortiflix_project::Label::Rose, mortiflix_project::ItemKind::Graphic { width: 400, height: 300, rate }, None);
         let mut it = p
-            .make_track_item(g, filmcraft_project::TrackKind::Video, Tick::ZERO, filmcraft_time::TimeRange::new(Tick::ZERO, Tick::from_seconds_f64(5.0)), rate)
+            .make_track_item(g, mortiflix_project::TrackKind::Video, Tick::ZERO, mortiflix_time::TimeRange::new(Tick::ZERO, Tick::from_seconds_f64(5.0)), rate)
             .unwrap();
         it.effects.extend(layers);
         it
@@ -674,7 +674,7 @@ mod tests {
 
     #[test]
     fn per_character_fill_and_size() {
-        use filmcraft_project::graphic_design::{CharStyle, LayerExtra, StyleRun};
+        use mortiflix_project::graphic_design::{CharStyle, LayerExtra, StyleRun};
         let mut e = new_text_layer("AAAA", Vec2::new(20.0, 100.0), 60.0);
         set(&mut e, "fill_color", ParamValue::Color([1.0, 1.0, 1.0, 1.0]));
         let red = CharStyle { fill: Some([1.0, 0.0, 0.0, 1.0]), ..Default::default() };
@@ -714,7 +714,7 @@ mod tests {
 
     #[test]
     fn pinned_box_follows_text_growth() {
-        use filmcraft_project::graphic_design::{LayerExtra, Pin, PinTarget};
+        use mortiflix_project::graphic_design::{LayerExtra, Pin, PinTarget};
         let mut t = new_text_layer("Hi", Vec2::new(50.0, 100.0), 40.0);
         t.layer = Some(Box::new(LayerExtra { uid: 1, ..Default::default() }));
         let mut bx = new_shape_layer(0, Vec2::new(60.0, 90.0), Vec2::new(40.0, 40.0), vec![]);
@@ -735,7 +735,7 @@ mod tests {
 
     #[test]
     fn roll_moves_the_whole_graphic() {
-        use filmcraft_project::graphic_design::{GraphicMeta, Roll, RollMode};
+        use mortiflix_project::graphic_design::{GraphicMeta, Roll, RollMode};
         let e = new_shape_layer(0, Vec2::new(200.0, 150.0), Vec2::new(100.0, 100.0), vec![]);
         let mut item = graphic_item(vec![e]);
         item.graphic = Some(Box::new(GraphicMeta {
@@ -861,7 +861,7 @@ mod tests {
 
     #[test]
     fn linear_gradient_keeps_a_per_character_fill_solid() {
-        use filmcraft_project::graphic_design::{CharStyle, LayerExtra, StyleRun};
+        use mortiflix_project::graphic_design::{CharStyle, LayerExtra, StyleRun};
         let mut e = new_text_layer("AAAA", Vec2::new(20.0, 100.0), 60.0);
         set(&mut e, "fill_kind", ParamValue::Choice(1));
         set(&mut e, "gradient_start", ParamValue::Color([0.0, 1.0, 0.0, 1.0]));

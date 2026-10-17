@@ -378,7 +378,7 @@ mod tests {
     /// ffprobe (an external oracle; skipped where it is not installed) reads every new format.
     #[test]
     fn ffprobe_reads_32_bit_formats() {
-        let dir = std::env::temp_dir().join(format!("filmcraft-pcm32-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("mortiflix-pcm32-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let s: Vec<f32> = (0..9_600).map(|i| (i as f32 * 0.01).sin() * 1.5).collect();
         let cases = [
@@ -405,7 +405,7 @@ mod tests {
     /// A reader takes the RF64 sizes: ffprobe reports the duration from `ds64` (skipped without it).
     #[test]
     fn ffprobe_reads_rf64_duration() {
-        let dir = std::env::temp_dir().join(format!("filmcraft-rf64-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("mortiflix-rf64-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("long.wav");
         let frames = 48_000u64 * 60 * 60 * 5; // 5 hours of 24-bit stereo: 5.2 GB

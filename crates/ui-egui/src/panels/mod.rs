@@ -57,15 +57,15 @@ pub mod voiceover;
 pub mod workspaces;
 
 use egui::{Align2, Color32, Rect};
-use filmcraft_project::ItemId;
+use mortiflix_project::ItemId;
 
-use crate::FilmcraftApp;
+use crate::StudioApp;
 use crate::dock::PanelKind;
 use crate::theme::Tokens;
 
 /// ` · 2:05 left`: the time a job has left, as it follows a percentage.
 pub fn left_text(d: std::time::Duration) -> String {
-    tlf!(" · {time} left", time = filmcraft_engine::export::format_eta(d))
+    tlf!(" · {time} left", time = mortiflix_engine::export::format_eta(d))
 }
 
 /// [`left_text`] for a job or queue item whose JSON has `etaSeconds`, nothing while it is null.
@@ -73,7 +73,7 @@ pub fn eta_suffix(job: &serde_json::Value) -> String {
     job["etaSeconds"].as_f64().and_then(|s| std::time::Duration::try_from_secs_f64(s).ok()).map(left_text).unwrap_or_default()
 }
 
-pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, p: PanelKind, rect: Rect) {
+pub fn show(app: &mut StudioApp, ui: &mut egui::Ui, p: PanelKind, rect: Rect) {
     match p {
         PanelKind::Program if !app.session.state.edit_points.is_empty() => trim_monitor::show(app, ui, rect),
         PanelKind::Program => monitor::show(app, ui, rect, monitor::Which::Program),
@@ -124,7 +124,7 @@ enum DragPayload {
 }
 
 fn payload_id() -> egui::Id {
-    egui::Id::new("filmcraft-drag-payload")
+    egui::Id::new("mortiflix-drag-payload")
 }
 
 pub fn start_drag_source(ui: &egui::Ui, source: source_drag::SourceDrag) {
@@ -182,7 +182,7 @@ pub fn dragged_project_item(ui: &egui::Ui) -> Option<ItemId> {
 }
 /// The items a drag from the Project panel carries: the whole selection when the dragged item is
 /// one of several selected, otherwise just the dragged item.
-pub fn dragged_selection(app: &FilmcraftApp, item: ItemId) -> Vec<ItemId> {
+pub fn dragged_selection(app: &StudioApp, item: ItemId) -> Vec<ItemId> {
     let sel = &app.session.state.project_selection;
     // the selection can hold bins beside items (one id space): only items can be placed
     if sel.len() > 1 && sel.contains(&item) { sel.iter().copied().filter(|i| app.session.project.item(*i).is_some()).collect() } else { vec![item] }
@@ -198,7 +198,7 @@ pub fn clear_drag(ui: &egui::Ui) {
 }
 
 fn cancelled_id() -> egui::Id {
-    egui::Id::new("filmcraft-drag-cancelled")
+    egui::Id::new("mortiflix-drag-cancelled")
 }
 
 /// Abandon the drag in progress (Escape, #580): nothing is dropped, and nothing restarts it until
@@ -214,7 +214,7 @@ pub fn drag_cancelled(ui: &egui::Ui) -> bool {
 }
 
 /// Draw the drag ghost near the pointer and clear the payload after release. Escape cancels it.
-pub fn drag_ghost(app: &FilmcraftApp, ui: &egui::Ui) {
+pub fn drag_ghost(app: &StudioApp, ui: &egui::Ui) {
     if !ui.ctx().input(|i| i.pointer.any_down()) {
         ui.ctx().data_mut(|d| d.remove::<bool>(cancelled_id()));
     }
@@ -230,7 +230,7 @@ pub fn drag_ghost(app: &FilmcraftApp, ui: &egui::Ui) {
                 1 => app.session.project.item(*i).map(|x| x.name.clone()).unwrap_or_default(),
                 n => format!("{n} items"),
             },
-            DragPayload::Bin(b) => app.session.project.root.find_bin(filmcraft_project::BinId(*b)).map(|x| x.name.clone()).unwrap_or_default(),
+            DragPayload::Bin(b) => app.session.project.root.find_bin(mortiflix_project::BinId(*b)).map(|x| x.name.clone()).unwrap_or_default(),
             DragPayload::Source(s) => {
                 let name = app.session.project.item(s.item).map(|i| i.name.as_str()).unwrap_or("Source");
                 let mode = match (s.video, s.audio) {
@@ -244,7 +244,7 @@ pub fn drag_ghost(app: &FilmcraftApp, ui: &egui::Ui) {
             DragPayload::Effect(e) => match (e.strip_prefix("preset:"), e.strip_prefix(LUMETRI_PRESET_PREFIX)) {
                 (Some(name), _) => name.to_string(),
                 (_, Some(name)) => crate::i18n::t(name).to_string(),
-                _ => filmcraft_project::find_effect(e).map(|d| d.name.to_string()).unwrap_or_default(),
+                _ => mortiflix_project::find_effect(e).map(|d| d.name.to_string()).unwrap_or_default(),
             },
         };
         let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::new("drag-ghost")));
@@ -272,7 +272,7 @@ pub fn drag_ghost(app: &FilmcraftApp, ui: &egui::Ui) {
 }
 
 /// The panel "≡" menu.
-pub fn panel_menu_popup(app: &mut FilmcraftApp, ui: &mut egui::Ui) {
+pub fn panel_menu_popup(app: &mut StudioApp, ui: &mut egui::Ui) {
     drag_ghost(app, ui);
     // bins opened in new windows (Project panel)
     project::floating(app, ui.ctx());

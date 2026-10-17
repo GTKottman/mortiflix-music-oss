@@ -12,7 +12,7 @@
 //!   field order, repeat-first-field, picture type and colour description.
 //!
 //! ```no_run
-//! let mut dec = filmcraft_mpeg2v::Decoder::new();
+//! let mut dec = mortiflix_mpeg2v::Decoder::new();
 //! # let access_units: Vec<(Vec<u8>, i64)> = vec![];
 //! for (au, pts) in access_units {
 //!     for pic in dec.decode(&au, pts)? {
@@ -20,7 +20,7 @@
 //!     }
 //! }
 //! let rest = dec.flush();
-//! # Ok::<(), filmcraft_mpeg2v::Error>(())
+//! # Ok::<(), mortiflix_mpeg2v::Error>(())
 //! ```
 
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable))]

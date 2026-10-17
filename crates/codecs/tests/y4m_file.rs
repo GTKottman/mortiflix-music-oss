@@ -4,10 +4,10 @@
 
 use std::sync::Arc;
 
-use filmcraft_color::Range;
-use filmcraft_frame::{Chroma, PixelData};
-use filmcraft_media::{FrameRequest, MediaKind, SharedSource};
-use filmcraft_time::{FrameRate, Tick};
+use mortiflix_color::Range;
+use mortiflix_frame::{Chroma, PixelData};
+use mortiflix_media::{FrameRequest, MediaKind, SharedSource};
+use mortiflix_time::{FrameRate, Tick};
 
 /// A Y4M file: `header` after the signature, `frames` as raw plane bytes, each after `frame_line`.
 fn y4m(header: &str, frame_line: &str, frames: &[Vec<u8>]) -> Vec<u8> {
@@ -26,7 +26,7 @@ fn planes8(luma: usize, chroma: usize, y: u8, cb: u8, cr: u8) -> Vec<u8> {
 }
 
 fn open(name: &str, bytes: Vec<u8>) -> SharedSource {
-    filmcraft_codecs::open_bytes(name, Arc::from(bytes)).unwrap()
+    mortiflix_codecs::open_bytes(name, Arc::from(bytes)).unwrap()
 }
 
 /// The middle of frame `k` at `fps`.
@@ -83,8 +83,8 @@ fn y4m_mono_has_neutral_chroma() {
 #[test]
 fn large_y4m_files_open_from_a_reader() {
     let bytes: Arc<[u8]> = Arc::from(y4m("W2 H2 F25:1 C444", "FRAME", &[planes8(4, 4, 50, 60, 70), planes8(4, 4, 90, 60, 70)]));
-    let reader: filmcraft_media::SharedReader = Arc::new(filmcraft_media::reader::MemReader(bytes));
-    let src = filmcraft_media::reader::open_reader("big.y4m", reader, &filmcraft_codecs::reader_openers(), &filmcraft_codecs::openers()).unwrap();
+    let reader: mortiflix_media::SharedReader = Arc::new(mortiflix_media::reader::MemReader(bytes));
+    let src = mortiflix_media::reader::open_reader("big.y4m", reader, &mortiflix_codecs::reader_openers(), &mortiflix_codecs::openers()).unwrap();
     let f = src.video_frame(at(1, 25)).unwrap();
     let PixelData::Yuv8 { planes, chroma, .. } = &f.data else { panic!("{:?}", f.data) };
     assert_eq!((*chroma, planes[0][0]), (Chroma::C444, 90));
@@ -114,7 +114,7 @@ fn damaged_and_hostile_y4m_files_fail_without_panicking() {
     }
     for (i, b) in cases.into_iter().enumerate() {
         let r = std::panic::catch_unwind(|| {
-            filmcraft_codecs::open_bytes("damaged.y4m", Arc::from(b)).map(|s| (0..3).filter(|&k| s.video_frame(at(k, 25)).is_ok()).count())
+            mortiflix_codecs::open_bytes("damaged.y4m", Arc::from(b)).map(|s| (0..3).filter(|&k| s.video_frame(at(k, 25)).is_ok()).count())
         });
         assert!(r.is_ok(), "case {i} panicked");
     }
@@ -124,11 +124,11 @@ fn damaged_and_hostile_y4m_files_fail_without_panicking() {
 /// the planes ffmpeg's own rawvideo output gives for the same file.
 #[test]
 fn ffmpeg_y4m_files_match_ffmpeg_rawvideo() {
-    let Some(ff) = filmcraft_testkit::oracle::ffmpeg_or_skip("Y4M oracle") else { return };
-    let dir = filmcraft_testkit::fixtures::fixtures_dir("codecs/y4m");
+    let Some(ff) = mortiflix_testkit::oracle::ffmpeg_or_skip("Y4M oracle") else { return };
+    let dir = mortiflix_testkit::fixtures::fixtures_dir("codecs/y4m");
     for (pix_fmt, bytes_per_sample) in [("yuv420p", 1usize), ("yuv422p10le", 2)] {
         let y4m = dir.join(format!("testsrc2_{pix_fmt}.y4m"));
-        let made = filmcraft_testkit::fixtures::generate(&y4m, |tmp| {
+        let made = mortiflix_testkit::fixtures::generate(&y4m, |tmp| {
             std::process::Command::new(&ff)
                 .args([
                     "-y",

@@ -7,9 +7,9 @@
 //! from the chain, never from where nodes sit. Reorder = rewire the chain: pull a noodle from a
 //! shot's socket to another shot, or drop a shot onto a noodle (`node.reorder`).
 //!
-//! The panel: header (counts, Maximise via FilmCraft's Maximize Frame), toolbar (Bin, Find, Show,
+//! The panel: header (counts, Maximise via Mortiflix Studio's Maximize Frame), toolbar (Bin, Find, Show,
 //! Highlight, + Add, zoom, Frame selected / all, Follow the playhead), the canvas, the inspector, the
-//! overview strip. Keys are panel-scoped `nodes.*` commands (FilmCraft shortcut tables, scope
+//! overview strip. Keys are panel-scoped `nodes.*` commands (Mortiflix Studio shortcut tables, scope
 //! "Mortiflix Nodes"), so ←/→ walk the film here while the preview keeps its own ←/→. Every action
 //! is a `nodes.*` command: the menus, keys, the control channel and the AI do the same.
 
@@ -657,7 +657,7 @@ pub fn command(m: &mut Mortiflix, what: &str, params: &Value) -> Result<Value, S
 }
 
 /// Every `nodes.*` command id with its label and default key (panel scope "Mortiflix Nodes").
-/// The host registers them (FilmCraft's command list and shortcut tables).
+/// The host registers them (Mortiflix Studio's command list and shortcut tables).
 pub const COMMANDS: &[(&str, &str, Option<&str>)] = &[
     ("nodes.prev", "Previous Node", Some("Left")),
     ("nodes.next", "Next Node", Some("Right")),

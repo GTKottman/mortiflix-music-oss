@@ -5,7 +5,7 @@
 //! Automation ids: `graphics.notice` (the notice), `graphics.notice.reset` (Use Default Graphics),
 //! `graphics.notice.close`.
 
-use crate::{FilmcraftApp, i18n};
+use crate::{StudioApp, i18n};
 
 /// Puts the default graphics mode back for the next start; the error says what could not be saved.
 pub type ResetFn = Box<dyn FnMut() -> Result<(), String>>;
@@ -35,7 +35,7 @@ impl GraphicsNotice {
 }
 
 /// Draw the notice (bottom right, above the status bar) until it is closed.
-pub(crate) fn show(app: &mut FilmcraftApp, ctx: &egui::Context) {
+pub(crate) fn show(app: &mut StudioApp, ctx: &egui::Context) {
     let Some(mut notice) = app.graphics_notice.take() else { return };
     if notice.closed {
         app.graphics_notice = Some(notice);

@@ -1,5 +1,5 @@
 [package]
-name = "filmcraft-prores"
+name = "mortiflix-prores"
 description = "Clean-room Apple ProRes (SMPTE RDD 36) decoder and encoder"
 version.workspace = true
 edition.workspace = true
@@ -14,9 +14,9 @@ default = ["threads"]
 threads = ["dep:rayon"]
 
 [dependencies]
-filmcraft-bitstream = { workspace = true }
+mortiflix-bitstream = { workspace = true }
 thiserror = { workspace = true }
 rayon = { workspace = true, optional = true }
 
 [dev-dependencies]
-filmcraft-testkit = { workspace = true }
+mortiflix-testkit = { workspace = true }

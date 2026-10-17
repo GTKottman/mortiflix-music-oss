@@ -157,7 +157,7 @@ where
                 ring.push(block.get(drop * ch..).unwrap_or_default());
             }
         };
-        let spawned = std::thread::Builder::new().name("filmcraft-audio-mix".into()).spawn(move || {
+        let spawned = std::thread::Builder::new().name("mortiflix-audio-mix".into()).spawn(move || {
             if std::panic::catch_unwind(std::panic::AssertUnwindSafe(body)).is_err() {
                 log::error!("audio mixing stopped after a panic; playback continues silent");
             }

@@ -1,6 +1,6 @@
 //! Lights & Glows (and the glow-like Legacy Alpha Glow, the procedural Lens Flare).
 
-use filmcraft_project::EffectInstance;
+use mortiflix_project::EffectInstance;
 use rayon::prelude::*;
 
 use super::*;
@@ -80,7 +80,7 @@ fn edges(img: &Image) -> Vec<f32> {
         for (x, o) in row.iter_mut().enumerate() {
             let l = |dx: isize, dy: isize| {
                 let p = img.get_clamped(x as isize + dx, y as isize + dy);
-                filmcraft_color::linear_to_srgb(luma([p[0], p[1], p[2]]).clamp(0.0, 1.0)) * p[3].min(1.0) + 0.0
+                mortiflix_color::linear_to_srgb(luma([p[0], p[1], p[2]]).clamp(0.0, 1.0)) * p[3].min(1.0) + 0.0
             };
             let gx = l(1, -1) + 2.0 * l(1, 0) + l(1, 1) - l(-1, -1) - 2.0 * l(-1, 0) - l(-1, 1);
             let gy = l(-1, 1) + 2.0 * l(0, 1) + l(1, 1) - l(-1, -1) - 2.0 * l(0, -1) - l(1, -1);

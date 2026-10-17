@@ -23,7 +23,7 @@
 //! `referenced properties` (root stream): u8 byte order, u16 path count, u32 pid count, then the
 //! pids of each path (from the root object) terminated by a 0 pid.
 
-use filmcraft_cfb::{CompoundFile, EntryKind, NodeId, Version, Writer};
+use mortiflix_cfb::{CompoundFile, EntryKind, NodeId, Version, Writer};
 
 pub(crate) type Auid = [u8; 16];
 

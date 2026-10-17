@@ -3,10 +3,10 @@
 //! Premiere's behaviour was observed in Premiere Pro 26.5.2.
 
 use super::*;
-use filmcraft_media::generators::GeneratorSource;
-use filmcraft_media::{DemoScene, Generator, MediaSource};
-use filmcraft_project::{Caption, CaptionFormat, CaptionTrack, ClipId, Label, MediaClip, MediaRef, ParamValue, SequenceSettings, TrackId, TrackKind};
-use filmcraft_time::{FrameRate, TICKS_PER_SECOND, TimeRange};
+use mortiflix_media::generators::GeneratorSource;
+use mortiflix_media::{DemoScene, Generator, MediaSource};
+use mortiflix_project::{Caption, CaptionFormat, CaptionTrack, ClipId, Label, MediaClip, MediaRef, ParamValue, SequenceSettings, TrackId, TrackKind};
+use mortiflix_time::{FrameRate, TICKS_PER_SECOND, TimeRange};
 
 const RED: [f32; 4] = [1.0, 0.0, 0.0, 1.0];
 
@@ -196,7 +196,7 @@ fn opacity_and_effects_on_a_nest_apply_to_its_whole_picture() {
     // a crop on the nest cuts its picture like any clip's
     let c = r.clip(outer, nest);
     c.effect_mut("opacity").unwrap().params.get_mut("opacity").unwrap().value = ParamValue::Float(100.0);
-    let mut crop = filmcraft_project::effect::find_effect("crop").unwrap().instance();
+    let mut crop = mortiflix_project::effect::find_effect("crop").unwrap().instance();
     crop.params.get_mut("left").unwrap().value = ParamValue::Float(50.0);
     c.effects.push(crop);
     let img = r.frame(outer, Tick(1000));
@@ -330,7 +330,7 @@ fn a_nest_that_is_not_plain_is_still_drawn_right() {
             r.clip(outer, nest).effect_mut("motion").unwrap().params.get_mut("scale").unwrap().value = ParamValue::Float(60.0);
         }),
         ("nest with an effect", |r, _, outer, nest| {
-            let mut crop = filmcraft_project::effect::find_effect("crop").unwrap().instance();
+            let mut crop = mortiflix_project::effect::find_effect("crop").unwrap().instance();
             crop.params.get_mut("left").unwrap().value = ParamValue::Float(30.0);
             r.clip(outer, nest).effects.push(crop);
         }),

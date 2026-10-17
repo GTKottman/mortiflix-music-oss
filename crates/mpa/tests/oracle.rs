@@ -11,8 +11,8 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use filmcraft_bitstream::BitWriter;
-use filmcraft_mpa::{Decoder, Mode, parse_header};
+use mortiflix_bitstream::BitWriter;
+use mortiflix_mpa::{Decoder, Mode, parse_header};
 
 /// A stream from an encoder.
 struct Encoded {
@@ -182,14 +182,14 @@ const ENCODED: &[Encoded] = &[
 ];
 
 fn tool(name: &str) -> Option<PathBuf> {
-    filmcraft_testkit::oracle::find_tool(name)
+    mortiflix_testkit::oracle::find_tool(name)
 }
 
 fn make_encoded(ff: &Path, s: &Encoded) -> Option<PathBuf> {
-    let out = filmcraft_testkit::fixtures_dir("mpa").join(format!("{}.mp2", s.name));
+    let out = mortiflix_testkit::fixtures_dir("mpa").join(format!("{}.mp2", s.name));
     if s.twolame {
         let twolame = tool("twolame")?;
-        return filmcraft_testkit::fixtures::generate(&out, |tmp| {
+        return mortiflix_testkit::fixtures::generate(&out, |tmp| {
             let wav = tmp.with_extension("wav");
             let made = Command::new(ff)
                 .args(["-hide_banner", "-v", "error", "-y", "-f", "lavfi", "-i", &format!("{}:s={}", s.input, s.rate), "-t", "1", "-c:a", "pcm_s16le"])
@@ -202,7 +202,7 @@ fn make_encoded(ff: &Path, s: &Encoded) -> Option<PathBuf> {
             made
         });
     }
-    filmcraft_testkit::fixtures::generate(&out, |tmp| {
+    mortiflix_testkit::fixtures::generate(&out, |tmp| {
         Command::new(ff)
             .args(["-hide_banner", "-v", "error", "-y", "-f", "lavfi", "-i", s.input, "-t", "1", "-c:a", "mp2"])
             .args(s.enc)
@@ -278,7 +278,7 @@ const MIN_SNR: f64 = 70.0;
 
 #[test]
 fn encoded_streams_match_ffmpeg() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     for s in ENCODED {
         let Some(f) = make_encoded(&ff, s) else {
             assert!(s.twolame, "could not generate {}", s.name);
@@ -508,10 +508,10 @@ const SYNTHETIC: &[(&str, u8, bool, u8, u8, u8, u8)] = &[
 
 #[test]
 fn synthetic_streams_match_ffmpeg() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     for (k, &(name, layer, lsf, br, sr, mode, ext)) in SYNTHETIC.iter().enumerate() {
-        let out = filmcraft_testkit::fixtures_dir("mpa").join(format!("{name}.mp{layer}"));
-        let f = filmcraft_testkit::fixtures::generate(&out, |tmp| {
+        let out = mortiflix_testkit::fixtures_dir("mpa").join(format!("{name}.mp{layer}"));
+        let f = mortiflix_testkit::fixtures::generate(&out, |tmp| {
             let mut rng = Rng(0x9E37_79B9 ^ k as u32);
             let h = header(lsf, layer, br, sr, mode, ext);
             let data: Vec<u8> = (0..40).flat_map(|_| if layer == 1 { random_layer1(&mut rng, h) } else { random_layer2(&mut rng, h) }).collect();
@@ -528,7 +528,7 @@ fn synthetic_streams_match_ffmpeg() {
 /// Damaged frames (bit flips, truncation, scrambled headers) give errors or noise, never a panic.
 #[test]
 fn damaged_frames_never_panic() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let mut rng = Rng(0x00C0_FFEE);
     let mut streams: Vec<Vec<u8>> = ENCODED.iter().filter(|s| !s.twolame).take(5).map(|s| std::fs::read(make_encoded(&ff, s).unwrap()).unwrap()).collect();
     let mut synth = Rng(7);
@@ -564,9 +564,9 @@ fn damaged_frames_never_panic() {
 #[test]
 #[ignore]
 fn generate_fixtures() {
-    let Some(ff) = filmcraft_testkit::ffmpeg_or_skip("mpa fixtures") else { return };
+    let Some(ff) = mortiflix_testkit::ffmpeg_or_skip("mpa fixtures") else { return };
     for s in ENCODED {
-        let out = filmcraft_testkit::fixtures_dir("mpa").join(format!("{}.mp2", s.name));
-        filmcraft_testkit::fixtures::generate_and_report(&format!("mpa/{}", s.name), &[out], || make_encoded(&ff, s));
+        let out = mortiflix_testkit::fixtures_dir("mpa").join(format!("{}.mp2", s.name));
+        mortiflix_testkit::fixtures::generate_and_report(&format!("mpa/{}", s.name), &[out], || make_encoded(&ff, s));
     }
 }

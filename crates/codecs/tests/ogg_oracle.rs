@@ -1,7 +1,7 @@
 //! Ogg Opus / Vorbis against ffmpeg: ffmpeg (libopus, its Vorbis encoder) writes the files and
 //! decodes them as the oracle. Length must match exactly (pre-skip and end trimming), the signal
 //! must match (libopus: SNR ≥ 50 dB on CELT music, ≥ 10 dB on SILK/hybrid speech, as in
-//! `filmcraft-opus`'s own oracle; Vorbis: SNR ≥ 60 dB), and any random window must equal the
+//! `mortiflix-opus`'s own oracle; Vorbis: SNR ≥ 60 dB), and any random window must equal the
 //! continuous decode (granule-position seeking with pre-roll).
 
 mod common;
@@ -9,8 +9,8 @@ mod common;
 use std::path::{Path, PathBuf};
 
 use common::*;
-use filmcraft_codecs::OggSource;
-use filmcraft_media::{MediaKind, MediaSource};
+use mortiflix_codecs::OggSource;
+use mortiflix_media::{MediaKind, MediaSource};
 
 const MUSIC: &[&str] = &[
     "-f",
@@ -128,7 +128,7 @@ fn check_seeks(file: &Path, ours: &[f32], ch: usize, rate: u32, tol: f32) {
 
 #[test]
 fn opus_celt_music_matches_libopus() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let f = make(&ff, "ogg_opus_music.opus");
     let (src, ours, want, ch, rate) = decode_both(&ff, &f, &["-c:a", "libopus"]);
     assert_eq!(src.info().container, "Ogg");
@@ -143,11 +143,11 @@ fn opus_celt_music_matches_libopus() {
 
 #[test]
 fn opus_end_trimming_and_10ms_frames() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let f = make(&ff, "ogg_opus_trim.ogg");
     let (src, ours, want, ch, rate) = decode_both(&ff, &f, &["-c:a", "libopus"]);
     // 1.2345 s is not a whole number of 10 ms packets: the last page's granule trims the end
-    let t = filmcraft_ogg::OpusTiming::of(&src.file().streams[0], filmcraft_opus::OpusHead::parse(&src.file().streams[0].headers[0]).unwrap().pre_skip as u32);
+    let t = mortiflix_ogg::OpusTiming::of(&src.file().streams[0], mortiflix_opus::OpusHead::parse(&src.file().streams[0].headers[0]).unwrap().pre_skip as u32);
     let decoded: i64 = t.durations.iter().map(|&d| d as i64).sum::<i64>() - t.pre_skip as i64;
     assert!(t.total < decoded, "end trimmed: {} < {}", t.total, decoded);
     assert_eq!(t.total, 59_256, "1.2345 s at 48 kHz");
@@ -158,7 +158,7 @@ fn opus_end_trimming_and_10ms_frames() {
 
 #[test]
 fn opus_silk_speech_matches_libopus() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let f = make(&ff, "ogg_opus_speech.opus");
     let (_src, ours, want, ch, rate) = decode_both(&ff, &f, &["-c:a", "libopus"]);
     assert_eq!(ch, 1);
@@ -170,7 +170,7 @@ fn opus_silk_speech_matches_libopus() {
 
 #[test]
 fn vorbis_matches_ffmpeg() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let f = make(&ff, "ogg_vorbis.ogg");
     let (src, ours, want, ch, rate) = decode_both(&ff, &f, &[]);
     assert_eq!(src.info().audio().unwrap().codec, "Vorbis");
@@ -183,9 +183,9 @@ fn vorbis_matches_ffmpeg() {
 
 #[test]
 fn opened_through_open_bytes_and_robust_to_damage() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let f = make(&ff, "ogg_opus_music.opus");
-    let s = filmcraft_codecs::open_bytes("x.opus", bytes(&f)).unwrap();
+    let s = mortiflix_codecs::open_bytes("x.opus", bytes(&f)).unwrap();
     assert_eq!(s.info().container, "Ogg");
     let full = std::fs::read(&f).unwrap();
     let mut rng = Rng(42);
@@ -213,14 +213,14 @@ fn opened_through_open_bytes_and_robust_to_damage() {
 #[test]
 #[ignore]
 fn generate_fixtures() {
-    let Some(ff) = filmcraft_testkit::ffmpeg() else {
+    let Some(ff) = mortiflix_testkit::ffmpeg() else {
         for n in ALL {
-            filmcraft_testkit::fixtures::report(n, filmcraft_testkit::fixtures::Status::Skipped);
+            mortiflix_testkit::fixtures::report(n, mortiflix_testkit::fixtures::Status::Skipped);
         }
         return;
     };
     for n in ALL {
         let out = dir().join(n);
-        filmcraft_testkit::fixtures::generate_and_report(n, std::slice::from_ref(&out), || fixture(&ff, n, &spec(n)));
+        mortiflix_testkit::fixtures::generate_and_report(n, std::slice::from_ref(&out), || fixture(&ff, n, &spec(n)));
     }
 }

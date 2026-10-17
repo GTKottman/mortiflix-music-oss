@@ -1,5 +1,5 @@
 [package]
-name = "filmcraft-export"
+name = "mortiflix-export"
 description = "Export pipeline: parallel render → encode → mux, presets, progress/cancel"
 version.workspace = true
 edition.workspace = true
@@ -10,23 +10,23 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
-filmcraft-time = { workspace = true }
-filmcraft-frame = { workspace = true }
-filmcraft-color = { workspace = true }
-filmcraft-media = { workspace = true }
-filmcraft-project = { workspace = true }
-filmcraft-render = { workspace = true }
-filmcraft-audio-dsp = { workspace = true }
-filmcraft-geom = { workspace = true }
-filmcraft-text = { workspace = true }
-filmcraft-isobmff = { workspace = true }
-filmcraft-prores = { workspace = true }
-filmcraft-dnx = { workspace = true }
-filmcraft-apv = { workspace = true }
-filmcraft-mxf = { workspace = true }
-filmcraft-aac = { workspace = true }
-filmcraft-flac = { workspace = true }
-filmcraft-h264enc = { workspace = true }
+mortiflix-time = { workspace = true }
+mortiflix-frame = { workspace = true }
+mortiflix-color = { workspace = true }
+mortiflix-media = { workspace = true }
+mortiflix-project = { workspace = true }
+mortiflix-render = { workspace = true }
+mortiflix-audio-dsp = { workspace = true }
+mortiflix-geom = { workspace = true }
+mortiflix-text = { workspace = true }
+mortiflix-isobmff = { workspace = true }
+mortiflix-prores = { workspace = true }
+mortiflix-dnx = { workspace = true }
+mortiflix-apv = { workspace = true }
+mortiflix-mxf = { workspace = true }
+mortiflix-aac = { workspace = true }
+mortiflix-flac = { workspace = true }
+mortiflix-h264enc = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
@@ -35,5 +35,5 @@ web-time = "1"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "tiff", "bmp"] }
 
 [dev-dependencies]
-filmcraft-testkit = { workspace = true }
-filmcraft-codecs = { workspace = true }
+mortiflix-testkit = { workspace = true }
+mortiflix-codecs = { workspace = true }

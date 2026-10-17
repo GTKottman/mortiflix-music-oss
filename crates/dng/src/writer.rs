@@ -413,7 +413,7 @@ pub fn write(samples: &[u16], o: &Options) -> Vec<u8> {
         }
     };
     merge(&mut raw, &o.raw_tags);
-    let mut main = vec![(tags::DNG_VERSION, Value::Byte(vec![1, 4, 0, 0])), (tags::UNIQUE_CAMERA_MODEL, Value::Ascii("FilmCraft Synthetic".into()))];
+    let mut main = vec![(tags::DNG_VERSION, Value::Byte(vec![1, 4, 0, 0])), (tags::UNIQUE_CAMERA_MODEL, Value::Ascii("Mortiflix Studio Synthetic".into()))];
     let ifd0 = if o.preview {
         let raw_at = put_ifd(&mut buf, raw, be);
         // a 2 × 2 RGB preview

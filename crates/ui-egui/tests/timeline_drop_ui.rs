@@ -5,11 +5,11 @@
 use std::path::{Path, PathBuf};
 
 use egui_kittest::Harness;
-use filmcraft_engine::Session;
-use filmcraft_ui_egui::FilmcraftApp;
+use mortiflix_engine::Session;
+use mortiflix_ui_egui::StudioApp;
 use serde_json::json;
 
-fn step(h: &mut Harness<'static, FilmcraftApp>) {
+fn step(h: &mut Harness<'static, StudioApp>) {
     let ctx = h.ctx.clone();
     let mut raw = std::mem::take(h.input_mut());
     eframe::App::raw_input_hook(h.state_mut(), &ctx, &mut raw);
@@ -18,29 +18,29 @@ fn step(h: &mut Harness<'static, FilmcraftApp>) {
     h.step();
 }
 
-fn harness() -> Harness<'static, FilmcraftApp> {
+fn harness() -> Harness<'static, StudioApp> {
     let mut s = Session::default();
     s.execute("file.openDemoProject", json!({})).unwrap();
     s.execute("file.newSequence", json!({"name":"Drop test","width":1280,"height":720,"fps":24})).unwrap();
-    let mut h = Harness::builder().with_size(egui::vec2(1600.0, 980.0)).build_eframe(move |_cc| FilmcraftApp::new(s));
+    let mut h = Harness::builder().with_size(egui::vec2(1600.0, 980.0)).build_eframe(move |_cc| StudioApp::new(s));
     for _ in 0..4 {
         step(&mut h);
     }
     h
 }
 
-fn pointer_to(h: &mut Harness<'static, FilmcraftApp>, pos: egui::Pos2) {
+fn pointer_to(h: &mut Harness<'static, StudioApp>, pos: egui::Pos2) {
     h.input_mut().events.push(egui::Event::PointerMoved(pos));
     step(h);
 }
 
-fn control_rect(h: &Harness<'static, FilmcraftApp>, id: &str) -> egui::Rect {
+fn control_rect(h: &Harness<'static, StudioApp>, id: &str) -> egui::Rect {
     let [x, y, w, height] = h.state().auto.elements.iter().find(|e| e.id == id).or_else(|| h.state().auto.find(id)).unwrap().rect;
     egui::Rect::from_min_size(egui::pos2(x, y), egui::vec2(w, height))
 }
 
 /// A point 60 px into the Timeline's clip area on the named track row.
-fn point_on_row(h: &Harness<'static, FilmcraftApp>, row_control: &str) -> egui::Pos2 {
+fn point_on_row(h: &Harness<'static, StudioApp>, row_control: &str) -> egui::Pos2 {
     let row = control_rect(h, row_control);
     let panel = control_rect(h, "panel.Timeline");
     egui::pos2(panel.min.x + h.state().ui.timeline.header_w + 60.0, row.center().y)
@@ -62,7 +62,7 @@ impl egui::DroppedFile for OsFile {
 
 /// Drops `path` with the pointer over `row_control`, as the OS does: the pointer is hovering first,
 /// then one frame carries the dropped file. The file is cleared afterwards, as egui only reports it once.
-fn drop_on_row(h: &mut Harness<'static, FilmcraftApp>, row_control: &str, path: &Path) {
+fn drop_on_row(h: &mut Harness<'static, StudioApp>, row_control: &str, path: &Path) {
     let at = point_on_row(h, row_control);
     pointer_to(h, at);
     h.input_mut().dropped_files.push(std::sync::Arc::new(OsFile(path.to_path_buf())));
@@ -72,7 +72,7 @@ fn drop_on_row(h: &mut Harness<'static, FilmcraftApp>, row_control: &str, path: 
 }
 
 /// (video clips, audio clips) on the active sequence.
-fn clip_counts(h: &Harness<'static, FilmcraftApp>) -> (usize, usize) {
+fn clip_counts(h: &Harness<'static, StudioApp>) -> (usize, usize) {
     let q = h.state().session.active_sequence().unwrap();
     (q.video_tracks.iter().map(|t| t.items.len()).sum(), q.audio_tracks.iter().map(|t| t.items.len()).sum())
 }
@@ -144,15 +144,15 @@ fn tone_dropped_on_a_video_row_goes_to_the_audio_track_without_error() {
 }
 
 /// Empty project: no sequence yet. Dropping on the empty Timeline must import *and* make a sequence.
-fn empty_harness() -> Harness<'static, FilmcraftApp> {
-    let mut h = Harness::builder().with_size(egui::vec2(1600.0, 980.0)).build_eframe(move |_cc| FilmcraftApp::new(Session::default()));
+fn empty_harness() -> Harness<'static, StudioApp> {
+    let mut h = Harness::builder().with_size(egui::vec2(1600.0, 980.0)).build_eframe(move |_cc| StudioApp::new(Session::default()));
     for _ in 0..4 {
         step(&mut h);
     }
     h
 }
 
-fn drop_on_empty_timeline(h: &mut Harness<'static, FilmcraftApp>, path: &Path) {
+fn drop_on_empty_timeline(h: &mut Harness<'static, StudioApp>, path: &Path) {
     let panel = control_rect(h, "panel.Timeline");
     pointer_to(h, panel.center());
     h.input_mut().dropped_files.push(std::sync::Arc::new(OsFile(path.to_path_buf())));
@@ -214,15 +214,15 @@ fn several_files_dropped_together_are_placed_in_one_undo_step() {
     assert_eq!(clip_counts(&h), (0, 0), "one undo removes every placed clip");
 }
 
-fn float_panel(h: &mut Harness<'static, FilmcraftApp>, panel: &str, rect: [f32; 4]) {
+fn float_panel(h: &mut Harness<'static, StudioApp>, panel: &str, rect: [f32; 4]) {
     let ctx = h.ctx.clone();
-    filmcraft_ui_egui::menus::invoke(h.state_mut(), &ctx, "window.floatPanel", json!({"panel": panel, "rect": rect})).unwrap();
+    mortiflix_ui_egui::menus::invoke(h.state_mut(), &ctx, "window.floatPanel", json!({"panel": panel, "rect": rect})).unwrap();
     for _ in 0..4 {
         step(h);
     }
 }
 
-fn drop_at(h: &mut Harness<'static, FilmcraftApp>, pos: egui::Pos2, path: &Path) {
+fn drop_at(h: &mut Harness<'static, StudioApp>, pos: egui::Pos2, path: &Path) {
     pointer_to(h, pos);
     h.input_mut().dropped_files.push(std::sync::Arc::new(OsFile(path.to_path_buf())));
     step(h);
@@ -230,7 +230,7 @@ fn drop_at(h: &mut Harness<'static, FilmcraftApp>, pos: egui::Pos2, path: &Path)
     step(h);
 }
 
-fn hover_at(h: &mut Harness<'static, FilmcraftApp>, pos: egui::Pos2) -> bool {
+fn hover_at(h: &mut Harness<'static, StudioApp>, pos: egui::Pos2) -> bool {
     pointer_to(h, pos);
     h.input_mut().hovered_files.push(Default::default());
     step(h);
@@ -291,7 +291,7 @@ fn offscreen_float_uses_rendered_clamp_and_maximized_timeline_ignores_hidden_flo
     assert!(!hover_at(&mut h, at));
     drop_at(&mut h, at, &still("drop_clamped_occlusion.png"));
     assert_eq!(clip_counts(&h), (0, 0));
-    h.state_mut().ui.keys.maximized = Some(filmcraft_ui_egui::dock::PanelKind::Timeline);
+    h.state_mut().ui.keys.maximized = Some(mortiflix_ui_egui::dock::PanelKind::Timeline);
     for _ in 0..4 {
         step(&mut h);
     }

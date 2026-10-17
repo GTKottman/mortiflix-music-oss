@@ -11,14 +11,14 @@ mod common;
 use std::time::Duration;
 
 use common::*;
-use filmcraft_codecs::VideoDecoder;
-use filmcraft_codecs::hw::NalStreamInfo;
-use filmcraft_platform::HybridDecoder;
-use filmcraft_platform::media_foundation::MfDecoder;
+use mortiflix_codecs::VideoDecoder;
+use mortiflix_codecs::hw::NalStreamInfo;
+use mortiflix_platform::HybridDecoder;
+use mortiflix_platform::media_foundation::MfDecoder;
 
 /// The hardware decoder for a stream, or `None` (skip) when this machine has none for it.
 fn hardware(s: &Stream) -> Option<Box<dyn VideoDecoder>> {
-    match filmcraft_platform::media_foundation_factory(&s.entry) {
+    match mortiflix_platform::media_foundation_factory(&s.entry) {
         Some(Ok(d)) => {
             assert!(d.name().starts_with("Media Foundation"), "{}", d.name());
             Some(d)
@@ -32,7 +32,7 @@ fn hardware(s: &Stream) -> Option<Box<dyn VideoDecoder>> {
 }
 
 fn software(s: &Stream) -> Box<dyn VideoDecoder> {
-    filmcraft_codecs::software_video_decoder(&s.entry).unwrap()
+    mortiflix_codecs::software_video_decoder(&s.entry).unwrap()
 }
 
 /// Every picture of `s` from the hardware decoder equals the software decoder's: whole stream,
@@ -76,8 +76,8 @@ fn parity(name: &str, s: &Stream) {
 /// of a GOP the decoder reports an error (the GOP cache seeks after every flush, and the hybrid
 /// decoder would replay the run in software). After an IDR the pictures are the software decoder's.
 fn drained_decoder_restarts_only_at_idr(name: &str, s: &Stream) {
-    use filmcraft_codecs::hw::{NalCodec, StreamInfo};
-    let info = filmcraft_platform::media_foundation::stream_info(&s.entry).unwrap();
+    use mortiflix_codecs::hw::{NalCodec, StreamInfo};
+    let info = mortiflix_platform::media_foundation::stream_info(&s.entry).unwrap();
     let is_idr = |i: usize| match &info {
         StreamInfo::Nal(n) => n.nal_types(&s.samples[i].0).iter().any(|&t| if n.codec == NalCodec::H264 { t == 5 } else { matches!(t, 19 | 20) }),
         StreamInfo::Frame(f) => f.is_random_access(&s.samples[i].0),
@@ -102,7 +102,7 @@ fn drained_decoder_restarts_only_at_idr(name: &str, s: &Stream) {
 
 #[test]
 fn bit_exact_with_the_software_decoders() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     for (name, s) in small_streams(&ff) {
         parity(&name, &s);
     }
@@ -196,7 +196,7 @@ fn large_fixture(ff: &std::path::Path, codec: &str, size: &str) -> Option<std::p
 }
 
 fn large(codec: &str, size: &str) {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let Some(path) = large_fixture(&ff, codec, size) else { return };
     parity(&format!("{codec} {size}"), &read_stream(&path));
 }
@@ -221,10 +221,10 @@ fn hevc_main10_1080p_and_2160p_are_bit_exact() {
 
 #[test]
 fn mid_stream_failure_continues_in_software() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     for (name, s) in small_streams(&ff) {
         let name = name.as_str();
-        let info = filmcraft_platform::media_foundation::stream_info(&s.entry).unwrap();
+        let info = mortiflix_platform::media_foundation::stream_info(&s.entry).unwrap();
         let Ok(_) = MfDecoder::new(info.clone()) else {
             eprintln!("SKIPPED: no Media Foundation hardware decoder for {name}");
             continue;
@@ -237,10 +237,10 @@ fn mid_stream_failure_continues_in_software() {
             let mut vt = MfDecoder::new(info.clone()).unwrap();
             vt.fail_after(fail_at as u64);
             let mut d = HybridDecoder::new(Box::new(vt), s.entry.clone(), info.clone());
-            let before = filmcraft_codecs::hw::hw_stats().fallbacks;
+            let before = mortiflix_codecs::hw::hw_stats().fallbacks;
             let out = decode_all(&mut d, &s.samples);
             assert!(!d.is_hardware(), "{name}: switched to software");
-            assert!(filmcraft_codecs::hw::hw_stats().fallbacks > before, "{name}: fallback counted");
+            assert!(mortiflix_codecs::hw::hw_stats().fallbacks > before, "{name}: fallback counted");
             assert_same(&format!("{name} failing at sample {fail_at}"), &out, &reference);
             // the instance stays in software across seeks
             d.reset();
@@ -265,7 +265,7 @@ fn bounded(what: &str, limit: Duration, f: impl FnOnce() + Send + 'static) {
 
 #[test]
 fn damaged_samples_and_parameter_sets_never_crash_or_hang() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     for (name, s) in small_streams(&ff) {
         let name = name.as_str();
         if hardware(&s).is_none() {
@@ -277,7 +277,7 @@ fn damaged_samples_and_parameter_sets_never_crash_or_hang() {
             let entry = s.entry.clone();
             bounded(&format!("{name} seed {seed}"), Duration::from_secs(60), move || {
                 let mut seed = seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1;
-                let mut d = filmcraft_platform::media_foundation_factory(&entry).unwrap().unwrap();
+                let mut d = mortiflix_platform::media_foundation_factory(&entry).unwrap().unwrap();
                 for (i, (smp, pts)) in samples.iter().enumerate().take(40) {
                     let mut m = smp.clone();
                     match xorshift(&mut seed) % 4 {
@@ -303,15 +303,15 @@ fn damaged_samples_and_parameter_sets_never_crash_or_hang() {
         }
         // damaged parameter sets: the factory declines or the decoder errors / falls back
         let rec = match &s.entry.codec {
-            filmcraft_isobmff::CodecConfig::Avc(a) => a.to_bytes(),
-            filmcraft_isobmff::CodecConfig::Hevc(c) => c.to_bytes(),
-            filmcraft_isobmff::CodecConfig::Av1(c) => {
+            mortiflix_isobmff::CodecConfig::Avc(a) => a.to_bytes(),
+            mortiflix_isobmff::CodecConfig::Hevc(c) => c.to_bytes(),
+            mortiflix_isobmff::CodecConfig::Av1(c) => {
                 damaged_av1c(name, &s, c);
                 continue;
             }
             _ => continue,
         };
-        let hevc = matches!(s.entry.codec, filmcraft_isobmff::CodecConfig::Hevc(_));
+        let hevc = matches!(s.entry.codec, mortiflix_isobmff::CodecConfig::Hevc(_));
         let mut seed = 0x1234_5678u64;
         for round in 0..24 {
             let mut r = rec.clone();
@@ -344,7 +344,7 @@ fn damaged_samples_and_parameter_sets_never_crash_or_hang() {
 /// match ffmpeg's decode exactly; when it does not, the factory declines.
 #[test]
 fn hevc_422_10bit_matches_ffmpeg_when_the_hardware_takes_it() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let args = [
         "-f",
         "lavfi",
@@ -372,8 +372,8 @@ fn hevc_422_10bit_matches_ffmpeg_when_the_hardware_takes_it() {
     assert_eq!(out.len(), o.stdout.len() / fsize, "frame count");
     for (i, f) in out.iter().enumerate() {
         let raw: Vec<u16> = o.stdout[i * fsize..(i + 1) * fsize].as_chunks::<2>().0.iter().map(|b| u16::from_le_bytes([b[0], b[1]])).collect();
-        let filmcraft_frame::PixelData::Yuv16 { planes, chroma, bits, .. } = &f.frame.data else { panic!("16-bit planes") };
-        assert_eq!((*chroma, *bits), (filmcraft_frame::Chroma::C422, 10));
+        let mortiflix_frame::PixelData::Yuv16 { planes, chroma, bits, .. } = &f.frame.data else { panic!("16-bit planes") };
+        assert_eq!((*chroma, *bits), (mortiflix_frame::Chroma::C422, 10));
         let (y, c) = (w * h, (w / 2) * h);
         assert!(planes[0][..] == raw[..y] && planes[1][..] == raw[y..y + c] && planes[2][..] == raw[y + c..], "frame {i} differs from ffmpeg");
     }
@@ -383,7 +383,7 @@ fn hevc_422_10bit_matches_ffmpeg_when_the_hardware_takes_it() {
 /// fails nor leaks Direct3D / Media Foundation objects into the next one.
 #[test]
 fn repeated_initialisation() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let Some(path) = named(&ff, "h264_high.mp4") else { return };
     let s = read_stream(&path);
     let reference = decode_all(software(&s).as_mut(), &s.samples[..13]);
@@ -399,7 +399,7 @@ fn repeated_initialisation() {
 /// software decoder's pictures.
 #[test]
 fn concurrent_decoders_share_the_device() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let jobs: Vec<_> = ["h264_high.mp4", "hevc_main.mp4", "hevc_main10.mp4", "h264_high.mp4", "hevc_main.mp4"]
         .into_iter()
         .filter_map(|n| named(&ff, n))
@@ -425,7 +425,7 @@ fn concurrent_decoders_share_the_device() {
 /// A decoder dropped, used and moved between threads (decoders migrate between frame workers).
 #[test]
 fn decoder_moves_between_threads() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let Some(path) = named(&ff, "hevc_main.mp4") else { return };
     let s = read_stream(&path);
     let Some(mut hw) = hardware(&s) else { return };
@@ -570,7 +570,7 @@ fn frame_fixture(ff: &std::path::Path, codec: &str, size: &str) -> Option<std::p
 }
 
 fn frame_parity(codec: &str, sizes: &[&str]) {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     for size in sizes {
         let Some(path) = frame_fixture(&ff, codec, size) else { continue };
         parity(&format!("{codec} {size}"), &read_stream(&path));
@@ -599,7 +599,7 @@ fn av1_10bit_is_bit_exact() {
 
 /// Damaged `av1C` sequence headers (bit flips, truncation): the backend declines or the decoder
 /// errors / falls back, never crashes or hangs.
-fn damaged_av1c(name: &str, s: &Stream, c: &filmcraft_isobmff::Av1Config) {
+fn damaged_av1c(name: &str, s: &Stream, c: &mortiflix_isobmff::Av1Config) {
     let mut seed = 0x9E37_79B9u64;
     for round in 0..24 {
         let mut cfg = c.clone();
@@ -614,10 +614,10 @@ fn damaged_av1c(name: &str, s: &Stream, c: &filmcraft_isobmff::Av1Config) {
             }
         }
         let mut entry = s.entry.clone();
-        entry.codec = filmcraft_isobmff::CodecConfig::Av1(cfg);
+        entry.codec = mortiflix_isobmff::CodecConfig::Av1(cfg);
         let samples: Vec<_> = s.samples.iter().take(12).cloned().collect();
         bounded(&format!("{name} av1C round {round}"), Duration::from_secs(60), move || {
-            let Some(info) = filmcraft_platform::media_foundation::stream_info(&entry) else { return };
+            let Some(info) = mortiflix_platform::media_foundation::stream_info(&entry) else { return };
             let Ok(mut d) = MfDecoder::new(info) else { return };
             for (smp, pts) in &samples {
                 if d.decode(smp, *pts).is_err() {
@@ -634,7 +634,7 @@ fn damaged_av1c(name: &str, s: &Stream, c: &filmcraft_isobmff::Av1Config) {
 /// continues with the software decoder, whose output is the reference.
 #[test]
 fn in_band_format_changes_fall_back_to_software() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     for codec in ["vp9", "av1"] {
         let (Some(big), Some(small)) = (frame_fixture(&ff, codec, "1920x1080"), frame_fixture(&ff, codec, "640x360")) else { continue };
         let (a, b) = (read_stream(&big), read_stream(&small));
@@ -642,10 +642,10 @@ fn in_band_format_changes_fall_back_to_software() {
         let mut sw = software(&a);
         // (the second stream's pictures come later in time, as in a real stream)
         let samples: Vec<_> = a.samples[..8].iter().cloned().chain(b.samples[..8].iter().map(|(d, p)| (d.clone(), p + 100_000))).collect();
-        let before = filmcraft_codecs::hw::hw_stats().fallbacks;
+        let before = mortiflix_codecs::hw::hw_stats().fallbacks;
         let got = decode_all(hw.as_mut(), &samples);
         let want = decode_all(sw.as_mut(), &samples);
-        assert!(filmcraft_codecs::hw::hw_stats().fallbacks > before, "{codec}: the change was counted as a fallback");
+        assert!(mortiflix_codecs::hw::hw_stats().fallbacks > before, "{codec}: the change was counted as a fallback");
         assert!(!hw.name().starts_with("Media Foundation"), "{codec}: continued in {}", hw.name());
         assert_same(&format!("{codec} 1080p then 360p"), &got, &want);
         assert!(got.iter().any(|f| f.frame.width == 640) && got.iter().any(|f| f.frame.width == 1920), "{codec}: both sizes came out");

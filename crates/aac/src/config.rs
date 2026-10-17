@@ -1,7 +1,7 @@
 //! `AudioSpecificConfig` (ISO/IEC 14496-3 §1.6.2.1), `program_config_element` (§4.4.1.1) and ADTS
 //! framing (§1.A.2.2).
 
-use filmcraft_bitstream::{BitReader, BitWriter};
+use mortiflix_bitstream::{BitReader, BitWriter};
 
 use crate::tables::{SAMPLE_RATES, table_index_for_rate};
 use crate::{Error, Result};

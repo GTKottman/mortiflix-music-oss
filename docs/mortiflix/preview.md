@@ -1,7 +1,7 @@
 # Part 04: the loose preview (doc 36), as built
 
 The **Mortiflix Preview** panel plays everything made so far as one video, in film order, at the
-planned timing, on stages 1-4. Nothing is rendered: it is FilmCraft's own Program monitor playing a
+planned timing, on stages 1-4. Nothing is rendered: it is Mortiflix Studio's own Program monitor playing a
 sequence called **Loose preview** that the app keeps in step with the graph.
 
 ## Files
@@ -10,7 +10,7 @@ sequence called **Loose preview** that the app keeps in step with the graph.
 |---|---|
 | `crates/mortiflix-ui/src/preview/plan.rs` | The edit list: `Plan::from_service(preview.plan result, graph.get result)`. The service picks the best media per shot; this adds beat names, each shot's look still (fallback), shots being remade, and checks the files exist. Pure data, hostile-input safe. |
 | `crates/mortiflix-ui/src/preview.rs` | `PreviewState` (in `MfxState::preview`), `poll` (asks `preview.plan {scope: all}` + `graph.get` on project change, ~0.3 s after a `node.changed` / `status` / `project.changed` event, and every 10 s), `layout`, and the panel: header (Plays at, Fit), caption, Beats / Shots / Voice / Music bar, transport (⏮ Play ⏭, timecode, All / From here / This shot / This beat, Loop, legend). |
-| `crates/ui-egui/src/mortiflix_preview.rs` | FilmCraft side: builds the sequence from the plan, draws the Program monitor's picture in the panel, Play's scope and Loop, follows the node selection, fills `PreviewState::player`, and the `mortiflix.preview.*` commands. |
+| `crates/ui-egui/src/mortiflix_preview.rs` | Mortiflix Studio side: builds the sequence from the plan, draws the Program monitor's picture in the panel, Play's scope and Loop, follows the node selection, fills `PreviewState::player`, and the `mortiflix.preview.*` commands. |
 
 Shared edits (one line or one hunk each): `state.rs` (`preview` field), `ui-egui/src/lib.rs` (mod),
 `mortiflix.rs` (Host field, frame hook, picture call, command route), `menus.rs` (commands chained),
@@ -33,17 +33,17 @@ Shared edits (one line or one hunk each): `state.rs` (`preview` field), `ui-egui
    `file.newColorMatte`, `timeline.place`, `edit.clear`), folded into one undo step
    "Mortiflix: Loose preview". V1 = pictures, A1 = voice lines, A2 = music. Imports are cached, so
    a rebuild after a new version re-imports only the new file.
-5. On stages 1-4 the Loose preview sequence is the active sequence. From stage 5 on, FilmCraft's
+5. On stages 1-4 the Loose preview sequence is the active sequence. From stage 5 on, Mortiflix Studio's
    own sequence takes the monitor; the Loose preview stays in the project bin.
 
 ## Play, scope, Loop
 
 - **Play** plays the scope: **All** (from the start), **From here** (default, playhead to end),
   **This shot** / **This beat** (the selected node's, else the one under the playhead). Space
-  (FilmCraft's Play) does the same.
+  (Mortiflix Studio's Play) does the same.
 - At the end of the scope Play stops; with **Loop** (Ctrl+L / ⌘L in the panel) it starts over. With
-  In / Out marked, Loop loops that range (FilmCraft's own loop).
-- FilmCraft's keys work on it: J/K/L, ←/→ one frame, ↑/↓ previous / next shot (edit), Home/End, I/O.
+  In / Out marked, Loop loops that range (Mortiflix Studio's own loop).
+- Mortiflix Studio's keys work on it: J/K/L, ←/→ one frame, ↑/↓ previous / next shot (edit), Home/End, I/O.
 - Selecting a node (any part setting `state.selected_node`) moves the playhead to it; while playing
   it keeps playing from there. Clicking a shot in the bar selects it.
 
@@ -73,4 +73,4 @@ Automation ids: `mfx.preview.play`, `.prev`, `.next`, `.scope.<all|fromHere|shot
   step, imports cached, the playhead kept). Fast for tens of shots; 100+ shots untested.
 - Voice / music "stand-in" dotting reads a `stand_in` flag the service does not send yet.
 - Transitions play as plain cuts.
-- No proxies made for heavy pieces; FilmCraft's Half playback resolution is the default.
+- No proxies made for heavy pieces; Mortiflix Studio's Half playback resolution is the default.

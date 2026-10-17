@@ -10,7 +10,7 @@
 //! resilient / frame parallel modes.
 //!
 //! ```no_run
-//! let mut dec = filmcraft_vp9::Decoder::new();
+//! let mut dec = mortiflix_vp9::Decoder::new();
 //! let chunk: Vec<u8> = Vec::new(); // one IVF / WebM frame
 //! for pic in dec.decode(&chunk, 0).unwrap() {
 //!     println!("{}x{} {}-bit", pic.width, pic.height, pic.bit_depth);

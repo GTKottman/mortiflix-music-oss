@@ -3,9 +3,9 @@
 
 mod support;
 
-use filmcraft_interchange::{ExportOptions, FcpxmlVersion, Format, detect, import};
-use filmcraft_project::{ItemKind, Keyframe, Label, Marker, MarkerId, MarkerKind, MediaRef, Param, ParamValue, Project, TrackKind, TransitionAlign};
-use filmcraft_time::FrameRate;
+use mortiflix_interchange::{ExportOptions, FcpxmlVersion, Format, detect, import};
+use mortiflix_project::{ItemKind, Keyframe, Label, Marker, MarkerId, MarkerKind, MediaRef, Param, ParamValue, Project, TrackKind, TransitionAlign};
+use mortiflix_time::FrameRate;
 use proptest::prelude::*;
 use support::*;
 
@@ -122,7 +122,7 @@ fn golden_connected_clips() {
     assert_eq!(pier.effect("motion").unwrap().param("rotation").unwrap().value, ParamValue::Float(-90.0));
     // retimed clip: 2x, source in = 10 s into an asset whose timecode starts at 3600 s
     assert_eq!(boats.speed, 2.0);
-    assert_eq!(boats.source_in, filmcraft_time::Tick(10 * filmcraft_time::TICKS_PER_SECOND));
+    assert_eq!(boats.source_in, mortiflix_time::Tick(10 * mortiflix_time::TICKS_PER_SECOND));
     assert_eq!(media_key(p, boats.item), "/proj/boats.mov");
     let t = &v1.transitions[0];
     assert_eq!((t.start, t.duration, t.from, t.to, t.align), (r.tick_of(60), r.tick_of(24), Some(pier.id), Some(boats.id), TransitionAlign::CenterAtCut));
@@ -154,16 +154,16 @@ fn golden_connected_clips() {
     assert_eq!(s.markers.len(), 1);
     assert_eq!(
         (s.markers[0].name.as_str(), s.markers[0].comment.as_str(), s.markers[0].start, s.markers[0].duration),
-        ("Seagull", "nice", r.tick_of(24), filmcraft_time::Tick::ZERO)
+        ("Seagull", "nice", r.tick_of(24), mortiflix_time::Tick::ZERO)
     );
     // event became a bin
-    assert!(p.root.children.iter().any(|c| matches!(c, filmcraft_project::BinEntry::Bin(b) if b.name == "Day 1")));
+    assert!(p.root.children.iter().any(|c| matches!(c, mortiflix_project::BinEntry::Bin(b) if b.name == "Day 1")));
     assert!(!rep.has_warnings(), "{rep}");
     let m = p.items.values().find(|i| i.name == "Boats").unwrap().as_media().unwrap();
     assert!(matches!(&m.media, MediaRef::File { path } if path == "/proj/boats.mov"));
 }
 
-fn project() -> (Project, filmcraft_project::ItemId) {
+fn project() -> (Project, mortiflix_project::ItemId) {
     let r = FrameRate::FPS_29_97;
     let mut p = Project::new("Lib");
     let a = media(&mut p, "/m/a.mov", true, true, r);
@@ -199,7 +199,7 @@ fn project() -> (Project, filmcraft_project::ItemId) {
         u.markers.push(Marker {
             id: MarkerId(77),
             start: r.tick_of(10),
-            duration: filmcraft_time::Tick::ZERO,
+            duration: mortiflix_time::Tick::ZERO,
             name: "in nest".into(),
             comment: String::new(),
             kind: MarkerKind::Comment,
@@ -284,7 +284,7 @@ proptest! {
         let wav = media(&mut p, "/y/vo.wav", false, true, rate);
         let s = sequence(&mut p, "S", rate, false);
         let mut ends = [0i64; 3];
-        let mut prev: [Option<filmcraft_project::ClipId>; 3] = [None; 3];
+        let mut prev: [Option<mortiflix_project::ClipId>; 3] = [None; 3];
         let mut aends = [0i64; 3];
         for g in &clips {
             let t = ends[g.track] + g.gap;

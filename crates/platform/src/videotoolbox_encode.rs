@@ -10,7 +10,7 @@
 //! presentation order with decode time = presentation time.
 //!
 //! Pictures go in as 8-bit 4:2:0 (NV12) pixel buffers filled from planar BT.709 limited-range
-//! Y'CbCr, the layout of `filmcraft_export::rgba_to_yuv420_8`, so the colours match the built-in
+//! Y'CbCr, the layout of `mortiflix_export::rgba_to_yuv420_8`, so the colours match the built-in
 //! encoder's. VideoToolbox encodes asynchronously; its output callback (on a VideoToolbox thread)
 //! copies each compressed frame (length-prefixed NAL units) into a queue that [`VtEncoder::encode`]
 //! and [`VtEncoder::flush`] drain.

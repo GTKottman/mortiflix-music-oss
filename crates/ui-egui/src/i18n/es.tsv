@@ -11,10 +11,10 @@
 # Clean-room: every entry was written from the plain meaning of the English text using ordinary
 # Spanish video-editing vocabulary (pista, cabezal, secuencia, bandeja, procesar…). No proprietary
 # localisation resource, string table or product UI was consulted or copied; add entries the same
-# way. Product and technology names (FilmCraft, ArtCraft, Lumetri, ProRes, LUFS…) keep their
+# way. Product and technology names (Mortiflix Studio, ArtCraft, Lumetri, ProRes, LUFS…) keep their
 # spelling. "video" is written without an accent, as in the rest of this catalog.
 
-	About FilmCraft	Acerca de FilmCraft
+	About Mortiflix Studio	Acerca de Mortiflix Studio
 	Add Audio Submix Track	Añadir pista de submezcla de audio
 	Add Caption at Playhead	Añadir subtítulo en el cabezal
 	Add Chapter Marker…	Añadir marcador de capítulo…
@@ -133,9 +133,8 @@
 	File	Archivo
 	File…	Archivo…
 	Fill frame	Rellenar fotograma
-	FilmCraft Help…	Ayuda de FilmCraft…
-	FilmCraft on GitHub	FilmCraft en GitHub
-	FilmCraft on getartcraft.com	FilmCraft en getartcraft.com
+	Mortiflix Studio Help…	Ayuda de Mortiflix Studio…
+	Mortiflix Studio on mortiflix.com	Mortiflix Studio en mortiflix.com
 	Find Next	Buscar siguiente
 	Find…	Buscar…
 	Fit	Ajustar
@@ -308,7 +307,7 @@
 	Select Previous Graphic	Seleccionar gráfico anterior
 	Select Previous Layer	Seleccionar capa anterior
 	Selection Follows Playhead	La selección sigue al cabezal
-	Selection as FilmCraft Project…	Selección como proyecto de FilmCraft…
+	Selection as Mortiflix Studio Project…	Selección como proyecto de Mortiflix Studio…
 	Selection…	Selección…
 	Send Backward	Enviar atrás
 	Send to Back	Enviar al fondo
@@ -419,7 +418,6 @@
 	Version {version}	Versión {version}
 	A clean-room, pure-Rust non-linear video editor. Part of the ArtCraft family.	Un editor de video no lineal en Rust puro, desarrollado en sala limpia. Parte de la familia ArtCraft.
 	Join the ArtCraft Discord	Únete al Discord de ArtCraft
-	Source code on GitHub	Código fuente en GitHub
 	Report an issue	Informar de un problema
 	MIT OR Apache-2.0. Fonts: Inter, Noto Serif and JetBrains Mono (SIL OFL 1.1).	MIT OR Apache-2.0. Fuentes: Inter, Noto Serif y JetBrains Mono (SIL OFL 1.1).
 	just now	ahora mismo
@@ -438,8 +436,8 @@
 	No background jobs.	No hay tareas en segundo plano.
 	Recover Unsaved Changes	Recuperar cambios no guardados
 	Untitled	Sin título
-	FilmCraft was closed while “{name}” had unsaved changes.	FilmCraft se cerró mientras “{name}” tenía cambios sin guardar.
-	FilmCraft quit unexpectedly while “{name}” had unsaved changes.	FilmCraft se cerró de forma inesperada mientras “{name}” tenía cambios sin guardar.
+	Mortiflix Studio was closed while “{name}” had unsaved changes.	Mortiflix Studio se cerró mientras “{name}” tenía cambios sin guardar.
+	Mortiflix Studio quit unexpectedly while “{name}” had unsaved changes.	Mortiflix Studio se cerró de forma inesperada mientras “{name}” tenía cambios sin guardar.
 	Recover unsaved changes from {when}?	¿Recuperar los cambios no guardados de {when}?
 	The project had not been saved yet.	El proyecto aún no se había guardado.
 	{n} sessions have unsaved changes:	{n} sesiones tienen cambios sin guardar:
@@ -966,7 +964,7 @@
 	Font family	Familia de fuentes
 	Label Colors	Colores de etiqueta
 	Decoded frames held for the monitors and thumbnails: {used} of {budget}.	Fotogramas descodificados en memoria para los monitores y miniaturas: {used} de {budget}.
-	FilmCraft keeps the rest of the RAM free for other applications.	FilmCraft deja el resto de la RAM libre para otras aplicaciones.
+	Mortiflix Studio keeps the rest of the RAM free for other applications.	Mortiflix Studio deja el resto de la RAM libre para otras aplicaciones.
 	not available in this session	no disponible en esta sesión
 	Currently: {loc} — {files} file(s), {size}	Actualmente: {loc} — {files} archivo(s), {size}
 	 ({ch} output channels)	 ({ch} canales de salida)
@@ -1077,7 +1075,7 @@
 	Video Frame	Fotograma de video
 	Pin To	Fijar a
 	Pinned Edges	Bordes fijados
-	FilmCraft Graphics Template	Plantilla de gráficos de FilmCraft
+	Mortiflix Studio Graphics Template	Plantilla de gráficos de Mortiflix Studio
 	{n} Font	{n} Fuente
 	{n} Size	{n} Tamaño
 	{n} Color	{n} Color
@@ -1087,7 +1085,7 @@
 	Export As Motion Graphics Template	Exportar como plantilla de animación
 	Category:	Categoría:
 	Editable properties:	Propiedades editables:
-	Saved as a FilmCraft graphics template (.fcgt) in your templates folder.	Se guarda como plantilla de gráficos de FilmCraft (.fcgt) en tu carpeta de plantillas.
+	Saved as a Mortiflix Studio graphics template (.fcgt) in your templates folder.	Se guarda como plantilla de gráficos de Mortiflix Studio (.fcgt) en tu carpeta de plantillas.
 	Exported graphics template to {path}	Plantilla de gráficos exportada a {path}
 	Replace Fonts in Projects	Reemplazar fuentes en proyectos
 	Fonts used in the project:	Fuentes usadas en el proyecto:
@@ -1457,7 +1455,7 @@
 	Center of Sphere	Centro de la esfera
 	Cents	Centésimas
 	Change to Color	Cambiar a color
-	Changes are copied in the background a moment after each edit. If FilmCraft quits unexpectedly, they are offered the next time it starts.	Los cambios se copian en segundo plano poco después de cada edición. Si FilmCraft se cierra de forma inesperada, se ofrecen la próxima vez que se inicie.
+	Changes are copied in the background a moment after each edit. If Mortiflix Studio quits unexpectedly, they are offered the next time it starts.	Los cambios se copian en segundo plano poco después de cada edición. Si Mortiflix Studio se cierra de forma inesperada, se ofrecen la próxima vez que se inicie.
 	Channel	Canal
 	Channel Blur	Desenfoque de canal
 	Channel Mix	Mezcla de canales
@@ -1830,13 +1828,13 @@
 	Hard Limiter	Limitador duro
 	Hard Mix	Mezcla definida
 	Hardware decoding	Descodificación por hardware
-	Hardware decoding: Auto uses the system's video decoder (VideoToolbox on macOS, Media Foundation on Windows, VA-API or NVDEC for H.264 and HEVC on Linux) for the streams it supports, and FilmCraft's own decoder for everything else or if the hardware fails. Media that is already open keeps its decoder until it is reopened.	Descodificación por hardware: Automático usa el descodificador de video del sistema (VideoToolbox en macOS, Media Foundation en Windows, VA-API o NVDEC para H.264 y HEVC en Linux) para los flujos que admite, y el descodificador propio de FilmCraft para todo lo demás o si falla el hardware. Los medios ya abiertos mantienen su descodificador hasta que se vuelven a abrir.
+	Hardware decoding: Auto uses the system's video decoder (VideoToolbox on macOS, Media Foundation on Windows, VA-API or NVDEC for H.264 and HEVC on Linux) for the streams it supports, and Mortiflix Studio's own decoder for everything else or if the hardware fails. Media that is already open keeps its decoder until it is reopened.	Descodificación por hardware: Automático usa el descodificador de video del sistema (VideoToolbox en macOS, Media Foundation en Windows, VA-API o NVDEC para H.264 y HEVC en Linux) para los flujos que admite, y el descodificador propio de Mortiflix Studio para todo lo demás o si falla el hardware. Los medios ya abiertos mantienen su descodificador hasta que se vuelven a abrir.
 	Head Size	Tamaño de la cabeza
 	Heart	Corazón
 	Height	Altura
 	Hexagon	Hexágono
 	Hide Back Face	Ocultar la cara posterior
-	Hide FilmCraft	Ocultar FilmCraft
+	Hide Mortiflix Studio	Ocultar Mortiflix Studio
 	Hide Others	Ocultar otras
 	High	Alta
 	High Cutoff	Corte de agudos
@@ -2107,7 +2105,7 @@
 	Night	Noche
 	No Motion	Sin movimiento
 	No Scroll	Sin desplazamiento
-	No plugins are installed. Changes will take effect the next time you start FilmCraft.	No hay complementos instalados. Los cambios se aplicarán la próxima vez que inicies FilmCraft.
+	No plugins are installed. Changes will take effect the next time you start Mortiflix Studio.	No hay complementos instalados. Los cambios se aplicarán la próxima vez que inicies Mortiflix Studio.
 	Noise	Ruido
 	Noise & Grain	Ruido y grano
 	Noise (Legacy)	Ruido (heredado)
@@ -2539,7 +2537,7 @@
 	Template Properties	Propiedades de la plantilla
 	Text Animator	Animador de texto
 	Text Color	Color del texto
-	The media cache holds render previews of unsaved projects and other files FilmCraft can recreate. Deleting them is always safe; FilmCraft rebuilds them as needed.	La caché de medios guarda previsualizaciones procesadas de proyectos sin guardar y otros archivos que FilmCraft puede volver a crear. Eliminarlos siempre es seguro; FilmCraft los regenera cuando hace falta.
+	The media cache holds render previews of unsaved projects and other files Mortiflix Studio can recreate. Deleting them is always safe; Mortiflix Studio rebuilds them as needed.	La caché de medios guarda previsualizaciones procesadas de proyectos sin guardar y otros archivos que Mortiflix Studio puede volver a crear. Eliminarlos siempre es seguro; Mortiflix Studio los regenera cuando hace falta.
 	Thickness	Grosor
 	Tile Gradient	Degradado en mosaico
 	Tilt	Inclinación
@@ -2749,7 +2747,7 @@
 	System Compatibility Report	Informe de compatibilidad del sistema
 	no GPU adapter: the CPU compositor is used	no hay adaptador de GPU: se usa el compositor de CPU
 	Avid Log Exchange	Avid Log Exchange
-	FilmCraft Project	Proyecto de FilmCraft
+	Mortiflix Studio Project	Proyecto de Mortiflix Studio
 	{name} Selection.fcproj	{name} Selección.fcproj
 	{name} (Simplified)	{name} (simplificada)
 	Find in:	Buscar en:
@@ -2889,7 +2887,7 @@
 	Start Queue	Iniciar cola
 	Stop	Detener
 	Clear Finished	Borrar terminadas
-	Not supported by FilmCraft's encoders yet	Los codificadores de FilmCraft aún no lo admiten
+	Not supported by Mortiflix Studio's encoders yet	Los codificadores de Mortiflix Studio aún no lo admiten
 	Sequence name	Nombre de la secuencia
 	Folder	Carpeta
 	Preset	Ajuste preestablecido
@@ -2979,7 +2977,7 @@
 	Drag a clip to slide it between its neighbours.	Arrastra un clip para deslizarlo entre sus vecinos.
 	Drag to scroll the timeline.	Arrastra para desplazar la línea de tiempo.
 	Click to zoom in; Opt-click to zoom out.	Haz clic para acercar; Opción+clic para alejar.
-	FilmCraft hit an error	FilmCraft ha encontrado un error
+	Mortiflix Studio hit an error	Mortiflix Studio ha encontrado un error
 	Details: {path}	Detalles: {path}
 	Opened {url}	Abierto {url}
 	(empty)	(vacío)
@@ -3239,7 +3237,7 @@
 	QuickTime, ProRes 4444 (4:4:4) with alpha channel, 24-bit 48 kHz PCM	QuickTime, ProRes 4444 (4:4:4) con canal alfa, PCM de 24 bits y 48 kHz
 	QuickTime, ProRes 4444 XQ (4:4:4), 24-bit 48 kHz PCM	QuickTime, ProRes 4444 XQ (4:4:4), PCM de 24 bits y 48 kHz
 	QuickTime, ProRes 422, 24-bit 48 kHz PCM	QuickTime, ProRes 422, PCM de 24 bits y 48 kHz
-	Quit FilmCraft	Salir de FilmCraft
+	Quit Mortiflix Studio	Salir de Mortiflix Studio
 	Rate Stretch Tool	Herramienta Ajuste de velocidad
 	Razor Tool	Herramienta Cuchilla
 	Rectangle Tool	Herramienta Rectángulo
@@ -3540,8 +3538,8 @@
 	Composite in Linear Color	Componer en color lineal
 	Auto Tone Map Media (HDR and log into SDR)	Mapeo de tonos automático de medios (HDR y log a SDR)
 	Configure…	Configurar…
-	Not supported in FilmCraft yet	FilmCraft aún no lo admite
-	FilmCraft always composites in linear light	FilmCraft siempre compone en luz lineal
+	Not supported in Mortiflix Studio yet	Mortiflix Studio aún no lo admite
+	Mortiflix Studio always composites in linear light	Mortiflix Studio siempre compone en luz lineal
 	Loop marked range	Bucle del intervalo marcado
 	Play Source	Reproducir origen
 	Source Play/Stop	Reproducir/Detener origen
@@ -3607,16 +3605,15 @@
 	Opens in your web browser: {url}	Se abre en el navegador web: {url}
 	Saves this session's log and shows it in your file manager.	Guarda el registro de esta sesión y lo muestra en el explorador de archivos.
 	Shows a report on this computer.	Muestra un informe sobre este equipo.
-	Shows the version, community links and credits in a FilmCraft window.	Muestra la versión, los enlaces de la comunidad y los créditos en una ventana de FilmCraft.
+	Shows the version, community links and credits in a Mortiflix Studio window.	Muestra la versión, los enlaces de la comunidad y los créditos en una ventana de Mortiflix Studio.
 	Couldn't open your web browser	No se pudo abrir el navegador web
 	Open this address in your browser yourself:	Abre esta dirección tú mismo en el navegador:
-# Mortiflix FilmCraft: Stages menu and panels
+# Mortiflix Studio: Stages menu and panels
 	Back	Atrás
 	Next	Siguiente
 	Script	Guion
 	Shots	Planos
 	Voice & music	Voz y música
-	FilmCraft	FilmCraft
 	Render	Renderizar
 	Mortiflix Chat	Chat de Mortiflix
 	Mortiflix Preview	Vista previa de Mortiflix
@@ -3638,7 +3635,7 @@
 	Choose Files for Mortiflix	Elegir archivos para Mortiflix
 	Choose a File and Send It to Mortiflix	Elegir un archivo y enviarlo a Mortiflix
 	Show in Folder	Mostrar en la carpeta
-# Mortiflix FilmCraft: node area commands (part 03)
+# Mortiflix Studio: node area commands (part 03)
 	Previous Node	Nodo anterior
 	Next Node	Nodo siguiente
 	Node Above	Nodo de arriba
@@ -3686,7 +3683,7 @@
 	Frame Beat 8	Encuadrar la parte 8
 	Frame Beat 9	Encuadrar la parte 9
 	Nodes	Nodos
-# Mortiflix FilmCraft: loose preview (doc 36)
+# Mortiflix Studio: loose preview (doc 36)
 	Play the Loose Preview	Reproducir la vista previa provisional
 	Play or Pause the Loose Preview	Reproducir o pausar la vista previa provisional
 	Pause the Loose Preview	Pausar la vista previa provisional
@@ -3698,10 +3695,10 @@
 	Follow the Playhead	Seguir el cabezal de reproducción
 	Rebuild the Loose Preview	Reconstruir la vista previa provisional
 	Show the Shot's File	Mostrar el archivo del plano
-# Mortiflix FilmCraft: Into FilmCraft (doc 38)
-	Bring the Video into FilmCraft	Llevar el vídeo a FilmCraft
+# Mortiflix Studio: Into Edit (doc 38)
+	Bring the Video into Edit	Llevar el vídeo a Edición
 	Start the Edit Again from Mortiflix…	Empezar la edición de nuevo desde Mortiflix…
-	Run the FilmCraft Import	Ejecutar la importación a FilmCraft
+	Run the Mortiflix Studio Import	Ejecutar la importación a Mortiflix Studio
 	Mortiflix Timeline Edit	Edición de línea de tiempo de Mortiflix
-# Mortiflix FilmCraft: Script panel (stage 1)
+# Mortiflix Studio: Script panel (stage 1)
 	Undo in the Script	Deshacer en el guion

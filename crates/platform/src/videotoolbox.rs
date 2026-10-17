@@ -20,9 +20,9 @@ use std::panic::AssertUnwindSafe;
 use std::ptr::NonNull;
 use std::sync::{Arc, Mutex, PoisonError};
 
-use filmcraft_codecs::hw::{NalCodec, NalStreamInfo};
-use filmcraft_codecs::{CodecError, DecodedFrame, Result, VideoDecoder};
-use filmcraft_frame::{Chroma, PixelData, VideoFrame, pool};
+use mortiflix_codecs::hw::{NalCodec, NalStreamInfo};
+use mortiflix_codecs::{CodecError, DecodedFrame, Result, VideoDecoder};
+use mortiflix_frame::{Chroma, PixelData, VideoFrame, pool};
 use objc2_core_foundation::{CFBoolean, CFDictionary, CFNumber, CFRetained, CFString, CFType};
 use objc2_core_media::{
     CMBlockBuffer, CMFormatDescription, CMSampleBuffer, CMSampleTimingInfo, CMTime, CMTimeFlags, CMVideoFormatDescriptionCreateFromH264ParameterSets,
@@ -59,7 +59,7 @@ struct Layout {
     chroma: Chroma,
     /// Significant bits per sample (8 = `Yuv8`).
     bits: u32,
-    color: filmcraft_color::ColorInfo,
+    color: mortiflix_color::ColorInfo,
     par: (u32, u32),
 }
 
@@ -244,7 +244,7 @@ fn copy_out(pb: &CVImageBuffer, l: &Layout) -> std::result::Result<VideoFrame, S
         PixelData::Yuv16 { planes: [Arc::new(yp), Arc::new(u), Arc::new(v)], chroma: l.chroma, bits: l.bits, alpha: None }
     };
     drop(lock);
-    Ok(VideoFrame { width: w as u32, height: h as u32, data, color: l.color, par: l.par, pts: filmcraft_time::Tick::ZERO })
+    Ok(VideoFrame { width: w as u32, height: h as u32, data, color: l.color, par: l.par, pts: mortiflix_time::Tick::ZERO })
 }
 
 /// The layout for a stream, or why VideoToolbox is not used for it.
@@ -255,7 +255,7 @@ fn layout(info: &NalStreamInfo) -> std::result::Result<Layout, String> {
     if info.bit_depth_luma != info.bit_depth_chroma || !matches!(info.bit_depth_luma, 8 | 10) {
         return Err(format!("{}-bit luma / {}-bit chroma", info.bit_depth_luma, info.bit_depth_chroma));
     }
-    let full = info.color.range == filmcraft_color::Range::Full;
+    let full = info.color.range == mortiflix_color::Range::Full;
     let ten = info.bit_depth_luma == 10;
     let (chroma, pixel_format) = match (info.chroma_format_idc, ten, full) {
         (1, false, false) => (Chroma::C420, NV12_VIDEO),

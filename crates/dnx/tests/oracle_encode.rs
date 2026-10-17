@@ -2,7 +2,7 @@
 
 mod common;
 use common::*;
-use filmcraft_dnx::{ChromaFormat, Encoder, EncoderConfig, Profile, decode_frame};
+use mortiflix_dnx::{ChromaFormat, Encoder, EncoderConfig, Profile, decode_frame};
 
 struct Case {
     name: &'static str,

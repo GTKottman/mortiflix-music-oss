@@ -1,6 +1,6 @@
-# filmcraft-audio-dsp
+# mortiflix-audio-dsp
 
-Real-time audio DSP for FilmCraft. Layer **L1**, **no dependencies**, compiles for
+Real-time audio DSP for Mortiflix Studio. Layer **L1**, **no dependencies**, compiles for
 `wasm32-unknown-unknown`, no `unsafe`. Clean-room: written from the public standards
 (ITU-R BS.1770-4, EBU R128 / Tech 3341 / Tech 3342) and textbook DSP (RBJ cookbook biquads,
 Householder FDN, phase vocoder, spectral subtraction with the statistical late-reverberation
@@ -104,7 +104,7 @@ Measured on synthetic signals (`effects::essential::tests`, 48 kHz):
 | `deesser` | 150 Hz harmonic voice + 5–10 kHz noise bursts | sibilance −5.1 dB (8 dB max) / −9.8 dB (16 dB max) during bursts; voice band ±0.01 dB; non-sibilant passages ±0.001 dB |
 | `dereverb` (100 %) | harmonic syllables (100 ms / 400 ms gaps) + Polack-model late reverb, RT60 0.8 s | tail-to-burst energy −5.0 → −10.1 dB (5.0 dB better); burst energy −1.7 dB |
 | `speech_enhance` | voice + fricative noise syllables over −60 dBFS noise | presence/mud tilt +5.5 dB; noise between syllables −8.7 dB; overall level +1.0 dB |
-| Dialogue chain | `denoise` + `parametric_eq` (2 HP bands) + `dehum` + `deesser` + `dereverb` + `compressor` + `simple_eq` + `speech_enhance` + `reverb`, 60 s stereo | 1.36 s = **44× realtime** on one core (release, Apple Silicon; `cargo test --release -p filmcraft-audio-dsp dialogue_chain_realtime -- --ignored --nocapture`) |
+| Dialogue chain | `denoise` + `parametric_eq` (2 HP bands) + `dehum` + `deesser` + `dereverb` + `compressor` + `simple_eq` + `speech_enhance` + `reverb`, 60 s stereo | 1.36 s = **44× realtime** on one core (release, Apple Silicon; `cargo test --release -p mortiflix-audio-dsp dialogue_chain_realtime -- --ignored --nocapture`) |
 
 ## Ducking analysis (`ducking`)
 

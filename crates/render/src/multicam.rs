@@ -6,8 +6,8 @@
 //! image. A 2×2 grid of 1080p angles at ¼ scale costs about as much as one ½-resolution frame of
 //! compositing plus the four decodes.
 
-use filmcraft_project::{ItemId, Project, Sequence};
-use filmcraft_time::Tick;
+use mortiflix_project::{ItemId, Project, Sequence};
+use mortiflix_time::Tick;
 use rayon::prelude::*;
 
 use crate::{Image, RenderOptions, SourceProvider, output_size};

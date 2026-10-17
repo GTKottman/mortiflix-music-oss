@@ -1,4 +1,4 @@
-//! Class ids, property ids and definition ids of the AAF object model subset FilmCraft reads and
+//! Class ids, property ids and definition ids of the AAF object model subset Mortiflix Studio reads and
 //! writes (AAF Object Specification v1.1, AAF Edit Protocol). Class and data definition AUIDs are
 //! SMPTE labels (RP 224 / RP 210 registers) in AUID byte order; property ids are the AAF / ST 377-1
 //! local tags.
@@ -68,7 +68,7 @@ pub(crate) mod cls {
     pub const DESCRIPTIVE_MARKER: Auid = class(0x41);
     pub const PCM_DESCRIPTOR: Auid = class(0x48);
     pub const IMPORT_DESCRIPTOR: Auid = class(0x4A);
-    /// Classes with a `Locator` and media properties FilmCraft reads as file descriptors.
+    /// Classes with a `Locator` and media properties Mortiflix Studio reads as file descriptors.
     pub const WAVE_DESCRIPTOR: Auid = class(0x2C);
     pub const AIFC_DESCRIPTOR: Auid = class(0x26);
     pub const SOUND_DESCRIPTOR: Auid = class(0x42);

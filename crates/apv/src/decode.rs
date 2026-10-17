@@ -1,6 +1,6 @@
 //! RFC 9924 APV frame and tile decoder.
 
-use filmcraft_bitstream::BitReader;
+use mortiflix_bitstream::BitReader;
 
 use crate::dct::{scale_and_idct8x8, scale_and_idct8x8_dc_only};
 use crate::header::{

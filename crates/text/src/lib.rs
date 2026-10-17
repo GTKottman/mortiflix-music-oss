@@ -1,4 +1,4 @@
-//! FilmCraft text engine (layer L1).
+//! Mortiflix Studio text engine (layer L1).
 //!
 //! - [`fonts`]: font database — bundled OFL fonts (Inter, JetBrains Mono, Noto Serif), the optional
 //!   craft-fonts ([`fonts::CRAFT_FONTS`], Japanese; empty unless built with `CRAFT_FONTS_DIR`) plus faces
@@ -35,7 +35,7 @@ mod perf {
     /// 24 fps). Cold = first time (shaping + glyph rasterisation); warm = cached.
     #[test]
     fn three_line_title_is_fast() {
-        let text = "FILMCRAFT PRESENTS\nA Night Drive Through the City\nDirected by Nobody in Particular";
+        let text = "MORTIFLIX PRESENTS\nA Night Drive Through the City\nDirected by Nobody in Particular";
         let st = TextStyle { size: 96.0, style: "Bold".into(), ..Default::default() };
         let ps = ParagraphStyle { align: Align::Center, ..Default::default() };
         let t0 = std::time::Instant::now();

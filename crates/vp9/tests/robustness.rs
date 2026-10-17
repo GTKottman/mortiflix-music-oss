@@ -2,7 +2,7 @@
 
 mod common;
 
-use filmcraft_vp9::Decoder;
+use mortiflix_vp9::Decoder;
 use std::time::{Duration, Instant};
 
 fn xorshift(seed: &mut u64) -> u64 {

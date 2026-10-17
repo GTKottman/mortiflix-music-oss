@@ -584,7 +584,7 @@ mod tests {
 
     #[test]
     fn covers_text_does_not_keep_file_bytes() {
-        let path = std::env::temp_dir().join(format!("filmcraft-covers-text-{}.ttf", std::process::id()));
+        let path = std::env::temp_dir().join(format!("mortiflix-covers-text-{}.ttf", std::process::id()));
         std::fs::write(&path, INTER_REGULAR).expect("write temp font");
         let info = FaceInfo {
             family: "Inter".into(),

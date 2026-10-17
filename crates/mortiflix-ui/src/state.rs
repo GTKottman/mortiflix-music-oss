@@ -104,7 +104,7 @@ pub struct NextConfirm {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct MfxState {
-    /// Mortiflix is on: the stage bar shows and stage commands switch FilmCraft's layout.
+    /// Mortiflix is on: the stage bar shows and stage commands switch Mortiflix Studio's layout.
     pub active: bool,
     /// The Mortiflix project id (the service's `state/<id>`), None before New project / Open.
     /// The service connections the state has seen (a restarted service opens the project again).
@@ -136,8 +136,8 @@ pub struct MfxState {
     pub nodes: crate::nodes::NodeArea,
     /// The loose preview (doc 36): its plan, scope, loop and the player as the host saw it.
     pub preview: crate::preview::PreviewState,
-    /// Into FilmCraft (doc 38): the hand-off and the stage-5 Mortiflix panel.
-    pub handoff: crate::into_filmcraft::Handoff,
+    /// Into Edit (doc 38): the hand-off and the stage-5 Mortiflix panel.
+    pub handoff: crate::into_edit::Handoff,
     /// The script, line by line, and the owner's unsaved draft (Script panel + chat card).
     pub script: crate::script::ScriptState,
     /// Stage 2 Look: the looks, the one in use, the music theme (Look panel + chat's looks card).

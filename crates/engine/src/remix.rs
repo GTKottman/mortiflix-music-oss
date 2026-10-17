@@ -1,6 +1,6 @@
 //! Clip ▸ Remix: retime a music clip to a target duration by cutting it at musically similar beat
-//! boundaries (Premiere's Remix; analysis and planning in [`filmcraft_audio_dsp::remix`], playback
-//! in [`filmcraft_render::remix`]).
+//! boundaries (Premiere's Remix; analysis and planning in [`mortiflix_audio_dsp::remix`], playback
+//! in [`mortiflix_render::remix`]).
 //!
 //! | command | menu | what it does |
 //! |---|---|---|
@@ -21,10 +21,10 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 
-use filmcraft_audio_dsp::remix::{self as dsp, Analysis, Params};
-use filmcraft_project::{ClipId, ItemId, TrackKind};
-use filmcraft_render::remix::{Remix, TickPiece};
-use filmcraft_time::Tick;
+use mortiflix_audio_dsp::remix::{self as dsp, Analysis, Params};
+use mortiflix_project::{ClipId, ItemId, TrackKind};
+use mortiflix_render::remix::{Remix, TickPiece};
+use mortiflix_time::Tick;
 use serde_json::{Value, json};
 
 use crate::commands::{CommandSpec, bad, f64_p, has_seq, u64_p};
@@ -50,7 +50,7 @@ fn check_clip(s: &Session, c: ClipId) -> std::result::Result<(), String> {
         return Err("Remix works on audio clips".into());
     }
     let item = s.project.item(it.item).ok_or("the clip has no media")?;
-    if !matches!(item.kind, filmcraft_project::ItemKind::Media(_)) || !item.has_audio() {
+    if !matches!(item.kind, mortiflix_project::ItemKind::Media(_)) || !item.has_audio() {
         return Err("the clip has no audio media to remix".into());
     }
     Ok(())
@@ -66,7 +66,7 @@ fn is_remixed(s: &Session) -> std::result::Result<(), String> {
     has_seq(s)?;
     let c = selected_audio(s).ok_or("select an audio clip")?;
     let seq = s.active_sequence().ok_or("no sequence is open")?;
-    if seq.find_item(c).is_some_and(|(_, i)| filmcraft_render::remix::is_remixed(i)) { Ok(()) } else { Err("the selected clip is not remixed".into()) }
+    if seq.find_item(c).is_some_and(|(_, i)| mortiflix_render::remix::is_remixed(i)) { Ok(()) } else { Err("the selected clip is not remixed".into()) }
 }
 
 fn target_clip(s: &Session, p: &Value, cmd: &str) -> Result<ClipId> {
@@ -92,7 +92,7 @@ fn duration_p(s: &Session, p: &Value) -> Option<Tick> {
     }
     if let Some(tc) = p.get("timecode").and_then(Value::as_str) {
         let df = s.active_sequence().map(|q| q.settings.drop_frame).unwrap_or(false);
-        return filmcraft_time::parse_timecode(tc, rate, df, 0).ok().map(|f| rate.tick_of(f));
+        return mortiflix_time::parse_timecode(tc, rate, df, 0).ok().map(|f| rate.tick_of(f));
     }
     None
 }
@@ -107,7 +107,7 @@ fn analysis(s: &Session, item: ItemId, source_in: Tick, dur: Tick) -> Result<Arc
         return Ok(a.clone());
     }
     let provider = s.media.provider(s.project.clone(), s.services.clone());
-    let src = filmcraft_render::SourceProvider::source(&provider, item).ok_or_else(|| EngineError::Other("the clip's media is offline".into()))?;
+    let src = mortiflix_render::SourceProvider::source(&provider, item).ok_or_else(|| EngineError::Other("the clip's media is offline".into()))?;
     let buf = src.audio(m0, len.max(0) as usize, sr).map_err(|e| EngineError::Other(format!("reading the clip's audio: {e}")))?;
     let refs: Vec<&[f32]> = buf.channels.iter().map(Vec::as_slice).collect();
     let a = Arc::new(dsp::analyze(&refs, sr).map_err(|e| EngineError::Other(format!("cannot remix: {e}")))?);
@@ -124,7 +124,7 @@ fn make_plan(s: &Session, c: ClipId, target: Tick, segments: f64, variations: f6
     let seq = s.active_sequence().ok_or(EngineError::NoSequence)?;
     let sr = seq.settings.sample_rate.max(1) as i64;
     let (_, it) = seq.find_item(c).ok_or_else(|| EngineError::Other("no such clip".into()))?;
-    let old = filmcraft_render::remix::Remix::of(it);
+    let old = mortiflix_render::remix::Remix::of(it);
     let original = old.as_ref().map(|r| r.original).unwrap_or(it.duration);
     let a = analysis(s, it.item, it.source_in, original)?;
     let params = Params { segments: segments.clamp(0.0, 100.0), variations: variations.clamp(0.0, 100.0) };
@@ -154,7 +154,7 @@ fn apply(s: &mut Session, label: &str, c: ClipId, dur: Tick, rm: Option<Remix>) 
                 r.store(it);
             }
             None => {
-                filmcraft_render::remix::take(it);
+                mortiflix_render::remix::take(it);
             }
         }
         if let Some(t) = q.track_mut(tid) {
@@ -196,7 +196,7 @@ fn enable(s: &mut Session, p: &Value) -> Result<Value> {
     let c = target_clip(s, p, "clip.remix.enable")?;
     let seq = s.active_sequence().ok_or(EngineError::NoSequence)?;
     let (_, it) = seq.find_item(c).ok_or_else(|| bad("clip.remix.enable", "no such clip"))?;
-    if filmcraft_render::remix::is_remixed(it) {
+    if mortiflix_render::remix::is_remixed(it) {
         return Ok(report(s, c, None));
     }
     let dur = it.duration;

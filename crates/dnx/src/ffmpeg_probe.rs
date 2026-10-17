@@ -6,7 +6,7 @@
 //! ffmpeg's decoder differs from the text of SMPTE ST 2019-1 (see the README): the quantisation
 //! weights it uses for CID 1271, and its reconstruction offset.
 //!
-//! `DNX_CID=1271 cargo test -p filmcraft-dnx --lib ffmpeg_probe -- --ignored --nocapture`
+//! `DNX_CID=1271 cargo test -p mortiflix-dnx --lib ffmpeg_probe -- --ignored --nocapture`
 use crate::bits::Writer;
 use crate::header::{self, EOF_SIGNATURE, FieldCode, FrameHeader, SCAN_INDEX_OFFSET};
 use crate::tables::{ZIGZAG, cid_info, vlc};
@@ -91,8 +91,8 @@ fn stream_cid(cid: u32, w: u32, h: u32, depth: u8, q: u32, pos: usize, amp: u32,
 #[test]
 #[ignore]
 fn probe_weights() {
-    let ff = filmcraft_testkit::ffmpeg().unwrap();
-    let dir = filmcraft_testkit::fixtures_dir("dnx");
+    let ff = mortiflix_testkit::ffmpeg().unwrap();
+    let dir = mortiflix_testkit::fixtures_dir("dnx");
     let cid: u32 = std::env::var("DNX_CID").unwrap().parse().unwrap();
     let (w, h, depth): (u32, u32, u8) = match cid {
         1250 => (1280, 720, 10),
@@ -197,8 +197,8 @@ fn probe_weights() {
 #[test]
 #[ignore]
 fn probe_reconstruction() {
-    let ff = filmcraft_testkit::ffmpeg().unwrap();
-    let dir = filmcraft_testkit::fixtures_dir("dnx");
+    let ff = mortiflix_testkit::ffmpeg().unwrap();
+    let dir = mortiflix_testkit::fixtures_dir("dnx");
     let cid: u32 = std::env::var("DNX_CID").unwrap().parse().unwrap();
     let (w, h, depth): (u32, u32, u8) = match cid {
         1250 => (1280, 720, 10),

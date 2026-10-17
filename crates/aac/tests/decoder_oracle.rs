@@ -91,8 +91,8 @@ fn matches_ffmpeg_decoder() {
 /// per-frame energies and the L/R correlation with ffmpeg's decode.
 #[test]
 fn pns_matches_ffmpeg() {
-    use filmcraft_aac::AdtsHeader;
-    use filmcraft_bitstream::BitWriter;
+    use mortiflix_aac::AdtsHeader;
+    use mortiflix_bitstream::BitWriter;
     let Some(ff) = ffmpeg() else { return };
     fn ics(bw: &mut BitWriter, with_info: bool, nrg: u32) {
         bw.write_bits(100, 8); // global_gain

@@ -1,7 +1,7 @@
 //! GPU mask coverage and masked-effect mixing (WGSL compute), the counterpart of
-//! [`filmcraft_render::mask`]. Tested for parity with the CPU path.
+//! [`mortiflix_render::mask`]. Tested for parity with the CPU path.
 
-use filmcraft_render::mask::FlatMask;
+use mortiflix_render::mask::FlatMask;
 
 pub struct GpuMask {
     device: wgpu::Device,
@@ -26,7 +26,7 @@ fn f32_bytes(v: &[f32]) -> Vec<u8> {
 impl GpuMask {
     pub fn new(device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("filmcraft-mask"),
+            label: Some("mortiflix-mask"),
             source: wgpu::ShaderSource::Wgsl(include_str!("mask.wgsl").into()),
         });
         let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {

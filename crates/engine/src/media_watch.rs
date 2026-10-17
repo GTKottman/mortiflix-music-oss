@@ -16,12 +16,12 @@
 //! the file changed, not the edit. A file seen for the first time is only remembered; one that
 //! can't be opened (still being written) is tried again once it changes again, not on every look.
 //!
-//! [`MediaInfo`]: filmcraft_media::MediaInfo
+//! [`MediaInfo`]: mortiflix_media::MediaInfo
 
 use std::collections::{BTreeSet, HashMap};
 use std::sync::{Arc, Mutex, PoisonError};
 
-use filmcraft_project::{ItemId, ItemKind, MediaRef, Project};
+use mortiflix_project::{ItemId, ItemKind, MediaRef, Project};
 use serde_json::{Value, json};
 
 use crate::{Result, Session};
@@ -129,7 +129,7 @@ impl Session {
             match self.media.open_file(path, &*self.services) {
                 Ok(src) => {
                     let mut info = src.info().clone();
-                    if info.kind == filmcraft_media::MediaKind::Still
+                    if info.kind == mortiflix_media::MediaKind::Still
                         && let Some(v) = info.video.as_mut()
                     {
                         v.frame_rate = crate::settings::timebase_rate(&self.prefs.media.indeterminate_timebase);
@@ -142,7 +142,7 @@ impl Session {
                 }
             }
         }
-        // A file that can't be opened (still being written, or not media FilmCraft reads) keeps its
+        // A file that can't be opened (still being written, or not media Mortiflix Studio reads) keeps its
         // new stamp: it is tried again once it changes again, not on every look.
         if fresh.is_empty() {
             return Ok(json!({"refreshed": []}));

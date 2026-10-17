@@ -10,12 +10,12 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use filmcraft_edit as edit;
-use filmcraft_project::{
+use mortiflix_edit as edit;
+use mortiflix_project::{
     AudioChannelMap, AudioChannels, BinEntry, ClipId, FieldOptions, FieldProcessing, ItemId, ItemKind, Label, MediaClip, MediaRef, ParamValue, Project,
     TimeInterpolation, TrackItem, TrackKind,
 };
-use filmcraft_time::{FrameRate, TICKS_PER_SECOND, Tick, TimeRange, parse_timecode};
+use mortiflix_time::{FrameRate, TICKS_PER_SECOND, Tick, TimeRange, parse_timecode};
 use serde_json::{Value, json};
 
 use crate::commands::{
@@ -443,7 +443,7 @@ pub struct SourceView {
     pub rate: FrameRate,
     pub mark_in: Option<Tick>,
     pub mark_out: Option<Tick>,
-    pub markers: Vec<filmcraft_project::Marker>,
+    pub markers: Vec<mortiflix_project::Marker>,
     /// For a subclip: its range and whether trims are restricted to it.
     pub subclip: Option<(TimeRange, bool)>,
 }
@@ -472,7 +472,7 @@ impl SourceView {
 /// The Source monitor view of `item` (see [`SourceView`]).
 pub fn source_view(s: &Session, item: ItemId) -> Option<SourceView> {
     let pi = s.project.item(item)?;
-    let still = |m: &MediaClip| matches!(m.info.kind, filmcraft_media::MediaKind::Still) || m.info.duration.0 <= 0;
+    let still = |m: &MediaClip| matches!(m.info.kind, mortiflix_media::MediaKind::Still) || m.info.duration.0 <= 0;
     Some(match &pi.kind {
         ItemKind::Media(m) => {
             let rate = m.frame_rate();
@@ -604,7 +604,7 @@ fn remove_items(p: &mut Project, ids: &[ItemId]) {
 }
 
 /// Keyframe times of an effect instance shifted / scaled from clip `from` to clip `to` (media time).
-fn retime_effect(e: &mut filmcraft_project::EffectInstance, from: &TrackItem, to: &TrackItem, scale: bool) {
+fn retime_effect(e: &mut mortiflix_project::EffectInstance, from: &TrackItem, to: &TrackItem, scale: bool) {
     let (f0, f1) = (from.source_in, from.source_out());
     let (t0, t1) = (to.source_in, to.source_out());
     let map = |k: Tick| -> Tick {
@@ -690,7 +690,7 @@ pub(crate) fn item_range(p: &Project, id: ItemId, still: Tick) -> Option<TimeRan
     let rate = item_rate(p, id);
     Some(match &it.kind {
         ItemKind::Media(m) => {
-            let is_still = matches!(m.info.kind, filmcraft_media::MediaKind::Still);
+            let is_still = matches!(m.info.kind, mortiflix_media::MediaKind::Still);
             let full = if m.info.duration.0 > 0 && !is_still { m.info.duration } else { still };
             let a = m.mark_in.unwrap_or(Tick::ZERO);
             let b = m.mark_out.map(|o| o + rate.frame_duration()).unwrap_or(full);
@@ -732,7 +732,7 @@ fn bin_from_selection(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"bin": bin.0, "moved": items.len()}))
 }
 
-fn bin_names(b: &filmcraft_project::Bin, out: &mut Vec<String>) {
+fn bin_names(b: &mortiflix_project::Bin, out: &mut Vec<String>) {
     for c in &b.children {
         if let BinEntry::Bin(x) = c {
             out.push(x.name.clone());
@@ -759,11 +759,11 @@ fn offline_file(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let file_name = str_p(p, "fileName").map(str::to_string).filter(|n| !n.is_empty()).unwrap_or_else(|| "Offline.mov".into());
     let name = str_p(p, "name").map(str::to_string).filter(|n| !n.is_empty()).unwrap_or_else(|| file_name.clone());
-    let info = filmcraft_media::MediaInfo {
+    let info = mortiflix_media::MediaInfo {
         name: file_name.clone(),
-        kind: if has_v { filmcraft_media::MediaKind::Movie } else { filmcraft_media::MediaKind::AudioOnly },
+        kind: if has_v { mortiflix_media::MediaKind::Movie } else { mortiflix_media::MediaKind::AudioOnly },
         duration,
-        video: has_v.then(|| filmcraft_media::VideoStreamInfo {
+        video: has_v.then(|| mortiflix_media::VideoStreamInfo {
             width,
             height,
             frame_rate: rate,
@@ -776,7 +776,7 @@ fn offline_file(s: &mut Session, p: &Value) -> Result<Value> {
             hdr: None,
         }),
         audio_streams: has_a
-            .then(|| filmcraft_media::AudioStreamInfo {
+            .then(|| mortiflix_media::AudioStreamInfo {
                 sample_rate: u64_p(p, "sampleRate").unwrap_or(48_000) as u32,
                 channels: u64_p(p, "channels").unwrap_or(2).max(1) as u32,
                 codec: String::new(),
@@ -1027,11 +1027,11 @@ fn attr_sel(p: &Value) -> AttrSel {
     AttrSel { intrinsic, effects }
 }
 
-fn is_standard(e: &filmcraft_project::EffectInstance) -> bool {
-    e.def().is_some_and(|d| !d.intrinsic) && !filmcraft_project::graphic::is_layer(e) && !e.essential
+fn is_standard(e: &mortiflix_project::EffectInstance) -> bool {
+    e.def().is_some_and(|d| !d.intrinsic) && !mortiflix_project::graphic::is_layer(e) && !e.essential
 }
 
-fn wants_effect(sel: &AttrSel, e: &filmcraft_project::EffectInstance) -> bool {
+fn wants_effect(sel: &AttrSel, e: &mortiflix_project::EffectInstance) -> bool {
     sel.effects.as_ref().is_none_or(|ids| ids.contains(&e.effect))
 }
 
@@ -1078,7 +1078,7 @@ fn remove_attributes(s: &mut Session, p: &Value) -> Result<Value> {
     let seq = s.active_sequence().ok_or(EngineError::NoSequence)?;
     let frame = (seq.settings.width, seq.settings.height);
     let sizes: BTreeMap<ClipId, (u32, u32)> =
-        targets.iter().filter_map(|c| seq.find_item(*c).map(|(_, i)| (*c, filmcraft_render::source_size(&s.project, i.item).unwrap_or(frame)))).collect();
+        targets.iter().filter_map(|c| seq.find_item(*c).map(|(_, i)| (*c, mortiflix_render::source_size(&s.project, i.item).unwrap_or(frame)))).collect();
     let n = s.edit_sequence("Remove Attributes", |q, _, _| {
         let mut n = 0;
         for c in &targets {
@@ -1089,7 +1089,7 @@ fn remove_attributes(s: &mut Session, p: &Value) -> Result<Value> {
                     && let Some(def) = slot.def()
                 {
                     let mut fresh = def.instance();
-                    filmcraft_project::resolve_auto_points(&mut fresh, frame, sizes.get(c).copied().unwrap_or(frame));
+                    mortiflix_project::resolve_auto_points(&mut fresh, frame, sizes.get(c).copied().unwrap_or(frame));
                     *slot = fresh;
                 }
             }
@@ -1120,7 +1120,7 @@ fn subclip_plan(s: &Session, p: &Value) -> Result<(ItemId, TimeRange, String, La
         let pi = s.project.item(item).ok_or_else(|| EngineError::Other("no such item".into()))?;
         let rate = m.frame_rate();
         let still = s.prefs.timeline.still_duration(rate);
-        let is_still = matches!(m.info.kind, filmcraft_media::MediaKind::Still);
+        let is_still = matches!(m.info.kind, mortiflix_media::MediaKind::Still);
         let full = sub.unwrap_or(TimeRange::new(Tick::ZERO, if m.info.duration.0 > 0 && !is_still { m.info.duration } else { still }));
         let range = if sub.is_some() {
             full
@@ -1526,7 +1526,7 @@ fn fit_fill(s: &mut Session, p: &Value, fill: bool) -> Result<Value> {
         .iter()
         .filter_map(|c| {
             let (_, i) = q.find_item(*c)?;
-            Some((*c, filmcraft_render::source_size(&s.project, i.item)?, s.project.conformed_source_size(i.item, frame_par)?))
+            Some((*c, mortiflix_render::source_size(&s.project, i.item)?, s.project.conformed_source_size(i.item, frame_par)?))
         })
         .collect();
     if sizes.is_empty() {
@@ -1544,8 +1544,8 @@ fn fit_fill(s: &mut Session, p: &Value, fill: bool) -> Result<Value> {
             for (k, v) in [
                 ("scale", ParamValue::Float(pct)),
                 ("uniform_scale", ParamValue::Bool(true)),
-                ("position", ParamValue::Vec2(filmcraft_geom::Vec2::new(fw / 2.0, fh / 2.0))),
-                ("anchor", ParamValue::Vec2(filmcraft_geom::Vec2::new(*w as f64 / 2.0, *h as f64 / 2.0))),
+                ("position", ParamValue::Vec2(mortiflix_geom::Vec2::new(fw / 2.0, fh / 2.0))),
+                ("anchor", ParamValue::Vec2(mortiflix_geom::Vec2::new(*w as f64 / 2.0, *h as f64 / 2.0))),
             ] {
                 match m.param_mut(k) {
                     Some(prm) => {
@@ -1553,7 +1553,7 @@ fn fit_fill(s: &mut Session, p: &Value, fill: bool) -> Result<Value> {
                         prm.value = v;
                     }
                     None => {
-                        m.params.insert(k.to_string(), filmcraft_project::Param::new(v));
+                        m.params.insert(k.to_string(), mortiflix_project::Param::new(v));
                     }
                 }
             }
@@ -1645,7 +1645,7 @@ fn extract_audio(s: &mut Session, p: &Value) -> Result<Value> {
                 inter.push(buf.channels.get(c).and_then(|x| x.get(i)).copied().unwrap_or(0.0));
             }
         }
-        let bytes = filmcraft_media::wav::write_wav16(&inter, ch as u16, sr);
+        let bytes = mortiflix_media::wav::write_wav16(&inter, ch as u16, sr);
         let mut path = std::path::Path::new(&dir).join(format!("{stem} Audio Extracted.wav"));
         let mut k = 2;
         while s.services.file_size(&path.to_string_lossy()).is_ok() {

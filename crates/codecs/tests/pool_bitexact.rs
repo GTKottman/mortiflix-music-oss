@@ -1,4 +1,4 @@
-//! Decoded pictures are written into recycled plane buffers (`filmcraft_frame::pool`). A recycled
+//! Decoded pictures are written into recycled plane buffers (`mortiflix_frame::pool`). A recycled
 //! buffer still holds an old picture, so the decoder must overwrite every byte: here the pool is
 //! primed with buffers full of 0xAA before decoding, and every frame must still match ffmpeg bit
 //! for bit. (Its own process: the pool is global.)
@@ -8,12 +8,12 @@ mod common;
 use std::sync::Arc;
 
 use common::*;
-use filmcraft_frame::{Chroma, PixelData, VideoFrame};
-use filmcraft_media::FrameRequest;
+use mortiflix_frame::{Chroma, PixelData, VideoFrame};
+use mortiflix_media::FrameRequest;
 
 #[test]
 fn dirty_recycled_planes_decode_bit_exact() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     // 640×480: luma and chroma planes are both large enough to be pooled
     let Some(file) = fixture(
         &ff,
@@ -49,15 +49,15 @@ fn dirty_recycled_planes_decode_bit_exact() {
             data: PixelData::Yuv8 { planes: [dirty(w * h), dirty(w * h / 4), dirty(w * h / 4)], chroma: Chroma::C420, alpha: None },
             ..VideoFrame::rgba8(w as u32, h as u32, vec![0; w * h * 4])
         };
-        filmcraft_frame::pool::recycle(Arc::new(f));
+        mortiflix_frame::pool::recycle(Arc::new(f));
     }
-    let reused_before = filmcraft_frame::pool::stats().reused;
+    let reused_before = mortiflix_frame::pool::stats().reused;
 
-    let src = filmcraft_codecs::open_bytes("pool_h264.mp4", bytes(&file)).expect("open");
+    let src = mortiflix_codecs::open_bytes("pool_h264.mp4", bytes(&file)).expect("open");
     let rate = src.info().frame_rate();
     for i in 0..n {
         let f = src.video_frame(FrameRequest::full(rate.tick_of(i as i64))).expect("frame");
         assert_eq!(max_diff(&planes(&f), &reference(i)), 0, "frame {i} decoded into a recycled buffer");
     }
-    assert!(filmcraft_frame::pool::stats().reused > reused_before, "the decoder took the dirty pooled buffers");
+    assert!(mortiflix_frame::pool::stats().reused > reused_before, "the decoder took the dirty pooled buffers");
 }

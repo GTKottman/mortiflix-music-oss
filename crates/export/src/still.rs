@@ -1,6 +1,6 @@
 //! Single-frame formats and true per-channel depth, separate from sequence export settings.
 use crate::{ExportError, Format, Result};
-use filmcraft_render::Image;
+use mortiflix_render::Image;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StillFormat {
@@ -49,7 +49,7 @@ pub fn encode(image: &Image, format: StillFormat, depth: u8) -> Result<Vec<u8>> 
     let bad = || ExportError::Encode("invalid still image dimensions or pixel buffer".into());
     let w = u32::try_from(image.w).map_err(|_| bad())?;
     let h = u32::try_from(image.h).map_err(|_| bad())?;
-    filmcraft_project::validate_frame_size(w, h).map_err(|_| bad())?;
+    mortiflix_project::validate_frame_size(w, h).map_err(|_| bad())?;
     let samples = image.w.checked_mul(image.h).and_then(|n| n.checked_mul(4)).ok_or_else(bad)?;
     if image.px.len() != samples {
         return Err(bad());
@@ -86,7 +86,7 @@ pub fn encode(image: &Image, format: StillFormat, depth: u8) -> Result<Vec<u8>> 
         let [r, g, b, a] = *pixel;
         let a = if a.is_finite() { a.clamp(0.0, 1.0) } else { 0.0 };
         let encode_channel = |v: f32| {
-            let v = if a > 0.0 && v.is_finite() { filmcraft_color::linear_to_srgb(v / a).clamp(0.0, 1.0) } else { 0.0 };
+            let v = if a > 0.0 && v.is_finite() { mortiflix_color::linear_to_srgb(v / a).clamp(0.0, 1.0) } else { 0.0 };
             (v * 65535.0 + 0.5) as u16
         };
         for v in [encode_channel(r), encode_channel(g), encode_channel(b), (a * 65535.0 + 0.5) as u16] {

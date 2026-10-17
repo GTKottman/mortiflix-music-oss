@@ -7,16 +7,16 @@ use std::sync::{
 
 use egui::{Event, Id, Key, Modifiers, vec2};
 use egui_kittest::Harness;
-use filmcraft_engine::Session;
-use filmcraft_ui_egui::{
-    FilmcraftApp,
+use mortiflix_engine::Session;
+use mortiflix_ui_egui::{
+    StudioApp,
     control::ControlRequest,
     dock::{DockNode, PanelKind, SplitSize},
 };
 use serde_json::{Value, json};
 
 struct Driver {
-    h: Harness<'static, FilmcraftApp>,
+    h: Harness<'static, StudioApp>,
     tx: Sender<ControlRequest>,
 }
 
@@ -25,7 +25,7 @@ impl Driver {
         let mut session = Session::default();
         session.execute("file.openDemoProject", json!({})).unwrap();
         let (tx, rx) = channel();
-        let app = FilmcraftApp::new(session);
+        let app = StudioApp::new(session);
         let app = if isolated { app.with_control_input_only(rx) } else { app.with_control(rx) };
         let mut driver = Self { h: Harness::builder().with_size(vec2(1400.0, 900.0)).build_eframe(move |_| app), tx };
         driver.frames(4, true);
@@ -62,7 +62,7 @@ impl Driver {
     }
 }
 
-fn native_key(h: &mut Harness<'_, FilmcraftApp>, key: Key) {
+fn native_key(h: &mut Harness<'_, StudioApp>, key: Key) {
     for pressed in [true, false] {
         // The backend supplies native events before raw_input_hook. Harness::event would
         // instead append them after that hook and bypass the input boundary under test.
@@ -189,7 +189,7 @@ fn isolation_preserves_close_and_screenshot_delivery_without_claiming_os_focus()
     assert_eq!(raw.viewports[&egui::ViewportId::ROOT].events, vec![egui::ViewportEvent::Close]);
     assert!(matches!(raw.events.as_slice(), [Event::Screenshot { .. }, Event::ModifiersChanged(Modifiers::NONE)]));
     assert!(raw.hovered_files.is_empty() && raw.dropped_files.is_empty());
-    let state = filmcraft_ui_egui::control::inspect(d.h.state(), &ctx);
+    let state = mortiflix_ui_egui::control::inspect(d.h.state(), &ctx);
     assert_eq!(state["input"]["nativeWindowFocused"], false);
 }
 
@@ -215,7 +215,7 @@ fn focus_reports_real_widget_ownership_and_rejects_bad_targets_without_changing_
     ] {
         let (request, _) = ControlRequest::new("ui.focus", params);
         let ctx = d.h.ctx.clone();
-        let filmcraft_ui_egui::control::Outcome::Done(result) = filmcraft_ui_egui::control::handle(d.h.state_mut(), &ctx, &request) else {
+        let mortiflix_ui_egui::control::Outcome::Done(result) = mortiflix_ui_egui::control::handle(d.h.state_mut(), &ctx, &request) else {
             panic!("bad focus target must fail immediately");
         };
         assert_eq!(result["ok"], false, "{result}");

@@ -1,5 +1,5 @@
 [package]
-name = "filmcraft-ogg"
+name = "mortiflix-ogg"
 description = "Clean-room Ogg (RFC 3533) demuxer with Ogg Opus (RFC 7845) and Ogg Vorbis stream mapping"
 version.workspace = true
 edition.workspace = true
@@ -12,4 +12,4 @@ workspace = true
 [dependencies]
 
 [dev-dependencies]
-filmcraft-testkit = { workspace = true }
+mortiflix-testkit = { workspace = true }

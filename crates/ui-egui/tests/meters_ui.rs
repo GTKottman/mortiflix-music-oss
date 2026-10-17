@@ -6,10 +6,10 @@ use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex};
 
 use egui_kittest::Harness;
-use filmcraft_engine::Session;
-use filmcraft_ui_egui::control::ControlRequest;
-use filmcraft_ui_egui::dock::{DockNode, PanelKind, SplitSize};
-use filmcraft_ui_egui::{AudioOut, FilmcraftApp};
+use mortiflix_engine::Session;
+use mortiflix_ui_egui::control::ControlRequest;
+use mortiflix_ui_egui::dock::{DockNode, PanelKind, SplitSize};
+use mortiflix_ui_egui::{AudioOut, StudioApp};
 use serde_json::{Value, json};
 
 type Fill = Box<dyn FnMut(&mut [f32], usize) + Send>;
@@ -36,7 +36,7 @@ impl AudioOut for Out {
 }
 
 struct Driver {
-    harness: Harness<'static, FilmcraftApp>,
+    harness: Harness<'static, StudioApp>,
     tx: Sender<ControlRequest>,
     fill: Arc<Mutex<Option<Fill>>>,
 }
@@ -48,7 +48,7 @@ impl Driver {
         session.prefs.audio.scrub_audio = true;
         let (tx, rx) = channel();
         let fill = Arc::new(Mutex::new(None));
-        let mut app = FilmcraftApp::new(session).with_control(rx);
+        let mut app = StudioApp::new(session).with_control(rx);
         app.audio = Some(Box::new(Out { fill: fill.clone() }));
         let harness = Harness::builder().with_size(egui::vec2(1600.0, 980.0)).with_max_steps(10_000).build_eframe(move |_cc| app);
         let mut d = Driver { harness, tx, fill };

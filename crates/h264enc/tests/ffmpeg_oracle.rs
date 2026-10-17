@@ -6,7 +6,7 @@
 mod common;
 
 use common::{Yuv, annexb_nals, ffmpeg, ffmpeg_decode, ffmpeg_source, ffprobe, out_dir, psnr, synth};
-use filmcraft_h264enc::*;
+use mortiflix_h264enc::*;
 use std::process::Command;
 
 fn cfg(w: usize, h: usize, profile: Profile, preset: Preset, bframes: u8, rate: RateControl, slices: usize) -> EncoderConfig {

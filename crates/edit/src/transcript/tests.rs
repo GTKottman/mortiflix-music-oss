@@ -3,8 +3,8 @@
 //! a 2 s pause after "show.", fillers "Um," and "uh", phrase "you know.").
 
 use super::*;
-use filmcraft_project::{Label, Project, SequenceSettings, TrackItem};
-use filmcraft_time::FrameRate;
+use mortiflix_project::{Label, Project, SequenceSettings, TrackItem};
+use mortiflix_time::FrameRate;
 
 const R: FrameRate = FrameRate { num: 25, den: 1 };
 const MEDIA: ItemId = ItemId(1);

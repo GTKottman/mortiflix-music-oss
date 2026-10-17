@@ -1,4 +1,4 @@
-//! AVI media source (`filmcraft-avi` demux, GOP-aware video via [`crate::gop`]).
+//! AVI media source (`mortiflix-avi` demux, GOP-aware video via [`crate::gop`]).
 //!
 //! Video: Motion JPEG (frames without their own Huffman tables get the standard ones), H.264 and
 //! HEVC (Annex B byte streams, our decoders), and uncompressed RGB / YUV ([`RawFormat`]). A frame
@@ -7,16 +7,16 @@
 //!
 //! Audio: PCM (integer and float) straight from the chunks; MPEG audio (MP3, MP2) and AC-3 frames,
 //! which AVI chunks need not follow, are found again across chunk boundaries
-//! ([`filmcraft_mpegts::frame_bytes`]) and decoded as packets.
+//! ([`mortiflix_mpegts::frame_bytes`]) and decoded as packets.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use filmcraft_avi::{AviFile, BitmapInfo, StreamKind, WaveFormat};
-use filmcraft_frame::{AudioBuffer, VideoFrame};
-use filmcraft_isobmff::{PcmConfig, SampleEntry};
-use filmcraft_media::{AudioStreamInfo, FrameRequest, MediaError, MediaInfo, MediaKind, MediaSource, SharedSource, VideoStreamInfo};
-use filmcraft_time::{FrameRate, Tick};
+use mortiflix_avi::{AviFile, BitmapInfo, StreamKind, WaveFormat};
+use mortiflix_frame::{AudioBuffer, VideoFrame};
+use mortiflix_isobmff::{PcmConfig, SampleEntry};
+use mortiflix_media::{AudioStreamInfo, FrameRequest, MediaError, MediaInfo, MediaKind, MediaSource, SharedSource, VideoStreamInfo};
+use mortiflix_time::{FrameRate, Tick};
 
 use crate::audio::{PacketDecoder, decode_pcm};
 use crate::gop::{GopCache, VideoSamples};
@@ -24,7 +24,7 @@ use crate::video::{RawFormat, RawVideoDecoder, VideoDecoder};
 use crate::{CodecError, make_video_decoder};
 
 pub fn sniff(b: &[u8]) -> bool {
-    filmcraft_avi::sniff(b)
+    mortiflix_avi::sniff(b)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -77,7 +77,7 @@ enum ACodec {
     Pcm(PcmConfig),
     /// MPEG audio (layer 1-3) or AC-3 frames, found again across chunks.
     Framed {
-        ts: filmcraft_mpegts::Codec,
+        ts: mortiflix_mpegts::Codec,
         layer: u8,
     },
     Unsupported(String),
@@ -92,9 +92,9 @@ fn audio_codec(w: &WaveFormat) -> (ACodec, String) {
     match w.format_tag {
         1 if matches!(w.bits_per_sample, 8 | 16 | 24 | 32) => pcm(false),
         3 if matches!(w.bits_per_sample, 32 | 64) => pcm(true),
-        0x55 => (ACodec::Framed { ts: filmcraft_mpegts::Codec::MpegAudio, layer: 3 }, "MP3".into()),
-        0x50 => (ACodec::Framed { ts: filmcraft_mpegts::Codec::MpegAudio, layer: 2 }, "MPEG Audio".into()),
-        0x2000 => (ACodec::Framed { ts: filmcraft_mpegts::Codec::Ac3, layer: 0 }, "AC-3".into()),
+        0x55 => (ACodec::Framed { ts: mortiflix_mpegts::Codec::MpegAudio, layer: 3 }, "MP3".into()),
+        0x50 => (ACodec::Framed { ts: mortiflix_mpegts::Codec::MpegAudio, layer: 2 }, "MPEG Audio".into()),
+        0x2000 => (ACodec::Framed { ts: mortiflix_mpegts::Codec::Ac3, layer: 0 }, "AC-3".into()),
         tag => {
             let name = format!("audio format 0x{tag:04X}");
             (ACodec::Unsupported(name.clone()), name)
@@ -145,7 +145,7 @@ pub struct AviSource {
 
 /// Whether an Annex B access unit holds an H.264 IDR or HEVC IRAP picture.
 fn random_access(data: &[u8], hevc: bool) -> bool {
-    filmcraft_bitstream::annexb_nals(data).iter().any(|n| match n.first() {
+    mortiflix_bitstream::annexb_nals(data).iter().any(|n| match n.first() {
         Some(h) if hevc => (16..=23).contains(&((h >> 1) & 0x3F)),
         Some(h) => h & 0x1F == 5,
         None => false,
@@ -158,8 +158,8 @@ fn split_frames(
     file: &AviFile,
     bytes: &crate::Src,
     s: usize,
-    ts: &filmcraft_mpegts::Codec,
-) -> (Vec<Piece>, Vec<usize>, Vec<u32>, Option<filmcraft_mpegts::FrameInfo>) {
+    ts: &mortiflix_mpegts::Codec,
+) -> (Vec<Piece>, Vec<usize>, Vec<u32>, Option<mortiflix_mpegts::FrameInfo>) {
     let Some(st) = file.streams.get(s) else { return Default::default() };
     // chunk start positions in the concatenated stream
     let mut at = Vec::with_capacity(st.chunks.len());
@@ -184,12 +184,12 @@ fn split_frames(
             next += 1;
         }
         let Some(here) = win.get(pos - base..) else { break };
-        match filmcraft_mpegts::frame_bytes(ts, here) {
+        match mortiflix_mpegts::frame_bytes(ts, here) {
             Some(n) if pos + n <= total => {
                 if info.is_none() {
-                    info = filmcraft_mpegts::frame_info(ts, here);
+                    info = mortiflix_mpegts::frame_info(ts, here);
                 }
-                let k = filmcraft_mpegts::frame_info(ts, here).map_or(0, |f| f.samples);
+                let k = mortiflix_mpegts::frame_info(ts, here).map_or(0, |f| f.samples);
                 first.push(pieces.len());
                 let mut p = pos;
                 while p < pos + n {
@@ -219,13 +219,13 @@ fn split_frames(
 
 impl AviSource {
     pub fn open(name: &str, bytes: Arc<[u8]>) -> crate::Result<Self> {
-        Self::open_reader(name, Arc::new(filmcraft_media::reader::MemReader(bytes)))
+        Self::open_reader(name, Arc::new(mortiflix_media::reader::MemReader(bytes)))
     }
 
     /// Open from a random-access reader: the index now, frames and audio on demand.
-    pub fn open_reader(name: &str, reader: filmcraft_media::SharedReader) -> crate::Result<Self> {
+    pub fn open_reader(name: &str, reader: mortiflix_media::SharedReader) -> crate::Result<Self> {
         let bytes = crate::Src(reader);
-        let file = filmcraft_avi::open(&bytes).map_err(|e| CodecError::Container(e.to_string()))?;
+        let file = mortiflix_avi::open(&bytes).map_err(|e| CodecError::Container(e.to_string()))?;
         let vstream = file.streams.iter().position(|s| s.kind == StreamKind::Video && s.video.is_some() && !s.chunks.is_empty());
         let astreams: Vec<usize> = file
             .streams
@@ -233,7 +233,7 @@ impl AviSource {
             .enumerate()
             .filter(|(_, s)| s.kind == StreamKind::Audio && s.audio.is_some() && !s.chunks.is_empty())
             .map(|(i, _)| i)
-            .take(filmcraft_media::MAX_AUDIO_STREAMS)
+            .take(mortiflix_media::MAX_AUDIO_STREAMS)
             .collect();
         if vstream.is_none() && astreams.is_empty() {
             return Err(CodecError::Unsupported("no playable streams".into()));
@@ -276,7 +276,7 @@ impl AviSource {
                             file.streams
                                 .get(si)
                                 .and_then(|s| s.chunks.get(f.chunk))
-                                .and_then(|c| filmcraft_media::reader::read_range(&*bytes.0, c.offset, (c.size as usize).min(8 << 10)).ok())
+                                .and_then(|c| mortiflix_media::reader::read_range(&*bytes.0, c.offset, (c.size as usize).min(8 << 10)).ok())
                                 .unwrap_or_default()
                         })
                         .collect()
@@ -434,7 +434,7 @@ impl AviSource {
             ACodec::Framed { ts, layer } => {
                 if st.decoder.is_none() {
                     st.decoder = Some(match ts {
-                        filmcraft_mpegts::Codec::Ac3 => PacketDecoder::ac3()?,
+                        mortiflix_mpegts::Codec::Ac3 => PacketDecoder::ac3()?,
                         _ => PacketDecoder::mpeg_audio(*layer, ainfo.sample_rate)?,
                     });
                 }
@@ -514,7 +514,7 @@ impl MediaSource for AviSource {
         let s = self.vstream.ok_or(MediaError::NoStream("video"))?;
         let t = req.time.max(Tick::ZERO);
         let slot = |t: Tick| self.rate.frame_at(t);
-        let late = filmcraft_media::cancel::catch_up().map(|m| slot(t - m));
+        let late = mortiflix_media::cancel::catch_up().map(|m| slot(t - m));
         Ok(self.video.frame_late(&AviVideo { src: self, stream: s }, slot(t), late)?)
     }
 
@@ -576,8 +576,8 @@ pub fn opener(name: &str, bytes: Arc<[u8]>) -> Option<Result<SharedSource, Media
     Some(AviSource::open(name, bytes).map(|s| Arc::new(s) as SharedSource).map_err(Into::into))
 }
 
-/// [`filmcraft_media::ReaderOpener`] for AVI.
-pub fn reader_opener(name: &str, head: &[u8], reader: &filmcraft_media::SharedReader) -> Option<Result<SharedSource, MediaError>> {
+/// [`mortiflix_media::ReaderOpener`] for AVI.
+pub fn reader_opener(name: &str, head: &[u8], reader: &mortiflix_media::SharedReader) -> Option<Result<SharedSource, MediaError>> {
     if !sniff(head) {
         return None;
     }

@@ -1,14 +1,14 @@
-# filmcraft-h264enc
+# mortiflix-h264enc
 
-A clean-room, pure-Rust H.264/AVC encoder for FilmCraft's export path, written from the public
+A clean-room, pure-Rust H.264/AVC encoder for Mortiflix Studio's export path, written from the public
 ITU-T H.264 specification (04/2013 edition) and general encoder literature. Layer L0: it depends only on
-`filmcraft-bitstream`, `thiserror` and (optionally, feature `threads`, on by default) `rayon`. No `unsafe`,
+`mortiflix-bitstream`, `thiserror` and (optionally, feature `threads`, on by default) `rayon`. No `unsafe`,
 builds for `wasm32-unknown-unknown` with or without `threads`.
 
 ## Usage
 
 ```rust
-use filmcraft_h264enc::{Encoder, EncoderConfig, PacketFormat, Preset, Profile, RateControl, YuvFrame};
+use mortiflix_h264enc::{Encoder, EncoderConfig, PacketFormat, Preset, Profile, RateControl, YuvFrame};
 
 let mut cfg = EncoderConfig::new(1920, 1080, 30000, 1001);
 cfg.profile = Profile::High;
@@ -54,7 +54,7 @@ for p in enc.flush() { /* ... */ }
 
 ## Verification
 
-`cargo test --release -p filmcraft-h264enc` (ffmpeg/ffprobe used only as external oracles; tests skip when
+`cargo test --release -p mortiflix-h264enc` (ffmpeg/ffprobe used only as external oracles; tests skip when
 absent). Every stream is decoded with `ffmpeg -v warning -err_detect +crccheck+bitstream+buffer+explode -f rawvideo`
 and must print nothing (not even a `corrupt decoded frame` warning), produce exactly the number of frames encoded,
 and be **bit-identical to the encoder's reconstruction** — this covers Baseline/Main/High, all presets, 0–3
@@ -75,7 +75,7 @@ Results on the synthetic content (moving gradient, grain noise, text-like edges,
 | 640x360 1-pass VBR 1000 kbit/s | 981 kbit/s (−1.9%) |
 | 640x360 2-pass VBR 800 kbit/s | 840 kbit/s (+5.0%) |
 
-Development tool: `cargo run --release -p filmcraft-h264enc --example h264enc_synth -- W H FRAMES
+Development tool: `cargo run --release -p mortiflix-h264enc --example h264enc_synth -- W H FRAMES
 [profile] [preset] [bframes] [qpN|crfN|cbrN|vbrN] [slices] [synth|testsrc2|mandelbrot]` encodes, decodes with
 ffmpeg and reports speed, bitrate, PSNR and any encoder/decoder mismatch (`MAP=1` prints a per-MB mismatch map,
 `PERF=k` cycles k source pictures for speed runs).

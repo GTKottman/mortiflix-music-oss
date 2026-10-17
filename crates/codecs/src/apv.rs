@@ -6,10 +6,10 @@
 
 use std::sync::Arc;
 
-use filmcraft_color::{ColorInfo, Matrix, Range, Transfer};
-use filmcraft_frame::{AudioBuffer, VideoFrame};
-use filmcraft_media::{FrameRequest, MediaError, MediaInfo, MediaKind, MediaSource, SharedSource, VideoStreamInfo};
-use filmcraft_time::{FrameRate, Tick};
+use mortiflix_color::{ColorInfo, Matrix, Range, Transfer};
+use mortiflix_frame::{AudioBuffer, VideoFrame};
+use mortiflix_media::{FrameRequest, MediaError, MediaInfo, MediaKind, MediaSource, SharedSource, VideoStreamInfo};
+use mortiflix_time::{FrameRate, Tick};
 
 use crate::CodecError;
 use crate::gop::{GopCache, VideoSamples};
@@ -29,22 +29,22 @@ pub struct ApvSource {
     video: GopCache,
 }
 
-pub(crate) fn apv_pixfmt_label(chroma: filmcraft_apv::ChromaFormat, bit_depth: u8) -> String {
+pub(crate) fn apv_pixfmt_label(chroma: mortiflix_apv::ChromaFormat, bit_depth: u8) -> String {
     let sub = match chroma {
-        filmcraft_apv::ChromaFormat::Monochrome => "Monochrome",
-        filmcraft_apv::ChromaFormat::Yuv422 => "YUV 4:2:2",
-        filmcraft_apv::ChromaFormat::Yuv444 => "YUV 4:4:4",
-        filmcraft_apv::ChromaFormat::Yuv4444 => "YUVA 4:4:4:4",
+        mortiflix_apv::ChromaFormat::Monochrome => "Monochrome",
+        mortiflix_apv::ChromaFormat::Yuv422 => "YUV 4:2:2",
+        mortiflix_apv::ChromaFormat::Yuv444 => "YUV 4:4:4",
+        mortiflix_apv::ChromaFormat::Yuv4444 => "YUVA 4:4:4:4",
     };
     format!("{sub} {bit_depth}-bit")
 }
 
 impl ApvSource {
     pub fn open(name: &str, bytes: Arc<[u8]>) -> crate::Result<Self> {
-        Self::open_reader(name, Arc::new(filmcraft_media::reader::MemReader(bytes)))
+        Self::open_reader(name, Arc::new(mortiflix_media::reader::MemReader(bytes)))
     }
 
-    pub fn open_reader(name: &str, reader: filmcraft_media::SharedReader) -> crate::Result<Self> {
+    pub fn open_reader(name: &str, reader: mortiflix_media::SharedReader) -> crate::Result<Self> {
         let len = reader.len();
         let mut samples = Vec::new();
         let mut pos = 0u64;
@@ -70,9 +70,9 @@ impl ApvSource {
         let Some(&(off0, sz0)) = samples.first() else {
             return Err(CodecError::Container("APV: no valid access units".into()));
         };
-        let first = filmcraft_media::reader::read_range(&*reader, off0, sz0 as usize).map_err(|e| CodecError::Container(e.to_string()))?;
-        let fh = filmcraft_apv::probe(&first).map_err(|e| CodecError::Decode(e.to_string()))?;
-        let mut color = ColorInfo { matrix: filmcraft_frame::default_matrix(fh.width, fh.height), ..ColorInfo::REC709 };
+        let first = mortiflix_media::reader::read_range(&*reader, off0, sz0 as usize).map_err(|e| CodecError::Container(e.to_string()))?;
+        let fh = mortiflix_apv::probe(&first).map_err(|e| CodecError::Decode(e.to_string()))?;
+        let mut color = ColorInfo { matrix: mortiflix_frame::default_matrix(fh.width, fh.height), ..ColorInfo::REC709 };
         let mut explicit_color = None;
         if fh.color_description_present {
             if let Some(m) = Matrix::from_code(fh.color.matrix) {
@@ -94,7 +94,7 @@ impl ApvSource {
         let total_bits: u64 = samples.iter().map(|s| s.1 as u64 * 8).sum();
         let secs = duration.seconds();
         let bitrate = (secs > 0.0).then(|| (total_bits as f64 / secs) as u64);
-        let codec = match filmcraft_apv::Profile::from_idc(fh.profile_idc) {
+        let codec = match mortiflix_apv::Profile::from_idc(fh.profile_idc) {
             Some(p) => p.name().into(),
             None => "APV".into(),
         };
@@ -110,7 +110,7 @@ impl ApvSource {
                 codec,
                 pixel_format: apv_pixfmt_label(fh.chroma, fh.bit_depth),
                 color,
-                has_alpha: fh.chroma == filmcraft_apv::ChromaFormat::Yuv4444,
+                has_alpha: fh.chroma == mortiflix_apv::ChromaFormat::Yuv4444,
                 bitrate,
                 hdr: None,
             }),
@@ -140,7 +140,7 @@ impl VideoSamples for ApvVideo<'_> {
     }
     fn read(&self, i: usize) -> crate::Result<Vec<u8>> {
         let (off, sz) = self.0.samples.get(i).copied().ok_or_else(|| CodecError::Container("sample index out of range".into()))?;
-        filmcraft_media::reader::read_range(&*self.0.bytes.0, off, sz as usize).map_err(|e| CodecError::Container(e.to_string()))
+        mortiflix_media::reader::read_range(&*self.0.bytes.0, off, sz as usize).map_err(|e| CodecError::Container(e.to_string()))
     }
     fn make_decoder(&self) -> crate::Result<Box<dyn VideoDecoder>> {
         Ok(Box::new(ApvDecoder))
@@ -169,7 +169,7 @@ pub fn opener(name: &str, bytes: Arc<[u8]>) -> Option<Result<SharedSource, Media
     Some(ApvSource::open(name, bytes).map(|s| Arc::new(s) as SharedSource).map_err(Into::into))
 }
 
-pub fn reader_opener(name: &str, head: &[u8], reader: &filmcraft_media::SharedReader) -> Option<Result<SharedSource, MediaError>> {
+pub fn reader_opener(name: &str, head: &[u8], reader: &mortiflix_media::SharedReader) -> Option<Result<SharedSource, MediaError>> {
     if !sniff(head) {
         return None;
     }

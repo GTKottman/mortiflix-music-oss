@@ -8,7 +8,7 @@
 //! | `file.closeAllProjects` / `file.closeAllOtherProjects` | File ▸ Close All Projects / Close All Other Projects |
 //! | `file.saveAsTemplate` | File ▸ Save as Template… (`file.templates`, `file.newProjectFromTemplate`) |
 //! | `file.importFromMediaBrowser` | File ▸ Import from Media Browser (⌥⌘I) |
-//! | `file.exportSelectionProject` | File ▸ Export ▸ Selection as FilmCraft Project… |
+//! | `file.exportSelectionProject` | File ▸ Export ▸ Selection as Mortiflix Studio Project… |
 //! | `file.exportAle` | File ▸ Export ▸ Avid Log Exchange… |
 //! | `file.mediaPropertiesFile` / `file.mediaProperties` | File ▸ Get Media File Properties for ▸ File… / Selection… (⇧⌘H) |
 //! | `file.projectSettings.general` / `.scratchDisks` | File ▸ Project Settings ▸ General… / Scratch Disks… |
@@ -25,8 +25,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use filmcraft_project::{BinEntry, FindOp, FindQuery, FindRow, ItemId, ItemKind, MarkerKind, MediaRef, Project, SearchBin, TrackKind};
-use filmcraft_time::{Tick, TimeDisplay, TimeRange};
+use mortiflix_project::{BinEntry, FindOp, FindQuery, FindRow, ItemId, ItemKind, MarkerKind, MediaRef, Project, SearchBin, TrackKind};
+use mortiflix_time::{Tick, TimeDisplay, TimeRange};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -124,7 +124,7 @@ pub(crate) fn commands() -> Vec<CommandSpec> {
         }),
         spec(
             "file.exportSelectionProject",
-            "Selection as FilmCraft Project…",
+            "Selection as Mortiflix Studio Project…",
             &["File", "Export"],
             None,
             r#"{"path":str,"items":[id]?}"#,
@@ -336,7 +336,7 @@ fn only_one_project(_: &Session) -> std::result::Result<(), String> {
     Err("only one project is open".into())
 }
 
-const NO_CAPTIONS: &str = "the clip's media has no embedded captions FilmCraft can read (embedded CEA-608/708 caption streams are not supported yet)";
+const NO_CAPTIONS: &str = "the clip's media has no embedded captions Mortiflix Studio can read (embedded CEA-608/708 caption streams are not supported yet)";
 
 fn no_embedded_captions(_: &Session) -> std::result::Result<(), String> {
     Err(NO_CAPTIONS.into())
@@ -372,11 +372,11 @@ fn targets(s: &Session, p: &Value) -> Vec<ItemId> {
 }
 
 /// The media clip behind an item (subclips resolve to their parent).
-fn media_of(p: &Project, id: ItemId) -> Option<(ItemId, &filmcraft_project::MediaClip)> {
+fn media_of(p: &Project, id: ItemId) -> Option<(ItemId, &mortiflix_project::MediaClip)> {
     p.resolve_media(id).map(|(root, media, _)| (root, media))
 }
 
-fn file_path(m: &filmcraft_project::MediaClip) -> Option<&str> {
+fn file_path(m: &mortiflix_project::MediaClip) -> Option<&str> {
     match &m.media {
         MediaRef::File { path } => Some(path),
         MediaRef::Generator(_) => None,
@@ -453,7 +453,7 @@ fn new_search_bin(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let name = str_p(p, "name").map(str::to_string).unwrap_or_else(|| q.rows.iter().find(|r| !r.text.is_empty()).map(|r| r.text.clone()).unwrap_or_default());
     let b = s.edit("New Search Bin", |pr, _| {
-        let id = filmcraft_project::BinId(pr.alloc_id());
+        let id = mortiflix_project::BinId(pr.alloc_id());
         let b = SearchBin { id, name, query: q };
         pr.search_bins.push(b.clone());
         Ok(b)
@@ -512,8 +512,8 @@ pub struct FindState {
 /// One timeline Find hit.
 #[derive(Clone, Debug, PartialEq)]
 enum Hit {
-    Clip(filmcraft_project::ClipId, Tick),
-    Marker(filmcraft_project::MarkerId, Tick),
+    Clip(mortiflix_project::ClipId, Tick),
+    Marker(mortiflix_project::MarkerId, Tick),
 }
 
 fn timeline_hits(s: &Session, f: &FindState) -> Vec<Hit> {
@@ -640,7 +640,7 @@ fn save_as_template(s: &mut Session, p: &Value) -> Result<Value> {
     let mut proj = (*s.project).clone();
     proj.name = name.clone();
     proj.root.name = name.clone();
-    s.services.write_file(&path, &filmcraft_format::encode(&proj, false)).map_err(|e| EngineError::Other(format!("{path}: {e}")))?;
+    s.services.write_file(&path, &mortiflix_format::encode(&proj, false)).map_err(|e| EngineError::Other(format!("{path}: {e}")))?;
     Ok(json!({"path": path, "name": name}))
 }
 
@@ -670,7 +670,7 @@ fn new_from_template(s: &mut Session, p: &Value) -> Result<Value> {
         templates_dir(s).map(|d| d.join(format!("{}.fcproj", sanitize(t))).to_string_lossy().to_string()).unwrap_or_else(|| t.to_string())
     };
     let bytes = s.services.read_file(&path).map_err(|e| EngineError::Other(format!("{path}: {e}")))?;
-    let mut proj = filmcraft_format::decode(&bytes).map_err(|e| EngineError::Other(e.to_string()))?.project;
+    let mut proj = mortiflix_format::decode(&bytes).map_err(|e| EngineError::Other(e.to_string()))?.project;
     if s.is_dirty() && !bool_p(p, "force").unwrap_or(false) {
         return Err(EngineError::Other("the project has unsaved changes: save it first, or pass {\"force\": true} to discard them".into()));
     }
@@ -770,7 +770,7 @@ pub fn closure(p: &Project, roots: &[ItemId]) -> BTreeSet<ItemId> {
 
 /// A copy of `p` with only `keep` (bins that end up empty are dropped).
 pub fn project_subset(p: &Project, keep: &BTreeSet<ItemId>) -> Project {
-    fn prune(b: &mut filmcraft_project::Bin, keep: &BTreeSet<ItemId>) {
+    fn prune(b: &mut mortiflix_project::Bin, keep: &BTreeSet<ItemId>) {
         b.children.retain_mut(|c| match c {
             BinEntry::Item(i) => keep.contains(i),
             BinEntry::Bin(x) => {
@@ -805,7 +805,7 @@ fn export_selection(s: &mut Session, p: &Value) -> Result<Value> {
     let name = std::path::Path::new(&path).file_stem().map(|x| x.to_string_lossy().to_string()).unwrap_or_else(|| sub.name.clone());
     sub.name = name.clone();
     sub.root.name = name;
-    s.services.write_file(&path, &filmcraft_format::encode(&sub, false)).map_err(|e| EngineError::Other(format!("{path}: {e}")))?;
+    s.services.write_file(&path, &mortiflix_format::encode(&sub, false)).map_err(|e| EngineError::Other(format!("{path}: {e}")))?;
     Ok(json!({"path": path, "items": keep.iter().map(|i| i.0).collect::<Vec<_>>()}))
 }
 
@@ -819,11 +819,11 @@ fn export_ale(s: &mut Session, p: &Value) -> Result<Value> {
         // the whole project, in Project panel order
         s.project.root.all_items(&mut items);
     }
-    let doc = filmcraft_interchange::ale::export_items(&s.project, &items);
+    let doc = mortiflix_interchange::ale::export_items(&s.project, &items);
     if doc.rows.is_empty() {
         return Err(EngineError::Other("none of the items is a clip that can be logged".into()));
     }
-    s.services.write_file(&path, filmcraft_interchange::ale::write(&doc).as_bytes()).map_err(|e| EngineError::Other(format!("{path}: {e}")))?;
+    s.services.write_file(&path, mortiflix_interchange::ale::write(&doc).as_bytes()).map_err(|e| EngineError::Other(format!("{path}: {e}")))?;
     Ok(json!({"path": path, "clips": doc.rows.len()}))
 }
 
@@ -832,7 +832,7 @@ fn export_ale(s: &mut Session, p: &Value) -> Result<Value> {
 // ---------------------------------------------------------------------------------------------
 
 /// File properties of a probed media file (Get Media File Properties).
-pub fn info_json(name: &str, path: Option<&str>, info: &filmcraft_media::MediaInfo) -> Value {
+pub fn info_json(name: &str, path: Option<&str>, info: &mortiflix_media::MediaInfo) -> Value {
     let rate = info.frame_rate();
     let secs = info.duration.seconds();
     let mut v = json!({
@@ -841,8 +841,8 @@ pub fn info_json(name: &str, path: Option<&str>, info: &filmcraft_media::MediaIn
         "type": format!("{:?}", info.kind),
         "container": info.container,
         "fileSize": info.file_size,
-        "duration": {"ticks": info.duration.0, "seconds": secs, "timecode": filmcraft_time::format_timecode_frames(rate.frame_at(info.duration), rate, false)},
-        "startTimecode": info.start_timecode.map(|f| filmcraft_time::format_timecode_frames(f, rate, false)),
+        "duration": {"ticks": info.duration.0, "seconds": secs, "timecode": mortiflix_time::format_timecode_frames(rate.frame_at(info.duration), rate, false)},
+        "startTimecode": info.start_timecode.map(|f| mortiflix_time::format_timecode_frames(f, rate, false)),
         "dataRateKbps": info.file_size.filter(|_| secs > 0.0).map(|b| (b as f64 * 8.0 / secs / 1000.0).round()),
     });
     if let Some(vs) = &info.video {
@@ -886,10 +886,10 @@ fn pair_p(p: &Value, k: &str) -> Option<(f64, f64)> {
     Some((a.first()?.as_f64()?.clamp(0.0, 50.0), a.get(1)?.as_f64()?.clamp(0.0, 50.0)))
 }
 
-pub const RENDERER_GPU: &str = "FilmCraft GPU Acceleration (wgpu)";
-pub const RENDERER_SOFTWARE: &str = "FilmCraft Software Only (CPU)";
+pub const RENDERER_GPU: &str = "Mortiflix Studio GPU Acceleration (wgpu)";
+pub const RENDERER_SOFTWARE: &str = "Mortiflix Studio Software Only (CPU)";
 
-fn general_json(st: &filmcraft_project::ProjectSettings) -> Value {
+fn general_json(st: &mortiflix_project::ProjectSettings) -> Value {
     json!({
         "renderer": st.renderer,
         "renderers": [RENDERER_GPU, RENDERER_SOFTWARE],
@@ -957,12 +957,12 @@ pub fn scratch_paths(s: &Session) -> Value {
         "captured": {"setting": sc.captured, "path": same(&sc.captured)},
         "videoPreviews": {"setting": sc.video_previews, "path": previews_dir(s).map(|d| d.to_string_lossy().to_string()).unwrap_or_else(|| same(&sc.video_previews))},
         "audioPreviews": {"setting": sc.audio_previews, "path": same(&sc.audio_previews)},
-        "autoSave": {"setting": sc.auto_save, "path": sc.auto_save.clone().or_else(|| s.path.as_deref().map(|p| filmcraft_format::autosave::auto_save_dir(std::path::Path::new(p)).to_string_lossy().to_string())).unwrap_or_else(|| same(&None))},
+        "autoSave": {"setting": sc.auto_save, "path": sc.auto_save.clone().or_else(|| s.path.as_deref().map(|p| mortiflix_format::autosave::auto_save_dir(std::path::Path::new(p)).to_string_lossy().to_string())).unwrap_or_else(|| same(&None))},
     })
 }
 
 /// Render previews folder of the open project: Scratch Disks ▸ Video Previews / `<project
-/// name>`, else `FilmCraft Previews/<project name>` next to the project (None while unsaved).
+/// name>`, else `Mortiflix Studio Previews/<project name>` next to the project (None while unsaved).
 pub fn previews_dir(s: &Session) -> Option<std::path::PathBuf> {
     s.path.as_deref().map(|p| previews_dir_for(&s.project, p))
 }
@@ -1055,7 +1055,7 @@ fn source_settings(s: &mut Session, p: &Value) -> Result<Value> {
         "codec": codec,
         "container": m.info.container,
         "settings": [],
-        "message": format!("{} has no source settings in FilmCraft. Source settings apply to camera raw formats (R3D, ARRIRAW, CinemaDNG, ProRes RAW…), which FilmCraft does not decode.", if codec.is_empty() { "This clip".to_string() } else { codec.to_uppercase() }),
+        "message": format!("{} has no source settings in Mortiflix Studio. Source settings apply to camera raw formats (R3D, ARRIRAW, CinemaDNG, ProRes RAW…), which Mortiflix Studio does not decode.", if codec.is_empty() { "This clip".to_string() } else { codec.to_uppercase() }),
     }))
 }
 
@@ -1065,7 +1065,7 @@ fn xml_escape(s: &str) -> String {
 
 /// An XMP packet (ISO 16684-1) with the item's name and log metadata (Dublin Core and the XMP
 /// Dynamic Media schema).
-pub fn xmp_packet(it: &filmcraft_project::ProjectItem) -> String {
+pub fn xmp_packet(it: &mortiflix_project::ProjectItem) -> String {
     let meta = |k: &str| it.metadata.iter().find(|(x, _)| x.eq_ignore_ascii_case(k)).map(|(_, v)| xml_escape(v));
     let mut body = format!("   <dc:title><rdf:Alt><rdf:li xml:lang=\"x-default\">{}</rdf:li></rdf:Alt></dc:title>\n", xml_escape(&it.name));
     if let Some(d) = meta("Description") {
@@ -1077,7 +1077,7 @@ pub fn xmp_packet(it: &filmcraft_project::ProjectItem) -> String {
         }
     }
     format!(
-        "<?xpacket begin=\"\u{feff}\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">\n <rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\n  <rdf:Description rdf:about=\"\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\" xmlns:xmpDM=\"http://ns.adobe.com/xmp/1.0/DynamicMedia/\" xmp:CreatorTool=\"FilmCraft\">\n{body}  </rdf:Description>\n </rdf:RDF>\n</x:xmpmeta>\n<?xpacket end=\"w\"?>\n"
+        "<?xpacket begin=\"\u{feff}\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">\n <rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\n  <rdf:Description rdf:about=\"\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\" xmlns:xmpDM=\"http://ns.adobe.com/xmp/1.0/DynamicMedia/\" xmp:CreatorTool=\"Mortiflix Studio\">\n{body}  </rdf:Description>\n </rdf:RDF>\n</x:xmpmeta>\n<?xpacket end=\"w\"?>\n"
     )
 }
 
@@ -1096,7 +1096,7 @@ fn update_metadata(s: &mut Session, p: &Value) -> Result<Value> {
         let Some(path) = media_of(&s.project, id).and_then(|(_, m)| file_path(m)) else { continue };
         let side = sidecar_path(path);
         if let Ok(old) = s.services.read_file(&side)
-            && !String::from_utf8_lossy(&old).contains("xmp:CreatorTool=\"FilmCraft\"")
+            && !String::from_utf8_lossy(&old).contains("xmp:CreatorTool=\"Mortiflix Studio\"")
         {
             skipped.push(json!({"item": id.0, "path": side, "reason": "an XMP file written by another application exists"}));
             continue;
@@ -1166,7 +1166,7 @@ fn automate_to_sequence(s: &mut Session, p: &Value) -> Result<Value> {
     let mut plan: Vec<(ItemId, TimeRange)> = Vec::new();
     for id in &items {
         let Some(mut r) = crate::clip_ops::item_range(&s.project, *id, s.prefs.timeline.still_duration(s.sequence_rate())) else { continue };
-        let is_still = s.project.item(*id).and_then(|i| i.as_media()).is_some_and(|m| matches!(m.info.kind, filmcraft_media::MediaKind::Still));
+        let is_still = s.project.item(*id).and_then(|i| i.as_media()).is_some_and(|m| matches!(m.info.kind, mortiflix_media::MediaKind::Still));
         if is_still && let Some(d) = still {
             r = TimeRange::new(r.start, d);
         }
@@ -1212,7 +1212,7 @@ fn automate_to_sequence(s: &mut Session, p: &Value) -> Result<Value> {
             let mut links = std::collections::HashMap::new();
             for t in q.video_tracks.iter_mut().chain(q.audio_tracks.iter_mut()) {
                 if !t.locked && (t.sync_lock || dests.contains(&t.id)) {
-                    filmcraft_edit::insert_track_gap(t, first, len, ctx, &mut links);
+                    mortiflix_edit::insert_track_gap(t, first, len, ctx, &mut links);
                 }
             }
             Ok(())
@@ -1267,7 +1267,7 @@ fn automate_to_sequence(s: &mut Session, p: &Value) -> Result<Value> {
     }
     crate::clip_ops::collapse_history(s, n0, "Automate to Sequence");
     let clips: Vec<u64> = placed.iter().flat_map(|(_, ids)| ids.iter().map(|c| c.0)).collect();
-    s.state.selection = clips.iter().map(|c| filmcraft_project::ClipId(*c)).collect();
+    s.state.selection = clips.iter().map(|c| mortiflix_project::ClipId(*c)).collect();
     Ok(json!({"placed": placed.len(), "clips": clips, "transitions": transitions, "starts": starts.iter().map(|t| t.0).collect::<Vec<_>>()}))
 }
 
@@ -1280,9 +1280,9 @@ fn automate_to_sequence(s: &mut Session, p: &Value) -> Result<Value> {
 pub fn system_report() -> Value {
     let cpus = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
     let formats: Vec<Value> =
-        filmcraft_export::Format::ALL.iter().map(|f| json!({"format": f.label(), "available": filmcraft_export::available(*f)})).collect();
+        mortiflix_export::Format::ALL.iter().map(|f| json!({"format": f.label(), "available": mortiflix_export::available(*f)})).collect();
     json!({
-        "app": format!("FilmCraft {}", env!("CARGO_PKG_VERSION")),
+        "app": format!("Mortiflix Studio {}", env!("CARGO_PKG_VERSION")),
         "os": std::env::consts::OS,
         "family": std::env::consts::FAMILY,
         "arch": std::env::consts::ARCH,

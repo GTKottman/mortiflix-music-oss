@@ -6,17 +6,17 @@ use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex};
 
 use egui_kittest::Harness;
-use filmcraft_engine::Session;
-use filmcraft_ui_egui::FilmcraftApp;
-use filmcraft_ui_egui::control::ControlRequest;
-use filmcraft_ui_egui::state::Mode;
+use mortiflix_engine::Session;
+use mortiflix_ui_egui::StudioApp;
+use mortiflix_ui_egui::control::ControlRequest;
+use mortiflix_ui_egui::state::Mode;
 use serde_json::{Value, json};
 
 /// What the save panel was asked: filter label, extensions, suggested name.
 type Asked = Arc<Mutex<Vec<(String, Vec<String>, String)>>>;
 
 struct Driver {
-    harness: Harness<'static, FilmcraftApp>,
+    harness: Harness<'static, StudioApp>,
     tx: Sender<ControlRequest>,
 }
 
@@ -24,13 +24,13 @@ impl Driver {
     /// `save_to: None` is a cancelled save panel.
     fn new(session: Session, save_to: Option<std::path::PathBuf>, asked: Asked) -> Self {
         let (tx, rx) = channel();
-        let mut app = FilmcraftApp::new(session).with_control(rx);
+        let mut app = StudioApp::new(session).with_control(rx);
         app.hooks.pick_save_as = Some(Box::new(move |filter, exts, suggested| {
             asked.lock().unwrap().push((filter.to_string(), exts.iter().map(|e| e.to_string()).collect(), suggested.to_string()));
             save_to.as_ref().map(|d| d.join(suggested).to_string_lossy().into_owned())
         }));
         let mut builder = Harness::builder().with_size(egui::vec2(1600.0, 980.0)).with_max_steps(10_000);
-        if std::env::var_os("FILMCRAFT_UI_SNAPSHOT_DIR").is_some() {
+        if std::env::var_os("MFX_STUDIO_UI_SNAPSHOT_DIR").is_some() {
             builder = builder.wgpu();
         }
         let harness = builder.build_eframe(move |_cc| app);
@@ -165,7 +165,7 @@ fn marker_csv_menu_exports_sequence_review_notes() {
     d.frames(3);
     let elements = d.ok("ui.elements", json!({"prefix":"menu.markers.exportCsv"}));
     assert!(!elements.as_array().unwrap().is_empty(), "the menu command has an automation id");
-    if let Some(dir) = std::env::var_os("FILMCRAFT_UI_SNAPSHOT_DIR") {
+    if let Some(dir) = std::env::var_os("MFX_STUDIO_UI_SNAPSHOT_DIR") {
         let dir = std::path::PathBuf::from(dir);
         std::fs::create_dir_all(&dir).unwrap();
         d.harness.render().unwrap().save(dir.join("marker-csv-menu.png")).unwrap();

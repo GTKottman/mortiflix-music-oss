@@ -5,8 +5,8 @@
 //! whole edit. Locked caption tracks refuse edits. Sync-locked caption tracks follow insert and
 //! extract edits on the media tracks (see [`crate::insert`] / [`crate::extract`]).
 
-use filmcraft_project::{Caption, CaptionTrack, ClipId, Sequence, TrackId};
-use filmcraft_time::{Tick, TimeRange};
+use mortiflix_project::{Caption, CaptionTrack, ClipId, Sequence, TrackId};
+use mortiflix_time::{Tick, TimeRange};
 
 use crate::{Edge, EditCtx, EditError, Result};
 
@@ -295,10 +295,10 @@ pub fn extract_range(tr: &mut CaptionTrack, range: TimeRange) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use filmcraft_project::CaptionFormat;
+    use mortiflix_project::CaptionFormat;
 
     fn seq_with(captions: &[(i64, i64, &str)]) -> (Sequence, TrackId) {
-        let mut p = filmcraft_project::Project::new("t");
+        let mut p = mortiflix_project::Project::new("t");
         let sid = p.new_sequence("s", Default::default(), 1, 1, None);
         let mut seq = p.sequence(sid).unwrap().clone();
         let tid = TrackId(900);
@@ -319,7 +319,7 @@ mod tests {
     }
 
     fn ctx(next: &mut u64) -> EditCtx<'_> {
-        static NONE: fn(filmcraft_project::ItemId) -> Option<Tick> = |_| None;
+        static NONE: fn(mortiflix_project::ItemId) -> Option<Tick> = |_| None;
         EditCtx { next_id: next, media_duration: &NONE, media_start: &|_| Tick::ZERO, min_duration: Tick(10) }
     }
 

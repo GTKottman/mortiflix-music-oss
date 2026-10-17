@@ -40,7 +40,7 @@ pub enum PanelKind {
     ReferenceMonitor,
     Timecode,
     ProjectNotes,
-    // Mortiflix FilmCraft (drawn by `filmcraft-mortiflix-ui`, see `crate::mortiflix`)
+    // Mortiflix Studio (drawn by `mortiflix-ui`, see `crate::mortiflix`)
     MfxChat,
     MfxPreview,
     MfxNodes,
@@ -374,7 +374,7 @@ pub fn workspace(name: &str) -> DockNode {
             ),
             tabs(&[EssentialGraphics, Properties], 0),
         ),
-        // Mortiflix FilmCraft stages 1-4 (doc 40): chat left, preview and the stage's own panel,
+        // Mortiflix Studio stages 1-4 (doc 40): chat left, preview and the stage's own panel,
         // the node area along the bottom.
         "Mortiflix" => vsplit(
             Ratio(0.64),

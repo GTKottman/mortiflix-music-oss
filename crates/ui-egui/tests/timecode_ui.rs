@@ -5,14 +5,14 @@
 use std::sync::mpsc::{Sender, channel};
 
 use egui_kittest::Harness;
-use filmcraft_engine::Session;
-use filmcraft_time::{FrameRate, parse_timecode};
-use filmcraft_ui_egui::FilmcraftApp;
-use filmcraft_ui_egui::control::ControlRequest;
+use mortiflix_engine::Session;
+use mortiflix_time::{FrameRate, parse_timecode};
+use mortiflix_ui_egui::StudioApp;
+use mortiflix_ui_egui::control::ControlRequest;
 use serde_json::{Value, json};
 
 struct Driver {
-    harness: Harness<'static, FilmcraftApp>,
+    harness: Harness<'static, StudioApp>,
     tx: Sender<ControlRequest>,
 }
 
@@ -22,7 +22,7 @@ impl Driver {
         session.execute("file.openDemoProject", json!({})).expect("demo project");
         session.execute("source.open", json!({"item": 5})).expect("source clip");
         let (tx, rx) = channel();
-        let app = FilmcraftApp::new(session).with_control(rx);
+        let app = StudioApp::new(session).with_control(rx);
         let harness = Harness::builder().with_size(egui::vec2(1600.0, 980.0)).with_max_steps(10_000).build_eframe(move |_cc| app);
         let mut d = Driver { harness, tx };
         d.frames(4);
@@ -75,7 +75,7 @@ impl Driver {
         s.sequence_rate().frame_at(s.playhead())
     }
     fn source_rate(&self) -> FrameRate {
-        filmcraft_engine::clip_ops::source_view(&self.harness.state().session, filmcraft_project::ItemId(5)).unwrap().rate
+        mortiflix_engine::clip_ops::source_view(&self.harness.state().session, mortiflix_project::ItemId(5)).unwrap().rate
     }
     fn source_frame(&self) -> i64 {
         self.source_rate().frame_at(self.harness.state().session.state.source_playhead)

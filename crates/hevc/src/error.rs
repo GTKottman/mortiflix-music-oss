@@ -1,4 +1,4 @@
-use filmcraft_bitstream::BitError;
+use mortiflix_bitstream::BitError;
 
 /// Errors produced by the decoder.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]

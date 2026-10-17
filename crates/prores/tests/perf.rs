@@ -1,8 +1,8 @@
 //! Decode/encode throughput. Run with
-//! `cargo test --release -p filmcraft-prores --test perf -- --ignored --nocapture`.
+//! `cargo test --release -p mortiflix-prores --test perf -- --ignored --nocapture`.
 
 mod common;
-use filmcraft_prores::*;
+use mortiflix_prores::*;
 use std::time::Instant;
 
 /// A 1080p frame whose HQ encoding uses the full nominal rate (detailed, noisy content).

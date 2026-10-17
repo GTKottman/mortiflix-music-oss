@@ -270,7 +270,7 @@ fn scaled_splice(name: &str, w2: u32, h2: u32, interp: &[&str]) -> Option<Vec<Ve
 #[test]
 fn scaled_reference_downscale() {
     let Some(f) = scaled_splice("down", 256, 208, &[]) else { return };
-    let mut dec = filmcraft_vp9::Decoder::with_threads(1);
+    let mut dec = mortiflix_vp9::Decoder::with_threads(1);
     for c in &f {
         let _ = dec.decode(c, 0);
     }
@@ -330,7 +330,7 @@ fn intra_only_frames() {
                 frames.push(f.clone());
             }
         }
-        let mut dec = filmcraft_vp9::Decoder::with_threads(1);
+        let mut dec = mortiflix_vp9::Decoder::with_threads(1);
         for c in &frames {
             dec.decode(c, 0).unwrap();
         }

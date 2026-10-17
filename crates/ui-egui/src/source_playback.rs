@@ -2,13 +2,13 @@
 
 use std::sync::{Arc, Mutex};
 
-use filmcraft_engine::clip_ops::source_view;
-use filmcraft_project::ItemId;
-use filmcraft_render::SourceProvider;
-use filmcraft_time::Tick;
+use mortiflix_engine::clip_ops::source_view;
+use mortiflix_project::ItemId;
+use mortiflix_render::SourceProvider;
+use mortiflix_time::Tick;
 use serde_json::json;
 
-use crate::{AUDIO_STALL_S, FilmcraftApp, Playback};
+use crate::{AUDIO_STALL_S, Playback, StudioApp};
 
 #[derive(Default)]
 pub struct SourcePlayback {
@@ -19,7 +19,7 @@ pub struct SourcePlayback {
     failure: Arc<Mutex<Option<String>>>,
 }
 
-impl FilmcraftApp {
+impl StudioApp {
     pub fn toggle_source_play(&mut self) -> Result<(), String> {
         if self.source_playback.clock.playing {
             self.stop_source();
@@ -140,7 +140,7 @@ impl FilmcraftApp {
             return;
         }
         let map = [self.session.prefs.audio_hardware.map_left, self.session.prefs.audio_hardware.map_right];
-        let mixdown = filmcraft_audio_dsp::channels::Mixdown::from_id(&self.session.prefs.audio.mixdown_type).unwrap_or_default();
+        let mixdown = mortiflix_audio_dsp::channels::Mixdown::from_id(&self.session.prefs.audio.mixdown_type).unwrap_or_default();
         let channels = media.interpret.audio_channels.as_ref().and_then(|m| m.clips.first()).cloned().unwrap_or_default();
         // A seek gets its own failure slot: a late callback from the old stream cannot stop it.
         self.source_playback.failure = Arc::new(Mutex::new(None));
@@ -162,10 +162,10 @@ impl FilmcraftApp {
                     if !channels.is_empty() {
                         sound.channels = channels.iter().filter_map(|c| sound.channels.get(usize::from(*c)).cloned()).collect();
                     }
-                    let sound = filmcraft_render::audio::to_layout(sound, filmcraft_audio_dsp::channels::Layout::Stereo, mixdown);
+                    let sound = mortiflix_render::audio::to_layout(sound, mortiflix_audio_dsp::channels::Layout::Stereo, mixdown);
                     let Some(left) = sound.channels.first() else { return };
                     let right = sound.channels.get(1).unwrap_or(left);
-                    filmcraft_engine::settings::map_output(left, right, buf, ch, map);
+                    mortiflix_engine::settings::map_output(left, right, buf, ch, map);
                 }
                 Err(e) => {
                     *failure.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(format!("Source audio decoding failed: {e}"));

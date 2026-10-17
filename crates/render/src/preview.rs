@@ -39,12 +39,12 @@
 //! size and rate match the sequence. Green (a valid preview exists) is decided by the preview
 //! store, which knows which hashes have files.
 
-use filmcraft_project::{ClipId, ItemId, ItemKind, Project, Sequence, TrackItem, TrackKind, Transition};
-use filmcraft_time::{FrameRate, Tick};
+use mortiflix_project::{ClipId, ItemId, ItemKind, Project, Sequence, TrackItem, TrackKind, Transition};
+use mortiflix_time::{FrameRate, Tick};
 use serde::Serialize;
 
 /// Bump when the hash layout or the preview format changes (invalidates every preview).
-pub const HASH_VERSION: &str = "filmcraft-preview-v1";
+pub const HASH_VERSION: &str = "mortiflix-preview-v1";
 
 /// Multiple of the frame duration a frame may take before a segment is marked red. Playback
 /// renders ahead on several worker threads (2–6), so a frame can take somewhat longer than its
@@ -306,7 +306,7 @@ fn hash_item(h: &mut Fnv128, project: &Project, it: &TrackItem, origin: Tick, ki
     let mut c = it.clone();
     c.id = Default::default();
     c.start -= origin;
-    c.label = filmcraft_project::Label::ALL[0];
+    c.label = mortiflix_project::Label::ALL[0];
     c.markers.clear();
     c.link = None;
     c.group = None;
@@ -333,7 +333,7 @@ fn hash_source(h: &mut Fnv128, project: &Project, id: ItemId, kind: TrackKind, d
             c.mark_out = None;
             c.markers.clear();
             h.json(&("media", &c));
-            if matches!(c.media, filmcraft_project::MediaRef::Generator(_)) {
+            if matches!(c.media, mortiflix_project::MediaRef::Generator(_)) {
                 // generators may draw their name (demo footage)
                 h.json(&pi.name);
             }
@@ -384,7 +384,7 @@ fn hash_source(h: &mut Fnv128, project: &Project, id: ItemId, kind: TrackKind, d
 /// Estimated cost of one standard video effect on a 1080p frame (CPU reference), in ms.
 ///
 /// Three tiers from timing every effect at its defaults on a 1920×1080 frame on an M4 Pro
-/// (`cargo test -p filmcraft-render --release -- --ignored effect_costs --nocapture` prints the
+/// (`cargo test -p mortiflix-render --release -- --ignored effect_costs --nocapture` prints the
 /// table): heavy ≥ 30 ms (blurs/sharpen at real radii, Lumetri, Levels, keyers…), medium 10–30 ms,
 /// light < 10 ms. Unknown ids count as medium.
 pub fn effect_cost_ms(id: &str) -> f64 {
@@ -441,8 +441,8 @@ fn decode_cost_ms(project: &Project, id: ItemId, depth: u32) -> f64 {
             let Some(v) = &m.info.video else { return 0.0 };
             let px = (v.width as f64 * v.height as f64) / HD_PIXELS;
             let c = v.codec.to_ascii_lowercase();
-            let base = if matches!(m.info.kind, filmcraft_media::MediaKind::Still | filmcraft_media::MediaKind::Synthetic)
-                || matches!(m.media, filmcraft_project::MediaRef::Generator(_))
+            let base = if matches!(m.info.kind, mortiflix_media::MediaKind::Still | mortiflix_media::MediaKind::Synthetic)
+                || matches!(m.media, mortiflix_project::MediaRef::Generator(_))
             {
                 1.0
             } else if c.contains("264") || c.contains("avc") {

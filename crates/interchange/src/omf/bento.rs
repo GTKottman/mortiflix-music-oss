@@ -30,7 +30,7 @@
 //! | 0xFF Padding | — | ignored |
 //!
 //! Object references (OMF's `omfi:ObjRef`) are 4-byte keys resolved through the referencing
-//! object's reference list (standard property 22: pairs of u32 key, u32 object id). FilmCraft
+//! object's reference list (standard property 22: pairs of u32 key, u32 object id). Mortiflix Studio
 //! uses the referenced object's id as the key.
 
 use std::collections::{BTreeMap, HashMap};

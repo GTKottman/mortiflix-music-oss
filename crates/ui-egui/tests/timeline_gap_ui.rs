@@ -1,19 +1,19 @@
 //! Headless UI test of gaps in the Timeline (#648, #668): clicking empty time between two clips
 //! selects the gap (drawn as a light block), and Delete, Backspace or the gap's right-click menu
-//! (Ripple Delete) closes it, as in Premiere Pro. The real `FilmcraftApp` under `egui_kittest`,
+//! (Ripple Delete) closes it, as in Premiere Pro. The real `StudioApp` under `egui_kittest`,
 //! driven over the control channel.
 
 use std::sync::mpsc::{Sender, channel};
 
 use egui_kittest::Harness;
-use filmcraft_engine::Session;
-use filmcraft_engine::project::ClipId;
-use filmcraft_ui_egui::FilmcraftApp;
-use filmcraft_ui_egui::control::ControlRequest;
+use mortiflix_engine::Session;
+use mortiflix_engine::project::ClipId;
+use mortiflix_ui_egui::StudioApp;
+use mortiflix_ui_egui::control::ControlRequest;
 use serde_json::{Value, json};
 
 struct Driver {
-    harness: Harness<'static, FilmcraftApp>,
+    harness: Harness<'static, StudioApp>,
     tx: Sender<ControlRequest>,
 }
 
@@ -32,9 +32,9 @@ impl Driver {
         let v1 = &s.active_sequence().unwrap().video_tracks[0];
         let (a, b) = (v1.items[0].id, v1.items[1].id);
         let (tx, rx) = channel();
-        let app = FilmcraftApp::new(s).with_control(rx);
+        let app = StudioApp::new(s).with_control(rx);
         let mut builder = Harness::builder().with_size(egui::vec2(1600.0, 980.0)).with_max_steps(10_000);
-        if std::env::var_os("FILMCRAFT_UI_SHOTS").is_some() {
+        if std::env::var_os("MFX_STUDIO_UI_SHOTS").is_some() {
             builder = builder.wgpu();
         }
         let harness = builder.build_eframe(move |_cc| app);
@@ -44,7 +44,7 @@ impl Driver {
     }
 
     fn shot(&mut self, name: &str) {
-        let Some(dir) = std::env::var_os("FILMCRAFT_UI_SHOTS").map(std::path::PathBuf::from) else { return };
+        let Some(dir) = std::env::var_os("MFX_STUDIO_UI_SHOTS").map(std::path::PathBuf::from) else { return };
         self.frames(3);
         std::fs::create_dir_all(&dir).unwrap();
         self.harness.render().unwrap().save(dir.join(format!("{name}.png"))).unwrap();

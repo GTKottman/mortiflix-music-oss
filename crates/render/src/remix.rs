@@ -12,15 +12,15 @@
 //! | `original` | the clip duration before the remix (ticks), restored by Revert Remix |
 //! | `plan` | text `xfade;src,len;src,len;…` in ticks: crossfade length, then each piece's media start and length |
 //!
-//! The plan is computed by the engine (`clip.remix`) with [`filmcraft_audio_dsp::remix`]; playback
+//! The plan is computed by the engine (`clip.remix`) with [`mortiflix_audio_dsp::remix`]; playback
 //! only reads it, so rendering a remixed clip costs no analysis.
 
 use std::collections::BTreeMap;
 
-use filmcraft_audio_dsp::remix::{self as dsp, Piece};
-use filmcraft_frame::AudioBuffer;
-use filmcraft_project::{EffectInstance, Param, ParamValue, TrackItem};
-use filmcraft_time::Tick;
+use mortiflix_audio_dsp::remix::{self as dsp, Piece};
+use mortiflix_frame::AudioBuffer;
+use mortiflix_project::{EffectInstance, Param, ParamValue, TrackItem};
+use mortiflix_time::Tick;
 
 /// Effect id of the hidden remix state.
 pub const EFFECT: &str = "remix";

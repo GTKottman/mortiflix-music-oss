@@ -1,4 +1,4 @@
-//! Print FilmCraft's effect and transition catalog as the Effects panel lists it, as JSON: one
+//! Print Mortiflix Studio's effect and transition catalog as the Effects panel lists it, as JSON: one
 //! object per item with its `id`, display `name`, `kind` (`Video`, `Audio`, `VideoTransition`,
 //! `AudioTransition`) and Effects-panel folder `path` (e.g. `["Video Effects", "Blur & Sharpen"]`).
 //! Items with no Effects-panel folder (intrinsic Motion / Opacity / Volume…, graphic layers) and
@@ -7,16 +7,16 @@
 //! coverage against a reference list.
 //!
 //! ```sh
-//! cargo run -p filmcraft-project --example effect_catalog
+//! cargo run -p mortiflix-project --example effect_catalog
 //! ```
 
 use std::process::ExitCode;
 
-use filmcraft_project::vtransition::EFFECT_TOP_FOLDERS;
+use mortiflix_project::vtransition::EFFECT_TOP_FOLDERS;
 use serde_json::json;
 
 fn main() -> ExitCode {
-    let items: Vec<serde_json::Value> = filmcraft_project::effect_defs()
+    let items: Vec<serde_json::Value> = mortiflix_project::effect_defs()
         .iter()
         .filter(|d| d.category.first().is_some_and(|top| EFFECT_TOP_FOLDERS.contains(top)))
         .map(|d| json!({"id": d.id, "name": d.name, "kind": format!("{:?}", d.kind), "path": d.category}))

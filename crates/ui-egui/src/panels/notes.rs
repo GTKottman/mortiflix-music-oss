@@ -9,12 +9,12 @@
 use egui::{Rect, vec2};
 use serde_json::json;
 
-use crate::FilmcraftApp;
+use crate::StudioApp;
 
 /// Longest automation label (characters): the full notes are `project.notes`.
 const LABEL_CHARS: usize = 200;
 
-pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
+pub fn show(app: &mut StudioApp, ui: &mut egui::Ui, rect: Rect) {
     let t = app.tokens;
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(rect.shrink2(vec2(8.0, 6.0))));
     let ui = &mut child;

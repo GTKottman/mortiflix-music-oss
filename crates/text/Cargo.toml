@@ -1,6 +1,6 @@
 [package]
-name = "filmcraft-text"
-description = "FilmCraft text engine: font database (bundled + system), shaping, bidi, line breaking, paragraph layout and anti-aliased glyph/path rasterisation"
+name = "mortiflix-text"
+description = "Mortiflix Studio text engine: font database (bundled + system), shaping, bidi, line breaking, paragraph layout and anti-aliased glyph/path rasterisation"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -10,7 +10,7 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
-filmcraft-color = { workspace = true }
+mortiflix-color = { workspace = true }
 # Font tables, glyph outlines and metrics (MIT OR Apache-2.0). Rasterisation is our own.
 skrifa = { version = "0.44", default-features = false, features = ["std"] }
 # OpenType shaping (HarfBuzz port on read-fonts, MIT); shares font parsing with skrifa.

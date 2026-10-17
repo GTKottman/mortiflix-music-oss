@@ -75,7 +75,7 @@ fn op1a_reads_back() {
     assert!(m.warnings.is_empty(), "{:?}", m.warnings);
     assert_eq!(m.operational_pattern, OperationalPattern::Generalized { item: 1, package: 1 });
     assert_eq!(m.material_package_name.as_deref(), Some("Test Clip"));
-    assert_eq!(m.product_name.as_deref(), Some("FilmCraft"));
+    assert_eq!(m.product_name.as_deref(), Some("Mortiflix Studio"));
     let tc = m.timecode.unwrap();
     assert_eq!(tc.format(), "01:00:00:00");
     // header rewritten closed and complete; body and footer partitions; footer metadata used

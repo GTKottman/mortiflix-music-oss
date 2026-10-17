@@ -1,10 +1,10 @@
 //! Structural checks of written OMF files: the Bento label and TOC, and the required properties of
-//! the OMF Interchange 2.0 classes FilmCraft writes.
+//! the OMF Interchange 2.0 classes Mortiflix Studio writes.
 
 use std::collections::HashMap;
 
-use filmcraft_project::{Project, SequenceSettings, TrackKind, TransitionAlign, TransitionId, find_effect};
-use filmcraft_time::{FrameRate, TimeRange};
+use mortiflix_project::{Project, SequenceSettings, TrackKind, TransitionAlign, TransitionId, find_effect};
+use mortiflix_time::{FrameRate, TimeRange};
 
 use super::bento::{self, Container};
 use super::*;
@@ -12,21 +12,21 @@ use crate::essence::{AudioEssence, EssenceData, NeedOptions, audio_needs};
 
 fn project() -> (Project, ItemId) {
     let mut p = Project::new("t");
-    let info = filmcraft_media::MediaInfo {
+    let info = mortiflix_media::MediaInfo {
         name: "a.wav".into(),
-        kind: filmcraft_media::MediaKind::AudioOnly,
+        kind: mortiflix_media::MediaKind::AudioOnly,
         duration: FrameRate::FPS_25.tick_of(2500),
         video: None,
-        audio_streams: vec![filmcraft_media::AudioStreamInfo { sample_rate: 48_000, channels: 2, codec: String::new(), bits_per_sample: Some(16) }],
+        audio_streams: vec![mortiflix_media::AudioStreamInfo { sample_rate: 48_000, channels: 2, codec: String::new(), bits_per_sample: Some(16) }],
         container: String::new(),
         start_timecode: None,
         file_size: None,
     };
     let a = p.add_item(
         "a.wav",
-        filmcraft_project::Label::Iris,
-        filmcraft_project::ItemKind::Media(filmcraft_project::MediaClip {
-            media: filmcraft_project::MediaRef::File { path: "/m/a.wav".into() },
+        mortiflix_project::Label::Iris,
+        mortiflix_project::ItemKind::Media(mortiflix_project::MediaClip {
+            media: mortiflix_project::MediaRef::File { path: "/m/a.wav".into() },
             info,
             interpret: Default::default(),
             mark_in: None,
@@ -48,7 +48,7 @@ fn project() -> (Project, ItemId) {
     }
     let id = TransitionId(p.alloc_id());
     let q = p.sequence_mut(s).unwrap();
-    q.audio_tracks[0].transitions.push(filmcraft_project::Transition {
+    q.audio_tracks[0].transitions.push(mortiflix_project::Transition {
         id,
         effect: find_effect("constant_power").unwrap().instance(),
         start: r.tick_of(45),

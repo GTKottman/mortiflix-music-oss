@@ -7,18 +7,18 @@
 //! `metadata.label`, `metadata.section.<Clip|File>`.
 
 use egui::{Rect, RichText, Sense, vec2};
-use filmcraft_engine::panels::{Field, metadata_fields};
-use filmcraft_project::{ItemId, Label};
+use mortiflix_engine::panels::{Field, metadata_fields};
+use mortiflix_project::{ItemId, Label};
 use serde_json::json;
 
-use crate::FilmcraftApp;
+use crate::StudioApp;
 use crate::dock::PanelKind;
 use crate::theme::Tokens;
 
 use super::panel_state::InspectorSource;
 
 /// Remember the selection source even when both item inspectors are hidden.
-pub(crate) fn follow_selection(app: &mut FilmcraftApp) {
+pub(crate) fn follow_selection(app: &mut StudioApp) {
     match app.ui.focused {
         PanelKind::Project => app.ui.panels.inspector_source = InspectorSource::Project,
         PanelKind::Timeline => app.ui.panels.inspector_source = InspectorSource::Timeline,
@@ -28,7 +28,7 @@ pub(crate) fn follow_selection(app: &mut FilmcraftApp) {
 
 /// The item Metadata and Info show. Keep the preferred source while entering either inspector;
 /// an empty selection falls back to the other panel, as Metadata did before source retention.
-pub fn target(app: &FilmcraftApp) -> Option<ItemId> {
+pub fn target(app: &StudioApp) -> Option<ItemId> {
     let s = &app.session;
     let exists = |id: &ItemId| s.project.item(*id).is_some();
     let project = s.state.project_selection.first().copied().filter(exists);
@@ -43,7 +43,7 @@ pub fn field_id(name: &str) -> String {
     format!("metadata.field.{}", name.replace(' ', ""))
 }
 
-pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
+pub fn show(app: &mut StudioApp, ui: &mut egui::Ui, rect: Rect) {
     let t = app.tokens;
     let Some(item) = target(app) else {
         crate::dock::placeholder(ui, rect, &t, tl!("Select a clip to view its metadata."));

@@ -33,12 +33,12 @@
 
 use std::collections::BTreeMap;
 
-use filmcraft_time::{FrameRate, fields_to_frames, frames_to_fields};
+use mortiflix_time::{FrameRate, fields_to_frames, frames_to_fields};
 
 use crate::cea608::with_parity;
 use crate::{Cue, Document, Error, Result, scc};
 
-/// MCC files written by FilmCraft are 29.97 fps.
+/// MCC files written by Mortiflix Studio are 29.97 fps.
 pub const RATE: FrameRate = FrameRate::FPS_29_97;
 const CC_COUNT: usize = 20;
 /// cc_data triplets per frame left for CEA-708 (after the two CEA-608 fields).
@@ -318,7 +318,7 @@ fn schedule_708(doc: &Document) -> BTreeMap<i64, Vec<(bool, u8, u8)>> {
         let win = (i % 2) as u8;
         let s = scc::frame_of(c.start).max(cursor);
         let e = scc::frame_of(c.end);
-        let rows = scc::wrap_rows(&filmcraft_project::plain_text(&c.text));
+        let rows = scc::wrap_rows(&mortiflix_project::plain_text(&c.text));
         let load = packets(&load_atoms(win, &rows), &mut seq);
         let mut f = (s - load.len() as i64).max(cursor);
         let mut last = f;
@@ -531,7 +531,7 @@ pub fn write_with(doc: &Document, drop_frame: bool, cea608: bool, cea708: bool) 
     let dtv = if cea708 { schedule_708(doc) } else { BTreeMap::new() };
     let mut out = String::from("File Format=MacCaption_MCC V1.0\n\n");
     out.push_str("///////////////////////////////////////////////////////////////////////////////////\n");
-    out.push_str("// Closed captions written by FilmCraft: SMPTE ST 334-2 caption distribution packets\n");
+    out.push_str("// Closed captions written by Mortiflix Studio: SMPTE ST 334-2 caption distribution packets\n");
     out.push_str("// carrying CEA-608 field 1 and CEA-708 service 1 data, one packet per frame.\n");
     out.push_str("///////////////////////////////////////////////////////////////////////////////////\n\n");
     let n = doc.cues.len() as u64;
@@ -544,7 +544,7 @@ pub fn write_with(doc: &Document, drop_frame: bool, cea608: bool, cea708: bool) 
         (h >> 20) & 0xfff,
         h.rotate_left(29) & 0xffff_ffff_ffff
     ));
-    out.push_str("Creation Program=FilmCraft\n");
+    out.push_str("Creation Program=Mortiflix Studio\n");
     out.push_str(&format!("Time Code Rate={}\n\n", if drop_frame { "30DF" } else { "30" }));
     let first = f1.keys().next().copied().into_iter().chain(dtv.keys().next().copied()).min();
     let last = f1.keys().next_back().copied().into_iter().chain(dtv.keys().next_back().copied()).max();

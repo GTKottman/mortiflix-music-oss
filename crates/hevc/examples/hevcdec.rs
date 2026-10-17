@@ -1,7 +1,7 @@
 //! Decode an Annex-B H.265 file to raw planar YUV (yuv420p or yuv420p10le):
-//! `cargo run --release -p filmcraft-hevc --example hevcdec -- in.hevc out.yuv`
+//! `cargo run --release -p mortiflix-hevc --example hevcdec -- in.hevc out.yuv`
 
-use filmcraft_hevc::Decoder;
+use mortiflix_hevc::Decoder;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();

@@ -4,7 +4,7 @@
 mod common;
 
 use common::synth;
-use filmcraft_h264enc::*;
+use mortiflix_h264enc::*;
 
 fn crf(w: u32, h: u32, fps: u32, f: f32) -> Encoder {
     let mut c = EncoderConfig::new(w, h, fps, 1);
@@ -37,9 +37,9 @@ fn first_access_unit_carries_the_settings() {
     packets.extend(enc.flush());
     let text = |p: &Packet| String::from_utf8_lossy(&p.data).into_owned();
     let first = text(&packets[0]);
-    for want in ["filmcraft-h264enc", "rc=crf crf=18.0", "profile=high", "level=", "bframes=2", "cabac=1"] {
+    for want in ["mortiflix-h264enc", "rc=crf crf=18.0", "profile=high", "level=", "bframes=2", "cabac=1"] {
         assert!(first.contains(want), "{want} missing from {first:?}");
     }
     // once per stream
-    assert!(packets.iter().skip(1).all(|p| !text(p).contains("filmcraft-h264enc")));
+    assert!(packets.iter().skip(1).all(|p| !text(p).contains("mortiflix-h264enc")));
 }

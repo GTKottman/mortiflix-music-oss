@@ -1,6 +1,6 @@
 //! First-run setup: the Welcome window on first launch, and Edit ▸ Preferences ▸ Mortiflix… later.
 //!
-//! Three steps, each one skippable (FilmCraft's editing works without any of them):
+//! Three steps, each one skippable (Mortiflix Studio's editing works without any of them):
 //! 1. **Claude Code.** The AI is the user's own Claude Code (their plan pays). Setup finds `claude`
 //!    (PATH and the usual install folders), reads its version and whether it is signed in
 //!    (`claude auth status --json`), and **Link Claude Code** runs `claude auth login` with its output
@@ -32,7 +32,7 @@ use serde_json::{Value, json};
 use crate::service::{SERVICE_SCRIPT, ServiceConfig, ServiceSettings};
 use crate::{MfxCtx, MfxTheme, Mortiflix};
 
-/// What setup remembers, beside FilmCraft's `preferences.json` (the service path stays in
+/// What setup remembers, beside Mortiflix Studio's `preferences.json` (the service path stays in
 /// `mortiflix.json`, see [`ServiceSettings`]).
 pub const SETUP_FILE: &str = "mortiflix-setup.json";
 /// Where Claude Code's install page is.
@@ -488,7 +488,7 @@ pub fn open_terminal(bin: &Path) -> Result<String, String> {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Model packs (Whisper, Kokoro): the host fills them in from FilmCraft's own catalogues
+// Model packs (Whisper, Kokoro): the host fills them in from Mortiflix Studio's own catalogues
 
 /// One file of a model pack.
 #[derive(Clone, Debug, PartialEq)]
@@ -499,7 +499,7 @@ pub struct PackFile {
     pub size: u64,
 }
 
-/// A model FilmCraft can use (Whisper for captions, Kokoro for natural voices).
+/// A model Mortiflix Studio can use (Whisper for captions, Kokoro for natural voices).
 #[derive(Clone, Debug, PartialEq)]
 pub struct ModelPack {
     pub id: String,
@@ -510,7 +510,7 @@ pub struct ModelPack {
     pub source: String,
     /// Where its files go.
     pub dir: PathBuf,
-    /// This build can use it (FilmCraft built with the `whisper` / `neural-voices` features).
+    /// This build can use it (Mortiflix Studio built with the `whisper` / `neural-voices` features).
     pub usable: bool,
     pub files: Vec<PackFile>,
 }
@@ -542,7 +542,7 @@ impl ModelPack {
     }
 }
 
-/// The host (FilmCraft's side) hands over its model catalogues once.
+/// The host (Mortiflix Studio's side) hands over its model catalogues once.
 pub fn set_model_packs(egui_ctx: &egui::Context, packs: Vec<ModelPack>) {
     let fake = std::env::var("MFX_FAKE_DOWNLOADS").is_ok_and(|v| v == "1");
     let packs = if fake { packs.into_iter().map(ModelPack::faked).collect() } else { packs };
@@ -1009,10 +1009,10 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
 fn draw(m: &mut Model, ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     let theme = ctx.theme;
     if m.first_run {
-        ui.label(RichText::new("Welcome to Mortiflix FilmCraft").size(22.0).strong().color(theme.text));
+        ui.label(RichText::new("Welcome to Mortiflix Studio").size(22.0).strong().color(theme.text));
         ui.add_space(4.0);
         ui.label(
-            RichText::new("Three quick steps to let the AI make videos with you. Skip any of them: FilmCraft's editing works without all of this.")
+            RichText::new("Three quick steps to let the AI make videos with you. Skip any of them: Mortiflix Studio's editing works without all of this.")
                 .color(theme.text_dim),
         );
         ui.add_space(ROW_GAP);

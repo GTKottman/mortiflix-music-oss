@@ -1,5 +1,5 @@
 [package]
-name = "filmcraft-geom"
+name = "mortiflix-geom"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

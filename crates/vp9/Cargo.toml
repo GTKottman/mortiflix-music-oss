@@ -1,5 +1,5 @@
 [package]
-name = "filmcraft-vp9"
+name = "mortiflix-vp9"
 description = "Clean-room pure-Rust VP9 decoder (VP9 Bitstream & Decoding Process Specification)"
 version.workspace = true
 edition.workspace = true
@@ -14,7 +14,7 @@ default = ["threads"]
 threads = ["dep:rayon"]
 
 [dependencies]
-filmcraft-bitstream = { workspace = true }
+mortiflix-bitstream = { workspace = true }
 thiserror = { workspace = true }
 rayon = { workspace = true, optional = true }
 

@@ -5,9 +5,9 @@
 mod common;
 
 use common::*;
-use filmcraft_color::{ColorInfo, ColorSpace, Matrix, Primaries, Range, Transfer};
-use filmcraft_media::FrameRequest;
-use filmcraft_time::Tick;
+use mortiflix_color::{ColorInfo, ColorSpace, Matrix, Primaries, Range, Transfer};
+use mortiflix_media::FrameRequest;
+use mortiflix_time::Tick;
 
 /// One 64×64 frame of `codec` with the colour `params` (x264 / x265 syntax), and our stream and
 /// frame colour for it.
@@ -15,10 +15,10 @@ fn colors(ff: &std::path::Path, name: &str, codec: &[&str]) -> Option<(ColorInfo
     let mut args = vec!["-f", "lavfi", "-i", "testsrc2=size=64x64:rate=1", "-frames:v", "1"];
     args.extend_from_slice(codec);
     let path = fixture(ff, name, &args)?;
-    let isobmff = filmcraft_isobmff::open(bytes(&path)).unwrap();
-    let track = isobmff.tracks.iter().find(|t| t.kind == filmcraft_isobmff::TrackKind::Video).unwrap();
+    let isobmff = mortiflix_isobmff::open(bytes(&path)).unwrap();
+    let track = isobmff.tracks.iter().find(|t| t.kind == mortiflix_isobmff::TrackKind::Video).unwrap();
     assert!(track.entries[0].video.as_ref().unwrap().color.is_none(), "{name}: the fixture has a colr box");
-    let src = filmcraft_codecs::open_bytes(name, bytes(&path)).unwrap();
+    let src = mortiflix_codecs::open_bytes(name, bytes(&path)).unwrap();
     let stream = src.info().video.as_ref().unwrap().color;
     let frame = src.video_frame(FrameRequest::full(Tick::ZERO)).unwrap().color;
     Some((stream, frame))
@@ -26,7 +26,7 @@ fn colors(ff: &std::path::Path, name: &str, codec: &[&str]) -> Option<(ColorInfo
 
 #[test]
 fn decoded_frames_keep_the_signalled_primaries() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let x264 = |p: &'static str| ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-x264-params", p];
     let x265 = |p: &'static str, pix: &'static str| ["-c:v", "libx265", "-pix_fmt", pix, "-tag:v", "hvc1", "-x265-params", p];
     let sdr2020 = ColorInfo { matrix: Matrix::Bt709, transfer: Transfer::Bt709, primaries: Primaries::Bt2020, range: Range::Limited };

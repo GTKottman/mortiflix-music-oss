@@ -2,7 +2,7 @@
 //! need a selection: enablement is checked against the named targets. Without such parameters
 //! (the menus, shortcuts and `engine.commands`) enablement is the selection's, as before.
 
-use filmcraft_project::{ClipId, ItemId, TrackItem};
+use mortiflix_project::{ClipId, ItemId, TrackItem};
 use serde_json::json;
 
 use crate::{EngineError, Session};
@@ -235,7 +235,7 @@ fn project_delete_takes_explicit_bins_and_items_without_a_selection() {
     // an empty bin, by its id alone
     let r = s.execute("project.delete", json!({"items": [empty]})).unwrap();
     assert_eq!(r, json!({"items": 0, "bins": 1, "offline": 0}));
-    assert!(s.project.root.find_bin(filmcraft_project::BinId(empty)).is_none());
+    assert!(s.project.root.find_bin(mortiflix_project::BinId(empty)).is_none());
     // a bin with a clip in it, and an item, each by id alone
     let r = s.execute("project.delete", json!({"items": [outer]})).unwrap();
     assert_eq!(r, json!({"items": 1, "bins": 1, "offline": 0}));

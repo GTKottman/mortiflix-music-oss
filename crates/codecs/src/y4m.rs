@@ -13,10 +13,10 @@
 
 use std::sync::Arc;
 
-use filmcraft_color::{ColorInfo, Range};
-use filmcraft_frame::{AudioBuffer, Chroma, PixelData, VideoFrame};
-use filmcraft_media::{FrameRequest, MediaError, MediaInfo, MediaKind, MediaSource, SharedSource, VideoStreamInfo};
-use filmcraft_time::{FrameRate, Tick};
+use mortiflix_color::{ColorInfo, Range};
+use mortiflix_frame::{AudioBuffer, Chroma, PixelData, VideoFrame};
+use mortiflix_media::{FrameRequest, MediaError, MediaInfo, MediaKind, MediaSource, SharedSource, VideoStreamInfo};
+use mortiflix_time::{FrameRate, Tick};
 
 use crate::CodecError;
 
@@ -86,7 +86,7 @@ fn plane_samples(w: u32, h: u32, l: Layout) -> (usize, usize, usize) {
 
 pub struct Y4mSource {
     info: MediaInfo,
-    reader: filmcraft_media::SharedReader,
+    reader: mortiflix_media::SharedReader,
     /// File offset of each frame's planes.
     frames: Vec<u64>,
     frame_bytes: usize,
@@ -100,11 +100,11 @@ fn parse_ratio(s: &str) -> Option<(i64, i64)> {
 }
 
 /// The line starting at `pos` (without its newline) and the offset after it.
-fn line_at(reader: &dyn filmcraft_media::reader::ByteReader, pos: u64) -> Option<(Vec<u8>, u64)> {
+fn line_at(reader: &dyn mortiflix_media::reader::ByteReader, pos: u64) -> Option<(Vec<u8>, u64)> {
     let mut want = 128usize;
     loop {
         let len = (reader.len().saturating_sub(pos)).min(want as u64) as usize;
-        let buf = filmcraft_media::reader::read_range(reader, pos, len).ok()?;
+        let buf = mortiflix_media::reader::read_range(reader, pos, len).ok()?;
         if let Some(end) = buf.iter().position(|&b| b == b'\n') {
             let mut line = buf;
             line.truncate(end);
@@ -119,10 +119,10 @@ fn line_at(reader: &dyn filmcraft_media::reader::ByteReader, pos: u64) -> Option
 
 impl Y4mSource {
     pub fn open(name: &str, bytes: Arc<[u8]>) -> crate::Result<Self> {
-        Self::open_reader(name, Arc::new(filmcraft_media::reader::MemReader(bytes)))
+        Self::open_reader(name, Arc::new(mortiflix_media::reader::MemReader(bytes)))
     }
 
-    pub fn open_reader(name: &str, reader: filmcraft_media::SharedReader) -> crate::Result<Self> {
+    pub fn open_reader(name: &str, reader: mortiflix_media::SharedReader) -> crate::Result<Self> {
         let bad = |what: &str| CodecError::Container(format!("{name}: Y4M: {what}"));
         let (header, mut pos) = line_at(&*reader, 0).ok_or_else(|| bad("no stream header"))?;
         let header = String::from_utf8_lossy(&header).into_owned();
@@ -179,7 +179,7 @@ impl Y4mSource {
         if frames.is_empty() {
             return Err(bad("no complete frames"));
         }
-        let color = ColorInfo { matrix: filmcraft_frame::default_matrix(w, h), range: if full { Range::Full } else { Range::Limited }, ..ColorInfo::REC709 };
+        let color = ColorInfo { matrix: mortiflix_frame::default_matrix(w, h), range: if full { Range::Full } else { Range::Limited }, ..ColorInfo::REC709 };
         let duration = Tick::from_rational(frames.len() as i64, rate.den, rate.num);
         let bitrate = (frame_bytes as u64 * 8).checked_mul(rate.num as u64).map(|b| b / rate.den as u64);
         let info = MediaInfo {
@@ -210,7 +210,7 @@ impl Y4mSource {
         let (Some(&at), Some(v)) = (self.frames.get(idx), self.info.video.as_ref()) else {
             return Err(CodecError::Container("Y4M: frame index out of range".into()));
         };
-        let data = filmcraft_media::reader::read_range(&*self.reader, at, self.frame_bytes).map_err(|e| CodecError::Container(e.to_string()))?;
+        let data = mortiflix_media::reader::read_range(&*self.reader, at, self.frame_bytes).map_err(|e| CodecError::Container(e.to_string()))?;
         let (luma, chroma, alpha) = plane_samples(v.width, v.height, self.layout);
         // mono: neutral chroma at 4:2:0
         let mono = Layout { chroma: Some(Chroma::C420), ..self.layout };
@@ -272,7 +272,7 @@ pub fn opener(name: &str, bytes: Arc<[u8]>) -> Option<Result<SharedSource, Media
     Some(Y4mSource::open(name, bytes).map(|s| Arc::new(s) as SharedSource).map_err(Into::into))
 }
 
-pub fn reader_opener(name: &str, head: &[u8], reader: &filmcraft_media::SharedReader) -> Option<Result<SharedSource, MediaError>> {
+pub fn reader_opener(name: &str, head: &[u8], reader: &mortiflix_media::SharedReader) -> Option<Result<SharedSource, MediaError>> {
     if !sniff(head) {
         return None;
     }

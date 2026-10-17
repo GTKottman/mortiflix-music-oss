@@ -1,8 +1,8 @@
-# filmcraft-hevc
+# mortiflix-hevc
 
 Clean-room, pure-Rust (no `unsafe`) H.265 / HEVC decoder, implemented from the public ITU-T
 Rec. H.265 (ISO/IEC 23008-2) specification. It is an L0 crate: it depends only on
-`filmcraft-bitstream`, `thiserror`, and optionally `rayon` (default feature `threads`), and builds
+`mortiflix-bitstream`, `thiserror`, and optionally `rayon` (default feature `threads`), and builds
 for `wasm32-unknown-unknown`.
 
 All syntax tables (the CABAC `initValue` tables arranged per `initType` following Table 9-4, default
@@ -37,7 +37,7 @@ and fixture generators.
 ## API
 
 ```rust
-use filmcraft_hevc::{Decoder, Plane};
+use mortiflix_hevc::{Decoder, Plane};
 
 let mut dec = Decoder::new(); // or Decoder::with_threads(n), Decoder::from_hvcc(&hvcc)?
 for (pts, access_unit) in access_units {
@@ -59,7 +59,7 @@ WPP, weighted prediction, TMVP, SAO, block kinds...).
 
 ### Architecture
 
-Same design as `filmcraft-h264`: the calling thread parses parameter sets and slice headers and does
+Same design as `mortiflix-h264`: the calling thread parses parameter sets and slice headers and does
 POC / RPS / DPB bookkeeping; the CTU layer of each picture runs as a job (rayon pool). A job
 reconstructs into private planes, deblocks CTB row r once row r+1 is decoded, applies SAO to row r
 once row r+1 is deblocked, and publishes final rows (samples + 16x16 compressed motion for TMVP)
@@ -69,7 +69,7 @@ the memory traffic in prediction reads, in-loop filters and output) and as `u16`
 slice decoder and the filters are generic over the sample type (`picture::Sample`), monomorphised
 once per type.
 
-Draft mode (`Decoder::set_draft(true)`; FilmCraft enables it with Settings ▸ Playback ▸ Draft
+Draft mode (`Decoder::set_draft(true)`; Mortiflix Studio enables it with Settings ▸ Playback ▸ Draft
 decoding while the Program monitor plays at 1/2 or 1/4): sub-layer non-reference pictures
 (TRAIL_N, RASL_N, ...) of the highest temporal sub-layer — no later picture predicts from them,
 and TMVP reads only reference pictures — skip deblocking and SAO and are flagged
@@ -82,7 +82,7 @@ bumping), `cabac`, `slicedec` (CTU syntax + reconstruction), `mvpred` (merge / A
 
 ## Tests
 
-`cargo test -p filmcraft-hevc` (fixtures are generated on first use into `target/fixtures/hevc/`
+`cargo test -p mortiflix-hevc` (fixtures are generated on first use into `target/fixtures/hevc/`
 with ffmpeg; tests print a message and skip when ffmpeg is absent).
 
 - Unit tests: CABAC engine round trip against an encoder model and context initialisation, scan
@@ -135,12 +135,12 @@ libx265 unless noted (x265 enables WPP by default, so most streams carry entry p
 | vt_main / vt_main10 | 640x360 | Apple VideoToolbox (hevc_videotoolbox), macOS only |
 | synthetic (7 streams) | 96x64 | tiles, PCM, slices, dependent segments, LTR, list modification |
 
-`cargo test -p filmcraft-hevc --test conformance coverage_report -- --ignored --nocapture` prints the
+`cargo test -p mortiflix-hevc --test conformance coverage_report -- --ignored --nocapture` prints the
 decoder statistics per fixture.
 
 ## Performance
 
-`cargo test --release -p filmcraft-hevc --test perf -- --ignored --nocapture` (bit-exactness is
+`cargo test --release -p mortiflix-hevc --test perf -- --ignored --nocapture` (bit-exactness is
 verified first). Apple M4 Pro (14 cores), measured while the machine was heavily shared (load
 average 50-100), so these are lower bounds:
 
@@ -158,7 +158,7 @@ against the direct product on random sparse and dense blocks). SAO edge offset h
 loop for samples whose neighbours are inside the CTB. Together: ~60 % less CPU per frame
 (1080p 78 → 33 ms, 2160p 320 → 129 ms of CPU per frame through the media stack, alternating A/B), see
 [docs/performance.md](../../docs/performance.md).
-`cargo run --release -p filmcraft-hevc --example hevcdec -- in.hevc out.yuv` decodes a file
+`cargo run --release -p mortiflix-hevc --example hevcdec -- in.hevc out.yuv` decodes a file
 (`HEVC_THREADS=n`, `HEVC_LOOPS=k`, `HEVC_DRAFT=1`).
 
 M4.10 (2026-10-03), CPU cycles per frame counted by the kernel (`/usr/bin/time -l`, all threads

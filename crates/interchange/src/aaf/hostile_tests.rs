@@ -1,7 +1,7 @@
 //! Hostile object trees: a crafted file must give an error, never a crash, a hang or an
 //! allocation sized by a count in the file (AGENTS.md §0).
 
-use filmcraft_cfb::{Version, Writer};
+use mortiflix_cfb::{Version, Writer};
 
 use super::store::{self, SF_WEAK_SET, SF_WEAK_VECTOR, Value, utf16z};
 

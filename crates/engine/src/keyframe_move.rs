@@ -2,8 +2,8 @@
 //! relative timing intact, including at the clip boundaries. Selection itself is a UI concern.
 use std::collections::{BTreeMap, HashSet};
 
-use filmcraft_project::{ClipId, Keyframe, Param, Sequence, TrackItem};
-use filmcraft_time::Tick;
+use mortiflix_project::{ClipId, Keyframe, Param, Sequence, TrackItem};
+use mortiflix_time::Tick;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 

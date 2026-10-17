@@ -7,7 +7,7 @@
 //! (parsing), dependent slice segments, short- and long-term reference picture sets.
 //!
 //! ```no_run
-//! let mut dec = filmcraft_hevc::Decoder::new();
+//! let mut dec = mortiflix_hevc::Decoder::new();
 //! let stream = std::fs::read("video.h265").unwrap();
 //! for pic in dec.decode(&stream, 0).unwrap() {
 //!     println!("{}x{} poc {}", pic.width, pic.height, pic.poc);

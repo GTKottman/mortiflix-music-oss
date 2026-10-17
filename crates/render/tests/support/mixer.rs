@@ -3,11 +3,11 @@
 
 use std::sync::Arc;
 
-use filmcraft_frame::{AudioBuffer, VideoFrame};
-use filmcraft_media::{AudioStreamInfo, FrameRequest, MediaError, MediaInfo, MediaKind, MediaSource};
-use filmcraft_project::mixer::LANE_VOLUME;
-use filmcraft_project::{ItemId, ItemKind, Keyframe, Label, MediaClip, MediaRef, ParamValue, Project, SequenceSettings, Track, TrackId, TrackKind, TrackSend};
-use filmcraft_time::{FrameRate, TICKS_PER_SECOND, Tick, TimeRange};
+use mortiflix_frame::{AudioBuffer, VideoFrame};
+use mortiflix_media::{AudioStreamInfo, FrameRequest, MediaError, MediaInfo, MediaKind, MediaSource};
+use mortiflix_project::mixer::LANE_VOLUME;
+use mortiflix_project::{ItemId, ItemKind, Keyframe, Label, MediaClip, MediaRef, ParamValue, Project, SequenceSettings, Track, TrackId, TrackKind, TrackSend};
+use mortiflix_time::{FrameRate, TICKS_PER_SECOND, Tick, TimeRange};
 
 use super::{SourceMap, mixer};
 use mixer::{LiveMix, mix_graph};
@@ -25,10 +25,10 @@ impl MediaSource for FnSource {
     fn info(&self) -> &MediaInfo {
         &self.info
     }
-    fn video_frame(&self, _: FrameRequest) -> filmcraft_media::Result<Arc<VideoFrame>> {
+    fn video_frame(&self, _: FrameRequest) -> mortiflix_media::Result<Arc<VideoFrame>> {
         Err(MediaError::Unsupported("audio only".into()))
     }
-    fn audio(&self, start: i64, frames: usize, sample_rate: u32) -> filmcraft_media::Result<AudioBuffer> {
+    fn audio(&self, start: i64, frames: usize, sample_rate: u32) -> mortiflix_media::Result<AudioBuffer> {
         let f = self.f;
         Ok(AudioBuffer { sample_rate, channels: (0..self.ch).map(|c| (0..frames).map(|i| f(start + i as i64, c)).collect()).collect() })
     }
@@ -128,13 +128,13 @@ pub(crate) fn busy_rig(tracks: usize) -> Rig {
     let sig: Vec<fn(i64, usize) -> f32> = vec![noise; tracks];
     let mut r = Rig::new(&sig);
     let bus = r.add_submix("Bus");
-    let mut comp = filmcraft_project::find_effect("dynamics").unwrap().instance();
+    let mut comp = mortiflix_project::find_effect("dynamics").unwrap().instance();
     comp.param_mut("threshold").unwrap().value = ParamValue::Float(-20.0);
     r.submix(bus).effects.push(comp);
     for k in 0..tracks {
         let t = r.track(k);
         for (id, post) in [("parametric_eq", false), ("dynamics", false), ("studio_reverb", true)] {
-            let mut e = filmcraft_project::find_effect(id).unwrap().instance();
+            let mut e = mortiflix_project::find_effect(id).unwrap().instance();
             e.post_fader = post;
             t.effects.push(e);
         }

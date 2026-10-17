@@ -1,11 +1,11 @@
-//! Mortiflix FilmCraft stage 6, Render (doc 39): the host side of `filmcraft_mortiflix_ui::export`.
+//! Mortiflix Studio stage 6, Render (doc 39): the host side of `mortiflix_ui::export`.
 //!
-//! While Mortiflix is on, FilmCraft's Export tab shows the simple Mortiflix page (four presets, the
+//! While Mortiflix is on, Mortiflix Studio's Export tab shows the simple Mortiflix page (four presets, the
 //! render queue, Render, the Rendered page). This file feeds that page from the engine each frame,
 //! draws the timeline picture where it asks, and carries out what it asks for, always through
-//! FilmCraft's own export commands (`export.queue.add / start / cancel / retry / remove`), so the
-//! files are exactly what FilmCraft's Export would write. Advanced › All FilmCraft settings… shows
-//! FilmCraft's full Export page, with a strip to come back.
+//! Mortiflix Studio's own export commands (`export.queue.add / start / cancel / retry / remove`), so the
+//! files are exactly what Mortiflix Studio's Export would write. Advanced › All Mortiflix Studio settings… shows
+//! Mortiflix Studio's full Export page, with a strip to come back.
 //!
 //! One render queue for the PC: the app's exports wait while the Mortiflix service runs one of its
 //! heavy jobs (`render.jobs`), and the service holds its own jobs while the app exports
@@ -16,12 +16,12 @@ use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 use egui::{Color32, Rect, pos2, vec2};
-use filmcraft_engine::export::{ExportSettings, HardwareEncoding, Scaling};
-use filmcraft_engine::export_tools::{QueueStatus, range_param, settings_from_params};
-use filmcraft_mortiflix_ui::export::{self as ex, Action, Choices, ExportState, Os, Page, Pending, Preset, QueueRow, RenderRecord, RowState, Stem, TabView};
+use mortiflix_engine::export::{ExportSettings, HardwareEncoding, Scaling};
+use mortiflix_engine::export_tools::{QueueStatus, range_param, settings_from_params};
+use mortiflix_ui::export::{self as ex, Action, Choices, ExportState, Os, Page, Pending, Preset, QueueRow, RenderRecord, RowState, Stem, TabView};
 use serde_json::{Value, json};
 
-use crate::FilmcraftApp;
+use crate::StudioApp;
 use crate::frames::{FrameKey, Target};
 use crate::native_dialogs::FileDialog;
 
@@ -54,20 +54,20 @@ pub struct ExportHost {
     delete_on_cancel: Vec<(u64, String)>,
     /// (engine revision, timeline hash) so the hash is only recomputed after an edit.
     hash_cache: Option<(u64, Option<u64>, u64)>,
-    /// FilmCraft's presets (category, name), read once.
+    /// Mortiflix Studio's presets (category, name), read once.
     formats: Vec<(String, String)>,
     /// The project whose renders are loaded from disk.
     loaded_for: Option<String>,
 }
 
-/// Mortiflix's simple Export page is on (Mortiflix active and not in FilmCraft's full settings).
-pub fn active(app: &FilmcraftApp) -> bool {
+/// Mortiflix's simple Export page is on (Mortiflix active and not in Mortiflix Studio's full settings).
+pub fn active(app: &StudioApp) -> bool {
     app.mfx.core.state.active && !app.mfx.export.ui.full_settings
 }
 
-/// Export mode's body while Mortiflix is on: the simple page, or FilmCraft's full one under a strip
+/// Export mode's body while Mortiflix is on: the simple page, or Mortiflix Studio's full one under a strip
 /// that leads back.
-pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
+pub fn show(app: &mut StudioApp, ui: &mut egui::Ui, rect: Rect) {
     if app.mfx.export.ui.full_settings {
         let strip = Rect::from_min_size(rect.min, vec2(rect.width(), 30.0));
         ui.painter().rect_filled(strip, 0.0, app.tokens.header_bg);
@@ -111,30 +111,30 @@ pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
 
 /// Every frame (from `mortiflix::frame_begin`): read the service's replies, keep the one PC-wide
 /// queue moving, notice finished renders, and run a pending Get the video.
-pub fn frame(app: &mut FilmcraftApp, ctx: &egui::Context) {
+pub fn frame(app: &mut StudioApp, ctx: &egui::Context) {
     if !app.mfx.core.state.active {
         return;
     }
     let host = &mut app.mfx.export;
     host.ui.poll_service(&mut app.mfx.core.service);
-    let watching = app.mfx.core.state.stage == filmcraft_mortiflix_ui::STAGE_RENDER || !host.jobs.is_empty();
+    let watching = app.mfx.core.state.stage == mortiflix_ui::STAGE_RENDER || !host.jobs.is_empty();
     if watching {
         host.ui.poll_jobs(&mut app.mfx.core.service, ctx.input(|i| i.time));
     }
-    // Get the video waits for the hand-off into FilmCraft (`mortiflix.import.run {open_edit: false}`)
+    // Get the video waits for the hand-off into Edit (`mortiflix.import.run {open_edit: false}`)
     let handoff = app.mfx.core.state.handoff.phase;
-    if app.mfx.export.ui.pending_get_video && handoff == filmcraft_mortiflix_ui::into_filmcraft::Phase::Failed {
+    if app.mfx.export.ui.pending_get_video && handoff == mortiflix_ui::into_edit::Phase::Failed {
         app.mfx.export.ui.pending_get_video = false;
         let why = app.mfx.core.state.handoff.error.clone();
-        app.mfx.export.ui.note = format!("The video couldn't be brought into FilmCraft, so nothing was rendered. {why}").trim().to_string();
+        app.mfx.export.ui.note = format!("The video couldn't be brought into Edit, so nothing was rendered. {why}").trim().to_string();
     }
     if app.mfx.export.ui.pending_get_video
-        && handoff != filmcraft_mortiflix_ui::into_filmcraft::Phase::Preparing
+        && handoff != mortiflix_ui::into_edit::Phase::Preparing
         && app.session.active_sequence().is_some_and(|q| q.duration().0 > 0)
     {
         app.mfx.export.ui.pending_get_video = false;
         app.mfx.export.ui.choices.preset = Preset::Youtube;
-        app.mfx.export.ui.choices.filmcraft_preset = None;
+        app.mfx.export.ui.choices.studio_preset = None;
         if let Err(e) = render(app, None) {
             app.mfx.export.ui.note = e.clone();
             app.ui.status = e;
@@ -148,7 +148,7 @@ pub fn frame(app: &mut FilmcraftApp, ctx: &egui::Context) {
 }
 
 /// Get the video (stage 4 → 6): render the YouTube video as soon as the timeline is there.
-pub fn get_video(app: &mut FilmcraftApp) {
+pub fn get_video(app: &mut StudioApp) {
     app.mfx.export.ui.pending_get_video = true;
     app.mfx.export.ui.page = Page::Settings;
     app.mfx.export.ui.full_settings = false;
@@ -158,7 +158,7 @@ pub fn get_video(app: &mut FilmcraftApp) {
 /// framing, howMuch, loudness, captions, hardware, fileName, folder); `{"render": false}` only
 /// changes / reads; otherwise it renders. `{"page": "settings"|"rendered"}` switches the page.
 /// Returns the page's state and the render's queue ids.
-pub fn route(app: &mut FilmcraftApp, params: &Value) -> Result<Value, String> {
+pub fn route(app: &mut StudioApp, params: &Value) -> Result<Value, String> {
     if let Some(set) = params.get("set") {
         let mut c = app.mfx.export.ui.choices.clone();
         c.apply(set)?;
@@ -179,7 +179,7 @@ pub fn route(app: &mut FilmcraftApp, params: &Value) -> Result<Value, String> {
     Ok(json!({"started": started, "export": app.mfx.export.ui, "view": view_json(app)}))
 }
 
-fn view_json(app: &FilmcraftApp) -> Value {
+fn view_json(app: &StudioApp) -> Value {
     let v = view(app);
     json!({"hasSequence": v.has_sequence, "seconds": v.seconds, "estimate": v.estimate, "out": [v.out_width, v.out_height], "summary": v.summary,
            "defaultFolder": v.default_folder, "queue": v.queue, "timeline": v.timeline})
@@ -189,7 +189,7 @@ fn view_json(app: &FilmcraftApp) -> Value {
 // the view
 // ---------------------------------------------------------------------------------------------
 
-fn project_name(app: &FilmcraftApp) -> String {
+fn project_name(app: &StudioApp) -> String {
     if !app.mfx.core.state.project_title.trim().is_empty() {
         return app.mfx.core.state.project_title.trim().to_string();
     }
@@ -202,11 +202,11 @@ fn project_name(app: &FilmcraftApp) -> String {
     app.session.active_sequence().and(app.session.state.active_sequence).and_then(|id| app.session.project.item(id)).map(|i| i.name.clone()).unwrap_or_default()
 }
 
-fn default_folder(app: &FilmcraftApp) -> String {
+fn default_folder(app: &StudioApp) -> String {
     let os = Os::this();
-    let home = filmcraft_engine::media_browser::std_home_dir().unwrap_or_default();
+    let home = mortiflix_engine::media_browser::std_home_dir().unwrap_or_default();
     if home.is_empty() {
-        return filmcraft_engine::export_tools::default_export_dir(&app.session).to_string_lossy().to_string();
+        return mortiflix_engine::export_tools::default_export_dir(&app.session).to_string_lossy().to_string();
     }
     let xdg = match os {
         Os::Linux => std::env::var("XDG_VIDEOS_DIR").ok().or_else(|| {
@@ -218,10 +218,10 @@ fn default_folder(app: &FilmcraftApp) -> String {
     ex::default_folder(os, &home, xdg.as_deref(), &project_name(app))
 }
 
-/// FilmCraft settings for the person's choices (the FilmCraft preset plus the page's overrides).
-fn settings_for(app: &FilmcraftApp, c: &Choices) -> Result<(String, ExportSettings, String), String> {
+/// Mortiflix Studio settings for the person's choices (the Mortiflix Studio preset plus the page's overrides).
+fn settings_for(app: &StudioApp, c: &Choices) -> Result<(String, ExportSettings, String), String> {
     let r = ex::recipe(c);
-    let (_, mut s) = settings_from_params(&app.session, &json!({"preset": r.filmcraft_preset}), CMD).map_err(|e| e.to_string())?;
+    let (_, mut s) = settings_from_params(&app.session, &json!({"preset": r.studio_preset}), CMD).map_err(|e| e.to_string())?;
     if let Some(fs) = r.frame_size {
         s.frame_size = Some(fs);
     }
@@ -244,7 +244,7 @@ fn settings_for(app: &FilmcraftApp, c: &Choices) -> Result<(String, ExportSettin
             s.effects.loudness.target_lufs = lufs;
             s.effects.loudness.true_peak_dbtp = tp;
         }
-        None if c.filmcraft_preset.is_none() => s.effects.loudness.enabled = false,
+        None if c.studio_preset.is_none() => s.effects.loudness.enabled = false,
         None => {}
     }
     if let Some(fill) = r.fill {
@@ -258,11 +258,11 @@ fn settings_for(app: &FilmcraftApp, c: &Choices) -> Result<(String, ExportSettin
     }
     s.hardware_encoding = if r.hardware { HardwareEncoding::Auto } else { HardwareEncoding::Off };
     s.validate().map_err(|e| e.to_string())?;
-    Ok((r.filmcraft_preset, s, r.range))
+    Ok((r.studio_preset, s, r.range))
 }
 
 /// "H.264 · 16 Mbps · AAC 384 kbps · −14 LUFS"
-fn summary(s: &ExportSettings, w: u32, h: u32, rate: filmcraft_engine::time::FrameRate, sr: u32) -> String {
+fn summary(s: &ExportSettings, w: u32, h: u32, rate: mortiflix_engine::time::FrameRate, sr: u32) -> String {
     let r = s.resolve(w, h, rate, sr);
     let mut parts = vec![s.format.label().to_string()];
     if s.has_video() && r.target_kbps > 0 {
@@ -284,7 +284,7 @@ fn audio_label(s: &ExportSettings) -> String {
 }
 
 /// The timeline's hash: renders made from another timeline are "made before your last edit".
-fn timeline_hash(app: &mut FilmcraftApp) -> u64 {
+fn timeline_hash(app: &mut StudioApp) -> u64 {
     let rev = app.session.revision;
     let seq = app.session.state.active_sequence;
     if let Some((r, s, h)) = app.mfx.export.hash_cache
@@ -306,7 +306,7 @@ fn timeline_hash(app: &mut FilmcraftApp) -> u64 {
     h
 }
 
-fn view(app: &FilmcraftApp) -> TabView {
+fn view(app: &StudioApp) -> TabView {
     let mut v = TabView { os: Os::this(), project: project_name(app), default_folder: default_folder(app), ..TabView::default() };
     v.all_formats = if app.mfx.export.formats.is_empty() {
         app.session.export_presets.all().iter().map(|p| (p.category.clone(), p.name.clone())).collect()
@@ -325,17 +325,17 @@ fn view(app: &FilmcraftApp) -> TabView {
     v.seq_width = w;
     v.seq_height = h;
     if q.mark_in.is_some() || q.mark_out.is_some() {
-        v.in_out_seconds = filmcraft_engine::export::export_range(&app.session.project, seq, &ExportSettings::default()).ok().map(|r| r.duration.seconds());
+        v.in_out_seconds = mortiflix_engine::export::export_range(&app.session.project, seq, &ExportSettings::default()).ok().map(|r| r.duration.seconds());
     }
     v.audio_tracks = q.audio_tracks.iter().map(|t| (t.name.clone(), Stem::of_track(&t.name))).collect();
     let dur = match app.mfx.export.ui.choices.how_much {
         ex::HowMuch::InOut => {
-            filmcraft_engine::export::export_range(&app.session.project, seq, &ExportSettings::default()).map(|r| r.duration).unwrap_or(whole)
+            mortiflix_engine::export::export_range(&app.session.project, seq, &ExportSettings::default()).map(|r| r.duration).unwrap_or(whole)
         }
         ex::HowMuch::Whole => whole.max(fd),
     };
     for (i, p) in Preset::ALL.into_iter().enumerate() {
-        let c = Choices { preset: p, filmcraft_preset: None, ..app.mfx.export.ui.choices.clone() };
+        let c = Choices { preset: p, studio_preset: None, ..app.mfx.export.ui.choices.clone() };
         if let Ok((_, s, _)) = settings_for(app, &c)
             && let Some(slot) = v.estimates.get_mut(i)
         {
@@ -351,13 +351,13 @@ fn view(app: &FilmcraftApp) -> TabView {
             v.out_height = r.height;
         }
         let one = s.estimate_bytes(w, h, rate, sr, dur);
-        v.estimate = if c.filmcraft_preset.is_none() && c.preset == Preset::Stems { one.saturating_mul(3) } else { one };
+        v.estimate = if c.studio_preset.is_none() && c.preset == Preset::Stems { one.saturating_mul(3) } else { one };
         v.summary = summary(&s, w, h, rate, sr);
     }
     v
 }
 
-fn queue_rows(app: &FilmcraftApp) -> Vec<QueueRow> {
+fn queue_rows(app: &StudioApp) -> Vec<QueueRow> {
     let timeline = app.mfx.export.hash_cache.map_or(0, |c| c.2);
     app.session
         .export_queue
@@ -391,7 +391,7 @@ fn queue_rows(app: &FilmcraftApp) -> Vec<QueueRow> {
 }
 
 /// The timeline frame at the playhead, framed as the export will frame it.
-fn draw_picture(app: &mut FilmcraftApp, ui: &mut egui::Ui, pic: Rect, fill: bool) {
+fn draw_picture(app: &mut StudioApp, ui: &mut egui::Ui, pic: Rect, fill: bool) {
     let Some(seq) = app.session.state.active_sequence else { return };
     let Some(q) = app.session.project.sequence(seq).cloned() else { return };
     let rate = q.settings.frame_rate;
@@ -420,7 +420,7 @@ fn now_unix() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs())
 }
 
-fn clock_label(app: &FilmcraftApp, unix: u64) -> String {
+fn clock_label(app: &StudioApp, unix: u64) -> String {
     let secs = i64::try_from(unix).unwrap_or(0);
     if let Some(p) = app.session.persistence.as_ref() {
         let s = p.local_time(secs);
@@ -449,7 +449,7 @@ fn exists(p: &str) -> bool {
 }
 
 /// Queue one export of the active sequence with `settings` to `path`; returns the queue id.
-fn queue_one(app: &mut FilmcraftApp, preset: &str, settings: &ExportSettings, path: &str, range: &str) -> Result<u64, String> {
+fn queue_one(app: &mut StudioApp, preset: &str, settings: &ExportSettings, path: &str, range: &str) -> Result<u64, String> {
     let settings_json = serde_json::to_value(settings).map_err(|e| e.to_string())?;
     let p = json!({"preset": preset, "settings": settings_json, "path": path, "range": range, "start": false});
     let r = app.session.execute("export.queue.add", p).map_err(|e| e.to_string())?;
@@ -457,7 +457,7 @@ fn queue_one(app: &mut FilmcraftApp, preset: &str, settings: &ExportSettings, pa
 }
 
 /// Render the current choices (or a remembered render's, `again`). Returns the record index.
-fn render(app: &mut FilmcraftApp, again: Option<usize>) -> Result<usize, String> {
+fn render(app: &mut StudioApp, again: Option<usize>) -> Result<usize, String> {
     let seq = app.session.state.active_sequence.ok_or("Nothing on the timeline yet: finish the shots first")?;
     let dur = app.session.project.sequence(seq).map(|q| q.duration()).unwrap_or_default();
     if dur.0 <= 0 {
@@ -488,7 +488,7 @@ fn render(app: &mut FilmcraftApp, again: Option<usize>) -> Result<usize, String>
     let mut ids = Vec::new();
     let mut files = Vec::new();
     let path;
-    if choices.filmcraft_preset.is_none() && choices.preset == Preset::Stems {
+    if choices.studio_preset.is_none() && choices.preset == Preset::Stems {
         // a folder with Voice.wav, Music.wav, Effects.wav: each the whole length, the other stems' tracks muted
         let dir = ex::unique_path(&folder, &stem, "", &exists);
         std::fs::create_dir_all(&dir).map_err(|e| format!("Can't make {dir}: {e}"))?;
@@ -525,7 +525,7 @@ fn render(app: &mut FilmcraftApp, again: Option<usize>) -> Result<usize, String>
 
 /// Track a render: ask the service for its place in the one queue (`render.add`); without a
 /// service it goes at once.
-fn start_job(app: &mut FilmcraftApp, record: usize, queue_ids: Vec<u64>, label: &str) {
+fn start_job(app: &mut StudioApp, record: usize, queue_ids: Vec<u64>, label: &str) {
     let connected = app.mfx.core.service.status().is_connected();
     if connected {
         let id = app.mfx.core.service.request("render.add", json!({"label": label, "kind": "export"}));
@@ -541,10 +541,10 @@ fn start_job(app: &mut FilmcraftApp, record: usize, queue_ids: Vec<u64>, label: 
 }
 
 /// Keep the one queue moving. The service owns the PC's one render queue: each render of the app
-/// is a job there (`render.add`) and FilmCraft encodes it only once that job is running; progress
-/// goes back as `render.progress`. FilmCraft exports started from its own full Export page are left
-/// to FilmCraft.
-fn pump(app: &mut FilmcraftApp) {
+/// is a job there (`render.add`) and Mortiflix Studio encodes it only once that job is running; progress
+/// goes back as `render.progress`. Mortiflix Studio exports started from its own full Export page are left
+/// to Mortiflix Studio.
+fn pump(app: &mut StudioApp) {
     let host = &mut app.mfx.export;
     // the service's answers to render.add and its render.job events for our jobs
     for (record, row) in std::mem::take(&mut host.ui.added) {
@@ -575,7 +575,7 @@ fn pump(app: &mut FilmcraftApp) {
     for id in stop_items {
         let _ = app.session.execute("export.queue.cancel", json!({"id": id}));
     }
-    // FilmCraft's queue runs while the next ready item's job may go
+    // Mortiflix Studio's queue runs while the next ready item's job may go
     let q = &app.session.export_queue;
     let next = q.items.iter().find(|i| i.status == QueueStatus::Ready).map(|i| i.id);
     let encoding = q.items.iter().any(|i| i.status == QueueStatus::Encoding);
@@ -590,7 +590,7 @@ fn pump(app: &mut FilmcraftApp) {
                 app.ui.status = e.to_string();
             }
         }
-        _ => filmcraft_engine::export_tools::pump_queue(&mut app.session, false),
+        _ => mortiflix_engine::export_tools::pump_queue(&mut app.session, false),
     }
     // progress into the service's queue, about once a second
     let items = &app.session.export_queue.items;
@@ -626,7 +626,7 @@ fn pump(app: &mut FilmcraftApp) {
 }
 
 /// Notice renders that finished, failed or were stopped.
-fn settle(app: &mut FilmcraftApp) {
+fn settle(app: &mut StudioApp) {
     // stopped renders: delete the half-written file once the encoder let go of it
     let items = &app.session.export_queue.items;
     app.mfx.export.delete_on_cancel.retain(|(id, path)| match items.iter().find(|i| i.id == *id).map(|i| i.status) {
@@ -735,7 +735,7 @@ fn settle(app: &mut FilmcraftApp) {
     save_renders(app);
 }
 
-fn ask_publish_setup(app: &mut FilmcraftApp) {
+fn ask_publish_setup(app: &mut StudioApp) {
     if app.mfx.export.ui.pending.iter().any(|p| p.1 == Pending::PublishSetup) {
         return;
     }
@@ -752,7 +752,7 @@ fn ask_publish_setup(app: &mut FilmcraftApp) {
 // the page's actions
 // ---------------------------------------------------------------------------------------------
 
-fn act(app: &mut FilmcraftApp, ctx: &egui::Context, a: Action) -> Result<(), String> {
+fn act(app: &mut StudioApp, ctx: &egui::Context, a: Action) -> Result<(), String> {
     match a {
         Action::Render => render(app, None).map(|_| ()),
         Action::RenderAgain(i) => render(app, Some(i)).map(|_| ()),
@@ -809,7 +809,7 @@ fn act(app: &mut FilmcraftApp, ctx: &egui::Context, a: Action) -> Result<(), Str
             app.mfx.export.ui.full_settings = true;
             Ok(())
         }
-        Action::EditTab => crate::menus::invoke(app, ctx, "stages.filmcraft", json!({})).map(|_| ()),
+        Action::EditTab => crate::menus::invoke(app, ctx, "stages.edit", json!({})).map(|_| ()),
         Action::NewProject => crate::menus::invoke(app, ctx, "mortiflix.newProject", json!({})).map(|_| ()),
         Action::SetupPosting => crate::menus::invoke(app, ctx, "mortiflix.setup", json!({})).map(|_| ()),
         Action::Post(i) => {
@@ -834,15 +834,15 @@ fn act(app: &mut FilmcraftApp, ctx: &egui::Context, a: Action) -> Result<(), Str
 // renders of this project, kept across restarts (<data dir>/mortiflix-renders.json)
 // ---------------------------------------------------------------------------------------------
 
-fn renders_file(app: &FilmcraftApp) -> Option<std::path::PathBuf> {
+fn renders_file(app: &StudioApp) -> Option<std::path::PathBuf> {
     app.session.prefs_path.as_ref().and_then(|p| p.parent()).map(|d| d.join("mortiflix-renders.json"))
 }
 
-fn project_key(app: &FilmcraftApp) -> String {
+fn project_key(app: &StudioApp) -> String {
     app.mfx.core.state.project_id.clone().or_else(|| app.session.path.clone()).unwrap_or_else(|| project_name(app))
 }
 
-fn load_renders(app: &mut FilmcraftApp) {
+fn load_renders(app: &mut StudioApp) {
     let _ = timeline_hash(app);
     if app.mfx.export.formats.is_empty() {
         app.mfx.export.formats = app.session.export_presets.all().iter().map(|p| (p.category.clone(), p.name.clone())).collect();
@@ -870,7 +870,7 @@ fn load_renders(app: &mut FilmcraftApp) {
     }
 }
 
-fn save_renders(app: &FilmcraftApp) {
+fn save_renders(app: &StudioApp) {
     if !app.mfx.export.jobs.is_empty() && app.mfx.export.ui.renders.iter().all(|r| r.finished_at == 0) {
         return;
     }
@@ -893,7 +893,7 @@ fn save_renders(app: &FilmcraftApp) {
 
 /// For tests: the item id of a queued render.
 #[cfg(test)]
-fn first_queue_id(app: &FilmcraftApp) -> Option<u64> {
+fn first_queue_id(app: &StudioApp) -> Option<u64> {
     app.session.export_queue.items.first().map(|i| i.id)
 }
 
@@ -901,15 +901,15 @@ fn first_queue_id(app: &FilmcraftApp) -> Option<u64> {
 mod tests {
     use super::*;
 
-    fn app_with_sequence() -> FilmcraftApp {
-        let mut app = FilmcraftApp::new(filmcraft_engine::Session::default());
+    fn app_with_sequence() -> StudioApp {
+        let mut app = StudioApp::new(mortiflix_engine::Session::default());
         app.session.execute("file.openDemoProject", json!({})).unwrap();
         app.mfx.core.activate();
         app
     }
 
     #[test]
-    fn choices_turn_into_filmcraft_settings() {
+    fn choices_turn_into_mortiflix_settings() {
         let app = app_with_sequence();
         let (name, s, range) = settings_for(&app, &Choices::default()).unwrap();
         assert_eq!(name, "YouTube 1080p Full HD");
@@ -925,7 +925,7 @@ mod tests {
         let (_, s, _) = settings_for(&app, &master).unwrap();
         assert_eq!(s.extension(), "mov");
         assert!(!s.effects.loudness.enabled);
-        let bad = Choices { filmcraft_preset: Some("No Such Preset".into()), ..Choices::default() };
+        let bad = Choices { studio_preset: Some("No Such Preset".into()), ..Choices::default() };
         assert!(settings_for(&app, &bad).is_err());
     }
 
@@ -943,8 +943,8 @@ mod tests {
     }
 
     #[test]
-    fn render_queues_into_filmcraft_and_never_overwrites() {
-        let dir = filmcraft_engine::temp_dir().join(format!("mfx-export-test-{}", std::process::id()));
+    fn render_queues_into_mortiflix_and_never_overwrites() {
+        let dir = mortiflix_engine::temp_dir().join(format!("mfx-export-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let mut app = app_with_sequence();
         let folder = dir.to_string_lossy().to_string();
@@ -978,7 +978,7 @@ mod tests {
 
     #[test]
     fn stems_mute_the_other_tracks_only_in_the_queued_copy() {
-        let dir = filmcraft_engine::temp_dir().join(format!("mfx-export-stems-{}", std::process::id()));
+        let dir = mortiflix_engine::temp_dir().join(format!("mfx-export-stems-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let mut app = app_with_sequence();
         let before = app.session.project.clone();
@@ -1004,7 +1004,7 @@ mod tests {
 
     #[test]
     fn a_render_waits_for_the_services_go() {
-        let dir = filmcraft_engine::temp_dir().join(format!("mfx-export-go-{}", std::process::id()));
+        let dir = mortiflix_engine::temp_dir().join(format!("mfx-export-go-{}", std::process::id()));
         let mut app = app_with_sequence();
         route(&mut app, &json!({"set": {"folder": dir.to_string_lossy()}, "render": false})).unwrap();
         let i = render(&mut app, None).unwrap();
@@ -1037,7 +1037,7 @@ mod tests {
 
     #[test]
     fn get_video_waits_for_the_timeline_then_renders_youtube() {
-        let mut app = FilmcraftApp::new(filmcraft_engine::Session::default());
+        let mut app = StudioApp::new(mortiflix_engine::Session::default());
         app.mfx.core.activate();
         get_video(&mut app);
         frame(&mut app, &egui::Context::default());

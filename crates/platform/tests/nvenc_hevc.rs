@@ -4,10 +4,10 @@
 //! without an NVIDIA GPU / driver with HEVC encoding.
 #![cfg(target_os = "windows")]
 
-use filmcraft_bitstream::unescape_rbsp;
-use filmcraft_hevc::params::Sps;
-use filmcraft_isobmff::{HevcConfig, SampleEntry};
-use filmcraft_platform::nvenc::{Codec, Config, Nvenc, Packet, Profile, annex_b_to_length_prefixed_for, hevc_available, nal_type};
+use mortiflix_bitstream::unescape_rbsp;
+use mortiflix_hevc::params::Sps;
+use mortiflix_isobmff::{HevcConfig, SampleEntry};
+use mortiflix_platform::nvenc::{Codec, Config, Nvenc, Packet, Profile, annex_b_to_length_prefixed_for, hevc_available, nal_type};
 
 /// A moving test picture: gradient background, a moving box, a little texture.
 fn rgba(w: usize, h: usize, i: usize) -> Vec<u8> {
@@ -60,7 +60,7 @@ fn encode_all(cfg: &Config, frames: usize) -> Option<(Nvenc, Vec<Packet>, Source
     let (mut y, mut u, mut v) = (Vec::new(), Vec::new(), Vec::new());
     let (mut packets, mut sources) = (Vec::new(), Vec::new());
     for i in 0..frames {
-        filmcraft_export::rgba_to_yuv420_8(&rgba(w, h, i), w, h, &mut y, &mut u, &mut v);
+        mortiflix_export::rgba_to_yuv420_8(&rgba(w, h, i), w, h, &mut y, &mut u, &mut v);
         sources.push((y.clone(), u.clone(), v.clone()));
         packets.extend(enc.encode(&y, &u, &v, i as u64).unwrap());
     }
@@ -157,7 +157,7 @@ fn the_stream_decodes_to_the_source() {
 
     // our own decoder decodes the samples
     let entry = SampleEntry::hevc(hvcc, w as u16, h as u16);
-    let mut dec = filmcraft_codecs::software_video_decoder(&entry).unwrap();
+    let mut dec = mortiflix_codecs::software_video_decoder(&entry).unwrap();
     let mut out = Vec::new();
     for p in &packets {
         out.extend(dec.decode(&p.data, p.pts).unwrap());
@@ -168,7 +168,7 @@ fn the_stream_decodes_to_the_source() {
     let mut worst_chroma = 99.0f64;
     for f in &out {
         let src = &sources[f.pts as usize];
-        let filmcraft_frame::PixelData::Yuv8 { planes, .. } = &f.frame.data else { panic!("8-bit planes") };
+        let mortiflix_frame::PixelData::Yuv8 { planes, .. } = &f.frame.data else { panic!("8-bit planes") };
         worst = worst.min(psnr(&planes[0], &src.0));
         worst_chroma = worst_chroma.min(psnr(&planes[1], &src.1)).min(psnr(&planes[2], &src.2));
     }
@@ -276,7 +276,7 @@ fn an_encoder_dropped_mid_stream_releases_everything() {
         let mut enc = Nvenc::new(&config(640, 360)).unwrap_or_else(|e| panic!("round {round}: {e}"));
         let (mut y, mut u, mut v) = (Vec::new(), Vec::new(), Vec::new());
         for i in 0..5 {
-            filmcraft_export::rgba_to_yuv420_8(&rgba(640, 360, i), 640, 360, &mut y, &mut u, &mut v);
+            mortiflix_export::rgba_to_yuv420_8(&rgba(640, 360, i), 640, 360, &mut y, &mut u, &mut v);
             enc.encode(&y, &u, &v, i as u64).unwrap();
         }
         // dropped with pictures in flight and no flush
@@ -313,7 +313,7 @@ fn a_keyframe_every_one_or_two_pictures_is_written_without_b_frames() {
         let keys: Vec<i64> = packets.iter().filter(|p| p.key).map(|p| p.pts).collect();
         assert_eq!(keys, (0..12).step_by(keyint as usize).collect::<Vec<i64>>(), "keyint {keyint}");
         let entry = SampleEntry::hevc(enc.hevc_config().expect("an hvcC record").clone(), 640, 360);
-        let mut dec = filmcraft_codecs::software_video_decoder(&entry).unwrap();
+        let mut dec = mortiflix_codecs::software_video_decoder(&entry).unwrap();
         let mut n = 0;
         for p in &packets {
             n += dec.decode(&p.data, p.pts).unwrap().len();

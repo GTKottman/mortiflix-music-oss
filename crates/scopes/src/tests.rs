@@ -1,7 +1,7 @@
 //! Scope maths on generated frames with known values.
 
 use crate::*;
-use filmcraft_color::rgb_to_ycbcr;
+use mortiflix_color::rgb_to_ycbcr;
 
 fn rgba8(w: usize, h: usize, mut f: impl FnMut(usize, usize) -> [u8; 3]) -> Vec<u8> {
     let mut px = Vec::with_capacity(w * h * 4);
@@ -281,7 +281,7 @@ fn names_round_trip() {
     assert_eq!(ColorSpace::Auto.resolve(false).matrix(), Matrix::Bt709);
 }
 
-/// `cargo test --release -p filmcraft-scopes perf -- --ignored --nocapture`
+/// `cargo test --release -p mortiflix-scopes perf -- --ignored --nocapture`
 #[test]
 #[ignore]
 fn perf_scopes_at_1080p() {

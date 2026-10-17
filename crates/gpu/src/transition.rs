@@ -1,4 +1,4 @@
-use filmcraft_project::{EffectInstance, ParamValue};
+use mortiflix_project::{EffectInstance, ParamValue};
 use wgpu::util::DeviceExt;
 
 pub(crate) struct PushStage {

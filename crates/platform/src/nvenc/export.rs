@@ -1,5 +1,5 @@
 //! NVENC as an Export encoder: [`factory`] is registered in front of the software H.264 encoder
-//! (`filmcraft_export::register_encoder`).
+//! (`mortiflix_export::register_encoder`).
 //!
 //! - H.264: it takes an export only when Export ▸ Hardware encoding is Auto and NVENC can do what
 //!   the settings ask; otherwise it returns `None` and the software encoder runs, exactly as before.
@@ -10,19 +10,19 @@
 //!   encoder, otherwise an HDR sequence is tone-mapped to SDR as before. What NVENC cannot do
 //!   (interlaced, two-pass, non-square pixels, 10-bit on a GPU without it, sizes outside its
 //!   limits...) is counted as declined and ends the export with an error that says why; when this
-//!   machine has no HEVC encoder at all, [`filmcraft_export::available`] says so and the factory
+//!   machine has no HEVC encoder at all, [`mortiflix_export::available`] says so and the factory
 //!   returns `None` (the export's own "encoder not available" error).
 //!
 //! A hardware encoder that fails in the middle of an export (a lost device) ends the export with an
 //! error naming it; unlike a decoder it cannot be replayed into the software encoder, because the
 //! two write different streams.
 
-use filmcraft_export::{
+use mortiflix_export::{
     BitrateMode, ColorSignal, EncodedPacket, EncoderFrame, ExportError, ExportSettings, FieldOrder, Format, H264Pass, H264Profile, HardwareEncoding, Result,
     VideoEncoder,
 };
-use filmcraft_isobmff::{AvcConfig, SampleEntry};
-use filmcraft_time::FrameRate;
+use mortiflix_isobmff::{AvcConfig, SampleEntry};
+use mortiflix_time::FrameRate;
 
 use super::{Codec, Config, Nvenc, Profile, Sei, Signal};
 
@@ -113,8 +113,8 @@ impl VideoEncoder for NvencEncoder {
             // Main 10 takes the encoded R'G'B' floats: 10-bit limited-range BT.2020 NCL (or the signal's matrix)
             (true, Some(rgb)) => {
                 let (kr, kb) = self.signal.kr_kb();
-                filmcraft_export::timed(filmcraft_export::Stage::Convert, || {
-                    filmcraft_export::rgbf_to_yuv420_10(rgb, w, h, kr, kb, &mut self.y16, &mut self.u16, &mut self.v16)
+                mortiflix_export::timed(mortiflix_export::Stage::Convert, || {
+                    mortiflix_export::rgbf_to_yuv420_10(rgb, w, h, kr, kb, &mut self.y16, &mut self.u16, &mut self.v16)
                 })?;
                 self.enc.encode_10(&self.y16, &self.u16, &self.v16, f.index).map_err(|e| ExportError::Encode(format!("NVENC: {e}{hint}")))?
             }
@@ -123,13 +123,13 @@ impl VideoEncoder for NvencEncoder {
             // the GPU converts the RGBA picture itself (BT.709 limited range, the same codes as `rgba_to_yuv420_8`)
             (false, None) if self.enc.takes_rgba() => self.enc.encode_rgba(f.rgba, f.index).map_err(|e| ExportError::Encode(format!("NVENC: {e}{hint}")))?,
             (false, None) => {
-                filmcraft_export::timed(filmcraft_export::Stage::Convert, || {
-                    filmcraft_export::rgba_to_yuv420_8(f.rgba, w, h, &mut self.y, &mut self.u, &mut self.v)
+                mortiflix_export::timed(mortiflix_export::Stage::Convert, || {
+                    mortiflix_export::rgba_to_yuv420_8(f.rgba, w, h, &mut self.y, &mut self.u, &mut self.v)
                 });
                 self.enc.encode(&self.y, &self.u, &self.v, f.index).map_err(|e| ExportError::Encode(format!("NVENC: {e}{hint}")))?
             }
         };
-        filmcraft_export::note_hw_encode_frame();
+        mortiflix_export::note_hw_encode_frame();
         Ok(self.packets(ps))
     }
 
@@ -245,7 +245,7 @@ fn factory_with(
     }
     let declined = |why: &str| {
         log::info!("hardware encoding declined: {why}");
-        filmcraft_export::note_hw_encode_declined();
+        mortiflix_export::note_hw_encode_declined();
         None
     };
     let cfg = match config(format, w, h, rate, s) {
@@ -254,19 +254,19 @@ fn factory_with(
     };
     match open(&cfg) {
         Ok(enc) => {
-            filmcraft_export::note_hw_encode_session();
+            mortiflix_export::note_hw_encode_session();
             Some(Ok(Box::new(new_encoder(enc, w, h, rate, s.signal))))
         }
         Err(why) => declined(&why),
     }
 }
 
-/// The H.265 side of [`factory`]: FilmCraft's only HEVC encoder on Windows, so the Hardware encoding toggle
+/// The H.265 side of [`factory`]: Mortiflix Studio's only HEVC encoder on Windows, so the Hardware encoding toggle
 /// does not apply and a request NVENC cannot take is an error, not a fall-through.
 fn hevc_factory(w: u32, h: u32, rate: FrameRate, s: &ExportSettings) -> Option<Result<Box<dyn VideoEncoder>>> {
     let declined = |why: &str| {
         log::info!("hardware H.265 encoding declined: {why}");
-        filmcraft_export::note_hw_encode_declined();
+        mortiflix_export::note_hw_encode_declined();
         Some(Err(ExportError::Unsupported(format!("H.265 export with NVENC: {why}"))))
     };
     let cfg = match config(Format::Hevc, w, h, rate, s) {
@@ -275,7 +275,7 @@ fn hevc_factory(w: u32, h: u32, rate: FrameRate, s: &ExportSettings) -> Option<R
     };
     match open(&cfg, &nvenc_signal(&s.signal)) {
         Ok(enc) => {
-            filmcraft_export::note_hw_encode_session();
+            mortiflix_export::note_hw_encode_session();
             Some(Ok(Box::new(new_encoder(enc, w, h, rate, s.signal))))
         }
         // no HEVC encoder here at all: not a hardware attempt, the export's own "encoder not available" error

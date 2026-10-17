@@ -1,4 +1,4 @@
-# filmcraft-mpeg2v
+# mortiflix-mpeg2v
 
 Clean-room MPEG-2 video and MPEG-1 video decoder in pure Rust. Layer L0: depends only on
 `thiserror` and (optional, feature `threads`, default on) `rayon`. Builds for
@@ -17,16 +17,16 @@ consulted; FFmpeg is used only as an external fixture generator and test oracle.
 ## API
 
 ```rust
-let mut dec = filmcraft_mpeg2v::Decoder::new();
-for (i, au) in filmcraft_mpeg2v::access_units(&es).into_iter().enumerate() {
+let mut dec = mortiflix_mpeg2v::Decoder::new();
+for (i, au) in mortiflix_mpeg2v::access_units(&es).into_iter().enumerate() {
     for pic in dec.decode(&es[au], i as i64)? {             // display order
         // pic.y / pic.cb / pic.cr: tight 8-bit planes; pic.chroma: 4:2:0 / 4:2:2
         // pic.field_order(), pic.picture_type, pic.pts, pic.info (SequenceInfo)
     }
 }
 let rest = dec.flush();
-let info = filmcraft_mpeg2v::probe(&es);                    // sequence header + extensions
-let au = filmcraft_mpeg2v::scan_access_unit(&es[..]);       // picture types without decoding
+let info = mortiflix_mpeg2v::probe(&es);                    // sequence header + extensions
+let au = mortiflix_mpeg2v::scan_access_unit(&es[..]);       // picture types without decoding
 ```
 
 `decode` takes any chunk holding whole pictures (an access unit from a TS/PS/MXF/MOV sample).
@@ -110,7 +110,7 @@ FFmpeg's integer IDCT saturates differently from the exact one.
 
 ## Performance
 
-`cargo test --release -p filmcraft-mpeg2v --test perf -- --ignored --nocapture` decodes the
+`cargo test --release -p mortiflix-mpeg2v --test perf -- --ignored --nocapture` decodes the
 1080i fixture (1920×1080 4:2:0, 25 Mb/s, IBBP, field MC/DCT; FFmpeg-encoded) on an M4 Pro
 (14 cores) that was heavily loaded by other jobs (load average ≈ 190), best of five runs:
 **271 fps on one thread, 274 fps with slice rows on rayon** (runs under heavier momentary load

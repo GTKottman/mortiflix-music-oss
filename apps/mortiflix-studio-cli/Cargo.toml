@@ -1,0 +1,38 @@
+[package]
+name = "mortiflix-studio-cli"
+description = "Mortiflix Studio headless CLI and MCP server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "mortiflix-studio-cli"
+path = "src/main.rs"
+
+[features]
+default = []
+# Speech-to-text (Text panel ▸ Transcribe) with Whisper on the CPU, and model downloads.
+whisper = ["mortiflix-engine/whisper", "mortiflix-engine/speech-download"]
+
+[dependencies]
+mortiflix-engine = { workspace = true }
+mortiflix-export = { workspace = true }
+mortiflix-project = { workspace = true }
+mortiflix-render = { workspace = true }
+mortiflix-time = { workspace = true }
+mortiflix-gpu = { workspace = true }
+mortiflix-media = { workspace = true }
+mortiflix-codecs = { workspace = true }
+mortiflix-platform = { workspace = true }
+mortiflix-mxf = { workspace = true }
+mortiflix-mpegts = { workspace = true }
+mortiflix-ogg = { workspace = true }
+mortiflix-automation = { workspace = true }
+serde_json = { workspace = true }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+
+[dev-dependencies]
+mortiflix-testkit = { workspace = true }

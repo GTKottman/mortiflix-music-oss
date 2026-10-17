@@ -1,11 +1,11 @@
-// FilmCraft GPU compositor.
+// Mortiflix Studio GPU compositor.
 // Layers are drawn as transformed quads; the fragment shader samples the source (YUV planes or
 // RGBA) with manual bilinear filtering (textureLoad, so any float format works) and N×N
 // supersampling over the pixel footprint when minifying, converts to linear light, premultiplies
 // and scales by opacity. Normal layers blend into the Rgba16Float accumulator with fixed-function
 // premultiplied "over"; Dissolve does too (each pixel is either dropped or drawn opaque). The other
 // blend modes (`fs_blend`) read the accumulator under the layer from a copy (`backdrop`) and write
-// the composited result, with the math of `filmcraft_render::blend::composite`.
+// the composited result, with the math of `mortiflix_render::blend::composite`.
 
 struct U {
     m0: vec4<f32>,   // a b c d
@@ -15,7 +15,7 @@ struct U {
     p1: vec4<f32>,   // y_off y_scale c_off c_scale (code units)
     p2: vec4<f32>,   // kr kb code_scale footprint
     p3: vec4<f32>,   // blend mode, alpha-plane scale (0: none), effect-source integer decimation, unused
-    // Colour management of HDR / wide-gamut Y'CbCr (`filmcraft_color::InputTransform`, #965):
+    // Colour management of HDR / wide-gamut Y'CbCr (`mortiflix_color::InputTransform`, #965):
     q0: vec4<f32>,   // on, curve (0 sdr, 1 linear, 2 pq, 3 hlg), HLG OOTF scale (0: none), reference white cd/m²
     q1: vec4<f32>,   // HLG OOTF luma weights, gamut matrix on
     q2: vec4<f32>,   // gamut matrix row 0, tone mapping on
@@ -92,7 +92,7 @@ fn to_linear(v: vec3<f32>) -> vec3<f32> {
     return srgb_to_linear(clamp(v, vec3(0.0), vec3(1.0)));
 }
 
-// ---- colour management (`filmcraft_color::transform`), for `u.q0.x` = 1
+// ---- colour management (`mortiflix_color::transform`), for `u.q0.x` = 1
 
 // SMPTE ST 2084 on a 0..1 scale (1 = 10 000 cd/m²) and back.
 fn pq1(e: f32) -> f32 {
@@ -260,7 +260,7 @@ fn fs(in: VOut) -> @location(0) vec4<f32> {
 }
 
 // ---- the other blend modes: W3C Compositing and Blending formulas on straight, sRGB-encoded
-// colour, exactly as `filmcraft_render::blend` (no recursion in WGSL, so helpers are split out).
+// colour, exactly as `mortiflix_render::blend` (no recursion in WGSL, so helpers are split out).
 
 fn screen(b: f32, s: f32) -> f32 { return b + s - b * s; }
 

@@ -4,7 +4,7 @@
 use super::*;
 use crate::shortcut_presets as presets;
 use crate::shortcuts::Chord;
-use filmcraft_project::ParamValue;
+use mortiflix_project::ParamValue;
 use serde_json::json;
 
 fn demo() -> Session {
@@ -18,7 +18,7 @@ fn items(s: &Session, kind: TrackKind, idx: usize) -> Vec<(u64, Tick, Tick)> {
     s.active_sequence().unwrap().tracks(kind)[idx].items.iter().map(|i| (i.id.0, i.start, i.end())).collect()
 }
 
-fn clip(s: &Session, id: u64) -> filmcraft_project::TrackItem {
+fn clip(s: &Session, id: u64) -> mortiflix_project::TrackItem {
     s.active_sequence().unwrap().find_item(ClipId(id)).unwrap().1.clone()
 }
 
@@ -40,7 +40,7 @@ fn target_v1(s: &mut Session) {
 fn shortcut_tables_have_no_key_used_twice_in_one_scope() {
     let tables: [(&str, Vec<presets::Entry>); 4] = [
         ("Premiere", presets::premiere()),
-        ("FilmCraft panels", presets::FILMCRAFT_PANEL.iter().chain(presets::PREMIERE_PANEL).copied().collect()),
+        ("Mortiflix Studio panels", presets::MFX_STUDIO_PANEL.iter().chain(presets::PREMIERE_PANEL).copied().collect()),
         ("Final Cut", presets::FINAL_CUT.to_vec()),
         ("Avid", presets::AVID.to_vec()),
     ];
@@ -53,7 +53,7 @@ fn shortcut_tables_have_no_key_used_twice_in_one_scope() {
             }
         }
     }
-    // the FilmCraft Default set (registry defaults + panel tables + the Premiere audit) has no
+    // the Mortiflix Studio Default set (registry defaults + panel tables + the Premiere audit) has no
     // same-context conflicts for the new commands either
     let s = Session::default();
     let new_ids: Vec<&str> = keyboard::commands().iter().map(|c| c.id).collect();
@@ -293,7 +293,7 @@ fn text_layer_keys_change_size_leading_alignment_and_position() {
     s.execute("timeline.select", json!({"clips": [c]})).unwrap();
     let layer = |s: &Session| {
         let it = clip(s, c);
-        let idx = filmcraft_project::graphic::layer_indices(&it.effects);
+        let idx = mortiflix_project::graphic::layer_indices(&it.effects);
         it.effects[*idx.last().unwrap()].clone()
     };
     let f = |s: &Session, p: &str| layer(s).params[p].value.as_f64().unwrap_or(f64::NAN);

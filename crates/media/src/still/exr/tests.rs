@@ -167,7 +167,7 @@ fn exr_file(chans: &[Chan], data: [i32; 4], display: [i32; 4], comp: u8, value: 
 
 fn floats(d: &Decoded) -> &[f32] {
     match &d.frame.data {
-        filmcraft_frame::PixelData::RgbaF32(p) => p,
+        mortiflix_frame::PixelData::RgbaF32(p) => p,
         _ => panic!("EXR frames are float"),
     }
 }
@@ -300,8 +300,8 @@ fn still_source_reports_exr() {
     assert_eq!(s.info().kind, MediaKind::Still);
     assert_eq!((v.width, v.height, v.codec.as_str(), v.has_alpha), (4, 4, "EXR", true));
     assert_eq!(v.pixel_format, "RGBA 16-bit float");
-    let fr = s.video_frame(crate::FrameRequest::full(filmcraft_time::Tick(0))).unwrap();
-    assert!(matches!(fr.data, filmcraft_frame::PixelData::RgbaF32(_)));
+    let fr = s.video_frame(crate::FrameRequest::full(mortiflix_time::Tick(0))).unwrap();
+    assert!(matches!(fr.data, mortiflix_frame::PixelData::RgbaF32(_)));
 }
 
 #[test]

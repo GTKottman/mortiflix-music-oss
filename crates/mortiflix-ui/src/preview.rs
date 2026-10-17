@@ -1,18 +1,18 @@
-//! The loose preview and Play: FilmCraft's own monitor, no render, best media per shot (doc 36,
+//! The loose preview and Play: Mortiflix Studio's own monitor, no render, best media per shot (doc 36,
 //! mockups `UI Layout/36a Loose preview.html`, `36b Loose preview - states.html`).
 //!
 //! One panel plays everything made so far as one video, in film order, at the planned timing: a
 //! shot with motion plays its animatic piece, a shot with only a still holds it for its length, a
 //! shot not made yet is a dark card in its beat's colour, cut shots are skipped, voice and music
-//! play under it. The picture is FilmCraft's Program monitor playing a hidden sequence, "Loose
+//! play under it. The picture is Mortiflix Studio's Program monitor playing a hidden sequence, "Loose
 //! preview", that the host keeps in step with the graph ([`plan::Plan`] is its edit list), so
 //! nothing is rendered to watch it.
 //!
 //! This module owns the plan (the service's `preview.plan` + `graph.get`), the panel's controls (one Play with All /
 //! From here / This shot / This beat and Loop, the beats / shots / voice / music bar, the caption)
-//! and [`PreviewState`]. The host (`filmcraft-ui-egui`, `mortiflix_preview.rs`) builds the
+//! and [`PreviewState`]. The host (`mortiflix-ui-egui`, `mortiflix_preview.rs`) builds the
 //! sequence, draws the picture in [`Layout::picture`], fills [`Player`] every frame and runs the
-//! `mortiflix.preview.*` commands the controls push. FilmCraft's own keys drive the monitor
+//! `mortiflix.preview.*` commands the controls push. Mortiflix Studio's own keys drive the monitor
 //! (Space, J/K/L, ←/→ one frame, ↑/↓ previous/next shot, Home/End, I/O); Ctrl+L / ⌘L is Loop.
 
 pub mod plan;
@@ -27,12 +27,12 @@ pub use plan::{Media, Plan, PlanBeat, PlanShot, PlanSound};
 
 use crate::{MfxCtx, MfxState, Service};
 
-/// The FilmCraft sequence the preview plays (kept in the project bin, doc 36 "Out").
+/// The Mortiflix Studio sequence the preview plays (kept in the project bin, doc 36 "Out").
 pub const SEQUENCE_NAME: &str = "Loose preview";
 /// The graph is fetched again at least this often (seconds) while a project is open, and at once
 /// after a service event.
 pub const REFRESH_SECS: f64 = 10.0;
-/// FilmCraft's playhead colour (the "under the playhead" outline and the bar's playhead).
+/// Mortiflix Studio's playhead colour (the "under the playhead" outline and the bar's playhead).
 pub const PLAYHEAD: Color32 = Color32::from_rgb(0x58, 0x95, 0xec);
 
 const HEADER_H: f32 = 28.0;
@@ -85,7 +85,7 @@ impl Scope {
     }
 }
 
-/// FilmCraft's playback as the host saw it this frame (read-only here).
+/// Mortiflix Studio's playback as the host saw it this frame (read-only here).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Player {
@@ -97,7 +97,7 @@ pub struct Player {
     pub time: f64,
     pub duration: f64,
     pub fps: f64,
-    /// FilmCraft's timecodes (`HH:MM:SS:FF`).
+    /// Mortiflix Studio's timecodes (`HH:MM:SS:FF`).
     pub timecode: String,
     pub total: String,
     /// Playback resolution ("1/2") and monitor zoom ("Fit").
@@ -299,7 +299,7 @@ fn header(ui: &mut egui::Ui, ctx: &mut MfxCtx, r: Rect) {
     let tag_r = Rect::from_min_size(pos2(r.min.x + tw + 10.0, r.center().y - 10.0), vec2(tag.size().x + 16.0, 20.0));
     p.rect_filled(tag_r, 10.0, t.hover);
     p.galley(pos2(tag_r.min.x + 8.0, tag_r.center().y - tag.size().y / 2.0), tag, t.text_dim);
-    // right: Plays at ▾  Fit ▾ (FilmCraft's playback resolution and monitor zoom)
+    // right: Plays at ▾  Fit ▾ (Mortiflix Studio's playback resolution and monitor zoom)
     let pl = &ctx.state.preview.player;
     let res_label = if pl.res.is_empty() { "1/2".to_string() } else { pl.res.clone() };
     let zoom_label = if pl.zoom.is_empty() { "Fit".to_string() } else { pl.zoom.clone() };

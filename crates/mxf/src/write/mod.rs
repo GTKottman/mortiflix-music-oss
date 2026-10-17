@@ -338,8 +338,8 @@ impl WriterConfig {
             timecode: None,
             ids,
             first_track_id: 2,
-            company: "FilmCraft".into(),
-            product: "FilmCraft".into(),
+            company: "Mortiflix Studio".into(),
+            product: "Mortiflix Studio".into(),
             version: env!("CARGO_PKG_VERSION").into(),
             modified: Timestamp::default(),
         }
@@ -794,7 +794,7 @@ impl<W: Write + Seek> MxfWriter<W> {
             .p(0x3C01, &utf16(&cfg.company))
             .p(0x3C02, &utf16(&cfg.product))
             .p(0x3C04, &utf16(&cfg.version))
-            .p(0x3C05, &hash128(b"FilmCraft MXF writer"))
+            .p(0x3C05, &hash128(b"Mortiflix Studio MXF writer"))
             .p(0x3C06, &ts);
         s.write(&mut out);
         // Content storage, essence container data

@@ -10,7 +10,7 @@ use std::sync::Arc;
 use serde_json::json;
 
 use crate::Session;
-use filmcraft_project::{ItemId, ItemKind, ParamValue};
+use mortiflix_project::{ItemId, ItemKind, ParamValue};
 
 /// A 144 x 108 Color Matte (a 1440 x 1080 stand-in) whose pixels are `par`.
 fn matte(s: &mut Session, par: (u32, u32)) -> ItemId {
@@ -29,15 +29,15 @@ fn coverage(s: &Session, xs: &[usize]) -> Vec<f32> {
 }
 
 /// A 192 x 108 square-pixel sequence (a 1920 x 1080 stand-in) with `item` overwritten at 0.
-fn overwrite_into_square_hd(s: &mut Session, item: ItemId) -> filmcraft_project::ClipId {
+fn overwrite_into_square_hd(s: &mut Session, item: ItemId) -> mortiflix_project::ClipId {
     s.execute("file.newSequence", json!({"name": "HD", "width": 192, "height": 108, "fps": 24})).unwrap();
     s.execute("source.open", json!({"item": item.0})).unwrap();
     s.execute("playhead.set", json!({"seconds": 0.0})).unwrap();
     let r = s.execute("source.overwrite", json!({})).unwrap();
-    filmcraft_project::ClipId(r["clips"][0].as_u64().unwrap())
+    mortiflix_project::ClipId(r["clips"][0].as_u64().unwrap())
 }
 
-fn motion_scale(s: &Session, clip: filmcraft_project::ClipId) -> f64 {
+fn motion_scale(s: &Session, clip: mortiflix_project::ClipId) -> f64 {
     let (_, it) = s.active_sequence().unwrap().find_item(clip).unwrap();
     match it.effect("motion").unwrap().params["scale"].value {
         ParamValue::Float(v) => v,
@@ -102,7 +102,7 @@ fn default_media_scaling_uses_the_display_size() {
     s.execute("file.newSequence", json!({"name": "Narrow", "width": 96, "height": 108, "fps": 24})).unwrap();
     s.execute("source.open", json!({"item": item.0})).unwrap();
     let r = s.execute("source.overwrite", json!({})).unwrap();
-    let clip = filmcraft_project::ClipId(r["clips"][0].as_u64().unwrap());
+    let clip = mortiflix_project::ClipId(r["clips"][0].as_u64().unwrap());
     assert_eq!(motion_scale(&s, clip), 50.0);
     // Scale to Frame Size: the renderer fits the display size
     s.prefs.media.default_media_scaling = "scaleToFrameSize".into();
@@ -194,12 +194,12 @@ fn generators_made_for_a_non_square_sequence_have_its_pixels() {
 /// ffmpeg-made 144 x 108 H.264 with 4:3 samples (`setsar=4/3`): MP4 (`pasp`) and Matroska
 /// (DisplayWidth / DisplayHeight).
 fn anamorphic_fixtures() -> Option<Vec<PathBuf>> {
-    let ffmpeg = filmcraft_testkit::oracle::ffmpeg_or_skip("par")?;
-    let dir = filmcraft_testkit::fixtures_dir("engine/par");
+    let ffmpeg = mortiflix_testkit::oracle::ffmpeg_or_skip("par")?;
+    let dir = mortiflix_testkit::fixtures_dir("engine/par");
     let mut out = Vec::new();
     for ext in ["mp4", "mkv"] {
         let path = dir.join(format!("anamorphic_144x108_sar43.{ext}"));
-        out.push(filmcraft_testkit::fixtures::generate(&path, |tmp| {
+        out.push(mortiflix_testkit::fixtures::generate(&path, |tmp| {
             std::process::Command::new(&ffmpeg)
                 .args(["-y", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=size=144x108:rate=24:duration=1"])
                 .args(["-vf", "setsar=4/3", "-c:v", "libx264", "-preset", "fast", "-pix_fmt", "yuv420p"])

@@ -17,13 +17,13 @@
 
 use std::collections::{HashMap, HashSet};
 
-use filmcraft_geom::Vec2;
-use filmcraft_media::{DemoScene, Generator, MediaKind};
-use filmcraft_project::{
+use mortiflix_geom::Vec2;
+use mortiflix_media::{DemoScene, Generator, MediaKind};
+use mortiflix_project::{
     BinId, ClipId, EffectInstance, Interpolation, ItemId, ItemKind, Keyframe, Label, Marker, MarkerId, MarkerKind, Param, ParamValue, Project, Sequence,
     TrackItem, TrackKind, Transition, TransitionAlign, TransitionId, effect::find_effect_by_name, find_effect,
 };
-use filmcraft_time::{FrameRate, Tick, format_timecode_frames};
+use mortiflix_time::{FrameRate, Tick, format_timecode_frames};
 use roxmltree::Node;
 
 use crate::common::{
@@ -53,7 +53,7 @@ const BLEND_XML: &[(&str, u32)] = &[
 ];
 
 fn generator_from(name: &str, id: &str, report: &mut Report) -> Generator {
-    if let Some(json) = id.strip_prefix("filmcraft:")
+    if let Some(json) = id.strip_prefix("mortiflix-studio:")
         && let Ok(g) = serde_json::from_str::<Generator>(json)
     {
         return g;
@@ -605,7 +605,7 @@ impl<'a, 'i> Imp<'a, 'i, '_> {
                 }
             }
             _ => {
-                let def = filmcraft_project::find_effect(id).filter(|d| !d.intrinsic).or_else(|| find_effect_by_name(name).filter(|d| !d.intrinsic));
+                let def = mortiflix_project::find_effect(id).filter(|d| !d.intrinsic).or_else(|| find_effect_by_name(name).filter(|d| !d.intrinsic));
                 let Some(def) = def else {
                     self.report.warn(format!("effect \"{name}\" is not supported and was skipped"));
                     return;
@@ -928,7 +928,7 @@ impl Exp<'_, '_> {
         self.written_seqs.insert(id);
     }
 
-    fn write_transition(&mut self, tr: &Transition, kind: TrackKind, rate: FrameRate, t: &filmcraft_project::Track) {
+    fn write_transition(&mut self, tr: &Transition, kind: TrackKind, rate: FrameRate, t: &mortiflix_project::Track) {
         if !on_frame(rate, tr.start) || !on_frame(rate, tr.duration) {
             self.report.warn("sub-frame transition positions were rounded to frames");
         }
@@ -1105,9 +1105,9 @@ impl Exp<'_, '_> {
                 return;
             }
             other => {
-                self.report.info(format!("generator \"{}\" is written with a FilmCraft effect id", other.label()));
+                self.report.info(format!("generator \"{}\" is written with a Mortiflix Studio effect id", other.label()));
                 self.w.text("name", other.label());
-                self.w.text("effectid", format!("filmcraft:{}", serde_json::to_string(other).unwrap_or_default()));
+                self.w.text("effectid", format!("mortiflix-studio:{}", serde_json::to_string(other).unwrap_or_default()));
             }
         }
         self.w.text("effectcategory", "Matte");

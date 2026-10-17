@@ -19,7 +19,7 @@ use std::sync::{Arc, OnceLock};
 
 use egui::epaint::text::{ByteIndex, LayoutJob, LayoutSection, TextFormat};
 use egui::{Color32, FontData, FontDefinitions, FontId, Galley, Painter, Rect, Vec2, pos2};
-use filmcraft_text::fonts::{CraftFont, Face};
+use mortiflix_text::fonts::{CraftFont, Face};
 use unicode_bidi::{BidiClass, BidiInfo, bidi_class};
 
 /// A right-to-left script: its ISO 15924 code (as in the craft-fonts manifest), letters a face
@@ -56,7 +56,7 @@ const SCRIPTS: &[Script] = &[
 
 /// The craft-fonts faces for right-to-left scripts (empty unless built with `CRAFT_FONTS_DIR`).
 pub(crate) fn craft_fonts() -> impl Iterator<Item = &'static CraftFont> {
-    filmcraft_text::fonts::CRAFT_FONTS.iter().filter(|f| f.scripts.iter().any(|s| SCRIPTS.iter().any(|x| x.code == *s)))
+    mortiflix_text::fonts::CRAFT_FONTS.iter().filter(|f| f.scripts.iter().any(|s| SCRIPTS.iter().any(|x| x.code == *s)))
 }
 
 /// Installed faces for the scripts craft-fonts does not cover, looked up once per process (native
@@ -71,8 +71,8 @@ fn system_fonts() -> &'static [(String, Arc<FontData>)] {
         if missing.is_empty() {
             return Vec::new();
         }
-        filmcraft_text::fonts::scan_system();
-        let faces: Vec<_> = filmcraft_text::fonts::all_faces().into_iter().filter(|f| f.info.origin == "system" && !f.info.italic).collect();
+        mortiflix_text::fonts::scan_system();
+        let faces: Vec<_> = mortiflix_text::fonts::all_faces().into_iter().filter(|f| f.info.origin == "system" && !f.info.italic).collect();
         let by_weight = |f: &&Arc<Face>| f.info.weight.abs_diff(400);
         let mut chosen: Vec<&Arc<Face>> = Vec::new();
         let mut out = Vec::new();
@@ -328,7 +328,7 @@ mod tests {
 
     #[test]
     fn latin_and_numbers_inside_rtl_keep_their_order() {
-        assert_eq!(visual("قال FilmCraft 0.6 جيد"), [["جيد", " ", "FilmCraft 0.6", " ", "قال"]]);
+        assert_eq!(visual("قال Mortiflix Studio 0.6 جيد"), [["جيد", " ", "Mortiflix Studio 0.6", " ", "قال"]]);
         // Arabic-Indic digits read left to right, one section each so the shaper keeps them so
         assert_eq!(visual("سنة ١٤٤٥"), [["١", "٤", "٤", "٥", " ", "سنة"]]);
     }

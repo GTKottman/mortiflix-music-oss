@@ -262,7 +262,7 @@ mod tests {
     #[cfg(any(unix, windows))]
     #[test]
     fn file_reader_reads_ranges_in_place() {
-        let dir = std::env::temp_dir().join(format!("filmcraft-file-reader-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("mortiflix-file-reader-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("bytes.bin");
         std::fs::write(&path, b"0123456789").unwrap();
@@ -286,7 +286,7 @@ mod tests {
     #[cfg(any(unix, windows))]
     #[test]
     fn more_file_readers_than_the_pool_holds_stay_readable() {
-        let dir = std::env::temp_dir().join(format!("filmcraft-file-pool-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("mortiflix-file-pool-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let pool = Arc::new(FilePool::new(2));
         let paths: Vec<_> = (0..5).map(|i| dir.join(format!("{i}.bin"))).collect();
@@ -351,7 +351,7 @@ mod tests {
         let read = || r.1.load(std::sync::atomic::Ordering::SeqCst);
         let src = open_reader_within("a.wav", r.clone(), &[], &[], HEAD_LEN as u64).unwrap();
         assert_eq!(src.info().audio().unwrap().channels, 2);
-        assert_eq!(src.info().duration, filmcraft_time::Tick::from_units(20, 1));
+        assert_eq!(src.info().duration, mortiflix_time::Tick::from_units(20, 1));
         assert_eq!(src.info().file_size, Some(size));
         let after_open = read();
         assert!(after_open <= HEAD_LEN as u64 + 64, "{after_open}");

@@ -11,7 +11,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 
-use filmcraft_project::{EffectInstance, TrackMethod};
+use mortiflix_project::{EffectInstance, TrackMethod};
 use rayon::prelude::*;
 
 use super::*;
@@ -112,7 +112,7 @@ pub(crate) fn combine_echoes(layers: &[(Image, f32)], op: u32) -> Image {
 // ------------------------------------------------------------------ analysis helpers
 
 fn gray_of(img: &Image) -> Gray {
-    let px = img.px.par_chunks(4).map(|p| filmcraft_color::linear_to_srgb(luma([p[0], p[1], p[2]]).clamp(0.0, 1.0))).collect();
+    let px = img.px.par_chunks(4).map(|p| mortiflix_color::linear_to_srgb(luma([p[0], p[1], p[2]]).clamp(0.0, 1.0))).collect();
     Gray::new(img.w, img.h, px)
 }
 
@@ -255,13 +255,13 @@ pub fn stabilizer_path(env: &dyn FxEnv, now: f64, method: TrackMethod, detailed:
     let frames: Vec<Option<Prepared>> = (0..n)
         .into_par_iter()
         .map(|k| {
-            if filmcraft_media::cancel::cancelled() {
+            if mortiflix_media::cancel::cancelled() {
                 return None;
             }
             env.source_frame(k as f64 / fps - now, scale).map(|f| Prepared::new(gray_of(&f)))
         })
         .collect();
-    if filmcraft_media::cancel::cancelled() {
+    if mortiflix_media::cancel::cancelled() {
         return None;
     }
     let (w, h) = frames.iter().flatten().next().map(|p| (p.base().w, p.base().h))?;

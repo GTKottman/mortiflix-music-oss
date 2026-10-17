@@ -1,10 +1,10 @@
 //! NVENC with packed RGBA input (Windows, NVIDIA GPU): the GPU's RGB → 4:2:0 conversion matches the
-//! export's own BT.709 limited-range conversion (`filmcraft_export::rgba_to_yuv420_8`), for HEVC Main
+//! export's own BT.709 limited-range conversion (`mortiflix_export::rgba_to_yuv420_8`), for HEVC Main
 //! and H.264. Skips without an NVIDIA GPU / driver.
 #![cfg(target_os = "windows")]
 
-use filmcraft_isobmff::{AvcConfig, SampleEntry};
-use filmcraft_platform::nvenc::{Codec, Config, Nvenc, Packet, Profile, Signal, available, hevc_available};
+use mortiflix_isobmff::{AvcConfig, SampleEntry};
+use mortiflix_platform::nvenc::{Codec, Config, Nvenc, Packet, Profile, Signal, available, hevc_available};
 
 /// NVENC sessions are a limited resource on consumer GPUs: one test at a time.
 static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
@@ -75,7 +75,7 @@ fn round_trip(profile: Profile, w: usize, h: usize, frames: &[Vec<u8>]) -> Vec<[
             SampleEntry::avc(AvcConfig::new(vec![sps.to_vec()], vec![pps.to_vec()], 4), w as u16, h as u16)
         }
     };
-    let mut dec = filmcraft_codecs::software_video_decoder(&entry).unwrap();
+    let mut dec = mortiflix_codecs::software_video_decoder(&entry).unwrap();
     let mut out = Vec::new();
     for p in &packets {
         out.extend(dec.decode(&p.data, p.pts).unwrap());
@@ -85,7 +85,7 @@ fn round_trip(profile: Profile, w: usize, h: usize, frames: &[Vec<u8>]) -> Vec<[
     assert_eq!(out.len(), frames.len());
     out.into_iter()
         .map(|f| {
-            let filmcraft_frame::PixelData::Yuv8 { planes, .. } = &f.frame.data else { panic!("8-bit planes") };
+            let mortiflix_frame::PixelData::Yuv8 { planes, .. } = &f.frame.data else { panic!("8-bit planes") };
             [planes[0].to_vec(), planes[1].to_vec(), planes[2].to_vec()]
         })
         .collect()
@@ -100,7 +100,7 @@ fn check(profile: Profile) {
     let decoded = round_trip(profile, w, h, &frames);
     let (mut y, mut u, mut v) = (Vec::new(), Vec::new(), Vec::new());
     for (k, c) in colours.iter().enumerate() {
-        filmcraft_export::rgba_to_yuv420_8(&frames[k], w, h, &mut y, &mut u, &mut v);
+        mortiflix_export::rgba_to_yuv420_8(&frames[k], w, h, &mut y, &mut u, &mut v);
         let want = [f64::from(y[0]), f64::from(u[0]), f64::from(v[0])];
         let got = [mean(&decoded[k][0]), mean(&decoded[k][1]), mean(&decoded[k][2])];
         eprintln!("{profile:?} {c:?}: Y/Cb/Cr {got:.1?}, BT.709 limited {want:?}");
@@ -111,7 +111,7 @@ fn check(profile: Profile) {
     // a moving picture: close to the export's own conversion encoded the planar way
     let (mut worst, mut worst_chroma) = (99.0f64, 99.0f64);
     for (k, f) in frames.iter().enumerate().skip(colours.len()) {
-        filmcraft_export::rgba_to_yuv420_8(f, w, h, &mut y, &mut u, &mut v);
+        mortiflix_export::rgba_to_yuv420_8(f, w, h, &mut y, &mut u, &mut v);
         worst = worst.min(psnr(&decoded[k][0], &y));
         worst_chroma = worst_chroma.min(psnr(&decoded[k][1], &u)).min(psnr(&decoded[k][2], &v));
     }

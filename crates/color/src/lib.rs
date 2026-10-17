@@ -1,4 +1,4 @@
-//! Colour science for FilmCraft: YUV matrices, transfer functions, camera log curves, gamuts,
+//! Colour science for Mortiflix Studio: YUV matrices, transfer functions, camera log curves, gamuts,
 //! colour-managed input/output transforms (tone and gamut mapping), colour metadata and LUTs.
 //! See the crate README for the formulas and their sources.
 //!

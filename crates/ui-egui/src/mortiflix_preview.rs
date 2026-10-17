@@ -1,24 +1,24 @@
-//! Mortiflix FilmCraft's loose preview, FilmCraft side (doc 36): the hidden "Loose preview"
+//! Mortiflix Studio's loose preview, Mortiflix Studio side (doc 36): the hidden "Loose preview"
 //! sequence kept in step with the graph, the Program monitor's picture in the Mortiflix Preview
 //! panel, one Play with a scope (All / From here / This shot / This beat) and Loop, following the
 //! node selection, and the `mortiflix.preview.*` commands (so the chat, the node area and agents
 //! drive it like the buttons do).
 //!
-//! The panel's controls and the plan (what goes where) are in `filmcraft-mortiflix-ui`
-//! (`preview.rs`); this file turns the plan into FilmCraft clips with ordinary commands
+//! The panel's controls and the plan (what goes where) are in `mortiflix-ui`
+//! (`preview.rs`); this file turns the plan into Edit clips with ordinary commands
 //! (`file.import`, `file.newColorMatte`, `timeline.place`, `edit.clear`), folded into one undo
-//! step, "Mortiflix: Loose preview". Nothing is rendered: FilmCraft plays the files on disk.
+//! step, "Mortiflix: Loose preview". Nothing is rendered: Mortiflix Studio plays the files on disk.
 
 use std::collections::HashMap;
 
 use egui::Color32;
-use filmcraft_mortiflix_ui::preview::{self as pv, Media, Plan, Scope};
-use filmcraft_mortiflix_ui::{self as mfx};
-use filmcraft_project::{BinId, ItemId, ItemKind};
-use filmcraft_time::{Tick, TimeDisplay, format_time};
+use mortiflix_project::{BinId, ItemId, ItemKind};
+use mortiflix_time::{Tick, TimeDisplay, format_time};
+use mortiflix_ui::preview::{self as pv, Media, Plan, Scope};
+use mortiflix_ui::{self as mfx};
 use serde_json::{Value, json};
 
-use crate::FilmcraftApp;
+use crate::StudioApp;
 use crate::menus::UiCommand;
 use crate::panels::monitor::{self, Which};
 use crate::panels::monitor_view;
@@ -33,7 +33,7 @@ const fn cmd(id: &'static str, label: &'static str) -> UiCommand {
 }
 
 /// The preview's commands (chained into `mortiflix::COMMANDS`). Loop's Ctrl+L / ⌘L is a panel
-/// shortcut of the Mortiflix Preview panel (`FILMCRAFT_PANEL`): app-wide Ctrl+L is Link.
+/// shortcut of the Mortiflix Preview panel (`MFX_STUDIO_PANEL`): app-wide Ctrl+L is Link.
 pub const COMMANDS: &[UiCommand] = &[
     cmd("mortiflix.preview.play", "Play the Loose Preview"),
     cmd("mortiflix.preview.toggle", "Play or Pause the Loose Preview"),
@@ -61,7 +61,7 @@ pub struct HostPreview {
     /// Imported files and colour mattes, reused across rebuilds.
     items: HashMap<String, ItemId>,
     mattes: HashMap<String, ItemId>,
-    /// What Play is playing (start, end) when it isn't FilmCraft's own In/Out loop.
+    /// What Play is playing (start, end) when it isn't Mortiflix Studio's own In/Out loop.
     range: Option<(Tick, Tick)>,
     was_playing: bool,
     last_selected: Option<String>,
@@ -77,14 +77,14 @@ fn ticks(s: f64) -> Tick {
     if s.is_finite() { Tick::from_seconds_f64(s.max(0.0)) } else { Tick::ZERO }
 }
 
-fn loose_active(app: &FilmcraftApp) -> bool {
+fn loose_active(app: &StudioApp) -> bool {
     app.mfx.preview.seq.is_some() && app.session.state.active_sequence == app.mfx.preview.seq
 }
 
 /// Every frame (from `mortiflix::frame_begin`): keep the plan fresh, the sequence built and on the
 /// Program monitor during stages 1-4, Play's scope and Loop, follow the node selection, and tell
-/// the panel what FilmCraft's player is doing.
-pub fn frame(app: &mut FilmcraftApp, ctx: &egui::Context) {
+/// the panel what Mortiflix Studio's player is doing.
+pub fn frame(app: &mut StudioApp, ctx: &egui::Context) {
     if !app.mfx.core.state.active {
         return;
     }
@@ -96,8 +96,8 @@ pub fn frame(app: &mut FilmcraftApp, ctx: &egui::Context) {
     let core = &mut app.mfx.core;
     let now = ctx.input(|i| i.time);
     pv::poll(&mut core.state, &mut core.service, now);
-    if core.state.stage >= mfx::STAGE_FILMCRAFT {
-        // FilmCraft's own sequence is on the monitor now; the loose one stays in the bin
+    if core.state.stage >= mfx::STAGE_EDIT {
+        // Mortiflix Studio's own sequence is on the monitor now; the loose one stays in the bin
         app.mfx.preview.range = None;
         app.mfx.core.state.preview.player.ready = false;
         return;
@@ -139,7 +139,7 @@ pub fn frame(app: &mut FilmcraftApp, ctx: &egui::Context) {
 }
 
 /// Draw the Program monitor's picture where the panel's layout puts it (before the controls).
-pub fn picture(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: egui::Rect) {
+pub fn picture(app: &mut StudioApp, ui: &mut egui::Ui, rect: egui::Rect) {
     let l = pv::layout(rect.shrink(8.0));
     let p = &app.mfx.core.state.preview;
     if !p.player.ready || p.plan.shots.is_empty() || l.picture.height() < 8.0 || !loose_active(app) {
@@ -151,7 +151,7 @@ pub fn picture(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: egui::Rect) {
     monitor::show_picture(app, &mut child, l.picture);
 }
 
-fn follow_selection(app: &mut FilmcraftApp) {
+fn follow_selection(app: &mut StudioApp) {
     let sel = app.mfx.core.state.selected_node.clone();
     if sel == app.mfx.preview.last_selected {
         return;
@@ -171,12 +171,12 @@ fn follow_selection(app: &mut FilmcraftApp) {
     }
 }
 
-fn snap(app: &FilmcraftApp, t: Tick) -> Tick {
+fn snap(app: &StudioApp, t: Tick) -> Tick {
     app.session.sequence_rate().snap_nearest(t)
 }
 
 /// Play's scope end and Loop, and Space / L starting playback the way Play does.
-fn enforce_scope(app: &mut FilmcraftApp) {
+fn enforce_scope(app: &mut StudioApp) {
     let playing = app.playback.playing;
     let looping = app.mfx.core.state.preview.looping;
     let frame = app.session.sequence_rate().frame_duration();
@@ -186,7 +186,7 @@ fn enforce_scope(app: &mut FilmcraftApp) {
         app.mfx.preview.was_playing = playing;
         return;
     }
-    // FilmCraft's own Play (Space) started forward playback: it plays the scope, like Play
+    // Mortiflix Studio's own Play (Space) started forward playback: it plays the scope, like Play
     if playing && !app.mfx.preview.was_playing && app.mfx.preview.range.is_none() && (app.playback.speed - 1.0).abs() < 1e-9 && !app.playback.looping {
         let scope = app.mfx.core.state.preview.scope;
         let sel = app.mfx.core.state.selected_node.clone();
@@ -208,7 +208,7 @@ fn enforce_scope(app: &mut FilmcraftApp) {
                 app.mfx.preview.range = None;
             }
         } else if !app.playback.playing && app.mfx.preview.was_playing {
-            // FilmCraft stopped at the sequence end: Loop starts over, else Play is done
+            // Mortiflix Studio stopped at the sequence end: Loop starts over, else Play is done
             if looping && t + frame + frame >= b {
                 app.session.set_playhead(a);
                 app.play(1.0);
@@ -220,7 +220,7 @@ fn enforce_scope(app: &mut FilmcraftApp) {
     app.mfx.preview.was_playing = app.playback.playing;
 }
 
-fn fill_player(app: &mut FilmcraftApp) {
+fn fill_player(app: &mut StudioApp) {
     let ready = loose_active(app) && app.mfx.preview.built.is_some();
     let (rate, df, dur, marked) = match app.session.active_sequence() {
         Some(q) => (q.settings.frame_rate, q.settings.drop_frame, q.duration(), q.mark_in.is_some() && q.mark_out.is_some()),
@@ -249,7 +249,7 @@ fn fill_player(app: &mut FilmcraftApp) {
 }
 
 /// Start Play for `scope` (from the playhead, the selected node, or the node given).
-fn play(app: &mut FilmcraftApp, scope: Scope, node: Option<&str>) {
+fn play(app: &mut StudioApp, scope: Scope, node: Option<&str>) {
     if !loose_active(app) {
         return;
     }
@@ -257,7 +257,7 @@ fn play(app: &mut FilmcraftApp, scope: Scope, node: Option<&str>) {
     let frame = app.session.sequence_rate().frame_duration();
     let marked = app.session.active_sequence().and_then(|q| q.mark_in.zip(q.mark_out));
     if looping && let Some((i, _)) = marked {
-        // In / Out marked: Loop loops that range instead (FilmCraft's own loop)
+        // In / Out marked: Loop loops that range instead (Mortiflix Studio's own loop)
         app.mfx.preview.range = None;
         app.playback.looping = true;
         app.session.set_playhead(i);
@@ -281,7 +281,7 @@ fn play(app: &mut FilmcraftApp, scope: Scope, node: Option<&str>) {
 }
 
 /// Make the sequence match the plan: one undo step, "Mortiflix: Loose preview".
-fn rebuild(app: &mut FilmcraftApp) -> Result<(), String> {
+fn rebuild(app: &mut StudioApp) -> Result<(), String> {
     let plan = app.mfx.core.state.preview.plan.clone();
     let n0 = app.session.history.undo.len();
     let r = build(app, &plan);
@@ -292,11 +292,11 @@ fn rebuild(app: &mut FilmcraftApp) -> Result<(), String> {
     r
 }
 
-fn exec(app: &mut FilmcraftApp, id: &str, params: Value) -> Result<Value, String> {
+fn exec(app: &mut StudioApp, id: &str, params: Value) -> Result<Value, String> {
     app.session.execute(id, params).map_err(|e| e.to_string())
 }
 
-fn ensure_sequence(app: &mut FilmcraftApp) -> Result<ItemId, String> {
+fn ensure_sequence(app: &mut StudioApp) -> Result<ItemId, String> {
     if let Some(s) = app.mfx.preview.seq.filter(|s| app.session.project.sequence(*s).is_some()) {
         return Ok(s);
     }
@@ -313,7 +313,7 @@ fn ensure_sequence(app: &mut FilmcraftApp) -> Result<ItemId, String> {
     Ok(seq)
 }
 
-fn ensure_bin(app: &mut FilmcraftApp) -> Option<BinId> {
+fn ensure_bin(app: &mut StudioApp) -> Option<BinId> {
     if let Some(b) = app.mfx.preview.bin.filter(|b| app.session.project.root.find_bin(*b).is_some()) {
         return Some(b);
     }
@@ -322,7 +322,7 @@ fn ensure_bin(app: &mut FilmcraftApp) -> Option<BinId> {
     Some(b)
 }
 
-fn import(app: &mut FilmcraftApp, file: &str) -> Result<ItemId, String> {
+fn import(app: &mut StudioApp, file: &str) -> Result<ItemId, String> {
     if let Some(i) = app.mfx.preview.items.get(file).copied().filter(|i| app.session.project.item(*i).is_some()) {
         return Ok(i);
     }
@@ -336,7 +336,7 @@ fn import(app: &mut FilmcraftApp, file: &str) -> Result<ItemId, String> {
     Ok(id)
 }
 
-fn matte(app: &mut FilmcraftApp, colour: &str, seconds: f64) -> Result<ItemId, String> {
+fn matte(app: &mut StudioApp, colour: &str, seconds: f64) -> Result<ItemId, String> {
     let card = pv::plan::card_colour(colour);
     if let Some(i) = app.mfx.preview.mattes.get(&card).copied().filter(|i| app.session.project.item(*i).is_some()) {
         return Ok(i);
@@ -351,10 +351,10 @@ fn matte(app: &mut FilmcraftApp, colour: &str, seconds: f64) -> Result<ItemId, S
 }
 
 /// The media's own length, when it is a movie or a sound (stills and mattes stretch).
-fn media_len(app: &FilmcraftApp, item: ItemId) -> Option<Tick> {
+fn media_len(app: &StudioApp, item: ItemId) -> Option<Tick> {
     match &app.session.project.item(item)?.kind {
         ItemKind::Media(m)
-            if matches!(m.info.kind, filmcraft_media::MediaKind::Movie | filmcraft_media::MediaKind::AudioOnly) && m.info.duration > Tick::ZERO =>
+            if matches!(m.info.kind, mortiflix_media::MediaKind::Movie | mortiflix_media::MediaKind::AudioOnly) && m.info.duration > Tick::ZERO =>
         {
             Some(m.info.duration)
         }
@@ -362,7 +362,7 @@ fn media_len(app: &FilmcraftApp, item: ItemId) -> Option<Tick> {
     }
 }
 
-fn build(app: &mut FilmcraftApp, plan: &Plan) -> Result<(), String> {
+fn build(app: &mut StudioApp, plan: &Plan) -> Result<(), String> {
     let seq = ensure_sequence(app)?;
     if app.session.state.active_sequence != Some(seq) {
         exec(app, "sequence.open", json!({"item": seq.0}))?;
@@ -432,7 +432,7 @@ fn build(app: &mut FilmcraftApp, plan: &Plan) -> Result<(), String> {
         }
     }
     // pictures of another size fill the frame (an animatic made at 720p plays full size)
-    let pictures: Vec<filmcraft_project::ClipId> =
+    let pictures: Vec<mortiflix_project::ClipId> =
         app.session.project.sequence(seq).and_then(|q| q.video_tracks.first()).map(|t| t.items.iter().map(|i| i.id).collect()).unwrap_or_default();
     if !pictures.is_empty() {
         app.session.state.selection = pictures;
@@ -456,15 +456,15 @@ fn on_of(params: &Value, cur: bool) -> bool {
     params.get("on").and_then(Value::as_bool).unwrap_or(!cur)
 }
 
-fn state(app: &FilmcraftApp) -> Value {
+fn state(app: &StudioApp) -> Value {
     let p = &app.mfx.core.state.preview;
     json!({"scope": p.scope, "loop": p.looping, "follow": p.follow_playhead, "player": p.player, "shots": p.plan.shots.len(), "shotAtPlayhead": p.shot_at_playhead})
 }
 
 /// `mortiflix.preview.<what>`.
-pub fn command(app: &mut FilmcraftApp, what: &str, params: &Value) -> Result<Value, String> {
+pub fn command(app: &mut StudioApp, what: &str, params: &Value) -> Result<Value, String> {
     let needs_player = matches!(what, "play" | "toggle" | "seek" | "prevShot" | "nextShot");
-    if needs_player && (!loose_active(app) || app.mfx.core.state.stage >= mfx::STAGE_FILMCRAFT) {
+    if needs_player && (!loose_active(app) || app.mfx.core.state.stage >= mfx::STAGE_EDIT) {
         return Err(if app.mfx.core.state.preview.plan.shots.is_empty() {
             "Nothing to play yet: the preview fills in as soon as the script has its shots.".into()
         } else {
@@ -559,10 +559,10 @@ pub fn command(app: &mut FilmcraftApp, what: &str, params: &Value) -> Result<Val
 #[cfg(test)]
 mod tests {
     use super::*;
-    use filmcraft_mortiflix_ui::preview::{PlanBeat, PlanShot};
+    use mortiflix_ui::preview::{PlanBeat, PlanShot};
 
-    fn app_with_plan() -> (FilmcraftApp, egui::Context) {
-        let mut app = FilmcraftApp::new(filmcraft_engine::Session::default());
+    fn app_with_plan() -> (StudioApp, egui::Context) {
+        let mut app = StudioApp::new(mortiflix_engine::Session::default());
         let ctx = egui::Context::default();
         crate::menus::invoke(&mut app, &ctx, "stages.shots", json!({})).unwrap();
         let shot = |id: &str, beat: &str, start: f64, len: f64, colour: &str| PlanShot {
@@ -658,7 +658,7 @@ mod tests {
         frame(&mut app, &ctx);
         assert!((app.session.playhead().seconds() - 3.5).abs() < 0.05);
         assert_eq!(app.mfx.core.state.preview.shot_at_playhead.as_deref(), Some("s03"));
-        // Space (FilmCraft's own Play) with "This shot": plays the selected shot from its start
+        // Space (Mortiflix Studio's own Play) with "This shot": plays the selected shot from its start
         app.mfx.core.state.preview.scope = Scope::Shot;
         app.mfx.core.state.selected_node = Some("s01".into());
         frame(&mut app, &ctx);

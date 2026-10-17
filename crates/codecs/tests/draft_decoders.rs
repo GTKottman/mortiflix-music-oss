@@ -5,13 +5,13 @@
 mod common;
 
 use common::*;
-use filmcraft_media::FrameRequest;
-use filmcraft_media::cancel::with_draft;
+use mortiflix_media::FrameRequest;
+use mortiflix_media::cancel::with_draft;
 
 /// Play `name` without and with draft decoding, then "export" it: every non-draft request must
 /// be bit-exact with ffmpeg, and draft playback must have produced some approximate frames.
 fn check(name: &str, args: &[&str], w: usize, h: usize) {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let Some(file) = fixture(&ff, name, args) else { return };
     let raw = ffmpeg_frames(&ff, &file, "yuv420p");
     let fsize = w * h * 3 / 2;
@@ -20,24 +20,24 @@ fn check(name: &str, args: &[&str], w: usize, h: usize) {
     let reference = |i: usize| raw_planes(&raw[i * fsize..(i + 1) * fsize], w, h, w / 2, h / 2, 1);
 
     // Default: nothing is a draft, every frame exact.
-    let src = filmcraft_codecs::open_bytes(name, bytes(&file)).expect("open");
+    let src = mortiflix_codecs::open_bytes(name, bytes(&file)).expect("open");
     let rate = src.info().frame_rate();
-    let g0 = filmcraft_codecs::gop_stats();
+    let g0 = mortiflix_codecs::gop_stats();
     for i in 0..n {
         let f = src.video_frame(FrameRequest { time: rate.tick_of(i as i64), scale: 0.5 }).expect("frame");
         assert_eq!(max_diff(&planes(&f), &reference(i)), 0, "{name}: frame {i} without draft mode");
     }
-    assert_eq!(filmcraft_codecs::gop_stats().draft, g0.draft, "{name}: draft decoding is off by default");
+    assert_eq!(mortiflix_codecs::gop_stats().draft, g0.draft, "{name}: draft decoding is off by default");
 
     // Draft playback at 1/2 resolution on a fresh source: non-reference frames are drafts.
-    let src = filmcraft_codecs::open_bytes(name, bytes(&file)).expect("open");
-    let g1 = filmcraft_codecs::gop_stats();
+    let src = mortiflix_codecs::open_bytes(name, bytes(&file)).expect("open");
+    let g1 = mortiflix_codecs::gop_stats();
     let mut approximate = 0;
     for i in 0..n {
         let f = with_draft(true, || src.video_frame(FrameRequest { time: rate.tick_of(i as i64), scale: 0.5 })).expect("frame");
         approximate += (max_diff(&planes(&f), &reference(i)) > 0) as usize;
     }
-    let drafts = filmcraft_codecs::gop_stats().draft - g1.draft;
+    let drafts = mortiflix_codecs::gop_stats().draft - g1.draft;
     assert!(drafts > 0 && approximate > 0 && approximate as u64 <= drafts, "{name}: {drafts} draft frames, {approximate} differ");
 
     // Then an export from the same source (no draft hint): every frame is exact again.

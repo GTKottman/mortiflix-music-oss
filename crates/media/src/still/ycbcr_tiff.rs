@@ -6,7 +6,7 @@
 //! Every number comes from the file: sizes, strip offsets and counts are checked before use, the
 //! picture is capped at [`MAX_PIXELS`], and PackBits output stops at the bytes the image needs.
 
-use filmcraft_dng::tiff::{Tiff, tags};
+use mortiflix_dng::tiff::{Tiff, tags};
 
 use super::Raster;
 use crate::{MediaError, Result};

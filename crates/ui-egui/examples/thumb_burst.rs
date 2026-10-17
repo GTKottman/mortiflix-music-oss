@@ -8,16 +8,16 @@
 //! process monitor).
 //!
 //! ```sh
-//! cargo run --release -p filmcraft-ui-egui --example thumb_burst -- <clips dir> [--hw off|auto] [--limit N]
+//! cargo run --release -p mortiflix-ui-egui --example thumb_burst -- <clips dir> [--hw off|auto] [--limit N]
 //! ```
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
-use filmcraft_engine::Session;
-use filmcraft_project::ItemId;
-use filmcraft_ui_egui::frames::{FrameKey, FrameServer, Target};
+use mortiflix_engine::Session;
+use mortiflix_project::ItemId;
+use mortiflix_ui_egui::frames::{FrameKey, FrameServer, Target};
 use serde_json::json;
 
 fn main() {
@@ -27,7 +27,7 @@ fn main() {
         eprintln!("usage: thumb_burst <clips dir> [--hw off|auto] [--limit N]");
         return;
     };
-    filmcraft_codecs::hw::set_hardware_decoding(value("--hw").as_deref() != Some("off"));
+    mortiflix_codecs::hw::set_hardware_decoding(value("--hw").as_deref() != Some("off"));
     let limit = value("--limit").and_then(|v| v.parse().ok()).unwrap_or(usize::MAX);
     let mut clips: Vec<PathBuf> = std::fs::read_dir(&dir).map(|d| d.filter_map(|e| e.ok().map(|e| e.path())).collect()).unwrap_or_default();
     clips.retain(|p| p.extension().is_some_and(|e| e == "mp4"));
@@ -43,7 +43,7 @@ fn main() {
         let (peak, stop) = (peak.clone(), stop.clone());
         std::thread::spawn(move || {
             while !stop.load(Ordering::Relaxed) {
-                peak.fetch_max(filmcraft_codecs::live_decoders(), Ordering::Relaxed);
+                peak.fetch_max(mortiflix_codecs::live_decoders(), Ordering::Relaxed);
                 std::thread::sleep(Duration::from_millis(5));
             }
         })
@@ -55,14 +55,14 @@ fn main() {
         let r = s.execute("file.import", json!({"paths": [path.to_string_lossy()]})).expect("import");
         let id = ItemId(r["items"][0].as_u64().expect("item"));
         let (rate, width) = match s.project.item(id).map(|i| (i.frame_rate(), &i.kind)) {
-            Some((rate, filmcraft_project::ItemKind::Media(m))) => (rate, m.info.video.as_ref().map_or(1920, |v| v.width)),
+            Some((rate, mortiflix_project::ItemKind::Media(m))) => (rate, m.info.video.as_ref().map_or(1920, |v| v.width)),
             _ => continue,
         };
         let rev = {
             use std::hash::{Hash, Hasher};
             let mut h = std::collections::hash_map::DefaultHasher::new();
-            if let Some(filmcraft_project::ItemKind::Media(m)) = s.project.item(id).map(|i| &i.kind) {
-                filmcraft_engine::media_pool::media_key(m).hash(&mut h);
+            if let Some(mortiflix_project::ItemKind::Media(m)) = s.project.item(id).map(|i| &i.kind) {
+                mortiflix_engine::media_pool::media_key(m).hash(&mut h);
                 false.hash(&mut h);
             }
             h.finish()
@@ -83,6 +83,6 @@ fn main() {
         imported.as_secs_f64(),
         t0.elapsed().as_secs_f64(),
         peak.load(Ordering::Relaxed),
-        filmcraft_codecs::cached_bytes() as f64 / 1048576.0
+        mortiflix_codecs::cached_bytes() as f64 / 1048576.0
     );
 }

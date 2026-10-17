@@ -1,9 +1,9 @@
 //! Render-bar segments: splitting, hashing, invalidation and cost classification.
 
-use filmcraft_media::generators::GeneratorSource;
-use filmcraft_media::{DemoScene, Generator, MediaSource};
-use filmcraft_project::{ClipId, ItemId, ItemKind, Label, MediaClip, MediaRef, ParamValue, Project, SequenceSettings, TrackKind, find_effect};
-use filmcraft_time::{FrameRate, TICKS_PER_SECOND, Tick, TimeRange};
+use mortiflix_media::generators::GeneratorSource;
+use mortiflix_media::{DemoScene, Generator, MediaSource};
+use mortiflix_project::{ClipId, ItemId, ItemKind, Label, MediaClip, MediaRef, ParamValue, Project, SequenceSettings, TrackKind, find_effect};
+use mortiflix_time::{FrameRate, TICKS_PER_SECOND, Tick, TimeRange};
 
 use crate::preview::{Need, Segment, audio_segments, effect_cost_ms, segment_at, video_segments};
 
@@ -42,7 +42,7 @@ fn place(p: &mut Project, seq: ItemId, track: usize, item: ItemId, start_f: i64,
     let r = FrameRate::FPS_24;
     let mut ti = p.make_track_item(item, TrackKind::Video, r.tick_of(start_f), TimeRange::new(Tick::ZERO, r.tick_of(dur_f)), r).unwrap();
     for e in ti.effects.iter_mut() {
-        filmcraft_project::resolve_auto_points(e, (1920, 1080), (1920, 1080));
+        mortiflix_project::resolve_auto_points(e, (1920, 1080), (1920, 1080));
     }
     let id = ti.id;
     let t = &mut p.sequence_mut(seq).unwrap().video_tracks[track];
@@ -53,7 +53,7 @@ fn place(p: &mut Project, seq: ItemId, track: usize, item: ItemId, start_f: i64,
 
 fn add_fx(p: &mut Project, seq: ItemId, clip: ClipId, id: &str) {
     let mut inst = find_effect(id).unwrap().instance();
-    filmcraft_project::resolve_auto_points(&mut inst, (1920, 1080), (1920, 1080));
+    mortiflix_project::resolve_auto_points(&mut inst, (1920, 1080), (1920, 1080));
     p.sequence_mut(seq).unwrap().find_item_mut(clip).unwrap().1.effects.push(inst);
 }
 
@@ -92,7 +92,7 @@ fn transitions_are_their_own_segments() {
     let a = place(&mut p, seq, 0, ocean, 0, 48);
     let b = place(&mut p, seq, 0, matte, 48, 48);
     let r = FrameRate::FPS_24;
-    let tr = filmcraft_project::Transition {
+    let tr = mortiflix_project::Transition {
         id: Default::default(),
         effect: find_effect("cross_dissolve").unwrap().instance(),
         start: r.tick_of(36),
@@ -223,7 +223,7 @@ fn effect_tiers_are_ordered() {
 fn effect_costs() {
     use crate::effects::{FxCtx, apply};
     let mut rows = Vec::new();
-    for d in filmcraft_project::effect_defs().iter().filter(|d| d.kind == filmcraft_project::EffectKind::Video && !d.intrinsic) {
+    for d in mortiflix_project::effect_defs().iter().filter(|d| d.kind == mortiflix_project::EffectKind::Video && !d.intrinsic) {
         let mut img = crate::Image::filled(1920, 1080, [0.4, 0.5, 0.6, 1.0]);
         let e = d.instance();
         let cx = FxCtx {
@@ -235,7 +235,7 @@ fn effect_costs() {
             project: None,
             env: None,
             frame_rate: 24.0,
-            working: filmcraft_color::WorkingSpace::Rec709,
+            working: mortiflix_color::WorkingSpace::Rec709,
         };
         apply(&mut img, &e, &cx);
         let t0 = std::time::Instant::now();

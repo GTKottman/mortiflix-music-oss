@@ -2,7 +2,7 @@
 //! and the decode helpers.
 #![allow(dead_code)]
 
-use filmcraft_vp8::{Decoder, Picture};
+use mortiflix_vp8::{Decoder, Picture};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 

@@ -1,11 +1,11 @@
 //! Source monitor drag controls. The payload snapshots the marked span at drag start.
 
 use egui::{Rect, Sense, pos2, vec2};
-use filmcraft_engine::clip_ops::source_view;
-use filmcraft_project::ItemId;
-use filmcraft_time::TimeRange;
+use mortiflix_engine::clip_ops::source_view;
+use mortiflix_project::ItemId;
+use mortiflix_time::TimeRange;
 
-use crate::FilmcraftApp;
+use crate::StudioApp;
 
 #[derive(Clone, Copy, Debug)]
 pub struct SourceDrag {
@@ -15,7 +15,7 @@ pub struct SourceDrag {
     pub audio: bool,
 }
 
-pub fn begin(app: &mut FilmcraftApp, ui: &egui::Ui, video: bool, audio: bool) {
+pub fn begin(app: &mut StudioApp, ui: &egui::Ui, video: bool, audio: bool) {
     let Some(item) = app.session.state.source_item else { return };
     let Some(view) = source_view(&app.session, item) else { return };
     let Some(media) = app.session.project.item(view.media) else { return };
@@ -29,7 +29,7 @@ pub fn begin(app: &mut FilmcraftApp, ui: &egui::Ui, video: bool, audio: bool) {
     super::start_drag_source(ui, SourceDrag { item: view.media, range, video, audio });
 }
 
-pub fn controls(app: &mut FilmcraftApp, ui: &mut egui::Ui, row: Rect) {
+pub fn controls(app: &mut StudioApp, ui: &mut egui::Ui, row: Rect) {
     let media = app.session.state.source_item.and_then(|i| source_view(&app.session, i)).and_then(|v| app.session.project.item(v.media));
     let (has_video, has_audio) = media.map(|i| (i.has_video(), i.has_audio())).unwrap_or_default();
     let buttons = [

@@ -4,8 +4,8 @@ use std::ffi::c_void;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::ptr;
 
-use filmcraft_codecs::hw::NalCodec;
-use filmcraft_frame::VideoFrame;
+use mortiflix_codecs::hw::NalCodec;
+use mortiflix_frame::VideoFrame;
 
 use super::ffi::*;
 use crate::biplanar::{Biplanar, Geometry, to_frame};
@@ -562,7 +562,7 @@ pub fn probe() -> Result<String, String> {
 mod tests {
     use super::*;
     fn geometry() -> Geometry {
-        Geometry { crop: (0, 0, 640, 360), bits: 8, color: filmcraft_color::ColorInfo::REC709, par: (1, 1) }
+        Geometry { crop: (0, 0, 640, 360), bits: 8, color: mortiflix_color::ColorInfo::REC709, par: (1, 1) }
     }
     #[test]
     fn hostile_geometry_and_driver_sizes_are_errors() {

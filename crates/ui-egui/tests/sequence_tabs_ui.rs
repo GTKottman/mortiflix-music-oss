@@ -4,14 +4,14 @@
 use std::sync::mpsc::{Sender, channel};
 
 use egui_kittest::Harness;
-use filmcraft_engine::Session;
-use filmcraft_engine::project::ItemKind;
-use filmcraft_ui_egui::FilmcraftApp;
-use filmcraft_ui_egui::control::ControlRequest;
+use mortiflix_engine::Session;
+use mortiflix_engine::project::ItemKind;
+use mortiflix_ui_egui::StudioApp;
+use mortiflix_ui_egui::control::ControlRequest;
 use serde_json::{Value, json};
 
 struct Driver {
-    harness: Harness<'static, FilmcraftApp>,
+    harness: Harness<'static, StudioApp>,
     tx: Sender<ControlRequest>,
 }
 
@@ -20,7 +20,7 @@ impl Driver {
         let mut s = Session::default();
         s.execute("file.openDemoProject", json!({})).unwrap();
         let (tx, rx) = channel();
-        let app = FilmcraftApp::new(s).with_control(rx);
+        let app = StudioApp::new(s).with_control(rx);
         let harness = Harness::builder().with_size(egui::vec2(1600.0, 980.0)).with_step_dt(1.0 / 60.0).with_max_steps(10_000).build_eframe(move |_cc| app);
         let mut d = Driver { harness, tx };
         d.frames(4);
@@ -76,11 +76,11 @@ impl Driver {
         v.as_array().unwrap().iter().any(|e| e["id"] == json!(id))
     }
 
-    fn app(&mut self) -> &mut FilmcraftApp {
+    fn app(&mut self) -> &mut StudioApp {
         self.harness.state_mut()
     }
 
-    fn v1(&mut self, i: usize) -> filmcraft_engine::project::TrackItem {
+    fn v1(&mut self, i: usize) -> mortiflix_engine::project::TrackItem {
         self.app().session.active_sequence().unwrap().video_tracks[0].items[i].clone()
     }
 }
@@ -91,7 +91,7 @@ impl Driver {
     }
 
     fn has_timeline(&mut self) -> bool {
-        self.app().ui.dock.contains(filmcraft_ui_egui::dock::PanelKind::Timeline)
+        self.app().ui.dock.contains(mortiflix_ui_egui::dock::PanelKind::Timeline)
     }
 }
 
@@ -170,7 +170,7 @@ fn timeline_has_a_tab_per_open_sequence() {
     assert!(d.has_timeline(), "closing the last sequence keeps the Timeline panel");
     assert!(d.has("panel.tab.Timeline"));
     // reopening from the project brings it back, even if the panel itself was closed
-    d.app().ui.dock.close(filmcraft_ui_egui::dock::PanelKind::Timeline);
+    d.app().ui.dock.close(mortiflix_ui_egui::dock::PanelKind::Timeline);
     d.frames(2);
     assert!(!d.has_timeline());
     d.exec("sequence.open", json!({"item": main}));

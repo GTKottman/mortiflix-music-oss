@@ -3,7 +3,7 @@
 //!
 //! - [`open`] / [`open_with`] parse the EBML header and the first Segment (Info, Tracks, SeekHead,
 //!   Cues, Chapters, Tags, Attachments) and, by default, scan every Cluster's block headers to build
-//!   per-track [`Sample`] tables — the same shape as `filmcraft-isobmff`, so callers can treat both
+//!   per-track [`Sample`] tables — the same shape as `mortiflix-isobmff`, so callers can treat both
 //!   containers alike. Frame data is read on demand with [`MkvFile::read_sample`].
 //! - [`Demuxer`] iterates [`Packet`]s in file order (from any [`ByteSource`], `Read + Seek`, or a
 //!   byte slice) and seeks to the keyframe preceding a time, via the index, Cues, or a cluster scan.

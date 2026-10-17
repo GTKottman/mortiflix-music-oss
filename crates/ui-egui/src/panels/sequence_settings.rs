@@ -10,12 +10,12 @@
 //! non-drop-frame timecode for the NTSC rates, audio Channel Format and Sample Rate, Maximum Render
 //! Quality, and the Color Management tab (working colour space, wide gamut, auto tone map).
 //!
-//! Premiere settings FilmCraft has no equivalent for yet are shown greyed out with their current
+//! Premiere settings Mortiflix Studio has no equivalent for yet are shown greyed out with their current
 //! value and a "not supported yet" hint, rather than editable and silently ignored: Editing Mode,
 //! Pixel Aspect Ratio (rendered, and set by New Sequence From Clip, but not editable here yet), Fields, the Frames and Feet + Frames display
 //! formats, Number of Channels, audio Display Format, the Video Previews format, codec and size,
 //! Maximum Bit Depth, and the VR Properties tab. Composite in Linear Color is shown on and greyed:
-//! FilmCraft always composites in linear light.
+//! Mortiflix Studio always composites in linear light.
 //!
 //! Automation ids (`sequenceSettings.` + …): `tab.general`, `tab.color`, `tab.vr`; General:
 //! `name`, `editingMode`, `timebase` (+ `timebase.option.<num>/<den>` while open), `width`, `height`,
@@ -26,17 +26,17 @@
 //! `workingSpace` (+ `workingSpace.option.<id>`), `wideGamut`, `autoToneMap`; VR Properties:
 //! `vr.projection`, `vr.layout`, `vr.horizontal`, `vr.vertical`; `ok`, `cancel`.
 
-use filmcraft_color::WorkingSpace;
-use filmcraft_project::{AudioChannels, SequenceSettings};
-use filmcraft_time::FrameRate;
+use mortiflix_color::WorkingSpace;
+use mortiflix_project::{AudioChannels, SequenceSettings};
+use mortiflix_time::FrameRate;
 use serde_json::{Map, Value, json};
 
-use crate::FilmcraftApp;
+use crate::StudioApp;
 use crate::i18n::t;
 use crate::state::SequenceSettingsDraft;
 
-const NOT_YET: &str = "Not supported in FilmCraft yet";
-const LINEAR: &str = "FilmCraft always composites in linear light";
+const NOT_YET: &str = "Not supported in Mortiflix Studio yet";
+const LINEAR: &str = "Mortiflix Studio always composites in linear light";
 
 /// The Timebase list (frames per second as num/den), Premiere's common rates.
 const TIMEBASES: [(i64, i64); 15] = [
@@ -69,7 +69,7 @@ fn mix_name(c: AudioChannels) -> &'static str {
 }
 
 /// Fill the draft from the active sequence and open the dialog on the General tab.
-pub fn open(app: &mut FilmcraftApp) {
+pub fn open(app: &mut StudioApp) {
     let Some(q) = app.session.active_sequence() else { return };
     let st = &q.settings;
     let name = app.session.state.active_sequence.and_then(|id| app.session.project.item(id)).map(|i| i.name.clone()).unwrap_or_default();
@@ -97,7 +97,7 @@ pub fn open(app: &mut FilmcraftApp) {
 
 /// File ▸ New ▸ Sequence…: the dialog as New Sequence, from the default settings, named like
 /// `file.newSequence` would name it, with three video and three audio tracks.
-pub fn open_new(app: &mut FilmcraftApp) {
+pub fn open_new(app: &mut StudioApp) {
     let st = SequenceSettings::default();
     let n = app.session.project.sequences().count() + 1;
     app.ui.sequence_settings = SequenceSettingsDraft {
@@ -176,7 +176,7 @@ fn aspect(w: u32, h: u32) -> String {
 
 /// The width a `w` x `h` frame with `par` pixels shows at, in square pixels (rounded).
 fn display_width(w: u32, h: u32, par: (u32, u32)) -> u32 {
-    let dw = filmcraft_project::conformed_size((w, h), par, (1, 1)).0.round();
+    let dw = mortiflix_project::conformed_size((w, h), par, (1, 1)).0.round();
     if dw >= f64::from(u32::MAX) { u32::MAX } else { dw.max(0.0) as u32 }
 }
 
@@ -331,10 +331,10 @@ fn general(ui: &mut egui::Ui, d: &mut SequenceSettingsDraft, cur: &SequenceSetti
     });
     section(ui, "Video", |ui| {
         row(ui, label_w, "Frame Size:", true, |ui| {
-            let w = ui.add(crate::widgets::number_drag(&mut d.width).range(1..=filmcraft_project::MAX_FRAME_SIDE).speed(1.0));
+            let w = ui.add(crate::widgets::number_drag(&mut d.width).range(1..=mortiflix_project::MAX_FRAME_SIDE).speed(1.0));
             elems.push(("sequenceSettings.width".into(), w.rect, d.width.to_string()));
             ui.label(tl!("horizontal"));
-            let h = ui.add(crate::widgets::number_drag(&mut d.height).range(1..=filmcraft_project::MAX_FRAME_SIDE).speed(1.0));
+            let h = ui.add(crate::widgets::number_drag(&mut d.height).range(1..=mortiflix_project::MAX_FRAME_SIDE).speed(1.0));
             elems.push(("sequenceSettings.height".into(), h.rect, d.height.to_string()));
             ui.label(tl!("vertical"));
             // the display aspect: 1440 x 1080 with 4:3 pixels is 16:9
@@ -461,7 +461,7 @@ fn vr(ui: &mut egui::Ui, elems: &mut Elems) {
 }
 
 /// Draw the dialog. Returns whether it stays open.
-pub fn show(app: &mut FilmcraftApp, ctx: &egui::Context) -> bool {
+pub fn show(app: &mut StudioApp, ctx: &egui::Context) -> bool {
     let new_sequence = app.ui.sequence_settings.new_sequence;
     // New Sequence compares against the defaults it started from; Sequence Settings against the
     // active sequence

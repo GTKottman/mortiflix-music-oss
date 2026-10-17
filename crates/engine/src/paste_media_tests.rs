@@ -2,8 +2,8 @@
 
 use std::path::Path;
 
-use filmcraft_project::{BinEntry, BinId, ClipId, ItemId, TrackKind};
-use filmcraft_time::Tick;
+use mortiflix_project::{BinEntry, BinId, ClipId, ItemId, TrackKind};
+use mortiflix_time::Tick;
 use serde_json::{Value, json};
 
 use crate::Session;
@@ -85,7 +85,7 @@ fn a_track_is_added_when_every_track_is_busy() {
     // fill every track at the playhead
     for _ in 0..8 {
         let q = s.active_sequence().unwrap();
-        let busy = |ts: &[filmcraft_project::Track]| ts.iter().all(|t| t.items.iter().any(|c| c.start <= at && c.end() > at + Tick::from_seconds_f64(5.0)));
+        let busy = |ts: &[mortiflix_project::Track]| ts.iter().all(|t| t.items.iter().any(|c| c.start <= at && c.end() > at + Tick::from_seconds_f64(5.0)));
         if busy(&q.video_tracks) && busy(&q.audio_tracks) {
             break;
         }

@@ -1,8 +1,8 @@
 //! `clip.speedDuration` with `ripple` on a clip that has linked sound: the clip and its sound
 //! change as one edit, and the later clips move once.
 
-use filmcraft_project::ClipId;
-use filmcraft_time::Tick;
+use mortiflix_project::ClipId;
+use mortiflix_time::Tick;
 use serde_json::json;
 
 use crate::Session;

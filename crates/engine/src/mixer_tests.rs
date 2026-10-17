@@ -1,9 +1,9 @@
 //! Audio Track Mixer commands and automation recording.
 
 use super::*;
-use filmcraft_project::mixer::{LANE_VOLUME, MASTER_STRIP};
-use filmcraft_project::{AutomationMode, ParamValue};
-use filmcraft_time::TICKS_PER_SECOND;
+use mortiflix_project::mixer::{LANE_VOLUME, MASTER_STRIP};
+use mortiflix_project::{AutomationMode, ParamValue};
+use mortiflix_time::TICKS_PER_SECOND;
 use serde_json::json;
 
 fn demo() -> Session {
@@ -16,7 +16,7 @@ fn sec(x: f64) -> i64 {
     (x * TICKS_PER_SECOND as f64) as i64
 }
 
-fn a1(s: &Session) -> &filmcraft_project::Track {
+fn a1(s: &Session) -> &mortiflix_project::Track {
     &s.active_sequence().unwrap().audio_tracks[0]
 }
 
@@ -108,7 +108,7 @@ fn submixes_sends_and_inserts() {
     assert_eq!(q.audio_tracks[0].effects[0].param("threshold").unwrap().value, ParamValue::Float(-30.0));
     // the mix renders through the graph (the demo has audio on A1)
     let provider = s.media.provider(s.project.clone(), s.services.clone());
-    let b = filmcraft_render::audio::mix_sequence(&s.project, q, 0, 4_800, &provider);
+    let b = mortiflix_render::audio::mix_sequence(&s.project, q, 0, 4_800, &provider);
     assert_eq!(b.frames(), 4_800);
     // deleting a submix re-routes and drops sends
     let s1 = q.submix_tracks[0].id.0;
@@ -273,7 +273,7 @@ fn recorded_pass_plays_back_through_the_mix() {
     let provider = s.media.provider(s.project.clone(), s.services.clone());
     let b = s.previews.mix(&s.project, seq_id, 48_000, 4_800, &provider);
     assert!(b.channels[0].iter().all(|x| x.abs() < 1e-6), "faded out by the recorded automation");
-    let before = filmcraft_render::audio::mix_sequence(&s.project, q, 0, 4_800, &provider);
+    let before = mortiflix_render::audio::mix_sequence(&s.project, q, 0, 4_800, &provider);
     assert!(before.channels[0].iter().any(|x| x.abs() > 1e-4), "audible before the move");
     // master strip automation
     s.execute("mixer.setKeyframe", json!({"strip": "Mix", "time": 0, "value": -6.0})).unwrap();
@@ -367,18 +367,18 @@ fn default_audio_transition_is_used_by_apply() {
 // ------------------------------------------------------------------------------------- Audio Clip Mixer automation
 
 /// The first clip on A1 and a time range well inside it.
-fn a1_clip(s: &Session) -> (filmcraft_project::ClipId, Tick, Tick) {
+fn a1_clip(s: &Session) -> (mortiflix_project::ClipId, Tick, Tick) {
     let c = &a1(s).items[0];
     let len = c.duration.0;
     (c.id, Tick(c.start.0 + len / 5), Tick(c.start.0 + len * 4 / 5))
 }
 
-fn clip_level(s: &Session, clip: filmcraft_project::ClipId, t: Tick) -> f64 {
+fn clip_level(s: &Session, clip: mortiflix_project::ClipId, t: Tick) -> f64 {
     let (_, c) = s.active_sequence().unwrap().find_item(clip).unwrap();
     c.effect("volume").unwrap().f64_at("level", c.source_time_at(t))
 }
 
-fn clip_level_kfs(s: &Session, clip: filmcraft_project::ClipId) -> usize {
+fn clip_level_kfs(s: &Session, clip: mortiflix_project::ClipId) -> usize {
     let (_, c) = s.active_sequence().unwrap().find_item(clip).unwrap();
     c.effect("volume").unwrap().param("level").unwrap().keyframes.len()
 }
@@ -405,7 +405,7 @@ fn clip_mixer_touch_writes_clip_keyframes_and_ramps_back() {
     }
     // the held value is heard live on the track
     let tid = a1(&s).id;
-    assert_eq!(s.previews.live.get(tid, filmcraft_render::audio::CLIP_LANE_VOLUME).map(|o| o.value), Some(-12.0));
+    assert_eq!(s.previews.live.get(tid, mortiflix_render::audio::CLIP_LANE_VOLUME).map(|o| o.value), Some(-12.0));
     s.execute("clipMixer.release", json!({"track": "A1", "lane": "volume", "time": mid.0})).unwrap();
     let r = s.execute("mixer.recordStop", json!({"time": t1.0})).unwrap();
     assert_eq!(r["lanes"], 1);
@@ -421,7 +421,7 @@ fn clip_mixer_touch_writes_clip_keyframes_and_ramps_back() {
     let c_start = s.active_sequence().unwrap().find_item(clip).unwrap().1.start;
     assert!((clip_level(&s, clip, Tick(c_start.0 + 1)) - base).abs() < 1e-9);
     assert!((clip_level(&s, clip, Tick(t1.0 - 1)) - base).abs() < 1e-9, "{}", clip_level(&s, clip, Tick(t1.0 - 1)));
-    assert!(s.previews.live.get(tid, filmcraft_render::audio::CLIP_LANE_VOLUME).is_none(), "overrides cleared");
+    assert!(s.previews.live.get(tid, mortiflix_render::audio::CLIP_LANE_VOLUME).is_none(), "overrides cleared");
     s.execute("edit.undo", json!({})).unwrap();
     assert_eq!(clip_level_kfs(&s, clip), kf0);
 }
@@ -488,7 +488,7 @@ fn surround_sequence_settings_and_panner_lanes() {
     let mut s = demo();
     assert_eq!(s.execute("mixer.inspect", json!({})).unwrap()["strips"][0]["pans51"], false);
     s.execute("sequence.settings", json!({"mix": "5.1"})).unwrap();
-    assert_eq!(s.active_sequence().unwrap().settings.audio_master, filmcraft_project::AudioChannels::Surround51);
+    assert_eq!(s.active_sequence().unwrap().settings.audio_master, mortiflix_project::AudioChannels::Surround51);
     let v = s.execute("mixer.inspect", json!({})).unwrap();
     assert_eq!(v["strips"][0]["pans51"], true);
     assert_eq!(v["strips"][0]["outputChannels"], "5.1");
@@ -505,8 +505,8 @@ fn surround_sequence_settings_and_panner_lanes() {
     // the mix is six channels; mix_sequence folds it to stereo
     let provider = s.media.provider(s.project.clone(), s.services.clone());
     let q = s.active_sequence().unwrap();
-    assert_eq!(filmcraft_render::mixer::mix_graph(&s.project, q, 0, 480, &provider, None).channels.len(), 6);
-    assert_eq!(filmcraft_render::audio::mix_sequence(&s.project, q, 0, 480, &provider).channels.len(), 2);
+    assert_eq!(mortiflix_render::mixer::mix_graph(&s.project, q, 0, 480, &provider, None).channels.len(), 6);
+    assert_eq!(mortiflix_render::audio::mix_sequence(&s.project, q, 0, 480, &provider).channels.len(), 2);
     // a Write pass on a strip feeding 5.1 records the puck, not the stereo pan
     set_mode(&mut s, "A1", "Write");
     let r = s.execute("mixer.recordStart", json!({"time": 0})).unwrap();
@@ -515,8 +515,8 @@ fn surround_sequence_settings_and_panner_lanes() {
     // New Sequence with a 5.1 Mix and 5.1 tracks
     s.execute("file.newSequence", json!({"name": "surround", "mix": "5.1", "trackType": "5.1", "audio": 2})).unwrap();
     let q = s.active_sequence().unwrap();
-    assert_eq!(q.settings.audio_master, filmcraft_project::AudioChannels::Surround51);
-    assert!(q.audio_tracks.iter().all(|t| t.channels == filmcraft_project::AudioChannels::Surround51));
+    assert_eq!(q.settings.audio_master, mortiflix_project::AudioChannels::Surround51);
+    assert!(q.audio_tracks.iter().all(|t| t.channels == mortiflix_project::AudioChannels::Surround51));
     assert!(s.execute("file.newSequence", json!({"mix": "7.1"})).is_err());
     s.execute("file.newSequence", json!({"trackType": "Standard"})).unwrap();
 }

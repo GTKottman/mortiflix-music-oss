@@ -1,5 +1,5 @@
 [package]
-name = "filmcraft-platform"
+name = "mortiflix-platform"
 description = "OS media integration: hardware video decoding through the operating system's codecs (VideoToolbox on macOS, Media Foundation on Windows, VA-API and NVDEC on Linux), with transparent fallback to the pure-Rust decoders"
 version.workspace = true
 edition.workspace = true
@@ -21,15 +21,15 @@ type_complexity = "allow"
 undocumented_unsafe_blocks = "deny"
 
 [dependencies]
-filmcraft-bitstream = { workspace = true }
-filmcraft-codecs = { workspace = true }
-filmcraft-color = { workspace = true }
-filmcraft-export = { workspace = true }
-filmcraft-frame = { workspace = true }
-filmcraft-h264 = { workspace = true }
-filmcraft-hevc = { workspace = true }
-filmcraft-isobmff = { workspace = true }
-filmcraft-time = { workspace = true }
+mortiflix-bitstream = { workspace = true }
+mortiflix-codecs = { workspace = true }
+mortiflix-color = { workspace = true }
+mortiflix-export = { workspace = true }
+mortiflix-frame = { workspace = true }
+mortiflix-h264 = { workspace = true }
+mortiflix-hevc = { workspace = true }
+mortiflix-isobmff = { workspace = true }
+mortiflix-time = { workspace = true }
 log = { workspace = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
@@ -59,8 +59,8 @@ windows = { version = "0.62", features = [
 libloading = "0.8"
 
 [dev-dependencies]
-filmcraft-testkit = { workspace = true }
-filmcraft-media = { workspace = true }
-filmcraft-frame = { workspace = true }
-filmcraft-project = { workspace = true }
-filmcraft-render = { workspace = true }
+mortiflix-testkit = { workspace = true }
+mortiflix-media = { workspace = true }
+mortiflix-frame = { workspace = true }
+mortiflix-project = { workspace = true }
+mortiflix-render = { workspace = true }

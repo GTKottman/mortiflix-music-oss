@@ -30,7 +30,7 @@ fn snr(ours: &[Vec<f32>], want: &[f32], ch: usize, lag: i64) -> f64 {
 
 #[test]
 fn eac3_in_mp4_matroska_and_transport_streams() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let cases: [(&str, &str, u32, &[&str]); 4] = [
         ("eac3_51.mp4", SURROUND, 6, &["-b:a", "384k"]),
         ("eac3_51.mkv", SURROUND, 6, &["-b:a", "384k"]),
@@ -40,7 +40,7 @@ fn eac3_in_mp4_matroska_and_transport_streams() {
     for (name, input, channels, enc) in cases {
         let args: Vec<&str> = ["-f", "lavfi", "-i", input, "-t", "2", "-c:a", "eac3"].into_iter().chain(enc.iter().copied()).collect();
         let f = fixture(&ff, name, &args).unwrap_or_else(|| panic!("could not write {name}"));
-        let src = filmcraft_codecs::open_bytes(name, bytes(&f)).unwrap();
+        let src = mortiflix_codecs::open_bytes(name, bytes(&f)).unwrap();
         let a = src.info().audio().cloned().unwrap();
         assert_eq!((a.sample_rate, a.channels), (48_000, channels), "{name}: {}", a.codec);
         let want = ffmpeg_audio_f32(&ff, &f, &[]);
@@ -48,7 +48,7 @@ fn eac3_in_mp4_matroska_and_transport_streams() {
         let n = want.len() / ch;
         // MPEG-TS audio starts at its first PTS relative to the presentation start
         let start = match name.ends_with(".ts") {
-            true => filmcraft_codecs::MpegSource::open(name, bytes(&f)).unwrap().audio_extent().map_or(0, |e| e.0),
+            true => mortiflix_codecs::MpegSource::open(name, bytes(&f)).unwrap().audio_extent().map_or(0, |e| e.0),
             false => 0,
         };
         let ours = src.audio(start, n, 48_000).unwrap().channels;
@@ -66,7 +66,7 @@ fn eac3_in_mp4_matroska_and_transport_streams() {
         let ok = if name.ends_with(".mkv") { lag == 0 || lag == -256 } else { lag == 0 };
         assert!(ok, "{name}: decode is {lag} samples off ffmpeg's");
         // a window read on a fresh source (random access) gives the same samples
-        let fresh = filmcraft_codecs::open_bytes(name, bytes(&f)).unwrap();
+        let fresh = mortiflix_codecs::open_bytes(name, bytes(&f)).unwrap();
         let at = n / 3;
         let win = fresh.audio(start + at as i64, 4800, 48_000).unwrap().channels;
         let mut seek_err = 0f32;

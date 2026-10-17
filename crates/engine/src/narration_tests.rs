@@ -2,13 +2,13 @@
 //! their clip length when edited, and are one exact undo step.
 
 use super::*;
-use filmcraft_project::{ClipId, ItemId};
+use mortiflix_project::{ClipId, ItemId};
 use serde_json::json;
 
-const RATE: i64 = filmcraft_tts::SAMPLE_RATE as i64;
+const RATE: i64 = mortiflix_tts::SAMPLE_RATE as i64;
 
 fn tmp(name: &str) -> String {
-    let d = std::env::temp_dir().join(format!("filmcraft-tts-{}-{name}", std::process::id()));
+    let d = std::env::temp_dir().join(format!("mortiflix-tts-{}-{name}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
     d.to_string_lossy().into_owned()
 }
@@ -25,11 +25,11 @@ fn wav_samples(path: &str) -> Vec<f32> {
     b[44..].as_chunks::<4>().0.iter().map(|c| f32::from_le_bytes(*c)).collect()
 }
 
-fn clip(s: &Session, id: u64) -> filmcraft_project::TrackItem {
+fn clip(s: &Session, id: u64) -> mortiflix_project::TrackItem {
     s.active_sequence().unwrap().find_item(ClipId(id)).unwrap().1.clone()
 }
 
-fn all_clips(s: &Session) -> Vec<filmcraft_project::TrackItem> {
+fn all_clips(s: &Session) -> Vec<mortiflix_project::TrackItem> {
     s.active_sequence().unwrap().all_tracks().flat_map(|t| t.items.clone()).collect()
 }
 
@@ -53,7 +53,7 @@ fn create_places_the_narration_at_the_playhead_as_one_undo_step() {
     assert!(t0 > Tick::ZERO);
     let before = all_clips(&s);
     let undo0 = s.history.undo.len();
-    let r = s.execute("tts.create", json!({"text": "Welcome to FilmCraft.", "voice": "basic-male", "pitch": "low", "pace": 1.2, "dir": dir})).unwrap();
+    let r = s.execute("tts.create", json!({"text": "Welcome to Mortiflix Studio.", "voice": "basic-male", "pitch": "low", "pace": 1.2, "dir": dir})).unwrap();
     let c = clip(&s, r["clip"].as_u64().unwrap());
     assert_eq!(c.start, t0);
     // the clip is exactly as long as the speech (sample-exact) and plays it from the start
@@ -62,7 +62,7 @@ fn create_places_the_narration_at_the_playhead_as_one_undo_step() {
     assert_eq!(c.source_in, Tick::ZERO);
     assert_eq!(r["speechDuration"], c.duration.0);
     let n = s.project.narrations.get(&ItemId(r["item"].as_u64().unwrap())).unwrap();
-    assert_eq!((n.text.as_str(), n.voice.as_str(), n.pitch, n.pace), ("Welcome to FilmCraft.", "basic-male", VocalPitch::Low, 1.2));
+    assert_eq!((n.text.as_str(), n.voice.as_str(), n.pitch, n.pace), ("Welcome to Mortiflix Studio.", "basic-male", VocalPitch::Low, 1.2));
     assert_eq!(n.speech_duration, c.duration);
     assert_eq!(s.state.selection, vec![c.id]);
     // nothing that was there before moved or changed
@@ -83,8 +83,8 @@ fn create_places_the_narration_at_the_playhead_as_one_undo_step() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-use filmcraft_project::VocalPitch;
-use filmcraft_time::Tick;
+use mortiflix_project::VocalPitch;
+use mortiflix_time::Tick;
 
 #[test]
 fn create_never_overwrites_and_adds_a_track_when_every_track_is_busy() {
@@ -317,13 +317,13 @@ fn narrations_survive_save_and_reload() {
     let mut s = demo();
     let dir = tmp("save");
     let r = s.execute("tts.create", json!({"text": "Saved [pause 500ms] and loaded.", "pitch": "extraLow", "time": 0, "dir": dir})).unwrap();
-    let bytes = filmcraft_format::encode(&s.project, false);
-    let loaded = filmcraft_format::decode(&bytes).unwrap();
+    let bytes = mortiflix_format::encode(&s.project, false);
+    let loaded = mortiflix_format::decode(&bytes).unwrap();
     assert_eq!(loaded.project.narrations, s.project.narrations);
     let n = loaded.project.narrations.get(&ItemId(r["item"].as_u64().unwrap())).unwrap();
     assert_eq!((n.text.as_str(), n.pitch), ("Saved [pause 500ms] and loaded.", VocalPitch::ExtraLow));
     // a project without narrations writes no `narrations` key (older files are unchanged)
-    let plain = String::from_utf8(filmcraft_format::encode(&demo().project, false)).unwrap();
+    let plain = String::from_utf8(mortiflix_format::encode(&demo().project, false)).unwrap();
     assert!(!plain.contains("narrations"));
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -342,7 +342,7 @@ fn the_narration_is_heard_in_the_mix() {
     }
     let provider = s.media.provider(s.project.clone(), s.services.clone());
     let sr = s.active_sequence().unwrap().settings.sample_rate as usize;
-    let mix = filmcraft_render::audio::mix_sequence(&s.project, s.active_sequence().unwrap(), 0, sr, &provider).channels;
+    let mix = mortiflix_render::audio::mix_sequence(&s.project, s.active_sequence().unwrap(), 0, sr, &provider).channels;
     let rms = (mix[0].iter().map(|x| f64::from(x * x)).sum::<f64>() / sr as f64).sqrt();
     assert!(rms > 0.01, "narration audible, rms {rms}");
     let _ = std::fs::remove_dir_all(&dir);

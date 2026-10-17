@@ -1,4 +1,4 @@
-# filmcraft-avi
+# mortiflix-avi
 
 A clean-room AVI demuxer, written from Microsoft's published AVI RIFF file reference and the
 OpenDML AVI File Format Extensions 1.02. Layer L0: no dependencies beyond `std`, no `unsafe`, builds
@@ -8,7 +8,7 @@ and ffprobe are used only as external **test oracles**.
 ## API
 
 ```rust
-use filmcraft_avi::{open, StreamKind};
+use mortiflix_avi::{open, StreamKind};
 
 let file = open(&bytes)?;                    // any ByteSource: a slice, a file, a web Blob…
 for (i, s) in file.streams.iter().enumerate() {
@@ -31,12 +31,12 @@ for (i, s) in file.streams.iter().enumerate() {
 | Key frames | from the index; a scan marks every chunk and says so (`keyframes_known`) |
 | Damage | sizes clamped to the file (a cut-off recording opens with what is there), `rec ` lists nested at most 3 deep, tables bounded by what the file could hold |
 
-`filmcraft-codecs` maps the streams onto decoders (`AviSource`): Motion JPEG, H.264, HEVC and
+`mortiflix-codecs` maps the streams onto decoders (`AviSource`): Motion JPEG, H.264, HEVC and
 uncompressed RGB / YUV video; PCM, MP3, MP2 and AC-3 audio.
 
 ## Tests
 
-`cargo test -p filmcraft-avi`: hand-built files for every index path (`idx1` relative and absolute,
+`cargo test -p mortiflix-avi`: hand-built files for every index path (`idx1` relative and absolute,
 `rec ` lists, OpenDML standard indexes, a scan), truncation, and every single-byte mutation and
 truncation of them (never a panic). `tests/ffmpeg_oracle.rs` checks ffmpeg-made files (Motion JPEG,
 H.264 with B-frames, BGR24, YUY2; PCM and MP3) against ffprobe; the ignored `opendml_file_past_1_gb`

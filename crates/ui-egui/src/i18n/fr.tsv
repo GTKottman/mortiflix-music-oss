@@ -4,7 +4,7 @@
 # French video-editing vocabulary. No proprietary localisation resource, string table or product UI
 # was consulted or copied; add entries the same way. Commands use the infinitive ("Enregistrer
 # sous…"), messages address the user as "vous", and labels use French sentence case. Product,
-# format and technology names (FilmCraft, ArtCraft, Lumetri, ProRes, LUFS, EDL, AAF…) keep their
+# format and technology names (Mortiflix Studio, ArtCraft, Lumetri, ProRes, LUFS, EDL, AAF…) keep their
 # spelling. French spacing: a space before ":", ";", "?" and "!". This catalog has the same entries
 # as `es.tsv` plus the native macOS Settings menu; strings added later show in English until they
 # are translated. A native-speaker review is welcome.
@@ -16,7 +16,7 @@
 # décalage, overwrite = écraser, scopes = oscilloscopes, preferences (also the native macOS
 # Settings menu) = Préférences, settings = paramètres.
 
-	About FilmCraft	À propos de FilmCraft
+	About Mortiflix Studio	À propos de Mortiflix Studio
 	Add Audio Submix Track	Ajouter une piste de sous-mixage audio
 	Add Caption at Playhead	Ajouter un sous-titre à la tête de lecture
 	Add Chapter Marker…	Ajouter un marqueur de chapitre…
@@ -135,9 +135,8 @@
 	File	Fichier
 	File…	Fichier…
 	Fill frame	Remplir l'image
-	FilmCraft Help…	Aide de FilmCraft…
-	FilmCraft on GitHub	FilmCraft sur GitHub
-	FilmCraft on getartcraft.com	FilmCraft sur getartcraft.com
+	Mortiflix Studio Help…	Aide de Mortiflix Studio…
+	Mortiflix Studio on mortiflix.com	Mortiflix Studio sur mortiflix.com
 	Find Next	Rechercher le suivant
 	Find…	Rechercher…
 	Fit	Adapter
@@ -310,7 +309,7 @@
 	Select Previous Graphic	Sélectionner le graphique précédent
 	Select Previous Layer	Sélectionner le calque précédent
 	Selection Follows Playhead	La sélection suit la tête de lecture
-	Selection as FilmCraft Project…	Sélection en tant que projet FilmCraft…
+	Selection as Mortiflix Studio Project…	Sélection en tant que projet Mortiflix Studio…
 	Selection…	Sélection…
 	Send Backward	Reculer
 	Send to Back	Mettre à l'arrière-plan
@@ -421,7 +420,6 @@
 	Version {version}	Version {version}
 	A clean-room, pure-Rust non-linear video editor. Part of the ArtCraft family.	Un éditeur vidéo non linéaire en pur Rust, conçu en salle blanche. Membre de la famille ArtCraft.
 	Join the ArtCraft Discord	Rejoindre le Discord d'ArtCraft
-	Source code on GitHub	Code source sur GitHub
 	Report an issue	Signaler un problème
 	MIT OR Apache-2.0. Fonts: Inter, Noto Serif and JetBrains Mono (SIL OFL 1.1).	MIT OR Apache-2.0. Polices : Inter, Noto Serif et JetBrains Mono (SIL OFL 1.1).
 	just now	à l'instant
@@ -440,8 +438,8 @@
 	No background jobs.	Aucune tâche en arrière-plan.
 	Recover Unsaved Changes	Récupérer les modifications non enregistrées
 	Untitled	Sans titre
-	FilmCraft was closed while “{name}” had unsaved changes.	FilmCraft a été fermé alors que « {name} » contenait des modifications non enregistrées.
-	FilmCraft quit unexpectedly while “{name}” had unsaved changes.	FilmCraft s'est fermé de manière inattendue alors que « {name} » contenait des modifications non enregistrées.
+	Mortiflix Studio was closed while “{name}” had unsaved changes.	Mortiflix Studio a été fermé alors que « {name} » contenait des modifications non enregistrées.
+	Mortiflix Studio quit unexpectedly while “{name}” had unsaved changes.	Mortiflix Studio s'est fermé de manière inattendue alors que « {name} » contenait des modifications non enregistrées.
 	Recover unsaved changes from {when}?	Récupérer les modifications non enregistrées de {when} ?
 	The project had not been saved yet.	Le projet n'avait pas encore été enregistré.
 	{n} sessions have unsaved changes:	{n} sessions contiennent des modifications non enregistrées :
@@ -966,7 +964,7 @@
 	Font family	Famille de polices
 	Label Colors	Couleurs d'étiquette
 	Decoded frames held for the monitors and thumbnails: {used} of {budget}.	Images décodées conservées pour les moniteurs et les vignettes : {used} sur {budget}.
-	FilmCraft keeps the rest of the RAM free for other applications.	FilmCraft laisse le reste de la RAM libre pour les autres applications.
+	Mortiflix Studio keeps the rest of the RAM free for other applications.	Mortiflix Studio laisse le reste de la RAM libre pour les autres applications.
 	not available in this session	non disponible dans cette session
 	Currently: {loc} — {files} file(s), {size}	Actuellement : {loc} — {files} fichier(s), {size}
 	 ({ch} output channels)	 ({ch} canaux de sortie)
@@ -1077,7 +1075,7 @@
 	Video Frame	Cadre vidéo
 	Pin To	Épingler à
 	Pinned Edges	Bords épinglés
-	FilmCraft Graphics Template	Modèle de graphiques FilmCraft
+	Mortiflix Studio Graphics Template	Modèle de graphiques Mortiflix Studio
 	{n} Font	Police de {n}
 	{n} Size	Taille de {n}
 	{n} Color	Couleur de {n}
@@ -1087,7 +1085,7 @@
 	Export As Motion Graphics Template	Exporter en tant que modèle d'animation graphique
 	Category:	Catégorie :
 	Editable properties:	Propriétés modifiables :
-	Saved as a FilmCraft graphics template (.fcgt) in your templates folder.	Enregistré en tant que modèle de graphiques FilmCraft (.fcgt) dans votre dossier de modèles.
+	Saved as a Mortiflix Studio graphics template (.fcgt) in your templates folder.	Enregistré en tant que modèle de graphiques Mortiflix Studio (.fcgt) dans votre dossier de modèles.
 	Exported graphics template to {path}	Modèle de graphiques exporté vers {path}
 	Replace Fonts in Projects	Remplacer les polices dans les projets
 	Fonts used in the project:	Polices utilisées dans le projet :
@@ -1457,7 +1455,7 @@
 	Center of Sphere	Centre de la sphère
 	Cents	Cents
 	Change to Color	Changer en couleur
-	Changes are copied in the background a moment after each edit. If FilmCraft quits unexpectedly, they are offered the next time it starts.	Les changements sont copiés en arrière-plan peu après chaque opération de montage. Si FilmCraft se ferme de manière inattendue, ils vous sont proposés au démarrage suivant.
+	Changes are copied in the background a moment after each edit. If Mortiflix Studio quits unexpectedly, they are offered the next time it starts.	Les changements sont copiés en arrière-plan peu après chaque opération de montage. Si Mortiflix Studio se ferme de manière inattendue, ils vous sont proposés au démarrage suivant.
 	Channel	Canal
 	Channel Blur	Flou de canal
 	Channel Mix	Mixage des canaux
@@ -1830,7 +1828,7 @@
 	Hard Limiter	Limiteur dur
 	Hard Mix	Mélange dur
 	Hardware decoding	Décodage matériel
-	Hardware decoding: Auto uses the system's video decoder (VideoToolbox on macOS, Media Foundation on Windows, VA-API or NVDEC for H.264 and HEVC on Linux) for the streams it supports, and FilmCraft's own decoder for everything else or if the hardware fails. Media that is already open keeps its decoder until it is reopened.	Décodage matériel : Auto utilise le décodeur vidéo du système (VideoToolbox sur macOS, Media Foundation sur Windows, VA-API ou NVDEC pour H.264 et HEVC sous Linux) pour les flux qu'il prend en charge, et le décodeur propre à FilmCraft pour tout le reste ou en cas d'échec du matériel. Les médias déjà ouverts conservent leur décodeur jusqu'à leur réouverture.
+	Hardware decoding: Auto uses the system's video decoder (VideoToolbox on macOS, Media Foundation on Windows, VA-API or NVDEC for H.264 and HEVC on Linux) for the streams it supports, and Mortiflix Studio's own decoder for everything else or if the hardware fails. Media that is already open keeps its decoder until it is reopened.	Décodage matériel : Auto utilise le décodeur vidéo du système (VideoToolbox sur macOS, Media Foundation sur Windows, VA-API ou NVDEC pour H.264 et HEVC sous Linux) pour les flux qu'il prend en charge, et le décodeur propre à Mortiflix Studio pour tout le reste ou en cas d'échec du matériel. Les médias déjà ouverts conservent leur décodeur jusqu'à leur réouverture.
 	Head Size	Taille de la tête
 	Heart	Cœur
 	Height	Hauteur
@@ -2105,7 +2103,7 @@
 	Night	Nuit
 	No Motion	Aucun mouvement
 	No Scroll	Aucun défilement
-	No plugins are installed. Changes will take effect the next time you start FilmCraft.	Aucun plug-in n'est installé. Les modifications prendront effet au prochain démarrage de FilmCraft.
+	No plugins are installed. Changes will take effect the next time you start Mortiflix Studio.	Aucun plug-in n'est installé. Les modifications prendront effet au prochain démarrage de Mortiflix Studio.
 	Noise	Bruit
 	Noise & Grain	Bruit et grain
 	Noise (Legacy)	Bruit (ancien)
@@ -2536,7 +2534,7 @@
 	Template Properties	Propriétés du modèle
 	Text Animator	Animateur de texte
 	Text Color	Couleur du texte
-	The media cache holds render previews of unsaved projects and other files FilmCraft can recreate. Deleting them is always safe; FilmCraft rebuilds them as needed.	Le cache média contient les aperçus de rendu des projets non enregistrés et d'autres fichiers que FilmCraft peut recréer. Vous pouvez toujours les supprimer sans risque ; FilmCraft les reconstruit au besoin.
+	The media cache holds render previews of unsaved projects and other files Mortiflix Studio can recreate. Deleting them is always safe; Mortiflix Studio rebuilds them as needed.	Le cache média contient les aperçus de rendu des projets non enregistrés et d'autres fichiers que Mortiflix Studio peut recréer. Vous pouvez toujours les supprimer sans risque ; Mortiflix Studio les reconstruit au besoin.
 	Thickness	Épaisseur
 	Tile Gradient	Dégradé en mosaïque
 	Tilt	Inclinaison
@@ -2746,7 +2744,7 @@
 	System Compatibility Report	Rapport de compatibilité système
 	no GPU adapter: the CPU compositor is used	aucun adaptateur GPU : le compositeur CPU est utilisé
 	Avid Log Exchange	Avid Log Exchange
-	FilmCraft Project	Projet FilmCraft
+	Mortiflix Studio Project	Projet Mortiflix Studio
 	{name} Selection.fcproj	{name} Sélection.fcproj
 	{name} (Simplified)	{name} (simplifiée)
 	Find in:	Rechercher dans :
@@ -2886,7 +2884,7 @@
 	Start Queue	Lancer la file d'attente
 	Stop	Arrêter
 	Clear Finished	Effacer les éléments terminés
-	Not supported by FilmCraft's encoders yet	Pas encore pris en charge par les encodeurs de FilmCraft
+	Not supported by Mortiflix Studio's encoders yet	Pas encore pris en charge par les encodeurs de Mortiflix Studio
 	Sequence name	Nom de la séquence
 	Folder	Dossier
 	Preset	Préréglage
@@ -2976,7 +2974,7 @@
 	Drag a clip to slide it between its neighbours.	Faites glisser un clip pour le faire coulisser entre ses voisins.
 	Drag to scroll the timeline.	Faites glisser pour faire défiler la timeline.
 	Click to zoom in; Opt-click to zoom out.	Cliquez pour un zoom avant ; Option+clic pour un zoom arrière.
-	FilmCraft hit an error	FilmCraft a rencontré une erreur
+	Mortiflix Studio hit an error	Mortiflix Studio a rencontré une erreur
 	Details: {path}	Détails : {path}
 	Opened {url}	{url} ouvert
 	(empty)	(vide)
@@ -3218,7 +3216,7 @@
 	QuickTime, ProRes 4444 (4:4:4) with alpha channel, 24-bit 48 kHz PCM	QuickTime, ProRes 4444 (4:4:4) avec couche alpha, PCM 24 bits 48 kHz
 	QuickTime, ProRes 4444 XQ (4:4:4), 24-bit 48 kHz PCM	QuickTime, ProRes 4444 XQ (4:4:4), PCM 24 bits 48 kHz
 	QuickTime, ProRes 422, 24-bit 48 kHz PCM	QuickTime, ProRes 422, PCM 24 bits 48 kHz
-	Quit FilmCraft	Quitter FilmCraft
+	Quit Mortiflix Studio	Quitter Mortiflix Studio
 	Rate Stretch Tool	Outil Étirement de la vitesse
 	Razor Tool	Outil Cutter
 	Rectangle Tool	Outil Rectangle
@@ -3519,8 +3517,8 @@
 	Composite in Linear Color	Composer en couleur linéaire
 	Auto Tone Map Media (HDR and log into SDR)	Mappage automatique des tons des médias (HDR et log vers SDR)
 	Configure…	Configurer…
-	Not supported in FilmCraft yet	Pas encore pris en charge dans FilmCraft
-	FilmCraft always composites in linear light	FilmCraft compose toujours en lumière linéaire
+	Not supported in Mortiflix Studio yet	Pas encore pris en charge dans Mortiflix Studio
+	Mortiflix Studio always composites in linear light	Mortiflix Studio compose toujours en lumière linéaire
 	Loop marked range	Boucler la plage marquée
 	Play Source	Lire la source
 	Source Play/Stop	Lire/arrêter la source

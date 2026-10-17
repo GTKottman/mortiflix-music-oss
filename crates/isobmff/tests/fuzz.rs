@@ -2,7 +2,7 @@
 
 mod common;
 
-use filmcraft_isobmff::*;
+use mortiflix_isobmff::*;
 use std::io::Cursor;
 
 struct Rng(u64);

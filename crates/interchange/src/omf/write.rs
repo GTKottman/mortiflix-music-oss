@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use filmcraft_time::Tick;
+use mortiflix_time::Tick;
 
 use super::bento;
 use crate::comp::{CItem, CKind, Document, Gain, Source, ticks_to_units};
@@ -292,7 +292,7 @@ pub(crate) fn write(doc: &Document, report: &mut Report) -> Result<Vec<u8>> {
                     let start = w.u(c.start, rate);
                     let sc = w.sclp("omfi:data:Sound", n, mid, mtrack, start);
                     if !c.name.is_empty() {
-                        w.str(sc, "FilmCraft:SCLP:ClipName", &c.name);
+                        w.str(sc, "Mortiflix Studio:SCLP:ClipName", &c.name);
                     }
                     let seg = match &c.gain {
                         Some(g) => {
@@ -325,7 +325,7 @@ pub(crate) fn write(doc: &Document, report: &mut Report) -> Result<Vec<u8>> {
                     w.cpnt(e, "omfi:data:Sound", n);
                     w.r#ref(e, "OMFI:EFFE:EffectKind", kind);
                     w.refs(e, "OMFI:EFFE:EffectSlots", &[]);
-                    w.str(e, "FilmCraft:EFFE:EffectID", &x.effect);
+                    w.str(e, "Mortiflix Studio:EFFE:EffectID", &x.effect);
                     let tr = w.obj(b"TRAN");
                     w.cpnt(tr, "omfi:data:Sound", n);
                     w.i32(tr, "OMFI:TRAN:CutPoint", "omfi:Position32", cut);
@@ -346,10 +346,10 @@ pub(crate) fn write(doc: &Document, report: &mut Report) -> Result<Vec<u8>> {
         w.report.info("some times are not on whole samples / frames and were rounded");
     }
     let ident = w.obj(b"IDNT");
-    w.str(ident, "OMFI:IDNT:CompanyName", "FilmCraft");
-    w.str(ident, "OMFI:IDNT:ProductName", "FilmCraft");
+    w.str(ident, "OMFI:IDNT:CompanyName", "Mortiflix Studio");
+    w.str(ident, "OMFI:IDNT:ProductName", "Mortiflix Studio");
     w.str(ident, "OMFI:IDNT:ProductVersionString", env!("CARGO_PKG_VERSION"));
-    w.str(ident, "OMFI:IDNT:Platform", "FilmCraft");
+    w.str(ident, "OMFI:IDNT:Platform", "Mortiflix Studio");
     w.b.set(ident, "OMFI:IDNT:Date", "omfi:TimeStamp", &[0, 0, 0, 0, 1]);
     let head = w.obj(b"HEAD");
     w.b.set(head, "OMFI:HEAD:ByteOrder", "omfi:Int16", &0x4D4Di16.to_be_bytes());

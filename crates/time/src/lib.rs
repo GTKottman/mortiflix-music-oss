@@ -1,4 +1,4 @@
-//! Exact media time for FilmCraft.
+//! Exact media time for Mortiflix Studio.
 //!
 //! All time is an integer number of [`Tick`]s at [`TICKS_PER_SECOND`] = 254 016 000 000/s. That
 //! rate divides evenly into every broadcast frame duration (23.976, 24, 25, 29.97, 30, 48, 50,

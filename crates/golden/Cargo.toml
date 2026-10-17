@@ -1,5 +1,5 @@
 [package]
-name = "filmcraft-golden"
+name = "mortiflix-golden"
 description = "Golden-image tests for the CPU renderer/compositor and GPU-vs-CPU parity (test-only crate)"
 version.workspace = true
 edition.workspace = true
@@ -15,14 +15,14 @@ workspace = true
 [dependencies]
 
 [dev-dependencies]
-filmcraft-testkit = { workspace = true }
-filmcraft-color = { workspace = true }
-filmcraft-frame = { workspace = true }
-filmcraft-time = { workspace = true }
-filmcraft-geom = { workspace = true }
-filmcraft-media = { workspace = true }
-filmcraft-project = { workspace = true }
-filmcraft-render = { workspace = true }
-filmcraft-gpu = { workspace = true }
+mortiflix-testkit = { workspace = true }
+mortiflix-color = { workspace = true }
+mortiflix-frame = { workspace = true }
+mortiflix-time = { workspace = true }
+mortiflix-geom = { workspace = true }
+mortiflix-media = { workspace = true }
+mortiflix-project = { workspace = true }
+mortiflix-render = { workspace = true }
+mortiflix-gpu = { workspace = true }
 pollster = "0.4"
 wgpu = { version = "30", features = ["wgsl", "metal", "vulkan", "dx12", "gles"] }

@@ -1,8 +1,8 @@
-# filmcraft-vp9
+# mortiflix-vp9
 
 Clean-room, pure-Rust (no `unsafe`) VP9 decoder, implemented from the public *VP9 Bitstream &
 Decoding Process Specification* v0.6 (WebM project). It is an L0 crate: it depends only on
-`filmcraft-bitstream`, `thiserror`, and optionally `rayon` (default feature `threads`), and builds
+`mortiflix-bitstream`, `thiserror`, and optionally `rayon` (default feature `threads`), and builds
 for `wasm32-unknown-unknown` with and without `threads`.
 
 The constant tables (probability defaults, scans, coefficient bands, quantizer lookups, Pareto
@@ -33,7 +33,7 @@ is used only as an external fixture generator and test oracle.
 ## API
 
 ```rust
-use filmcraft_vp9::{Decoder, Plane};
+use mortiflix_vp9::{Decoder, Plane};
 
 let mut dec = Decoder::new(); // or Decoder::with_threads(n)
 for (pts, chunk) in chunks {  // one IVF / WebM block / MP4 sample each (frame or superframe)
@@ -51,11 +51,11 @@ dec.reset(); // forget references / contexts (seek), keeps the thread pool
 let stats = dec.stats(); // what the stream exercised (frame kinds, tiles, compound, scaling...)
 
 // Random access points: does a container sample start with a key frame (and its parameters)?
-let key: bool = filmcraft_vp9::is_keyframe(chunk);
-let info: Option<filmcraft_vp9::KeyframeInfo> = filmcraft_vp9::keyframe_info(chunk);
+let key: bool = mortiflix_vp9::is_keyframe(chunk);
+let info: Option<mortiflix_vp9::KeyframeInfo> = mortiflix_vp9::keyframe_info(chunk);
 ```
 
-`filmcraft-codecs` wires the decoder into Matroska / WebM (`V_VP9`, profile / bit depth from
+`mortiflix-codecs` wires the decoder into Matroska / WebM (`V_VP9`, profile / bit depth from
 `CodecPrivate`, colour from `Colour`) and MP4 (`vp09` + `vpcC`) import; its GOP cache asks
 `is_keyframe` before starting a decode at a container sync sample, so wrongly flagged samples
 (e.g. an MP4 without `stss`) still seek correctly.
@@ -86,7 +86,7 @@ start the next frame before the loop filter is done; frame-parallel / error-resi
 suite decodes every fixture with 1, 3 and all threads. Samples are `u16` internally for every bit
 depth.
 
-Draft mode (`Decoder::set_draft(true)`; FilmCraft enables it with Settings ▸ Playback ▸ Draft
+Draft mode (`Decoder::set_draft(true)`; Mortiflix Studio enables it with Settings ▸ Playback ▸ Draft
 decoding while the Program monitor plays at 1/2 or 1/4): frames with `refresh_frame_flags` 0 —
 no reference slot receives them, so nothing predicts from their samples — skip the loop filter
 and are flagged `Picture::draft`. The loop filter changes neither mode info, segmentation map nor
@@ -100,7 +100,7 @@ inter prediction calls, reconstruction), `intra`, `inter`, `transform`, `loopfil
 
 ## Tests
 
-`cargo test --release -p filmcraft-vp9`. Fixtures are generated on first use into
+`cargo test --release -p mortiflix-vp9`. Fixtures are generated on first use into
 `target/fixtures/vp9/` with ffmpeg + libvpx-vp9 (tests print a message and skip when ffmpeg or
 libvpx is unavailable). Every frame is compared sample-exactly with `ffmpeg -c:v vp9 -f rawvideo`
 output with 1 thread, 3 threads (frame threading with a small pool) and every core; the first
@@ -158,8 +158,8 @@ Backward adaptation is on (`-frame-parallel 0`) unless noted.
 
 ## Performance
 
-`cargo test --release -p filmcraft-vp9 --test perf -- --ignored --nocapture` (bit-exactness is
-verified first), or `VP9_THREADS=n VP9_LOOPS=k cargo run --release -p filmcraft-vp9 --example
+`cargo test --release -p mortiflix-vp9 --test perf -- --ignored --nocapture` (bit-exactness is
+verified first), or `VP9_THREADS=n VP9_LOOPS=k cargo run --release -p mortiflix-vp9 --example
 vp9dec -- in.ivf` (decodes the file k times and prints the statistics; `VP9_DRAFT=1` for draft
 mode).
 

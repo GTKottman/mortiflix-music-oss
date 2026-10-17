@@ -145,7 +145,7 @@ pub const MAX_DIFFERING: f64 = 0.03;
 
 /// Per displayed frame: (pict_type, interlaced_frame, top_field_first) from ffprobe.
 fn ffprobe_frames(file: &std::path::Path) -> Option<Vec<(String, bool, bool)>> {
-    let fp = filmcraft_testkit::ffprobe()?;
+    let fp = mortiflix_testkit::ffprobe()?;
     let o = std::process::Command::new(fp)
         .args(["-v", "error", "-select_streams", "v:0", "-show_entries", "frame=pict_type,interlaced_frame,top_field_first", "-of", "csv=p=0"])
         .arg(file)
@@ -164,7 +164,7 @@ fn ffprobe_frames(file: &std::path::Path) -> Option<Vec<(String, bool, bool)>> {
 }
 
 fn check(spec: &Spec) {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let f = make(&ff, spec).unwrap_or_else(|| panic!("could not generate {}", spec.name));
     let es = std::fs::read(&f).unwrap();
     let (pics, dec) = decode_es(&es, true);
@@ -218,8 +218,8 @@ fn hd_1080i_matches() {
 #[test]
 #[ignore]
 fn generate_fixtures() {
-    let Some(ff) = filmcraft_testkit::ffmpeg_or_skip("mpeg2v fixtures") else { return };
+    let Some(ff) = mortiflix_testkit::ffmpeg_or_skip("mpeg2v fixtures") else { return };
     for s in SPECS.iter().chain([&HD1080I]) {
-        filmcraft_testkit::fixtures::generate_and_report(&format!("mpeg2v/{}", s.name), &[path(s)], || make(&ff, s));
+        mortiflix_testkit::fixtures::generate_and_report(&format!("mpeg2v/{}", s.name), &[path(s)], || make(&ff, s));
     }
 }

@@ -1,5 +1,5 @@
 [package]
-name = "filmcraft-mxf"
+name = "mortiflix-mxf"
 description = "Clean-room MXF (SMPTE ST 377-1) demuxer and writer: OP1a and OP-Atom, index tables, AVC/VC-3/ProRes/MPEG-2/PCM essence"
 version.workspace = true
 edition.workspace = true
@@ -12,4 +12,4 @@ workspace = true
 [dependencies]
 
 [dev-dependencies]
-filmcraft-testkit = { workspace = true }
+mortiflix-testkit = { workspace = true }

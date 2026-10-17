@@ -20,7 +20,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::io;
 
-/// Random-access, read-only byte source (same shape as the other FilmCraft demuxers').
+/// Random-access, read-only byte source (same shape as the other Mortiflix Studio demuxers').
 pub trait ByteSource {
     fn len(&self) -> u64;
     fn read_at(&self, offset: u64, buf: &mut [u8]) -> io::Result<()>;

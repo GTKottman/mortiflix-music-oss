@@ -29,9 +29,9 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use serde_json::{Value, json};
 
-use filmcraft_project::{ClipId, ItemId, ItemKind, MediaRef, Narration, TrackId, TrackKind, VocalPitch};
-use filmcraft_time::{Tick, TimeRange};
-use filmcraft_tts as tts;
+use mortiflix_project::{ClipId, ItemId, ItemKind, MediaRef, Narration, TrackId, TrackKind, VocalPitch};
+use mortiflix_time::{Tick, TimeRange};
+use mortiflix_tts as tts;
 
 use crate::commands::{CommandSpec, always, bad, has_seq, str_p, time_p, u64_p};
 use crate::{EngineError, Result, Session};
@@ -393,15 +393,15 @@ fn spawn(s: &mut Session, job: crate::Job, wait: bool, name: &str, run: impl FnO
     Ok(id)
 }
 
-type JobResult = std::sync::Mutex<Option<std::result::Result<filmcraft_export::Report, String>>>;
+type JobResult = std::sync::Mutex<Option<std::result::Result<mortiflix_export::Report, String>>>;
 
-fn finish(prog: &filmcraft_export::Progress, res: &JobResult, r: std::result::Result<String, String>, t0: web_time::Instant) {
+fn finish(prog: &mortiflix_export::Progress, res: &JobResult, r: std::result::Result<String, String>, t0: web_time::Instant) {
     use std::sync::atomic::Ordering;
     let secs = t0.elapsed().as_secs_f64();
     let r = match r {
         Ok(status) => {
             *prog.status.lock().unwrap_or_else(PoisonError::into_inner) = status;
-            Ok(filmcraft_export::Report { path: String::new(), frames: 0, seconds: secs, bytes: 0, render_fps: 0.0, extra_files: Vec::new() })
+            Ok(mortiflix_export::Report { path: String::new(), frames: 0, seconds: secs, bytes: 0, render_fps: 0.0, extra_files: Vec::new() })
         }
         Err(e) => {
             *prog.status.lock().unwrap_or_else(PoisonError::into_inner) = e.clone();
@@ -430,7 +430,7 @@ fn render_job(s: &mut Session, p: &Value) -> Result<Value> {
     let job = new_job(s, "Synthesizing narration".into());
     let (prog, res, cache) = (job.progress.clone(), job.result.clone(), s.tts_cache.clone());
     let wait = p.get("wait").and_then(Value::as_bool).unwrap_or(false);
-    let id = spawn(s, job, wait, "filmcraft-tts", move || {
+    let id = spawn(s, job, wait, "mortiflix-tts", move || {
         let t0 = web_time::Instant::now();
         *prog.status.lock().unwrap_or_else(PoisonError::into_inner) = "Synthesizing…".into();
         let r = match render(&n, crate::transcript::models_dir().as_deref()) {
@@ -461,7 +461,7 @@ fn download_voices(s: &mut Session, p: &Value) -> Result<Value> {
     let job = new_job(s, format!("Downloading {}", tts::catalog::PACKAGE_NAME));
     job.progress.total.store(tts::catalog::missing_bytes(&dir), std::sync::atomic::Ordering::Relaxed);
     let (prog, res) = (job.progress.clone(), job.result.clone());
-    let id = spawn(s, job, wait, "filmcraft-tts-download", move || {
+    let id = spawn(s, job, wait, "mortiflix-tts-download", move || {
         let t0 = web_time::Instant::now();
         let r = download_package(&dir, &prog);
         finish(&prog, &res, r.map(|()| "Natural voices installed".to_string()), t0);
@@ -470,21 +470,21 @@ fn download_voices(s: &mut Session, p: &Value) -> Result<Value> {
 }
 
 #[cfg(feature = "neural-voices")]
-fn download_package(dir: &std::path::Path, prog: &filmcraft_export::Progress) -> std::result::Result<(), String> {
+fn download_package(dir: &std::path::Path, prog: &mortiflix_export::Progress) -> std::result::Result<(), String> {
     use std::sync::atomic::Ordering;
-    let files: Vec<filmcraft_speech::models::ModelFile> =
-        tts::catalog::FILES.iter().map(|f| filmcraft_speech::models::ModelFile { name: f.name, url: f.url, sha256: f.sha256, size: f.size }).collect();
+    let files: Vec<mortiflix_speech::models::ModelFile> =
+        tts::catalog::FILES.iter().map(|f| mortiflix_speech::models::ModelFile { name: f.name, url: f.url, sha256: f.sha256, size: f.size }).collect();
     let mut progress = |done: u64, total: u64, file: &str| {
         prog.done.store(done, Ordering::Relaxed);
         prog.total.store(total, Ordering::Relaxed);
         *prog.status.lock().unwrap_or_else(PoisonError::into_inner) = format!("Downloading {file}");
         !prog.cancel.load(Ordering::Relaxed)
     };
-    filmcraft_speech::models::download_files(&tts::catalog::package_dir(dir), &files, &mut progress).map_err(|e| e.to_string())
+    mortiflix_speech::models::download_files(&tts::catalog::package_dir(dir), &files, &mut progress).map_err(|e| e.to_string())
 }
 
 #[cfg(not(feature = "neural-voices"))]
-fn download_package(_: &std::path::Path, _: &filmcraft_export::Progress) -> std::result::Result<(), String> {
+fn download_package(_: &std::path::Path, _: &mortiflix_export::Progress) -> std::result::Result<(), String> {
     Err("natural voices are not available in this build".into())
 }
 

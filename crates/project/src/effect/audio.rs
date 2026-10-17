@@ -2,7 +2,7 @@
 //! Echo, Filter and EQ, Modulation, Noise Reduction/Restoration, Reverb, Special, Stereo
 //! Imagery, Time and Pitch, and the loose Balance / Mute / Volume items).
 //!
-//! Parameter ids match the `filmcraft-audio-dsp` effect parameters wherever the mapping is
+//! Parameter ids match the `mortiflix-audio-dsp` effect parameters wherever the mapping is
 //! direct (`render::audio_fx` checks this), so agents can drive every DSP parameter by id.
 
 use super::{A_AMP, A_DELAY, A_FILTER, A_NOISE, A_REVERB, A_SPECIAL, A_STEREO, A_TIME, EffectDef, ParamDef, audio, b, ch, f, fs, grp};

@@ -1,12 +1,12 @@
 //! Transition drag feedback: actual span and edge, no edit until release, one undo step.
 use egui::{Event, Modifiers, PointerButton, Pos2, Rect, pos2, vec2};
 use egui_kittest::Harness;
-use filmcraft_engine::{Session, commands::preview_transition};
-use filmcraft_project::TrackKind;
-use filmcraft_ui_egui::FilmcraftApp;
+use mortiflix_engine::{Session, commands::preview_transition};
+use mortiflix_project::TrackKind;
+use mortiflix_ui_egui::StudioApp;
 use serde_json::json;
 
-fn step(h: &mut Harness<'static, FilmcraftApp>) {
+fn step(h: &mut Harness<'static, StudioApp>) {
     let ctx = h.ctx.clone();
     let mut raw = std::mem::take(h.input_mut());
     eframe::App::raw_input_hook(h.state_mut(), &ctx, &mut raw);
@@ -15,7 +15,7 @@ fn step(h: &mut Harness<'static, FilmcraftApp>) {
     h.step();
 }
 
-fn pointer(h: &mut Harness<'static, FilmcraftApp>, pos: Pos2, pressed: Option<bool>) {
+fn pointer(h: &mut Harness<'static, StudioApp>, pos: Pos2, pressed: Option<bool>) {
     h.input_mut().events.push(Event::PointerMoved(pos));
     if pressed == Some(true) {
         step(h);
@@ -26,12 +26,12 @@ fn pointer(h: &mut Harness<'static, FilmcraftApp>, pos: Pos2, pressed: Option<bo
     step(h);
 }
 
-fn rect(h: &Harness<'static, FilmcraftApp>, id: &str) -> Rect {
+fn rect(h: &Harness<'static, StudioApp>, id: &str) -> Rect {
     let [x, y, w, height] = h.state().auto.elements.iter().find(|e| e.id == id).unwrap_or_else(|| panic!("missing {id}")).rect;
     Rect::from_min_size(pos2(x, y), vec2(w, height))
 }
 
-fn harness(effect: &str) -> Harness<'static, FilmcraftApp> {
+fn harness(effect: &str) -> Harness<'static, StudioApp> {
     let mut s = Session::default();
     s.execute("file.openDemoProject", json!({})).unwrap();
     s.execute("file.newSequence", json!({"name":"Transition drops","fps":24})).unwrap();
@@ -40,11 +40,11 @@ fn harness(effect: &str) -> Harness<'static, FilmcraftApp> {
     for (at, frames) in [(0, 48), (48, 6)] {
         s.execute("timeline.place", json!({"item":5,"time":rate.tick_of(at).0,"duration":rate.tick_of(frames).0})).unwrap();
     }
-    let mut app = FilmcraftApp::new(s);
+    let mut app = StudioApp::new(s);
     app.set_workspace("Effects");
     app.ui.effects_search = effect.to_string();
     let mut builder = Harness::builder().with_size(vec2(1600.0, 980.0)).with_max_steps(10_000);
-    if std::env::var_os("FILMCRAFT_UI_SNAPSHOT_DIR").is_some() {
+    if std::env::var_os("MFX_STUDIO_UI_SNAPSHOT_DIR").is_some() {
         builder = builder.wgpu();
     }
     let mut h = builder.build_eframe(move |_cc| app);
@@ -98,7 +98,7 @@ fn transition_drag_previews_both_edges_of_short_clips_and_commits_that_span() {
                     h.state().session.prefs.timeline.audio_transition_duration(rate)
                 }
             );
-            if let Some(dir) = std::env::var_os("FILMCRAFT_UI_SNAPSHOT_DIR") {
+            if let Some(dir) = std::env::var_os("MFX_STUDIO_UI_SNAPSHOT_DIR") {
                 let dir = std::path::PathBuf::from(dir);
                 std::fs::create_dir_all(&dir).unwrap();
                 h.render().unwrap().save(dir.join(format!("transition-{effect}-{edge}.png"))).unwrap();

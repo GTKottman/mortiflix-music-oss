@@ -80,7 +80,7 @@ pub fn vectorscope(v: &Vectorscope, col: [f32; 3], gain: f32, colorize: bool) ->
             let t = if colorize {
                 let [cb, cr] = v.point(x, y);
                 // the colour at this chroma with mid luma, desaturated towards white
-                let [r, g, b] = filmcraft_color::ycbcr_to_rgb(0.6, cb * 0.8, cr * 0.8, filmcraft_color::Matrix::Bt709);
+                let [r, g, b] = mortiflix_color::ycbcr_to_rgb(0.6, cb * 0.8, cr * 0.8, mortiflix_color::Matrix::Bt709);
                 [0.55 + 0.45 * r.clamp(0.0, 1.0), 0.55 + 0.45 * g.clamp(0.0, 1.0), 0.55 + 0.45 * b.clamp(0.0, 1.0)]
             } else {
                 col

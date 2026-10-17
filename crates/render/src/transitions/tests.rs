@@ -2,11 +2,11 @@
 //!
 //! Golden fingerprints (`goldens.txt`): a 4×4 grid of mean 8-bit RGB values at p = 0.25 / 0.5 /
 //! 0.75 on two procedural test frames. Re-bless after an intended change with
-//! `FILMCRAFT_BLESS=1 cargo test -p filmcraft-render transitions::tests::golden_fingerprints`
+//! `MFX_STUDIO_BLESS=1 cargo test -p mortiflix-render transitions::tests::golden_fingerprints`
 //! and review the diff.
 
-use filmcraft_geom::Vec2;
-use filmcraft_project::{EffectDef, EffectKind, ParamKind, ParamValue, effect_defs};
+use mortiflix_geom::Vec2;
+use mortiflix_project::{EffectDef, EffectKind, ParamKind, ParamValue, effect_defs};
 
 use super::*;
 
@@ -111,7 +111,7 @@ fn no_nan_on_degenerate_inputs() {
 }
 
 /// A non-default value for a parameter (to check every parameter is wired).
-fn changed(def: &filmcraft_project::ParamDef) -> Option<ParamValue> {
+fn changed(def: &mortiflix_project::ParamDef) -> Option<ParamValue> {
     Some(match (&def.kind, &def.default) {
         (ParamKind::Float { min, max, .. }, ParamValue::Float(v)) => {
             let hi = if *max > 1e5 { v * 2.0 + 10.0 } else { *max };
@@ -193,7 +193,7 @@ fn directions_differ() {
 #[test]
 fn wipe_border_and_centre() {
     let (a, b) = (frame_a(), frame_b());
-    let def = filmcraft_project::find_effect("iris_round").unwrap();
+    let def = mortiflix_project::find_effect("iris_round").unwrap();
     let mut e = def.instance();
     e.params.get_mut("border_width").unwrap().value = ParamValue::Float(3.0);
     e.params.get_mut("border_color").unwrap().value = ParamValue::Color([0.0, 1.0, 0.0, 1.0]);
@@ -214,7 +214,7 @@ fn wipe_border_and_centre() {
 #[test]
 fn linear_wipe_reveals_from_the_trailing_side() {
     let (a, b) = (frame_a(), frame_b());
-    let e = filmcraft_project::find_effect("linear_wipe").unwrap().instance(); // 90° = left → right
+    let e = mortiflix_project::find_effect("linear_wipe").unwrap().instance(); // 90° = left → right
     let m = apply(&e, &a, &b, 0.5);
     assert_eq!(m.get(2, 10), b.get(2, 10));
     assert_eq!(m.get(W - 3, 10), a.get(W - 3, 10));
@@ -223,7 +223,7 @@ fn linear_wipe_reveals_from_the_trailing_side() {
 #[test]
 fn push_moves_frames_by_the_eased_distance() {
     let (a, b) = (frame_a(), frame_b());
-    let mut e = filmcraft_project::find_effect("push").unwrap().instance();
+    let mut e = mortiflix_project::find_effect("push").unwrap().instance();
     e.params.get_mut("motion_blur").unwrap().value = ParamValue::Float(0.0);
     let m = apply(&e, &a, &b, 0.5); // eased 0.5 → half a frame, from the west
     for x in [4usize, 20, 28] {
@@ -237,12 +237,12 @@ fn push_moves_frames_by_the_eased_distance() {
 fn modern_and_legacy_ids_are_distinct_renders() {
     let (a, b) = (frame_a(), frame_b());
     for (modern, legacy) in [("push", "push_legacy"), ("clock_wipe", "clock_wipe_legacy"), ("cross_zoom", "cross_zoom_legacy"), ("whip", "whip_legacy")] {
-        let m = apply(&filmcraft_project::find_effect(modern).unwrap().instance(), &a, &b, 0.4);
-        let l = apply(&filmcraft_project::find_effect(legacy).unwrap().instance(), &a, &b, 0.4);
+        let m = apply(&mortiflix_project::find_effect(modern).unwrap().instance(), &a, &b, 0.4);
+        let l = apply(&mortiflix_project::find_effect(legacy).unwrap().instance(), &a, &b, 0.4);
         assert!(mean_abs(&m, &l) > 1e-4, "{modern} vs {legacy}");
     }
     // the legacy dissolves keep their exact maths
-    let e = filmcraft_project::find_effect("cross_dissolve_legacy").unwrap().instance();
+    let e = mortiflix_project::find_effect("cross_dissolve_legacy").unwrap().instance();
     let m = apply(&e, &a, &b, 0.25);
     let want = a.clone().lerp(&b, 0.25);
     assert!(mean_abs(&m, &want) < 1e-6);
@@ -272,8 +272,8 @@ fn morph_cut_moves_the_subject_instead_of_double_exposing() {
     // along, where a cross dissolve shows two half-bright copies
     let (a, b) = (jump_cut_frame(96.0, false), jump_cut_frame(108.0, false));
     let want = jump_cut_frame(102.0, false);
-    let morph = apply(&filmcraft_project::find_effect("morph_cut").unwrap().instance(), &a, &b, 0.5);
-    let dissolve = apply(&filmcraft_project::find_effect("cross_dissolve").unwrap().instance(), &a, &b, 0.5);
+    let morph = apply(&mortiflix_project::find_effect("morph_cut").unwrap().instance(), &a, &b, 0.5);
+    let dissolve = apply(&mortiflix_project::find_effect("cross_dissolve").unwrap().instance(), &a, &b, 0.5);
     // mean red error down a column through the subject's rows
     let column_err = |img: &Image, x: usize| (40..104).map(|y| (img.get(x, y)[0] - want.get(x, y)[0]).abs()).sum::<f32>() / 64.0;
     // uncovered background, both edges, the middle, background still to be covered
@@ -299,7 +299,7 @@ fn morph_cut_tracks_textured_subjects_and_follows_the_progress() {
     for (p, from, to, at) in [(0.5f32, 96.0f32, 108.0f32, 102.0f32), (0.25, 96.0, 112.0, 100.0)] {
         let (a, b) = (jump_cut_frame(from, true), jump_cut_frame(to, true));
         let want = jump_cut_frame(at, true);
-        let morph = apply(&filmcraft_project::find_effect("morph_cut").unwrap().instance(), &a, &b, p);
+        let morph = apply(&mortiflix_project::find_effect("morph_cut").unwrap().instance(), &a, &b, p);
         let dissolve = a.clone().lerp(&b, p);
         let (e_morph, e_dissolve) = (mean_abs(&morph, &want), mean_abs(&dissolve, &want));
         assert!(e_morph * 2.0 < e_dissolve, "p={p}: morph {e_morph} vs dissolve {e_dissolve}");
@@ -347,11 +347,11 @@ fn golden_fingerprints() {
         }
     }
     let path = golden_path();
-    if std::env::var_os("FILMCRAFT_BLESS").is_some() {
+    if std::env::var_os("MFX_STUDIO_BLESS").is_some() {
         std::fs::write(&path, lines.join("\n") + "\n").unwrap();
         return;
     }
-    let want = std::fs::read_to_string(&path).expect("goldens.txt (bless with FILMCRAFT_BLESS=1)");
+    let want = std::fs::read_to_string(&path).expect("goldens.txt (bless with MFX_STUDIO_BLESS=1)");
     let want: std::collections::HashMap<(String, String), String> = want
         .lines()
         .filter_map(|l| {
@@ -377,12 +377,12 @@ fn golden_fingerprints() {
     assert!(bad.is_empty(), "transition goldens differ: {bad:?}");
 }
 
-/// Contact sheets for eyeballing: `FILMCRAFT_TRANSITION_SHEETS=<dir> cargo test -p filmcraft-render
+/// Contact sheets for eyeballing: `MFX_STUDIO_TRANSITION_SHEETS=<dir> cargo test -p mortiflix-render
 /// contact_sheets -- --ignored` writes one PNG per folder (rows = transitions, columns = p).
 #[test]
 #[ignore]
 fn contact_sheets() {
-    let Some(dir) = std::env::var_os("FILMCRAFT_TRANSITION_SHEETS") else { return };
+    let Some(dir) = std::env::var_os("MFX_STUDIO_TRANSITION_SHEETS") else { return };
     let (cw, chh) = (192usize, 108usize);
     let a = paint(cw, chh, |x, y| {
         let u = x / cw as f32;

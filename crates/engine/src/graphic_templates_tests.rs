@@ -2,10 +2,10 @@ use serde_json::{Value, json};
 
 use crate::Session;
 use crate::media_test_util::tmp_dir;
-use filmcraft_project::graphic::LayerContent;
-use filmcraft_project::{ClipId, ParamValue, TrackItem};
-use filmcraft_render::graphic_clip::{item_layer_specs, layer_bounds};
-use filmcraft_time::Tick;
+use mortiflix_project::graphic::LayerContent;
+use mortiflix_project::{ClipId, ParamValue, TrackItem};
+use mortiflix_render::graphic_clip::{item_layer_specs, layer_bounds};
+use mortiflix_time::Tick;
 
 fn demo(dir: &str) -> Session {
     let mut s = Session::default();
@@ -67,7 +67,7 @@ fn template_export_install_apply_round_trip() {
     assert_eq!(r["controls"][4]["kind"], "checkbox");
     // the file is our documented JSON format
     let file: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-    assert_eq!(file["format"], "filmcraft.graphicsTemplate");
+    assert_eq!(file["format"], "mortiflix.graphicsTemplate");
     assert_eq!(file["version"], 1);
     assert_eq!(file["graphic"]["roll"]["mode"], "crawlLeft");
 
@@ -90,7 +90,7 @@ fn template_export_install_apply_round_trip() {
     let c2 = clip_of(&a);
     assert_eq!(texts(&s2, c2), vec!["Breaking News", "Subhead"]);
     let it = item(&s2, c2);
-    assert_eq!(it.graphic.as_ref().unwrap().roll.mode, filmcraft_project::RollMode::CrawlLeft);
+    assert_eq!(it.graphic.as_ref().unwrap().roll.mode, mortiflix_project::RollMode::CrawlLeft);
     let ctl = s2.execute("graphics.template.controls", json!({"clip": c2.0})).unwrap();
     assert_eq!(ctl["controls"][0]["value"], "Breaking News");
     assert_eq!(ctl["controls"][2]["value"], "#ff0000");
@@ -135,7 +135,7 @@ fn builtin_templates_apply_and_thumbnail() {
         assert!(!texts(&s, clip_of(&r)).is_empty(), "{id}");
         let th = s.execute("graphics.template.thumbnail", json!({"template": id, "width": 160})).unwrap();
         assert_eq!((th["width"].as_u64(), th["height"].as_u64()), (Some(160), Some(90)));
-        let png = filmcraft_project::gtemplate::base64_decode(th["pngBase64"].as_str().unwrap()).unwrap();
+        let png = mortiflix_project::gtemplate::base64_decode(th["pngBase64"].as_str().unwrap()).unwrap();
         assert!(png.starts_with(b"\x89PNG"));
         let (_, _, rgba) = super::thumbnail(&super::find_template(&s, id).unwrap().template, 160);
         assert!(rgba.chunks(4).filter(|p| p[3] > 128).count() > 50, "{id}: the thumbnail shows something");
@@ -270,7 +270,7 @@ fn character_styles_follow_edits() {
     let it = item(&s, c);
     let sp = &item_layer_specs(&it, it.source_in, canvas(&s))[0].1;
     let LayerContent::Text(t) = &sp.content else { panic!() };
-    let l = filmcraft_render::graphic_clip::text_layout(t);
+    let l = mortiflix_render::graphic_clip::text_layout(t);
     assert!(l.glyphs.iter().filter(|g| g.run == 1).all(|g| g.size == 140.0 && g.synth_bold));
     s.execute("graphics.setCharStyle", json!({"clip": c.0, "clear": true})).unwrap();
     assert_eq!(s.execute("graphics.list", json!({"clip": c.0})).unwrap()["layers"][0]["styles"], json!([]));

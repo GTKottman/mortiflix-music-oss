@@ -1,5 +1,5 @@
 //! Talking with the AI (doc 37): one **Mortiflix** panel and one history across all stages, docked
-//! left on stages 1-4 and right in FilmCraft on stage 5, and the **Assets** tab beside it (doc 32b,
+//! left on stages 1-4 and right in Edit on stage 5, and the **Assets** tab beside it (doc 32b,
 //! [`assets`]).
 //!
 //! The panel, top to bottom: the "Talking about" bar (crumbs synced both ways with
@@ -27,7 +27,7 @@ pub use assets::{AssetDrag, show_assets};
 use model::{Act, ActionButton, Move, Msg, NodeInfo, Role, Row};
 
 use crate::state::{ChatMessage, StatusKind};
-use crate::{MfxCtx, STAGE_FILMCRAFT, STAGE_RENDER, STAGE_VOICE_MUSIC, stage_key, stage_name};
+use crate::{MfxCtx, STAGE_EDIT, STAGE_RENDER, STAGE_VOICE_MUSIC, stage_key, stage_name};
 
 /// Links are blue and underlined (the owner's standard, doc 37).
 pub const LINK: Color32 = Color32::from_rgb(0x57, 0x94, 0xec);
@@ -129,7 +129,7 @@ fn ui_id() -> egui::Id {
     egui::Id::new("mfx-chat-ui")
 }
 
-/// The chat panel (PanelKind::MfxChat): left on stages 1-4, docked right in FilmCraft on stage 5.
+/// The chat panel (PanelKind::MfxChat): left on stages 1-4, docked right in Edit on stage 5.
 pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     let mut st: ChatUi = ui.data_mut(|d| d.get_temp(ui_id())).unwrap_or_default();
     let now = ui.input(|i| i.time);
@@ -435,7 +435,7 @@ fn load_history(ctx: &mut MfxCtx, st: &mut ChatUi, now: f64) {
 }
 
 /// Tell the service what is being talked about when the selection changes (node area, a link, a
-/// crumb, FilmCraft's clip): the AI's quick replies get it.
+/// crumb, Mortiflix Studio's clip): the AI's quick replies get it.
 fn sync_context(ctx: &mut MfxCtx, st: &mut ChatUi, now: f64) {
     if !connected(ctx) || ctx.state.project_id.is_none() || st.context_sent.as_ref() == Some(&ctx.state.selected_node) {
         return;
@@ -1189,7 +1189,7 @@ fn moves_row(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, info: Option<
                 let next: &[(&str, &str, &str)] = match ctx.state.stage {
                     2 => &[("hearIt", "Hear the voice and music", "stages.voiceMusic")],
                     STAGE_VOICE_MUSIC => &[("editVideo", "Edit the video", "stages.editVideo"), ("getVideo", "Get the video", "stages.getVideo")],
-                    STAGE_FILMCRAFT => &[("export", "Go to Export", "stages.render")],
+                    STAGE_EDIT => &[("export", "Go to Export", "stages.render")],
                     s if s >= STAGE_RENDER => &[],
                     _ => &[],
                 };

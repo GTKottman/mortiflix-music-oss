@@ -2,7 +2,7 @@
 //! and Merge Clips dialogs, the Program monitor's Multi-Camera view (angle grid, clicking an
 //! angle, Ctrl-click for video only) and live switching with the 1–9 keys while playing.
 //!
-//! Set `FILMCRAFT_UI_SNAPSHOT_DIR=<dir>` to also render the window offscreen with wgpu and write PNGs
+//! Set `MFX_STUDIO_UI_SNAPSHOT_DIR=<dir>` to also render the window offscreen with wgpu and write PNGs
 //! there (`multicam-*.png`).
 
 use std::path::{Path, PathBuf};
@@ -10,13 +10,13 @@ use std::sync::Arc;
 use std::sync::mpsc::{Sender, channel};
 
 use egui_kittest::Harness;
-use filmcraft_engine::Session;
-use filmcraft_engine::project::{ItemKind, Label, MediaClip, MediaRef, Project, SequenceSettings, TrackKind};
-use filmcraft_media::generators::GeneratorSource;
-use filmcraft_media::{DemoScene, Generator, MediaSource};
-use filmcraft_time::{FrameRate, Tick, TimeRange};
-use filmcraft_ui_egui::FilmcraftApp;
-use filmcraft_ui_egui::control::ControlRequest;
+use mortiflix_engine::Session;
+use mortiflix_engine::project::{ItemKind, Label, MediaClip, MediaRef, Project, SequenceSettings, TrackKind};
+use mortiflix_media::generators::GeneratorSource;
+use mortiflix_media::{DemoScene, Generator, MediaSource};
+use mortiflix_time::{FrameRate, Tick, TimeRange};
+use mortiflix_ui_egui::StudioApp;
+use mortiflix_ui_egui::control::ControlRequest;
 use serde_json::{Value, json};
 
 const W: u32 = 320;
@@ -24,7 +24,7 @@ const H: u32 = 180;
 
 fn tmp_dir(name: &str) -> PathBuf {
     let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
-    let d = std::env::temp_dir().join(format!("filmcraft-ui-{name}-{}-{nanos}", std::process::id()));
+    let d = std::env::temp_dir().join(format!("mortiflix-ui-{name}-{}-{nanos}", std::process::id()));
     std::fs::create_dir_all(&d).unwrap();
     d
 }
@@ -50,18 +50,18 @@ fn make_movie(path: &Path, scene: DemoScene, frames: i64) {
     let seq = p.new_sequence("s", SequenceSettings { width: W, height: H, frame_rate: rate, ..Default::default() }, 1, 0, None);
     let mut v = p.make_track_item(item, TrackKind::Video, Tick::ZERO, TimeRange::new(Tick::ZERO, dur), rate).unwrap();
     for e in &mut v.effects {
-        filmcraft_engine::project::resolve_auto_points(e, (W, H), (W, H));
+        mortiflix_engine::project::resolve_auto_points(e, (W, H), (W, H));
     }
     p.sequence_mut(seq).unwrap().video_tracks[0].items.push(v);
-    let settings = filmcraft_engine::export::ExportSettings {
-        format: filmcraft_engine::export::Format::ProRes,
+    let settings = mortiflix_engine::export::ExportSettings {
+        format: mortiflix_engine::export::Format::ProRes,
         path: path.to_string_lossy().into_owned(),
         include_audio: false,
         ..Default::default()
     };
-    let shared: filmcraft_media::SharedSource = Arc::new(src);
+    let shared: mortiflix_media::SharedSource = Arc::new(src);
     let provider = move |id| (id == item).then(|| shared.clone());
-    filmcraft_engine::export::export(&Arc::new(p), seq, &settings, &provider, &Default::default()).unwrap();
+    mortiflix_engine::export::export(&Arc::new(p), seq, &settings, &provider, &Default::default()).unwrap();
 }
 
 /// Four cameras imported into a session with an empty 320×180 sequence "Cut".
@@ -84,7 +84,7 @@ fn session() -> (Session, Vec<u64>) {
 }
 
 struct Driver {
-    harness: Harness<'static, FilmcraftApp>,
+    harness: Harness<'static, StudioApp>,
     tx: Sender<ControlRequest>,
     snapshots: Option<PathBuf>,
 }
@@ -92,8 +92,8 @@ struct Driver {
 impl Driver {
     fn new(session: Session) -> Self {
         let (tx, rx) = channel();
-        let app = FilmcraftApp::new(session).with_control(rx);
-        let snapshots = std::env::var_os("FILMCRAFT_UI_SNAPSHOT_DIR").map(PathBuf::from);
+        let app = StudioApp::new(session).with_control(rx);
+        let snapshots = std::env::var_os("MFX_STUDIO_UI_SNAPSHOT_DIR").map(PathBuf::from);
         let mut b = Harness::builder().with_size(egui::vec2(1600.0, 980.0)).with_max_steps(10_000);
         if snapshots.is_some() {
             b = b.wgpu();
@@ -158,7 +158,7 @@ impl Driver {
         v.as_array().unwrap().iter().filter_map(|e| e["id"].as_str().map(str::to_string)).collect()
     }
 
-    fn app(&mut self) -> &mut FilmcraftApp {
+    fn app(&mut self) -> &mut StudioApp {
         self.harness.state_mut()
     }
 
@@ -385,7 +385,7 @@ fn multicam_view_pages_beyond_sixteen_angles_and_edit_cameras() {
     d.click("editCameras.enabled.1");
     d.click("editCameras.ok");
     assert!(d.app().ui.edit_cameras.is_none());
-    let mc = d.app().session.project.sequence(filmcraft_engine::project::ItemId(src)).unwrap().multicam.clone().unwrap();
+    let mc = d.app().session.project.sequence(mortiflix_engine::project::ItemId(src)).unwrap().multicam.clone().unwrap();
     assert!(!mc.cameras[1].enabled);
     assert_eq!(d.exec("multicam.grid", json!({}))["angles"], 19);
 }

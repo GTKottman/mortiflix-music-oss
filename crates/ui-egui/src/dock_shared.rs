@@ -37,7 +37,7 @@ fn encode_node(node: &DockNode, depth: usize, count: &mut usize) -> Result<Node<
 fn decode_node(node: Node<PanelKind>) -> Result<DockNode, String> {
     Ok(match node {
         Node::Tabs { panels, active } => DockNode::Tabs { panels, active },
-        Node::Stack { .. } => return Err("FilmCraft does not use stacked panels".into()),
+        Node::Stack { .. } => return Err("Mortiflix Studio does not use stacked panels".into()),
         Node::Split { axis, size, first, second } => DockNode::Split {
             vertical: axis == SplitAxis::Vertical,
             size: match size {

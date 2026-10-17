@@ -1,7 +1,7 @@
 //! M5.11: every video effect is listed with its folder and badges, applies by id or name through
 //! `effects.apply` (undoable), takes parameters through `effects.setParam`, and renders.
 
-use filmcraft_project::{EffectKind, effect_defs};
+use mortiflix_project::{EffectKind, effect_defs};
 use serde_json::{Value, json};
 
 use crate::Session;
@@ -15,7 +15,7 @@ fn demo() -> Session {
 #[test]
 fn transition_preview_is_read_only_and_matches_apply_and_undo() {
     use crate::commands::preview_transition;
-    use filmcraft_project::TrackKind;
+    use mortiflix_project::TrackKind;
     for (kind, effect) in [(TrackKind::Video, "cross_dissolve"), (TrackKind::Audio, "constant_power")] {
         let mut s = demo();
         let clips: Vec<_> = s.active_sequence().unwrap().tracks(kind)[0].items.iter().map(|c| c.id).collect();
@@ -48,8 +48,8 @@ fn first_v1_clip(s: &Session) -> u64 {
     s.active_sequence().unwrap().video_tracks[0].items[0].id.0
 }
 
-fn video_effects() -> Vec<&'static filmcraft_project::EffectDef> {
-    effect_defs().iter().filter(|d| d.kind == EffectKind::Video && !d.intrinsic && !filmcraft_project::graphic::is_layer_id(d.id)).collect()
+fn video_effects() -> Vec<&'static mortiflix_project::EffectDef> {
+    effect_defs().iter().filter(|d| d.kind == EffectKind::Video && !d.intrinsic && !mortiflix_project::graphic::is_layer_id(d.id)).collect()
 }
 
 #[test]
@@ -76,7 +76,7 @@ fn every_video_effect_applies_by_id_and_name_and_renders() {
     let clip = first_v1_clip(&s);
     for d in video_effects() {
         s.execute("effects.apply", json!({"clips": [clip], "effect": d.id})).unwrap_or_else(|e| panic!("{}: {e}", d.id));
-        let it = s.active_sequence().unwrap().find_item(filmcraft_project::ClipId(clip)).unwrap().1.clone();
+        let it = s.active_sequence().unwrap().find_item(mortiflix_project::ClipId(clip)).unwrap().1.clone();
         let inst = it.effects.iter().find(|e| e.effect == d.id).unwrap_or_else(|| panic!("{} not on the clip", d.id));
         // auto points were resolved against the frame
         for (k, p) in &inst.params {
@@ -89,7 +89,7 @@ fn every_video_effect_applies_by_id_and_name_and_renders() {
             assert!(img.px.iter().all(|v| v.is_finite()), "{} rendered non-finite pixels", d.id);
         }
         s.execute("edit.undo", json!({})).unwrap();
-        assert!(s.active_sequence().unwrap().find_item(filmcraft_project::ClipId(clip)).unwrap().1.effects.iter().all(|e| e.effect != d.id), "{} undo", d.id);
+        assert!(s.active_sequence().unwrap().find_item(mortiflix_project::ClipId(clip)).unwrap().1.effects.iter().all(|e| e.effect != d.id), "{} undo", d.id);
         // by display name (MCP / CLI agents use either)
         s.execute("effects.apply", json!({"clips": [clip], "effect": d.name})).unwrap_or_else(|e| panic!("{} by name: {e}", d.name));
         s.execute("edit.undo", json!({})).unwrap();
@@ -107,11 +107,11 @@ fn new_effect_params_are_settable_and_keyframable() {
     s.execute("effects.setParam", json!({"clip": clip, "effect": "simple_text", "param": "text", "value": "Hello"})).unwrap();
     s.execute("effects.apply", json!({"clips": [clip], "effect": "corner_pin"})).unwrap();
     s.execute("effects.setParam", json!({"clip": clip, "effect": "corner_pin", "param": "upper_left", "value": [100.0, 50.0]})).unwrap();
-    let it = s.active_sequence().unwrap().find_item(filmcraft_project::ClipId(clip)).unwrap().1.clone();
+    let it = s.active_sequence().unwrap().find_item(mortiflix_project::ClipId(clip)).unwrap().1.clone();
     let td = it.effect("turbulent_displace").unwrap();
     assert_eq!(td.param("amount").unwrap().value.as_f64(), Some(120.0));
     assert!(td.param("evolution").unwrap().is_animated() || !td.param("evolution").unwrap().keyframes.is_empty());
-    assert!(matches!(&it.effect("simple_text").unwrap().param("text").unwrap().value, filmcraft_project::ParamValue::Text(t) if t == "Hello"));
+    assert!(matches!(&it.effect("simple_text").unwrap().param("text").unwrap().value, mortiflix_project::ParamValue::Text(t) if t == "Hello"));
     let img = s.render_program(0.125).unwrap();
     assert!(img.px.iter().all(|v| v.is_finite()));
 }
@@ -122,7 +122,7 @@ fn ultra_key_setting_writes_aggressive_parameters() {
     let clip = first_v1_clip(&s);
     s.execute("effects.apply", json!({"clips": [clip], "effect": "ultra_key"})).unwrap();
     s.execute("effects.setParam", json!({"clip": clip, "effect": "ultra_key", "param": "setting", "value": 2})).unwrap();
-    let e = s.active_sequence().unwrap().find_item(filmcraft_project::ClipId(clip)).unwrap().1.effect("ultra_key").unwrap();
+    let e = s.active_sequence().unwrap().find_item(mortiflix_project::ClipId(clip)).unwrap().1.effect("ultra_key").unwrap();
     assert_eq!(e.param("tolerance").unwrap().value.as_f64(), Some(90.0));
     assert_eq!(e.param("pedestal").unwrap().value.as_f64(), Some(50.0));
     assert_eq!(e.param("choke").unwrap().value.as_f64(), Some(10.0));

@@ -133,8 +133,8 @@ const SPECS: &[Spec] = &[
 ];
 
 fn make(ff: &Path, s: &Spec) -> Option<PathBuf> {
-    let out = filmcraft_testkit::fixtures_dir("ac3").join(format!("{}.{}", s.name, s.codec));
-    filmcraft_testkit::fixtures::generate(&out, |tmp| {
+    let out = mortiflix_testkit::fixtures_dir("ac3").join(format!("{}.{}", s.name, s.codec));
+    mortiflix_testkit::fixtures::generate(&out, |tmp| {
         let st = Command::new(ff)
             .args(["-hide_banner", "-v", "error", "-y", "-f", "lavfi", "-i", s.input, "-t", "1"])
             .args(["-c:a", s.codec])
@@ -150,7 +150,7 @@ fn make(ff: &Path, s: &Spec) -> Option<PathBuf> {
 fn frames(data: &[u8]) -> Vec<&[u8]> {
     let mut out = Vec::new();
     let mut p = 0;
-    while let Ok(h) = filmcraft_ac3::parse_header(&data[p..]) {
+    while let Ok(h) = mortiflix_ac3::parse_header(&data[p..]) {
         if p + h.frame_bytes > data.len() {
             break;
         }
@@ -162,11 +162,11 @@ fn frames(data: &[u8]) -> Vec<&[u8]> {
 
 #[test]
 fn ffmpeg_encoded_streams_decode() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     for s in SPECS {
         let f = make(&ff, s).unwrap_or_else(|| panic!("could not generate {}", s.name));
         let data = std::fs::read(&f).unwrap();
-        let mut dec = filmcraft_ac3::Decoder::new();
+        let mut dec = mortiflix_ac3::Decoder::new();
         let mut ours: Vec<Vec<f32>> = vec![Vec::new(); s.channels as usize];
         for fr in frames(&data) {
             let d = dec.decode(fr).unwrap();
@@ -194,7 +194,7 @@ fn ffmpeg_encoded_streams_decode() {
         }
         // the same stream decoded with another dither sequence: how far dither alone moves the
         // output (the difference to ffmpeg must be of that order)
-        let mut dec2 = filmcraft_ac3::Decoder::new();
+        let mut dec2 = mortiflix_ac3::Decoder::new();
         dec2.set_dither_seed(0xDEAD_BEEF);
         let other: Vec<f32> = frames(&data).iter().flat_map(|fr| dec2.decode(fr).unwrap().channels.swap_remove(0)).collect();
         let (mut sig, mut err) = (0f64, 0f64);
@@ -218,7 +218,7 @@ fn ffmpeg_encoded_streams_decode() {
 /// a panic.
 #[test]
 fn damaged_eac3_frames_never_panic() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let mut x = 0x00C0_FFEEu32;
     let mut rnd = move || {
         x ^= x << 13;
@@ -229,7 +229,7 @@ fn damaged_eac3_frames_never_panic() {
     for s in SPECS.iter().filter(|s| s.codec == "eac3") {
         let f = make(&ff, s).unwrap_or_else(|| panic!("could not generate {}", s.name));
         let data = std::fs::read(&f).unwrap();
-        let mut dec = filmcraft_ac3::Decoder::new();
+        let mut dec = mortiflix_ac3::Decoder::new();
         for fr in frames(&data).into_iter().take(8) {
             for k in 0..300 {
                 let mut m = fr.to_vec();
@@ -257,9 +257,9 @@ fn damaged_eac3_frames_never_panic() {
 #[test]
 #[ignore]
 fn generate_fixtures() {
-    let Some(ff) = filmcraft_testkit::ffmpeg_or_skip("ac3 fixtures") else { return };
+    let Some(ff) = mortiflix_testkit::ffmpeg_or_skip("ac3 fixtures") else { return };
     for s in SPECS {
-        let out = filmcraft_testkit::fixtures_dir("ac3").join(format!("{}.{}", s.name, s.codec));
-        filmcraft_testkit::fixtures::generate_and_report(&format!("ac3/{}", s.name), &[out], || make(&ff, s));
+        let out = mortiflix_testkit::fixtures_dir("ac3").join(format!("{}.{}", s.name, s.codec));
+        mortiflix_testkit::fixtures::generate_and_report(&format!("ac3/{}", s.name), &[out], || make(&ff, s));
     }
 }

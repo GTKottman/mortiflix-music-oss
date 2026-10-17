@@ -3,32 +3,32 @@
 //!
 //! In an HDR sequence (Rec. 2100 PQ / HLG working space) Basic Correction shows HDR White and
 //! HDR Specular and Curves shows HDR Range (cd/m²): the sliders and curves then span 0 … that
-//! many nits (see `filmcraft_color::grade`). Automation ids for those and HSL Secondary ▸ Refine:
+//! many nits (see `mortiflix_color::grade`). Automation ids for those and HSL Secondary ▸ Refine:
 //! `lumetri.param.<id>` (`hdr_white`, `hdr_specular`, `curves_hdr_range`, `hsl_denoise`,
 //! `hsl_blur`); Color Match: `lumetri.match.comparisonView` (toggles the Program monitor's
 //! Comparison View, whose reference frame Apply Match then uses).
 
 use egui::{Align2, Color32, Pos2, Rect, Sense, Stroke, StrokeKind, pos2, vec2};
-use filmcraft_project::{ClipId, EffectInstance, ParamValue};
-use filmcraft_time::Tick;
+use mortiflix_project::{ClipId, EffectInstance, ParamValue};
+use mortiflix_time::Tick;
 use serde_json::{Value, json};
 
-use crate::FilmcraftApp;
+use crate::StudioApp;
 use crate::icons::{self, Icon};
 use crate::native_dialogs::FileDialog;
 use crate::theme::Tokens;
 
 type Actions = Vec<Value>;
 
-fn selected(app: &FilmcraftApp) -> Option<(ClipId, filmcraft_project::TrackItem)> {
+fn selected(app: &StudioApp) -> Option<(ClipId, mortiflix_project::TrackItem)> {
     let seq = app.session.active_sequence()?;
     app.session.state.selection.iter().find_map(|c| {
         let (tid, it) = seq.find_item(*c)?;
-        (seq.track(tid)?.kind == filmcraft_project::TrackKind::Video).then(|| (*c, it.clone()))
+        (seq.track(tid)?.kind == mortiflix_project::TrackKind::Video).then(|| (*c, it.clone()))
     })
 }
 
-pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
+pub fn show(app: &mut StudioApp, ui: &mut egui::Ui, rect: Rect) {
     let t = app.tokens;
     let Some((clip, it)) = selected(app) else {
         crate::dock::placeholder(ui, rect, &t, tl!("(no clip selected)"));
@@ -98,9 +98,9 @@ pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
                 Some(ParamValue::Choice(c)) => *c as usize,
                 _ => 0,
             };
-            let opts = filmcraft_project::find_effect("lumetri")
+            let opts = mortiflix_project::find_effect("lumetri")
                 .and_then(|d| d.param("look"))
-                .and_then(|p| if let filmcraft_project::ParamKind::Choice(o) = p.kind { Some(o) } else { None })
+                .and_then(|p| if let mortiflix_project::ParamKind::Choice(o) = p.kind { Some(o) } else { None })
                 .unwrap_or(&[]);
             ui.horizontal(|ui| {
                 ui.add_sized(vec2(110.0, 20.0), egui::Label::new(egui::RichText::new(tl!("Look")).color(t.text_dim)));
@@ -272,15 +272,7 @@ pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
     }
 }
 
-fn open_section(
-    ui: &mut egui::Ui,
-    app: &mut FilmcraftApp,
-    e: &EffectInstance,
-    name: &str,
-    param: &str,
-    sec: &'static str,
-    out: &mut Vec<&'static str>,
-) -> bool {
+fn open_section(ui: &mut egui::Ui, app: &mut StudioApp, e: &EffectInstance, name: &str, param: &str, sec: &'static str, out: &mut Vec<&'static str>) -> bool {
     let on = e.param(param).and_then(|p| p.value.as_bool()).unwrap_or(param != "hsl_on");
     let (open, toggled) = section(ui, app, name, on);
     if toggled {
@@ -290,19 +282,19 @@ fn open_section(
 }
 
 /// LUT menu: None, built-ins, the project's LUT library, Browse… (file dialog → `lut.import`).
-fn lut_combo(ui: &mut egui::Ui, app: &mut FilmcraftApp, e: &EffectInstance, param: &str, label: &str, input: bool, out: &mut Vec<(&'static str, Value)>) {
+fn lut_combo(ui: &mut egui::Ui, app: &mut StudioApp, e: &EffectInstance, param: &str, label: &str, input: bool, out: &mut Vec<(&'static str, Value)>) {
     let t = app.tokens;
     let cur = match e.param(param).map(|p| &p.value) {
         Some(ParamValue::Text(s)) => s.clone(),
         _ => String::new(),
     };
     let cmd: &'static str = if input { "lumetri.setInputLut" } else { "lumetri.setLook" };
-    let shown = filmcraft_render::luts::label(Some(&app.session.project), &cur);
+    let shown = mortiflix_render::luts::label(Some(&app.session.project), &cur);
     let mut entries: Vec<(String, String)> = vec![(String::new(), tl!("None").into())];
-    let builtins: Vec<&filmcraft_render::luts::Builtin> = if input {
-        filmcraft_render::luts::input_builtins().collect()
+    let builtins: Vec<&mortiflix_render::luts::Builtin> = if input {
+        mortiflix_render::luts::input_builtins().collect()
     } else {
-        filmcraft_render::luts::builtins().iter().filter(|b| b.id.starts_with("look-")).collect()
+        mortiflix_render::luts::builtins().iter().filter(|b| b.id.starts_with("look-")).collect()
     };
     entries.extend(builtins.into_iter().map(|b| (format!("builtin:{}", b.id), b.label.clone())));
     entries.extend(app.session.project.luts.iter().map(|l| (format!("lib:{}", l.id), l.name.clone())));
@@ -329,7 +321,7 @@ fn lut_combo(ui: &mut egui::Ui, app: &mut FilmcraftApp, e: &EffectInstance, para
 }
 
 /// A section header; returns (expanded, switch clicked). `on` is the section's enable switch.
-fn section(ui: &mut egui::Ui, app: &mut FilmcraftApp, name: &str, on: bool) -> (bool, bool) {
+fn section(ui: &mut egui::Ui, app: &mut StudioApp, name: &str, on: bool) -> (bool, bool) {
     let t = app.tokens;
     let key = format!("lumetri2:{name}");
     let open = !app.ui.collapsed_fx.contains(&key) && (name == "Basic Correction" || app.ui.expanded_fx.contains(&key));
@@ -392,7 +384,7 @@ fn slider(
     idx: usize,
 ) -> Rect {
     let Some(pd) = e.def().and_then(|d| d.param(id)) else { return Rect::NOTHING };
-    let filmcraft_project::ParamKind::Float { min, max, soft_min, soft_max, decimals, .. } = pd.kind else { return Rect::NOTHING };
+    let mortiflix_project::ParamKind::Float { min, max, soft_min, soft_max, decimals, .. } = pd.kind else { return Rect::NOTHING };
     let v = e.param(id).map(|p| p.f64_at(mt)).unwrap_or(pd.default.as_f64().unwrap_or(0.0));
     let (row, _) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::hover());
     ui.painter().text(pos2(row.min.x + 4.0, row.center().y), Align2::LEFT_CENTER, label, Tokens::ui(12.0), t.text_dim);
@@ -406,7 +398,7 @@ fn slider(
                     Gradient::Temp => lerp_col(Color32::from_rgb(70, 120, 230), Color32::from_rgb(240, 150, 50), f0),
                     Gradient::Tint => lerp_col(Color32::from_rgb(60, 190, 80), Color32::from_rgb(220, 70, 200), f0),
                     Gradient::Hue => {
-                        let rgb = filmcraft_color::hsl_to_rgb(f0, 0.8, 0.5);
+                        let rgb = mortiflix_color::hsl_to_rgb(f0, 0.8, 0.5);
                         Color32::from_rgb((rgb[0] * 255.0) as u8, (rgb[1] * 255.0) as u8, (rgb[2] * 255.0) as u8)
                     }
                 };
@@ -480,7 +472,7 @@ fn curve_editor(ui: &mut egui::Ui, e: &EffectInstance, id: &str, hue: bool, col:
         let n = 36;
         for i in 0..n {
             let f0 = i as f32 / n as f32;
-            let rgb = filmcraft_color::hsl_to_rgb(f0, 0.8, 0.5);
+            let rgb = mortiflix_color::hsl_to_rgb(f0, 0.8, 0.5);
             let c = Color32::from_rgb((rgb[0] * 255.0) as u8, (rgb[1] * 255.0) as u8, (rgb[2] * 255.0) as u8);
             p.rect_filled(
                 Rect::from_min_max(
@@ -503,10 +495,10 @@ fn curve_editor(ui: &mut egui::Ui, e: &EffectInstance, id: &str, hue: bool, col:
                 ext.push([(q[0] + off + 1.0) / 3.0, q[1]]);
             }
         }
-        let l = filmcraft_render::effects::curve_lut(&ext, 3 * 128);
+        let l = mortiflix_render::effects::curve_lut(&ext, 3 * 128);
         l[128..256].to_vec()
     } else {
-        filmcraft_render::effects::curve_lut(&draw_pts, 128)
+        mortiflix_render::effects::curve_lut(&draw_pts, 128)
     };
     let line: Vec<Pos2> = lut.iter().enumerate().map(|(i, y)| to_screen([i as f32 / 127.0, y.clamp(0.0, 1.0)])).collect();
     p.add(egui::Shape::line(line, Stroke::new(1.5, col)));
@@ -580,7 +572,7 @@ fn color_wheel(ui: &mut egui::Ui, e: &EffectInstance, mt: Tick, id: &str, lid: &
     for i in 0..n {
         let a0 = i as f32 / n as f32 * std::f32::consts::TAU;
         let a1 = (i + 1) as f32 / n as f32 * std::f32::consts::TAU;
-        let rgb = filmcraft_color::hsl_to_rgb(1.0 - (i as f32 / n as f32), 0.75, 0.5);
+        let rgb = mortiflix_color::hsl_to_rgb(1.0 - (i as f32 / n as f32), 0.75, 0.5);
         let col = Color32::from_rgb((rgb[0] * 255.0) as u8, (rgb[1] * 255.0) as u8, (rgb[2] * 255.0) as u8);
         let base = mesh.vertices.len() as u32;
         for (a, r) in [(a0, r_in), (a0, r_out), (a1, r_out), (a1, r_in)] {
@@ -624,7 +616,7 @@ fn color_wheel(ui: &mut egui::Ui, e: &EffectInstance, mt: Tick, id: &str, lid: &
 
 /// Color Match: reference frame (sequence timecode), Face Detection (skin-tone protection),
 /// Apply Match (`lumetri.applyMatch`).
-fn match_controls(ui: &mut egui::Ui, app: &mut FilmcraftApp, out: &mut Vec<(&'static str, Value)>) {
+fn match_controls(ui: &mut egui::Ui, app: &mut StudioApp, out: &mut Vec<(&'static str, Value)>) {
     let t = app.tokens;
     sub(ui, &t, tl!("Color Match"));
     let key = egui::Id::new("lumetri-match-ref");
@@ -639,9 +631,9 @@ fn match_controls(ui: &mut egui::Ui, app: &mut FilmcraftApp, out: &mut Vec<(&'st
     if b.clicked() {
         out.push(("view.display", json!({"display": if comparing { "composite" } else { "comparison" }})));
     }
-    let reference = app.ui.program.compare_ref.filter(|_| comparing).map(filmcraft_time::Tick);
+    let reference = app.ui.program.compare_ref.filter(|_| comparing).map(mortiflix_time::Tick);
     if let (Some(r), Some(q)) = (reference, app.session.active_sequence()) {
-        tc = filmcraft_time::format_time(r, q.settings.frame_rate, q.settings.drop_frame, filmcraft_time::TimeDisplay::Timecode, 48000);
+        tc = mortiflix_time::format_time(r, q.settings.frame_rate, q.settings.drop_frame, mortiflix_time::TimeDisplay::Timecode, 48000);
     }
     ui.horizontal(|ui| {
         ui.add_sized(vec2(110.0, 20.0), egui::Label::new(egui::RichText::new(tl!("Reference")).color(t.text_dim)));

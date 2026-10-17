@@ -1,10 +1,10 @@
 # Russian (ru) catalog. Columns separated by TAB: context <TAB> source <TAB> translation
 # Empty context is a plain UI string. Escapes: \n, \t, \\; preserve placeholders and trailing …
-# Original clean-room translations from the meaning of FilmCraft's English menu labels,
+# Original clean-room translations from the meaning of Mortiflix Studio's English menu labels,
 # using Russian video-editing vocabulary (Premiere-style). No proprietary localization resources were used.
 # Core menu coverage; other interface strings fall back to English.
 
-	About FilmCraft	О FilmCraft
+	About Mortiflix Studio	О Mortiflix Studio
 	Add Audio Submix Track	Добавить дорожку подмикширования звука
 	Add Caption at Playhead	Добавить субтитр в позиции курсора воспроизведения
 	Add Chapter Marker…	Добавить маркер главы…
@@ -126,9 +126,8 @@
 	File	Файл
 	File…	Файл…
 	Fill frame	Заполнить кадр
-	FilmCraft Help…	Справка FilmCraft…
-	FilmCraft on GitHub	FilmCraft на GitHub
-	FilmCraft on getartcraft.com	FilmCraft на getartcraft.com
+	Mortiflix Studio Help…	Справка Mortiflix Studio…
+	Mortiflix Studio on mortiflix.com	Mortiflix Studio на mortiflix.com
 	Find Next	Найти далее
 	Find…	Найти…
 	Fit	По размеру
@@ -298,7 +297,7 @@
 	Select Previous Graphic	Выбрать предыдущий графический элемент
 	Select Previous Layer	Выбрать предыдущий слой
 	Selection Follows Playhead	Выделение следует за курсором воспроизведения
-	Selection as FilmCraft Project…	Выделение как проект FilmCraft…
+	Selection as Mortiflix Studio Project…	Выделение как проект Mortiflix Studio…
 	Selection…	Выделение…
 	Send Backward	Переместить назад
 	Send to Back	Переместить на задний план
@@ -360,5 +359,5 @@
 	Next Appearance Mode	Следующий режим оформления
 	Project Notes	Заметки проекта
 
-# Mortiflix FilmCraft: Stages menu
+# Mortiflix Studio: Stages menu
 	Stages	Этапы

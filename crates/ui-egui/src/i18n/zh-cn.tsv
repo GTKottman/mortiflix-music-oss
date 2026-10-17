@@ -8,8 +8,8 @@
 #
 # 净室实现：每条译文均由英文含义直接译出，使用通用的中文视频剪辑术语（剪辑、时间轴、序列、
 #   轨道、关键帧……）。未参考或复制任何专有本地化资源、字符串表或产品界面。产品与技术名称
-#   （FilmCraft、ArtCraft、Lumetri、ProRes、LUFS……）保留原文拼写。
-	About FilmCraft	关于 FilmCraft
+#   （Mortiflix Studio、ArtCraft、Lumetri、ProRes、LUFS……）保留原文拼写。
+	About Mortiflix Studio	关于 Mortiflix Studio
 	Add Audio Submix Track	添加音频子混音轨道
 	Add Caption at Playhead	在播放头处添加字幕
 	Add Chapter Marker…	添加章节标记…
@@ -128,9 +128,8 @@
 	File	文件
 	File…	文件…
 	Fill frame	填满帧
-	FilmCraft Help…	FilmCraft 帮助…
-	FilmCraft on GitHub	GitHub 上的 FilmCraft
-	FilmCraft on getartcraft.com	getartcraft.com 上的 FilmCraft
+	Mortiflix Studio Help…	Mortiflix Studio 帮助…
+	Mortiflix Studio on mortiflix.com	mortiflix.com 上的 Mortiflix Studio
 	Find Next	查找下一个
 	Find…	查找…
 	Fit	适配
@@ -303,7 +302,7 @@
 	Select Previous Graphic	选择上一个图形
 	Select Previous Layer	选择上一个图层
 	Selection Follows Playhead	选择跟随播放头
-	Selection as FilmCraft Project…	将所选对象另存为 FilmCraft 项目…
+	Selection as Mortiflix Studio Project…	将所选对象另存为 Mortiflix Studio 项目…
 	Selection…	所选对象…
 	Send Backward	下移一层
 	Send to Back	置于底层
@@ -410,7 +409,6 @@
 	Version {version}	版本 {version}
 	A clean-room, pure-Rust non-linear video editor. Part of the ArtCraft family.	一款净室实现的纯 Rust 非线性视频编辑器，属于 ArtCraft 家族。
 	Join the ArtCraft Discord	加入 ArtCraft Discord
-	Source code on GitHub	GitHub 上的源代码
 	Report an issue	报告问题
 	MIT OR Apache-2.0. Fonts: Inter, Noto Serif and JetBrains Mono (SIL OFL 1.1).	MIT 或 Apache-2.0。字体：Inter、Noto Serif 与 JetBrains Mono（SIL OFL 1.1）。
 	just now	刚刚
@@ -429,8 +427,8 @@
 	No background jobs.	无后台任务。
 	Recover Unsaved Changes	恢复未保存的更改
 	Untitled	未命名
-	FilmCraft was closed while “{name}” had unsaved changes.	FilmCraft 在“{name}”存在未保存的更改时被关闭。
-	FilmCraft quit unexpectedly while “{name}” had unsaved changes.	FilmCraft 在“{name}”存在未保存的更改时意外退出。
+	Mortiflix Studio was closed while “{name}” had unsaved changes.	Mortiflix Studio 在“{name}”存在未保存的更改时被关闭。
+	Mortiflix Studio quit unexpectedly while “{name}” had unsaved changes.	Mortiflix Studio 在“{name}”存在未保存的更改时意外退出。
 	Recover unsaved changes from {when}?	恢复 {when} 的未保存更改吗？
 	The project had not been saved yet.	该项目尚未保存。
 	{n} sessions have unsaved changes:	{n} 个会话存在未保存的更改：
@@ -956,7 +954,7 @@
 	Font family	字体族
 	Label Colors	标签颜色
 	Decoded frames held for the monitors and thumbnails: {used} of {budget}.	为监视器和缩略图保留的解码帧：{used} / {budget}。
-	FilmCraft keeps the rest of the RAM free for other applications.	FilmCraft 将剩余内存留给其他应用程序。
+	Mortiflix Studio keeps the rest of the RAM free for other applications.	Mortiflix Studio 将剩余内存留给其他应用程序。
 	not available in this session	在当前会话中不可用
 	Currently: {loc} — {files} file(s), {size}	当前：{loc} — {files} 个文件，{size}
 	 ({ch} output channels)	 （{ch} 个输出通道）
@@ -1065,7 +1063,7 @@
 	Video Frame	视频帧
 	Pin To	固定到
 	Pinned Edges	固定边
-	FilmCraft Graphics Template	FilmCraft 图形模板
+	Mortiflix Studio Graphics Template	Mortiflix Studio 图形模板
 	{n} Font	{n} 字体
 	{n} Size	{n} 大小
 	{n} Color	{n} 颜色
@@ -1075,7 +1073,7 @@
 	Export As Motion Graphics Template	导出为动态图形模板
 	Category:	分类：
 	Editable properties:	可编辑属性：
-	Saved as a FilmCraft graphics template (.fcgt) in your templates folder.	已作为 FilmCraft 图形模板（.fcgt）保存到你的模板文件夹。
+	Saved as a Mortiflix Studio graphics template (.fcgt) in your templates folder.	已作为 Mortiflix Studio 图形模板（.fcgt）保存到你的模板文件夹。
 	Exported graphics template to {path}	已将图形模板导出到 {path}
 	Replace Fonts in Projects	替换项目中的字体
 	Fonts used in the project:	项目中使用的字体：
@@ -1445,7 +1443,7 @@
 	Center of Sphere	球体中心
 	Cents	音分
 	Change to Color	更改为颜色
-	Changes are copied in the background a moment after each edit. If FilmCraft quits unexpectedly, they are offered the next time it starts.	每次编辑后，更改会在后台稍后复制。如果 FilmCraft 意外退出，下次启动时会提示恢复。
+	Changes are copied in the background a moment after each edit. If Mortiflix Studio quits unexpectedly, they are offered the next time it starts.	每次编辑后，更改会在后台稍后复制。如果 Mortiflix Studio 意外退出，下次启动时会提示恢复。
 	Channel	通道
 	Channel Blur	通道模糊
 	Channel Mix	通道混合
@@ -1818,7 +1816,7 @@
 	Hard Limiter	硬限制器
 	Hard Mix	硬混合
 	Hardware decoding	硬件解码
-	Hardware decoding: Auto uses the system's video decoder (VideoToolbox on macOS, Media Foundation on Windows, VA-API for H.264 and HEVC on Linux) for the streams it supports, and FilmCraft's own decoder for everything else or if the hardware fails. Media that is already open keeps its decoder until it is reopened.	硬件解码：自动模式对支持的流使用系统视频解码器（macOS 上为 VideoToolbox，Windows 上为 Media Foundation，Linux 上对 H.264 和 HEVC 使用 VA-API），其余情况或硬件失败时回退到 FilmCraft 自带的解码器。已打开的媒体会保留其解码器，直到重新打开。
+	Hardware decoding: Auto uses the system's video decoder (VideoToolbox on macOS, Media Foundation on Windows, VA-API for H.264 and HEVC on Linux) for the streams it supports, and Mortiflix Studio's own decoder for everything else or if the hardware fails. Media that is already open keeps its decoder until it is reopened.	硬件解码：自动模式对支持的流使用系统视频解码器（macOS 上为 VideoToolbox，Windows 上为 Media Foundation，Linux 上对 H.264 和 HEVC 使用 VA-API），其余情况或硬件失败时回退到 Mortiflix Studio 自带的解码器。已打开的媒体会保留其解码器，直到重新打开。
 	Head Size	头部大小
 	Heart	心形
 	Height	高度
@@ -2088,7 +2086,7 @@
 	Night	夜景
 	No Motion	无运动
 	No Scroll	不滚动
-	No plugins are installed. Changes will take effect the next time you start FilmCraft.	未安装任何插件。更改将在下次启动 FilmCraft 时生效。
+	No plugins are installed. Changes will take effect the next time you start Mortiflix Studio.	未安装任何插件。更改将在下次启动 Mortiflix Studio 时生效。
 	Noise	噪点
 	Noise & Grain	噪点与颗粒
 	Noise (Legacy)	噪点（旧版）
@@ -2519,7 +2517,7 @@
 	Template Properties	模板属性
 	Text Animator	文本动画器
 	Text Color	文本颜色
-	The media cache holds render previews of unsaved projects and other files FilmCraft can recreate. Deleting them is always safe; FilmCraft rebuilds them as needed.	媒体缓存保存未保存项目的渲染预览，以及其他 FilmCraft 可重建的文件。删除它们始终安全；FilmCraft 会在需要时重新构建。
+	The media cache holds render previews of unsaved projects and other files Mortiflix Studio can recreate. Deleting them is always safe; Mortiflix Studio rebuilds them as needed.	媒体缓存保存未保存项目的渲染预览，以及其他 Mortiflix Studio 可重建的文件。删除它们始终安全；Mortiflix Studio 会在需要时重新构建。
 	Thickness	厚度
 	Tile Gradient	平铺渐变
 	Tilt	倾斜
@@ -2729,7 +2727,7 @@
 	System Compatibility Report	系统兼容性报告
 	no GPU adapter: the CPU compositor is used	无 GPU 适配器：使用 CPU 合成器
 	Avid Log Exchange	Avid Log Exchange
-	FilmCraft Project	FilmCraft 项目
+	Mortiflix Studio Project	Mortiflix Studio 项目
 	{name} Selection.fcproj	{name} Selection.fcproj
 	{name} (Simplified)	{name}（简化）
 	Find in:	查找位置：
@@ -2869,7 +2867,7 @@
 	Start Queue	启动队列
 	Stop	停止
 	Clear Finished	清除已完成
-	Not supported by FilmCraft's encoders yet	FilmCraft 的编码器尚不支持
+	Not supported by Mortiflix Studio's encoders yet	Mortiflix Studio 的编码器尚不支持
 	Sequence name	序列名称
 	Folder	文件夹
 	Preset	预设
@@ -2958,7 +2956,7 @@
 	Drag a clip to slide it between its neighbours.	拖动剪辑以在其相邻剪辑之间滑动。
 	Drag to scroll the timeline.	拖动以滚动时间轴。
 	Click to zoom in; Opt-click to zoom out.	单击以放大；Opt-单击以缩小。
-	FilmCraft hit an error	FilmCraft 遇到错误
+	Mortiflix Studio hit an error	Mortiflix Studio 遇到错误
 	Details: {path}	详细信息：{path}
 	Opened {url}	已打开 {url}
 	(empty)	（空）
@@ -3218,7 +3216,7 @@
 	QuickTime, ProRes 4444 (4:4:4) with alpha channel, 24-bit 48 kHz PCM	QuickTime，ProRes 4444 (4:4:4)，带 Alpha 通道，24 位 48 kHz PCM
 	QuickTime, ProRes 4444 XQ (4:4:4), 24-bit 48 kHz PCM	QuickTime，ProRes 4444 XQ (4:4:4)，24 位 48 kHz PCM
 	QuickTime, ProRes 422, 24-bit 48 kHz PCM	QuickTime，ProRes 422，24 位 48 kHz PCM
-	Quit FilmCraft	退出 FilmCraft
+	Quit Mortiflix Studio	退出 Mortiflix Studio
 	Rate Stretch Tool	速率伸缩工具
 	Razor Tool	剃刀工具
 	Rectangle Tool	矩形工具
@@ -3519,8 +3517,8 @@
 	Composite in Linear Color	在线性色彩中合成
 	Auto Tone Map Media (HDR and log into SDR)	自动色调映射媒体（HDR 与 log 映射至 SDR）
 	Configure…	配置…
-	Not supported in FilmCraft yet	FilmCraft 尚不支持
-	FilmCraft always composites in linear light	FilmCraft 始终在线性光中合成
+	Not supported in Mortiflix Studio yet	Mortiflix Studio 尚不支持
+	Mortiflix Studio always composites in linear light	Mortiflix Studio 始终在线性光中合成
 	Loop marked range	循环标记范围
 	Play Source	播放源
 	Source Play/Stop	源播放/停止
@@ -3582,22 +3580,21 @@
 	Opens in your web browser: {url}	在网页浏览器中打开：{url}
 	Saves this session's log and shows it in your file manager.	保存本次会话的日志并在文件管理器中显示。
 	Shows a report on this computer.	显示本机的报告。
-	Shows the version, community links and credits in a FilmCraft window.	在 FilmCraft 窗口中显示版本、社区链接和致谢。
+	Shows the version, community links and credits in a Mortiflix Studio window.	在 Mortiflix Studio 窗口中显示版本、社区链接和致谢。
 	Couldn't open your web browser	无法打开网页浏览器
 	Open this address in your browser yourself:	请自行在浏览器中打开此地址：
-# Mortiflix FilmCraft: Stages menu and panels
+# Mortiflix Studio: Stages menu and panels
 	Back	返回
 	Next	下一步
 	Script	脚本
 	Shots	镜头
 	Voice & music	配音与音乐
-	FilmCraft	FilmCraft
 	Render	渲染
 	Mortiflix Chat	Mortiflix 聊天
 	Mortiflix Preview	Mortiflix 预览
 	Mortiflix Nodes	Mortiflix 节点
 	Mortiflix Stage	Mortiflix 阶段
 	Mortiflix Assets	Mortiflix 素材
-# Mortiflix FilmCraft: Into FilmCraft (doc 38)
+# Mortiflix Studio: Into Edit (doc 38)
 	Start the Edit Again from Mortiflix…	从 Mortiflix 重新开始剪辑…
 	Mortiflix…	Mortiflix…

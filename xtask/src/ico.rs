@@ -95,7 +95,7 @@ mod tests {
 
     #[test]
     fn committed_icon_is_valid() {
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../assets/app-icon/filmcraft.ico");
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../assets/app-icon/mortiflix-studio.ico");
         let Ok(ico) = std::fs::read(&path) else { return };
         assert_eq!(&ico[..4], &[0, 0, 1, 0]);
         let n = u16::from_le_bytes([ico[4], ico[5]]) as usize;

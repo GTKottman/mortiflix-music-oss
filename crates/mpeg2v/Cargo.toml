@@ -1,5 +1,5 @@
 [package]
-name = "filmcraft-mpeg2v"
+name = "mortiflix-mpeg2v"
 description = "Clean-room MPEG-2 video (ITU-T H.262 | ISO/IEC 13818-2) and MPEG-1 video (ISO/IEC 11172-2) decoder"
 version.workspace = true
 edition.workspace = true
@@ -18,4 +18,4 @@ thiserror = { workspace = true }
 rayon = { workspace = true, optional = true }
 
 [dev-dependencies]
-filmcraft-testkit = { workspace = true }
+mortiflix-testkit = { workspace = true }

@@ -1,6 +1,6 @@
-//! `cargo run -p filmcraft-tts --release --features kokoro --example narrate -- <models dir> <voice id> <script.txt> <out.wav>`
+//! `cargo run -p mortiflix-tts --release --features kokoro --example narrate -- <models dir> <voice id> <script.txt> <out.wav>`
 //!
-//! Speaks a script file with any FilmCraft voice (built in or natural) through the full pipeline
+//! Speaks a script file with any Mortiflix Studio voice (built in or natural) through the full pipeline
 //! (normalizer, pronunciation, Kokoro) and writes a mono 32-bit float WAV.
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -11,9 +11,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let text = std::fs::read_to_string(script)?;
     let t0 = std::time::Instant::now();
-    let v = filmcraft_tts::voice_in(id, Some(std::path::Path::new(models)))?;
+    let v = mortiflix_tts::voice_in(id, Some(std::path::Path::new(models)))?;
     let t1 = std::time::Instant::now();
-    let audio = v.synthesize(&text, &filmcraft_tts::Params::default())?;
+    let audio = v.synthesize(&text, &mortiflix_tts::Params::default())?;
     let t2 = std::time::Instant::now();
     let rate = audio.sample_rate;
     let data = (audio.samples.len() * 4) as u32;

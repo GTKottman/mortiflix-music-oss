@@ -1,7 +1,7 @@
 //! Writing one frame (RFC 9639 §9): header with CRC-8, one subframe per channel, zero padding to a
 //! byte, CRC-16.
 
-use filmcraft_bitstream::BitWriter;
+use mortiflix_bitstream::BitWriter;
 
 use crate::crc::{crc8, crc16};
 use crate::predict::{Residual, Subframe};
@@ -53,7 +53,7 @@ fn sample_size_code(bps: u8) -> u8 {
         16 => 4,
         20 => 5,
         24 => 6,
-        // 32 bits has code 7 since RFC 9639, which earlier decoders (symphonia 0.5, FilmCraft's own
+        // 32 bits has code 7 since RFC 9639, which earlier decoders (symphonia 0.5, Mortiflix Studio's own
         // FLAC import) reject as reserved; 0 ("as STREAMINFO says") decodes everywhere
         _ => 0,
     }

@@ -2,17 +2,17 @@
 //! reference decoder (never linked).
 #![allow(dead_code)]
 
-use filmcraft_dnx::{Frame, probe};
+use mortiflix_dnx::{Frame, probe};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-/// ffmpeg, or `None` after printing `SKIPPED` (see `filmcraft_testkit::oracle`).
+/// ffmpeg, or `None` after printing `SKIPPED` (see `mortiflix_testkit::oracle`).
 pub fn ffmpeg() -> Option<PathBuf> {
-    filmcraft_testkit::ffmpeg_or_skip("dnx oracle")
+    mortiflix_testkit::ffmpeg_or_skip("dnx oracle")
 }
 
 pub fn fixture_dir() -> PathBuf {
-    filmcraft_testkit::fixtures_dir("dnx")
+    mortiflix_testkit::fixtures_dir("dnx")
 }
 
 pub fn run(ff: &Path, args: &[&str]) {
@@ -41,7 +41,7 @@ impl Spec {
 pub fn make(ff: &Path, spec: &Spec) -> PathBuf {
     let path = fixture_dir().join(format!("{}.mov", spec.name));
     if !path.exists() {
-        let tmp = filmcraft_testkit::temp_path(&path);
+        let tmp = mortiflix_testkit::temp_path(&path);
         let frames = spec.frames.to_string();
         let mut args = vec!["-f", "lavfi", "-i", spec.lavfi.as_str(), "-frames:v", frames.as_str(), "-c:v", "dnxhd"];
         args.extend(spec.enc.iter().copied());
@@ -254,17 +254,17 @@ pub fn ffmpeg_decode(ff: &Path, mov: &Path, pix_fmt: &str) -> Vec<u16> {
 }
 
 /// Render a lavfi source to raw planar frames with ffmpeg and load them as [`Frame`]s.
-pub fn source_frames(ff: &Path, name: &str, lavfi: &str, frames: u32, w: u32, h: u32, chroma: filmcraft_dnx::ChromaFormat, depth: u8) -> Vec<Frame> {
+pub fn source_frames(ff: &Path, name: &str, lavfi: &str, frames: u32, w: u32, h: u32, chroma: mortiflix_dnx::ChromaFormat, depth: u8) -> Vec<Frame> {
     let pix = match (chroma, depth) {
-        (filmcraft_dnx::ChromaFormat::Yuv422, 8) => "yuv422p",
-        (filmcraft_dnx::ChromaFormat::Yuv422, 10) => "yuv422p10le",
-        (filmcraft_dnx::ChromaFormat::Yuv422, _) => "yuv422p12le",
+        (mortiflix_dnx::ChromaFormat::Yuv422, 8) => "yuv422p",
+        (mortiflix_dnx::ChromaFormat::Yuv422, 10) => "yuv422p10le",
+        (mortiflix_dnx::ChromaFormat::Yuv422, _) => "yuv422p12le",
         (_, 10) => "yuv444p10le",
         _ => "yuv444p12le",
     };
     let path = fixture_dir().join(format!("{name}.{pix}.raw"));
     if !path.exists() {
-        let tmp = filmcraft_testkit::temp_path(&path);
+        let tmp = mortiflix_testkit::temp_path(&path);
         let f = frames.to_string();
         run(ff, &["-f", "lavfi", "-i", lavfi, "-frames:v", &f, "-f", "rawvideo", "-pix_fmt", pix, tmp.to_str().unwrap()]);
         std::fs::rename(&tmp, &path).unwrap();

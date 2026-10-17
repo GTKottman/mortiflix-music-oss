@@ -5,10 +5,10 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use filmcraft_flac::{Encoder, EncoderConfig, Error, STREAMINFO_OFFSET};
+use mortiflix_flac::{Encoder, EncoderConfig, Error, STREAMINFO_OFFSET};
 
 fn ffmpeg() -> Option<PathBuf> {
-    filmcraft_testkit::ffmpeg_or_skip("flac oracle")
+    mortiflix_testkit::ffmpeg_or_skip("flac oracle")
 }
 
 struct Rng(u64);
@@ -77,7 +77,7 @@ fn round_trip(name: &str, planar: &[Vec<i32>], cfg: EncoderConfig, chunk: usize)
     let bps = cfg.bits_per_sample;
     let rate = cfg.sample_rate;
     let file = encode(planar, cfg, chunk).unwrap();
-    let path = filmcraft_testkit::fixtures_dir("flac").join(format!("{name}.flac"));
+    let path = mortiflix_testkit::fixtures_dir("flac").join(format!("{name}.flac"));
     std::fs::write(&path, &file).unwrap();
 
     // samples: s32 holds each one shifted to the top bits

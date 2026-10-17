@@ -1,11 +1,11 @@
 {
- "format": "filmcraft.project",
+ "format": "mortiflix.project",
  "schema_version": 8,
- "generator": "FilmCraft 0.1.0",
+ "generator": "Mortiflix Studio 0.1.0",
  "project": {
   "name": "Schema 8 Edit",
   "settings": {
-   "renderer": "FilmCraft GPU Acceleration (wgpu)",
+   "renderer": "Mortiflix Studio GPU Acceleration (wgpu)",
    "video_display": "Timecode",
    "audio_display_samples": true,
    "default_still_duration": 1270080000000,

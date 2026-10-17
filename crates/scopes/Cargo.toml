@@ -1,5 +1,5 @@
 [package]
-name = "filmcraft-scopes"
+name = "mortiflix-scopes"
 description = "Video scopes maths: waveform, parade, histogram and vectorscopes from a frame's R'G'B' values"
 version.workspace = true
 edition.workspace = true
@@ -10,7 +10,7 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
-filmcraft-color = { workspace = true }
+mortiflix-color = { workspace = true }
 serde = { workspace = true }
 
 [dev-dependencies]

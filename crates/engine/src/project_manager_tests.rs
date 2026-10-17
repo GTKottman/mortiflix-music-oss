@@ -1,8 +1,8 @@
 //! Project Manager: collect copies used media (excluding unused clips) and the copy opens and
 //! plays; consolidate trims to the used range plus handles and every edit stays in place.
 
-use filmcraft_media::DemoScene;
-use filmcraft_project::{ItemId, MediaRef};
+use mortiflix_media::DemoScene;
+use mortiflix_project::{ItemId, MediaRef};
 use serde_json::json;
 
 use crate::Session;
@@ -20,7 +20,7 @@ fn project(root: &std::path::Path) -> (Session, Vec<ItemId>, String) {
     // use only frames 20..32 of a (V1 + A1)
     let seq = s.state.active_sequence.unwrap();
     let mut p = (*s.project).clone();
-    let rate = filmcraft_time::FrameRate::FPS_24;
+    let rate = mortiflix_time::FrameRate::FPS_24;
     let q = p.sequence_mut(seq).unwrap();
     for t in q.all_tracks_mut() {
         let it = t.items.iter_mut().find(|i| i.item == items[0]).unwrap();
@@ -86,7 +86,7 @@ fn consolidate_trims_to_used_ranges_with_handles() {
         )
         .unwrap();
     let trim = &r["files"].as_array().unwrap().iter().find(|f| f["item"] == json!(items[0].0)).unwrap()["trim"];
-    let rate = filmcraft_time::FrameRate::FPS_24;
+    let rate = mortiflix_time::FrameRate::FPS_24;
     assert_eq!(trim["start"], json!(rate.tick_of(16).0), "used from frame 20, 4 handle frames: {r}");
     assert_eq!(trim["end"], json!(rate.tick_of(36).0), "used through frame 31, 4 handles: {r}");
     assert!(r["resultBytes"].as_u64().unwrap() > 0);
@@ -104,8 +104,8 @@ fn consolidate_trims_to_used_ranges_with_handles() {
 
 #[test]
 fn nested_subclip_keeps_its_whole_parent_chain_used() {
-    use filmcraft_project::{ItemKind, Label};
-    use filmcraft_time::{Tick, TimeRange};
+    use mortiflix_project::{ItemKind, Label};
+    use mortiflix_time::{Tick, TimeRange};
     let root = tmp_dir("pm-nested-subclip");
     let (s, items, _) = project(&root);
     let seq = s.state.active_sequence.unwrap();

@@ -5,22 +5,22 @@ use std::sync::Arc;
 use std::sync::mpsc::{Sender, channel};
 
 use egui_kittest::Harness;
-use filmcraft_engine::Session;
-use filmcraft_ui_egui::FilmcraftApp;
-use filmcraft_ui_egui::control::ControlRequest;
+use mortiflix_engine::Session;
+use mortiflix_ui_egui::StudioApp;
+use mortiflix_ui_egui::control::ControlRequest;
 use serde_json::{Value, json};
 
 const SR: u32 = 48_000;
 
 struct Driver {
-    harness: Harness<'static, FilmcraftApp>,
+    harness: Harness<'static, StudioApp>,
     tx: Sender<ControlRequest>,
 }
 
 impl Driver {
     fn new(session: Session) -> Self {
         let (tx, rx) = channel();
-        let app = FilmcraftApp::new(session).with_control(rx);
+        let app = StudioApp::new(session).with_control(rx);
         let harness = Harness::builder().with_size(egui::vec2(1600.0, 980.0)).with_max_steps(10_000).build_eframe(move |_cc| app);
         let mut d = Driver { harness, tx };
         d.frames(4);
@@ -83,18 +83,18 @@ impl Driver {
 
     fn duration(&mut self, clip: u64) -> f64 {
         let s = self.harness.state();
-        s.session.active_sequence().unwrap().find_item(filmcraft_project::ClipId(clip)).unwrap().1.duration.seconds()
+        s.session.active_sequence().unwrap().find_item(mortiflix_project::ClipId(clip)).unwrap().1.duration.seconds()
     }
 }
 
 /// A session with 32 s of generated 120 BPM music on A1 (selected).
 fn session() -> (Session, u64) {
-    let (m, _) = filmcraft_audio_dsp::remix::test_music(SR, 120.0, 16, 5);
+    let (m, _) = mortiflix_audio_dsp::remix::test_music(SR, 120.0, 16, 5);
     let mut s = Session::default();
     s.execute("file.newSequence", json!({"name": "remix", "audio": 2, "video": 1})).unwrap();
     let inter: Vec<f32> = (0..m[0].len()).flat_map(|i| [m[0][i], m[1][i]]).collect();
-    let bytes: Arc<[u8]> = filmcraft_engine::previews::write_wav_f32(&inter, SR).into();
-    let item = filmcraft_engine::commands::import_bytes(&mut s, "/music.wav", bytes, None).unwrap();
+    let bytes: Arc<[u8]> = mortiflix_engine::previews::write_wav_f32(&inter, SR).into();
+    let item = mortiflix_engine::commands::import_bytes(&mut s, "/music.wav", bytes, None).unwrap();
     let r = s.execute("timeline.place", json!({"item": item.0, "audioTrack": "A1", "seconds": 0.0})).unwrap();
     let c = r["clips"][0].as_u64().unwrap();
     s.execute("timeline.select", json!({"clips": [c]})).unwrap();

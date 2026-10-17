@@ -11,14 +11,14 @@ mod common;
 use std::time::Duration;
 
 use common::*;
-use filmcraft_codecs::VideoDecoder;
-use filmcraft_codecs::hw::NalStreamInfo;
-use filmcraft_platform::HybridDecoder;
-use filmcraft_platform::videotoolbox::VtDecoder;
+use mortiflix_codecs::VideoDecoder;
+use mortiflix_codecs::hw::NalStreamInfo;
+use mortiflix_platform::HybridDecoder;
+use mortiflix_platform::videotoolbox::VtDecoder;
 
 /// The hardware decoder for a stream, or `None` (skip) when this machine has none for it.
 fn hardware(s: &Stream) -> Option<Box<dyn VideoDecoder>> {
-    match filmcraft_platform::videotoolbox_factory(&s.entry) {
+    match mortiflix_platform::videotoolbox_factory(&s.entry) {
         Some(Ok(d)) => {
             assert!(d.name().starts_with("VideoToolbox"), "{}", d.name());
             Some(d)
@@ -32,12 +32,12 @@ fn hardware(s: &Stream) -> Option<Box<dyn VideoDecoder>> {
 }
 
 fn software(s: &Stream) -> Box<dyn VideoDecoder> {
-    filmcraft_codecs::software_video_decoder(&s.entry).unwrap()
+    mortiflix_codecs::software_video_decoder(&s.entry).unwrap()
 }
 
 #[test]
 fn bit_exact_with_the_software_decoders() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     for (name, _) in FIXTURES {
         let Some(path) = named(&ff, name) else { continue };
         let s = read_stream(&path);
@@ -76,7 +76,7 @@ fn bit_exact_with_the_software_decoders() {
 
 #[test]
 fn mid_stream_failure_continues_in_software() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     for (name, _) in FIXTURES {
         let Some(path) = named(&ff, name) else { continue };
         let s = read_stream(&path);
@@ -92,10 +92,10 @@ fn mid_stream_failure_continues_in_software() {
             let mut vt = VtDecoder::new(info.clone()).unwrap();
             vt.fail_after(fail_at as u64);
             let mut d = HybridDecoder::new(Box::new(vt), s.entry.clone(), info.clone());
-            let before = filmcraft_codecs::hw::hw_stats().fallbacks;
+            let before = mortiflix_codecs::hw::hw_stats().fallbacks;
             let out = decode_all(&mut d, &s.samples);
             assert!(!d.is_hardware(), "{name}: switched to software");
-            assert!(filmcraft_codecs::hw::hw_stats().fallbacks > before, "{name}: fallback counted");
+            assert!(mortiflix_codecs::hw::hw_stats().fallbacks > before, "{name}: fallback counted");
             assert_same(&format!("{name} failing at sample {fail_at}"), &out, &reference);
             // the instance stays in software across seeks
             d.reset();
@@ -120,7 +120,7 @@ fn bounded(what: &str, limit: Duration, f: impl FnOnce() + Send + 'static) {
 
 #[test]
 fn damaged_samples_and_parameter_sets_never_crash_or_hang() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     for (name, _) in FIXTURES {
         let Some(path) = named(&ff, name) else { continue };
         let s = read_stream(&path);
@@ -133,7 +133,7 @@ fn damaged_samples_and_parameter_sets_never_crash_or_hang() {
             let entry = s.entry.clone();
             bounded(&format!("{name} seed {seed}"), Duration::from_secs(60), move || {
                 let mut seed = seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1;
-                let mut d = filmcraft_platform::videotoolbox_factory(&entry).unwrap().unwrap();
+                let mut d = mortiflix_platform::videotoolbox_factory(&entry).unwrap().unwrap();
                 for (i, (smp, pts)) in samples.iter().enumerate().take(40) {
                     let mut m = smp.clone();
                     match xorshift(&mut seed) % 4 {
@@ -159,11 +159,11 @@ fn damaged_samples_and_parameter_sets_never_crash_or_hang() {
         }
         // damaged parameter sets: the factory declines or the decoder errors / falls back
         let rec = match &s.entry.codec {
-            filmcraft_isobmff::CodecConfig::Avc(a) => a.to_bytes(),
-            filmcraft_isobmff::CodecConfig::Hevc(c) => c.to_bytes(),
+            mortiflix_isobmff::CodecConfig::Avc(a) => a.to_bytes(),
+            mortiflix_isobmff::CodecConfig::Hevc(c) => c.to_bytes(),
             _ => continue,
         };
-        let hevc = matches!(s.entry.codec, filmcraft_isobmff::CodecConfig::Hevc(_));
+        let hevc = matches!(s.entry.codec, mortiflix_isobmff::CodecConfig::Hevc(_));
         let mut seed = 0x1234_5678u64;
         for round in 0..24 {
             let mut r = rec.clone();
@@ -196,7 +196,7 @@ fn damaged_samples_and_parameter_sets_never_crash_or_hang() {
 /// match ffmpeg's decode exactly; when it does not, the factory declines.
 #[test]
 fn hevc_422_10bit_matches_ffmpeg_when_the_hardware_takes_it() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let args = [
         "-f",
         "lavfi",
@@ -224,8 +224,8 @@ fn hevc_422_10bit_matches_ffmpeg_when_the_hardware_takes_it() {
     assert_eq!(out.len(), o.stdout.len() / fsize, "frame count");
     for (i, f) in out.iter().enumerate() {
         let raw: Vec<u16> = o.stdout[i * fsize..(i + 1) * fsize].as_chunks::<2>().0.iter().map(|b| u16::from_le_bytes([b[0], b[1]])).collect();
-        let filmcraft_frame::PixelData::Yuv16 { planes, chroma, bits, .. } = &f.frame.data else { panic!("16-bit planes") };
-        assert_eq!((*chroma, *bits), (filmcraft_frame::Chroma::C422, 10));
+        let mortiflix_frame::PixelData::Yuv16 { planes, chroma, bits, .. } = &f.frame.data else { panic!("16-bit planes") };
+        assert_eq!((*chroma, *bits), (mortiflix_frame::Chroma::C422, 10));
         let (y, c) = (w * h, (w / 2) * h);
         assert!(planes[0][..] == raw[..y] && planes[1][..] == raw[y..y + c] && planes[2][..] == raw[y + c..], "frame {i} differs from ffmpeg");
     }

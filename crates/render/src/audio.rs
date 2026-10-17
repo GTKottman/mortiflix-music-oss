@@ -5,15 +5,15 @@
 //! Stereo, mono and adaptive tracks carry two channels. 5.1 tracks carry six (L, R, C, LFE, Ls,
 //! Rs): their clips play the source's first six channels (or the six `source_channels` picked with
 //! Modify ▸ Audio Channels); mono and stereo sources on a 5.1 track are upmixed onto the front
-//! speakers ([`filmcraft_audio_dsp::channels`]). The clip Panner (stereo balance) does not apply to
+//! speakers ([`mortiflix_audio_dsp::channels`]). The clip Panner (stereo balance) does not apply to
 //! 5.1 clips, and Channel Volume's left/right levels apply to L and R.
 
 use std::collections::HashMap;
 
-use filmcraft_audio_dsp::channels::{self as chans, Layout, Mixdown};
-use filmcraft_frame::AudioBuffer;
-use filmcraft_project::{AudioChannels, Project, Sequence, Track, TrackId, TrackItem};
-use filmcraft_time::{Tick, TimeRange};
+use mortiflix_audio_dsp::channels::{self as chans, Layout, Mixdown};
+use mortiflix_frame::AudioBuffer;
+use mortiflix_project::{AudioChannels, Project, Sequence, Track, TrackId, TrackItem};
+use mortiflix_time::{Tick, TimeRange};
 
 use crate::mixer::Override;
 use crate::{SourceProvider, transitions};

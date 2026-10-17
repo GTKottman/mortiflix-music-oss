@@ -3,10 +3,10 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use filmcraft_engine::Session;
-use filmcraft_project::{ItemId, Project, SequenceSettings, TrackKind};
-use filmcraft_time::{FrameRate, Tick, TimeRange};
-use filmcraft_ui_egui::frames::{FrameServer, process_cpu_time};
+use mortiflix_engine::Session;
+use mortiflix_project::{ItemId, Project, SequenceSettings, TrackKind};
+use mortiflix_time::{FrameRate, Tick, TimeRange};
+use mortiflix_ui_egui::frames::{FrameServer, process_cpu_time};
 use serde_json::{Value, json};
 
 use crate::Opts;
@@ -14,23 +14,23 @@ use crate::fixtures::fixture;
 use crate::playback::{self, Bench, Display, load_avg, ms, pct};
 
 /// The GPU export frame renderer factory the bench registers for the export section (the app and
-/// CLI register the same thing at startup): filmcraft-gpu's off-screen compositor behind
-/// filmcraft-export's frame-renderer hook.
-fn gpu_export_frame_renderer_factory() -> Option<Box<dyn filmcraft_export::FrameRenderer>> {
-    struct R(filmcraft_gpu::ExportRenderer);
-    impl filmcraft_export::FrameRenderer for R {
+/// CLI register the same thing at startup): mortiflix-gpu's off-screen compositor behind
+/// mortiflix-export's frame-renderer hook.
+fn gpu_export_frame_renderer_factory() -> Option<Box<dyn mortiflix_export::FrameRenderer>> {
+    struct R(mortiflix_gpu::ExportRenderer);
+    impl mortiflix_export::FrameRenderer for R {
         fn render(
             &mut self,
-            project: &filmcraft_project::Project,
+            project: &mortiflix_project::Project,
             seq: ItemId,
             t: Tick,
-            opts: filmcraft_render::RenderOptions,
-            sources: &dyn filmcraft_render::SourceProvider,
-        ) -> Option<filmcraft_render::Image> {
+            opts: mortiflix_render::RenderOptions,
+            sources: &dyn mortiflix_render::SourceProvider,
+        ) -> Option<mortiflix_render::Image> {
             self.0.render(project, seq, t, opts, sources)
         }
     }
-    filmcraft_gpu::ExportRenderer::new().map(|r| Box::new(R(r)) as Box<dyn filmcraft_export::FrameRenderer>)
+    mortiflix_gpu::ExportRenderer::new().map(|r| Box::new(R(r)) as Box<dyn mortiflix_export::FrameRenderer>)
 }
 
 fn median(v: &[f64]) -> f64 {
@@ -73,9 +73,9 @@ pub fn decode(o: &Opts) -> Vec<Value> {
         let mut first = Vec::new();
         let mut frames = 0;
         let mut rate = FrameRate::FPS_23_976;
-        let hw0 = filmcraft_codecs::hw::hw_stats();
+        let hw0 = mortiflix_codecs::hw::hw_stats();
         for _ in 0..o.repeat {
-            let src = match filmcraft_codecs::open_bytes(name, bytes.clone()) {
+            let src = match mortiflix_codecs::open_bytes(name, bytes.clone()) {
                 Ok(s) => s,
                 Err(e) => {
                     eprintln!("decode {name}: {e}");
@@ -88,7 +88,7 @@ pub fn decode(o: &Opts) -> Vec<Value> {
             frames = n;
             let (t0, c0) = (Instant::now(), cpu_now());
             for f in 0..n {
-                if let Err(e) = src.video_frame(filmcraft_media::FrameRequest::full(rate.tick_of(f))) {
+                if let Err(e) = src.video_frame(mortiflix_media::FrameRequest::full(rate.tick_of(f))) {
                     eprintln!("decode {name} frame {f}: {e}");
                     break;
                 }
@@ -104,7 +104,7 @@ pub fn decode(o: &Opts) -> Vec<Value> {
             continue;
         }
         let best = fps.iter().cloned().fold(0.0, f64::max);
-        let hw = filmcraft_codecs::hw::hw_stats();
+        let hw = mortiflix_codecs::hw::hw_stats();
         let row = json!({
             "fixture": name, "codec": codec, "size": size, "frames": frames,
             "fps": best, "fps_min": fps.iter().cloned().fold(f64::MAX, f64::min), "fps_runs": fps,
@@ -145,15 +145,15 @@ pub fn seek(o: &Opts) -> Vec<Value> {
             rng ^= rng >> 7;
             rng ^= rng << 17;
             for (m, (_, margin)) in modes.iter().enumerate() {
-                let src = filmcraft_codecs::open_bytes(name, bytes.clone()).expect("open");
+                let src = mortiflix_codecs::open_bytes(name, bytes.clone()).expect("open");
                 let rate = src.info().frame_rate();
                 let n = rate.frame_at(src.info().duration).max(1);
                 let t = rate.tick_of((rng % n as u64) as i64);
-                let (g0, t0, c0) = (filmcraft_codecs::gop_stats(), Instant::now(), cpu_now());
-                filmcraft_media::cancel::with_catch_up(*margin, || src.video_frame(filmcraft_media::FrameRequest::full(t))).expect("frame");
+                let (g0, t0, c0) = (mortiflix_codecs::gop_stats(), Instant::now(), cpu_now());
+                mortiflix_media::cancel::with_catch_up(*margin, || src.video_frame(mortiflix_media::FrameRequest::full(t))).expect("frame");
                 wall[m].push(ms(t0.elapsed()));
                 cpu[m].push(ms(cpu_now() - c0));
-                let g = filmcraft_codecs::gop_stats() - g0;
+                let g = mortiflix_codecs::gop_stats() - g0;
                 dec[m] += g.decoded;
                 skip[m] += g.skipped;
             }
@@ -217,7 +217,7 @@ pub fn playback(o: &Opts) -> Vec<Value> {
             bench.draft = draft;
             let mut display = Display::new(o.gpu);
             let path = if display.gpu_available() { "gpu" } else { "cpu" };
-            let hw0 = filmcraft_codecs::hw::hw_stats();
+            let hw0 = mortiflix_codecs::hw::hw_stats();
             let r = bench.play(&s, seq, &mut display, scale, Tick::ZERO, &format!("{scenario} {res} #{}", rep + 1));
             let mut v = playback::to_json(&r, scenario, res, path);
             let frames = (r.shown + r.dropped).max(1) as f64;
@@ -228,7 +228,7 @@ pub fn playback(o: &Opts) -> Vec<Value> {
             v["skipped"] = json!(r.gop.skipped);
             v["draft_frames"] = json!(r.gop.draft);
             // OS hardware decoder activity during the run (zero with --hw off)
-            let hw = filmcraft_codecs::hw::hw_stats();
+            let hw = mortiflix_codecs::hw::hw_stats();
             v["hw_frames"] = json!(hw.frames - hw0.frames);
             v["hw_sessions"] = json!(hw.sessions - hw0.sessions);
             v["hw_fallbacks"] = json!(hw.fallbacks - hw0.fallbacks);
@@ -302,7 +302,7 @@ pub fn big_sequence(s: &mut Session, item: ItemId, name: &str, seed: u64) -> (It
                     p.make_track_item(item, kind, rate.tick_of(at), TimeRange::new(rate.tick_of(src_in), rate.tick_of(len)), rate).expect("track item");
                 // "auto" (NaN) Motion points resolve against the frame, as the edit commands do
                 for e in &mut it.effects {
-                    filmcraft_project::resolve_auto_points(e, (1920, 1080), (640, 360));
+                    mortiflix_project::resolve_auto_points(e, (1920, 1080), (640, 360));
                 }
                 items.push(it);
                 at += len + (next() % 12) as i64;
@@ -326,8 +326,8 @@ pub fn big_sequence(s: &mut Session, item: ItemId, name: &str, seed: u64) -> (It
 // ------------------------------------------------------------------------------------ timeline UI
 
 struct Ui {
-    harness: egui_kittest::Harness<'static, filmcraft_ui_egui::FilmcraftApp>,
-    tx: std::sync::mpsc::Sender<filmcraft_ui_egui::control::ControlRequest>,
+    harness: egui_kittest::Harness<'static, mortiflix_ui_egui::StudioApp>,
+    tx: std::sync::mpsc::Sender<mortiflix_ui_egui::control::ControlRequest>,
 }
 
 impl Ui {
@@ -340,7 +340,7 @@ impl Ui {
     }
 
     fn call(&mut self, method: &str, params: Value) -> Value {
-        let (req, reply) = filmcraft_ui_egui::control::ControlRequest::new(method, params.clone());
+        let (req, reply) = mortiflix_ui_egui::control::ControlRequest::new(method, params.clone());
         self.tx.send(req).expect("control");
         for _ in 0..600 {
             self.frame();
@@ -368,7 +368,7 @@ pub fn timeline(o: &Opts) -> Vec<Value> {
         let item = playback::import(&mut s, &path);
         let (_, clips) = big_sequence(&mut s, item, "Timeline 1000", 7);
         let (tx, rx) = std::sync::mpsc::channel();
-        let app = filmcraft_ui_egui::FilmcraftApp::new(s).with_control(rx);
+        let app = mortiflix_ui_egui::StudioApp::new(s).with_control(rx);
         let mut b = egui_kittest::Harness::builder().with_size(egui::vec2(1920.0, 1080.0)).with_max_steps(100_000);
         if gpu {
             b = b.wgpu();
@@ -454,7 +454,7 @@ pub fn export(o: &Opts) -> Vec<Value> {
         return Vec::new();
     };
     let secs = if o.quick { 3.0 } else { 8.0 };
-    let dir = std::env::temp_dir().join(format!("filmcraft-bench-export-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("mortiflix-bench-export-{}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("tmp dir");
     let mut rows = Vec::new();
     // Scenes: (id, format, label, extension, effects-heavy). `--only` matches the id exactly here,
@@ -469,12 +469,12 @@ pub fn export(o: &Opts) -> Vec<Value> {
         let mut cpu = Vec::new();
         let mut bytes = 0u64;
         let mut frames = 0i64;
-        let hw0 = filmcraft_engine::export::hw_encode_stats();
-        let gpu0 = filmcraft_engine::export::gpu_render_stats();
+        let hw0 = mortiflix_engine::export::hw_encode_stats();
+        let gpu0 = mortiflix_engine::export::gpu_render_stats();
         // The engine's headless session does not register the app's GPU export renderer; the bench
         // does it here so `--gpu-rendering auto` measures the GPU path (and the row reports the
         // frames it actually rendered on the GPU).
-        filmcraft_engine::export::register_frame_renderer(gpu_export_frame_renderer_factory);
+        mortiflix_engine::export::register_frame_renderer(gpu_export_frame_renderer_factory);
         for _ in 0..o.repeat {
             let mut s = Session::default();
             let a = playback::import(&mut s, &path);
@@ -498,8 +498,8 @@ pub fn export(o: &Opts) -> Vec<Value> {
             .expect("audio");
             frames = s.project.sequence(seq).map(|q| q.settings.frame_rate.frame_at(q.duration())).unwrap_or(0);
             let out = dir.join(format!("out.{ext}"));
-            filmcraft_export::reset_export_lock_wait();
-            filmcraft_gpu::export_renderer::timing::reset();
+            mortiflix_export::reset_export_lock_wait();
+            mortiflix_gpu::export_renderer::timing::reset();
             let (t0, c0) = (Instant::now(), cpu_now());
             // `--hw auto`: the hardware encoder too (NVENC H.264 on Windows); `--hw off`: ours
             let hardware = if o.hw == "off" { "off" } else { "auto" };
@@ -513,8 +513,8 @@ pub fn export(o: &Opts) -> Vec<Value> {
                 eprintln!("export {format}: {e}");
                 break;
             }
-            let lock_wait = filmcraft_export::export_lock_wait();
-            let gpu_timings = filmcraft_gpu::export_renderer::timing::get();
+            let lock_wait = mortiflix_export::export_lock_wait();
+            let gpu_timings = mortiflix_gpu::export_renderer::timing::get();
             if gpu_timings.frames > 0 {
                 let f = gpu_timings.frames as f64;
                 eprintln!(
@@ -543,10 +543,10 @@ pub fn export(o: &Opts) -> Vec<Value> {
             "realtime": frames as f64 / best / FrameRate::FPS_23_976.as_f64(), "cpu_ms_per_frame": median(&cpu),
             "mbytes": bytes as f64 / 1e6, "runs_s": runs, "load": load_avg(),
             // pictures encoded by a hardware encoder during this row (zero with --hw off or where there is none)
-            "hw_frames": filmcraft_engine::export::hw_encode_stats().frames.saturating_sub(hw0.frames),
+            "hw_frames": mortiflix_engine::export::hw_encode_stats().frames.saturating_sub(hw0.frames),
             // frames composited by the GPU export renderer (zero with --gpu-rendering off or where there is no adapter)
-            "gpu_frames": filmcraft_engine::export::gpu_render_stats().frames.saturating_sub(gpu0.frames),
-            "gpu_fallbacks": filmcraft_engine::export::gpu_render_stats().fallbacks.saturating_sub(gpu0.fallbacks),
+            "gpu_frames": mortiflix_engine::export::gpu_render_stats().frames.saturating_sub(gpu0.frames),
+            "gpu_fallbacks": mortiflix_engine::export::gpu_render_stats().fallbacks.saturating_sub(gpu0.fallbacks),
         }));
     }
     let _ = std::fs::remove_dir_all(&dir);
@@ -567,7 +567,7 @@ pub fn project(o: &Opts) -> Vec<Value> {
     for k in 0..5 {
         clips += big_sequence(&mut s, item, &format!("Sequence {}", k + 1), 11 + k as u64).1;
     }
-    let dir = std::env::temp_dir().join(format!("filmcraft-bench-project-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("mortiflix-bench-project-{}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("tmp dir");
     let file = dir.join("big.fcproj");
     let n = o.repeat.max(3);

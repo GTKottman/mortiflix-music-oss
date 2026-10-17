@@ -4,7 +4,7 @@
 //!
 //! The hybrid keeps the samples fed since the last point decoding can restart from (the run's
 //! first sample, then every IDR / IRAP access unit). On a failure it builds the software decoder
-//! ([`filmcraft_codecs::software_video_decoder`], skipping registered factories), replays those
+//! ([`mortiflix_codecs::software_video_decoder`], skipping registered factories), replays those
 //! samples through it and carries on, dropping pictures the hardware already returned and keeping
 //! the ones it had decoded but not yet returned, so the output is the software decoder's own
 //! sequence. That replay log is bounded; past the bound a failure is reported as an error once
@@ -12,9 +12,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use filmcraft_codecs::hw::StreamInfo;
-use filmcraft_codecs::{CodecError, DecodedFrame, Result, VideoDecoder};
-use filmcraft_isobmff::SampleEntry;
+use mortiflix_codecs::hw::StreamInfo;
+use mortiflix_codecs::{CodecError, DecodedFrame, Result, VideoDecoder};
+use mortiflix_isobmff::SampleEntry;
 
 /// Replay log bounds: samples and bytes since the last restart point.
 const LOG_MAX_SAMPLES: usize = 600;
@@ -44,7 +44,7 @@ impl HybridDecoder {
     /// Wrap `hw`, a decoder for `entry` (whose stream is described by `info`).
     pub fn new(hw: Box<dyn VideoDecoder>, entry: SampleEntry, info: impl Into<StreamInfo>) -> Self {
         let info = info.into();
-        filmcraft_codecs::hw::note_hw_session();
+        mortiflix_codecs::hw::note_hw_session();
         Self {
             hw: Some(hw),
             sw: None,
@@ -136,14 +136,14 @@ impl HybridDecoder {
     fn fall_back(&mut self, err: CodecError) -> Result<Vec<DecodedFrame>> {
         let Some(mut hw) = self.hw.take() else { return Err(err) };
         log::warn!("{} failed ({err}); continuing with the software decoder", hw.name());
-        filmcraft_codecs::hw::note_hw_fallback();
+        mortiflix_codecs::hw::note_hw_fallback();
         for f in hw.flush() {
             if !self.emitted.contains(&f.pts) {
                 self.carry.insert(f.pts, f);
             }
         }
         drop(hw);
-        let mut sw = filmcraft_codecs::software_video_decoder(&self.entry).map_err(|e| CodecError::Decode(format!("{err}; no software decoder: {e}")))?;
+        let mut sw = mortiflix_codecs::software_video_decoder(&self.entry).map_err(|e| CodecError::Decode(format!("{err}; no software decoder: {e}")))?;
         sw.set_draft(self.draft);
         self.sw = Some(sw);
         let Some(log) = self.log.take() else {
@@ -192,7 +192,7 @@ impl VideoDecoder for HybridDecoder {
         };
         match hw.decode(sample, pts) {
             Ok(out) => {
-                filmcraft_codecs::hw::note_hw_frames(out.len());
+                mortiflix_codecs::hw::note_hw_frames(out.len());
                 self.note_emitted(&out);
                 Ok(out)
             }
@@ -203,7 +203,7 @@ impl VideoDecoder for HybridDecoder {
     fn flush(&mut self) -> Vec<DecodedFrame> {
         if let Some(hw) = self.hw.as_mut() {
             let out = hw.flush();
-            filmcraft_codecs::hw::note_hw_frames(out.len());
+            mortiflix_codecs::hw::note_hw_frames(out.len());
             self.note_emitted(&out);
             return out;
         }

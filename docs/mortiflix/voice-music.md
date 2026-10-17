@@ -1,6 +1,6 @@
 # Voice & music (stage 4) — how it is built
 
-Part 05 of the Mortiflix FilmCraft build (docs 34 and 33b in Morti Drive › Design Docs › Mortiflix FilmCraft).
+Part 05 of the Mortiflix Studio build (docs 34 and 33b in Morti Drive › Design Docs › Mortiflix Studio).
 
 ## Where it lives
 
@@ -41,7 +41,7 @@ Part 05 of the Mortiflix FilmCraft build (docs 34 and 33b in Morti Drive › Des
 | Swap: try another | `music.cue.set {cue, text}` |
 | A planned cue's feel / energy (stage 4 and the chat card) | `music.cue.set {cue, feel, energy}` |
 | Using this (theme card) | `music.theme.use {sample}` |
-| Play all / Play beat / Play line / click / ruler | FilmCraft's player: `playhead.set`, `playback.toggle \| stop \| forward` |
+| Play all / Play beat / Play line / click / ruler | Mortiflix Studio's player: `playhead.set`, `playback.toggle \| stop \| forward` |
 
 The selection is shared (`state.selected_node`), so the chat's "talking about" bar and the node area follow it.
 The move-on buttons are the stage bar's (Edit the video / Get the video, owner answer 1). When the service reports
@@ -51,10 +51,10 @@ when something failed.
 ## Not done yet
 
 - Recording from the microphone in the booth (Record is shown, disabled): the app has to capture the take
-  (FilmCraft's voice-over recorder) and hand it over with `voice.booth.import {source: booth}`.
+  (Mortiflix Studio's voice-over recorder) and hand it over with `voice.booth.import {source: booth}`.
 - Lane M / S / faders: the protocol has no lane mix yet (per-line and per-cue levels work).
-- Playing a sample or a single take's audio on its own (the app plays through FilmCraft's sequence only).
-- The doc 34 keys (← →, Enter, R) work only where FilmCraft's own keymap doesn't take them first; panel-scoped
+- Playing a sample or a single take's audio on its own (the app plays through Mortiflix Studio's sequence only).
+- The doc 34 keys (← →, Enter, R) work only where Mortiflix Studio's own keymap doesn't take them first; panel-scoped
   bindings would need `menus.rs`.
 - The loudness meter and the playhead position come from the preview (part 04); this stage shows where it last put
   the playhead.

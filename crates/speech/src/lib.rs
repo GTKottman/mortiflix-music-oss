@@ -1,4 +1,4 @@
-//! Speech-to-text for FilmCraft's Text panel ▸ Transcript.
+//! Speech-to-text for Mortiflix Studio's Text panel ▸ Transcript.
 //!
 //! - [`Transcriber`]: the trait every speech recogniser implements. It takes mono 16 kHz samples
 //!   and returns a [`Transcript`] whose words carry media-time bounds (`Tick`s; one 16 kHz sample
@@ -23,8 +23,8 @@ pub mod vad;
 #[cfg(feature = "whisper")]
 pub mod whisper;
 
-use filmcraft_project::Transcript;
-use filmcraft_time::{TICKS_PER_SECOND, Tick};
+use mortiflix_project::Transcript;
+use mortiflix_time::{TICKS_PER_SECOND, Tick};
 
 /// The sample rate every transcriber takes.
 pub const SAMPLE_RATE: u32 = 16_000;
@@ -153,7 +153,7 @@ pub fn downmix(channels: &[Vec<f32>]) -> Vec<f32> {
 /// without punctuation, hyphenated words split): (substitutions + deletions + insertions) / reference words.
 pub fn word_error_rate(reference: &str, hypothesis: &str) -> f64 {
     let norm = |s: &str| -> Vec<String> {
-        s.split(|c: char| c.is_whitespace() || c == '-').map(filmcraft_project::transcript::normalize_word).filter(|w| !w.is_empty()).collect()
+        s.split(|c: char| c.is_whitespace() || c == '-').map(mortiflix_project::transcript::normalize_word).filter(|w| !w.is_empty()).collect()
     };
     let (r, h) = (norm(reference), norm(hypothesis));
     if r.is_empty() {
@@ -174,7 +174,7 @@ pub fn word_error_rate(reference: &str, hypothesis: &str) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use filmcraft_project::Word;
+    use mortiflix_project::Word;
 
     #[test]
     fn sample_ticks_are_exact() {

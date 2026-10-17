@@ -1,6 +1,6 @@
 [package]
-name = "filmcraft-project"
-description = "FilmCraft document model: projects, bins, clips, sequences, tracks, effects, keyframes, markers"
+name = "mortiflix-project"
+description = "Mortiflix Studio document model: projects, bins, clips, sequences, tracks, effects, keyframes, markers"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -10,10 +10,10 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
-filmcraft-time = { workspace = true }
-filmcraft-geom = { workspace = true }
-filmcraft-color = { workspace = true }
-filmcraft-media = { workspace = true }
+mortiflix-time = { workspace = true }
+mortiflix-geom = { workspace = true }
+mortiflix-color = { workspace = true }
+mortiflix-media = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

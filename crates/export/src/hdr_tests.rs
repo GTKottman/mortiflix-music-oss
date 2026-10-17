@@ -143,14 +143,14 @@ fn only_pq_has_static_metadata_and_it_is_what_h264_writes() {
     assert!(ColorSignal::default().static_metadata().is_none());
     let (md, cll) = ColorSignal::PQ.static_metadata().unwrap();
     assert_eq!(cll, (0, 0));
-    assert_eq!(md, filmcraft_isobmff::MasteringDisplay::bt2020(1000.0, 0.0001));
+    assert_eq!(md, mortiflix_isobmff::MasteringDisplay::bt2020(1000.0, 0.0001));
     assert_eq!(md.to_bytes().len(), 24);
     // the box on the sample entry is the same value
-    let mut e = filmcraft_isobmff::SampleEntry::hevc(Default::default(), 64, 64);
+    let mut e = mortiflix_isobmff::SampleEntry::hevc(Default::default(), 64, 64);
     ColorSignal::PQ.apply_to(&mut e, false);
     let v = e.video.as_ref().unwrap();
     assert_eq!((v.mastering_display, v.content_light), (Some(md), Some((0, 0))));
-    let mut e = filmcraft_isobmff::SampleEntry::hevc(Default::default(), 64, 64);
+    let mut e = mortiflix_isobmff::SampleEntry::hevc(Default::default(), 64, 64);
     ColorSignal::HLG.apply_to(&mut e, false);
     let v = e.video.as_ref().unwrap();
     assert!(v.color.is_some() && v.mastering_display.is_none() && v.content_light.is_none());

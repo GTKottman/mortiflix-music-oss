@@ -1,8 +1,8 @@
 //! Video transitions: combine the outgoing (A) and incoming (B) layers at progress `p` ∈ [0,1].
 //!
-//! Every transition is procedural maths written for FilmCraft (no third-party artwork, no masks
+//! Every transition is procedural maths written for Mortiflix Studio (no third-party artwork, no masks
 //! or textures from other products). The folders follow Premiere 26's Effects panel (see
-//! `filmcraft_project::vtransition`). Shared building blocks:
+//! `mortiflix_project::vtransition`). Shared building blocks:
 //!
 //! - [`Tx`]: the inputs plus typed parameter access (defaults come from the definition, so older
 //!   projects that lack a newer parameter still render).
@@ -21,8 +21,8 @@
 //! Morph Cut morphs with dense optical flow ([`crate::flow`]) but has no face tracking, and the
 //! Smart Tools / Text transitions are procedural stand-ins (no content analysis, no typed text).
 
-use filmcraft_project::{EffectInstance, ParamValue};
-use filmcraft_time::Tick;
+use mortiflix_project::{EffectInstance, ParamValue};
+use mortiflix_time::Tick;
 use rayon::prelude::*;
 
 use crate::image::Image;
@@ -128,14 +128,14 @@ impl Tx<'_> {
             Some(ParamValue::Color(c)) => c,
             _ => [1.0; 4],
         };
-        let l = |v: f32| filmcraft_color::srgb_to_linear(v.clamp(0.0, 1.0));
+        let l = |v: f32| mortiflix_color::srgb_to_linear(v.clamp(0.0, 1.0));
         [l(c[0]), l(c[1]), l(c[2]), 1.0]
     }
     /// The `center` point in working pixels (NaN components = frame centre).
     pub fn center(&self) -> (f32, f32) {
         let v = match self.value("center") {
             Some(ParamValue::Vec2(v)) => v,
-            _ => filmcraft_geom::Vec2::new(f64::NAN, f64::NAN),
+            _ => mortiflix_geom::Vec2::new(f64::NAN, f64::NAN),
         };
         let x = if v.x.is_finite() { v.x as f32 * self.scale } else { self.wf / 2.0 };
         let y = if v.y.is_finite() { v.y as f32 * self.scale } else { self.hf / 2.0 };

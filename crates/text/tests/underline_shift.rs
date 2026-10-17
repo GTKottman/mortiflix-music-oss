@@ -1,5 +1,5 @@
 //! Whole-style underline must follow `baseline_shift` the same way character-style runs do.
-use filmcraft_text::{ParagraphStyle, StyleRun, TextStyle, layout, layout_rich};
+use mortiflix_text::{ParagraphStyle, StyleRun, TextStyle, layout, layout_rich};
 
 fn style(shift: f32) -> TextStyle {
     TextStyle { size: 100.0, underline: true, baseline_shift: shift, ..Default::default() }

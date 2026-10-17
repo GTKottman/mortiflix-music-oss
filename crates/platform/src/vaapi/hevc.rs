@@ -1,5 +1,5 @@
 //! The HEVC side of the VA-API decoder, like [`super::h264`]: the software decoder's own parsers
-//! (`filmcraft_hevc::params`, `slice`) and decoded picture buffer (`filmcraft_hevc::dpb`: POC,
+//! (`mortiflix_hevc::params`, `slice`) and decoded picture buffer (`mortiflix_hevc::dpb`: POC,
 //! reference picture sets, reference lists, output order) drive a stateless hardware decoder, so
 //! both decoders make the same decisions and output the same pictures in the same order, RASL
 //! pictures of a CRA the run starts at left out as in software.
@@ -12,11 +12,11 @@
 
 use std::sync::Arc;
 
-use filmcraft_bitstream::{length_prefixed_nals, unescape_rbsp};
-use filmcraft_codecs::{CodecError, DecodedFrame, Result};
-use filmcraft_hevc::dpb::{Dpb, Marking, Output, OutputMeta, PocState, Ref, RefPicSet, build_ref_lists};
-use filmcraft_hevc::params::{Layout, Pps, ScalingList, Sps};
-use filmcraft_hevc::slice::{NalHeader, SliceHeader, SliceType, nal_type};
+use mortiflix_bitstream::{length_prefixed_nals, unescape_rbsp};
+use mortiflix_codecs::{CodecError, DecodedFrame, Result};
+use mortiflix_hevc::dpb::{Dpb, Marking, Output, OutputMeta, PocState, Ref, RefPicSet, build_ref_lists};
+use mortiflix_hevc::params::{Layout, Pps, ScalingList, Sps};
+use mortiflix_hevc::slice::{NalHeader, SliceHeader, SliceType, nal_type};
 
 use super::Accel;
 use super::ffi::{
@@ -199,7 +199,7 @@ impl<A: Accel> Front<A> {
             &rbsp,
             hdr,
             |id| {
-                let missing = |what: String| filmcraft_hevc::Error::MissingParameterSet(what);
+                let missing = |what: String| mortiflix_hevc::Error::MissingParameterSet(what);
                 let pps = ppss.get(id as usize).and_then(Option::as_ref).ok_or_else(|| missing(format!("PPS {id}")))?;
                 let sps = spss.get(pps.sps_id as usize).and_then(Option::as_ref).ok_or_else(|| missing(format!("SPS {}", pps.sps_id)))?;
                 Ok((pps.clone(), sps.clone()))

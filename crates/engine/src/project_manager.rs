@@ -14,9 +14,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 
-use filmcraft_media::MediaKind;
-use filmcraft_project::{ItemId, ItemKind, MediaRef, Project};
-use filmcraft_time::{Tick, TimeRange};
+use mortiflix_media::MediaKind;
+use mortiflix_project::{ItemId, ItemKind, MediaRef, Project};
+use mortiflix_time::{Tick, TimeRange};
 use serde_json::{Value, json};
 
 use crate::commands::{CommandSpec, bad, bool_p, str_p, u64_p};
@@ -132,7 +132,7 @@ pub fn run(s: &mut Session, p: &Value) -> Result<Value> {
     let mut taken: Vec<String> = Vec::new();
     let mut original_bytes = 0u64;
     let mut result_bytes = 0u64;
-    let fd_handles = |rate: filmcraft_time::FrameRate| Tick(rate.frame_duration().0 * handles);
+    let fd_handles = |rate: mortiflix_time::FrameRate| Tick(rate.frame_duration().0 * handles);
     let ids: Vec<ItemId> = proj.items.keys().copied().collect();
     for id in ids {
         let Some(m) = proj.item(id).and_then(|i| i.as_media()).cloned() else { continue };
@@ -200,7 +200,7 @@ pub fn run(s: &mut Session, p: &Value) -> Result<Value> {
     std::fs::create_dir_all(&dest_dir).map_err(|e| EngineError::Other(format!("{dest}: {e}")))?;
 
     // ---- the job
-    let sources: BTreeMap<ItemId, filmcraft_media::SharedSource> =
+    let sources: BTreeMap<ItemId, mortiflix_media::SharedSource> =
         work.iter().filter(|w| w.range.is_some()).filter_map(|w| s.media.full_res_source(&s.project, w.item, &*s.services).map(|src| (w.item, src))).collect();
     if let Some(w) = work.iter().find(|w| w.range.is_some() && s.media.offline_status(w.item).is_some()) {
         return Err(EngineError::Other(format!("{} is offline; link it before consolidating", w.src_path)));
@@ -220,7 +220,7 @@ pub fn run(s: &mut Session, p: &Value) -> Result<Value> {
         let t0 = web_time::Instant::now();
         let r = execute(proj, work, sources, previews.map(|d| (d, prev_dst)), &project_path, pr, &prog, &*services);
         let secs = t0.elapsed().as_secs_f64();
-        let r = r.map(|bytes| filmcraft_export::Report {
+        let r = r.map(|bytes| mortiflix_export::Report {
             path: project_path.clone(),
             frames: prog.done.load(Ordering::Relaxed),
             seconds: secs,
@@ -243,7 +243,7 @@ pub fn run(s: &mut Session, p: &Value) -> Result<Value> {
     if bool_p(p, "wait").unwrap_or(false) || cfg!(target_arch = "wasm32") {
         run();
     } else {
-        std::thread::Builder::new().name("filmcraft-project-manager".into()).spawn(run).map_err(|e| EngineError::Other(e.to_string()))?;
+        std::thread::Builder::new().name("mortiflix-project-manager".into()).spawn(run).map_err(|e| EngineError::Other(e.to_string()))?;
     }
     let mut out = summary;
     out["job"] = json!(id);
@@ -254,15 +254,15 @@ pub fn run(s: &mut Session, p: &Value) -> Result<Value> {
 fn execute(
     mut proj: Project,
     work: Vec<Work>,
-    sources: BTreeMap<ItemId, filmcraft_media::SharedSource>,
+    sources: BTreeMap<ItemId, mortiflix_media::SharedSource>,
     previews: Option<(PathBuf, PathBuf)>,
     project_path: &str,
     pr: &Preset,
-    prog: &filmcraft_export::Progress,
+    prog: &mortiflix_export::Progress,
     services: &dyn crate::Services,
 ) -> std::result::Result<u64, String> {
     let mut bytes = 0;
-    let openers = filmcraft_codecs::openers();
+    let openers = mortiflix_codecs::openers();
     for w in &work {
         if prog.cancel.load(Ordering::Relaxed) {
             return Err("cancelled".into());
@@ -286,7 +286,7 @@ fn execute(
                 proj.shift_media_time(w.item, r.start);
                 let b = std::fs::read(&w.out).map_err(|e| format!("{}: {e}", w.out))?;
                 let fname = Path::new(&w.out).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-                let info = filmcraft_media::open_bytes(&fname, b.into(), &openers).map_err(|e| format!("{}: {e}", w.out))?.info().clone();
+                let info = mortiflix_media::open_bytes(&fname, b.into(), &openers).map_err(|e| format!("{}: {e}", w.out))?.info().clone();
                 if let Some(mm) = proj.item_mut(w.item).and_then(|i| i.as_media_mut()) {
                     mm.info = info;
                     mm.proxy = None;
@@ -312,20 +312,20 @@ fn execute(
     if let Some((from, to)) = previews {
         bytes += copy_dir(&from, &to).map_err(|e| format!("copying previews: {e}"))?;
     }
-    let data = filmcraft_format::encode(&proj, false);
-    filmcraft_format::atomic_write(Path::new(project_path), &data).map_err(|e| format!("{project_path}: {e}"))?;
+    let data = mortiflix_format::encode(&proj, false);
+    mortiflix_format::atomic_write(Path::new(project_path), &data).map_err(|e| format!("{project_path}: {e}"))?;
     prog.done.fetch_add(1, Ordering::Relaxed);
     Ok(bytes + data.len() as u64)
 }
 
-fn estimate_bytes(m: &filmcraft_project::MediaClip, dur: Tick, pr: &Preset) -> u64 {
+fn estimate_bytes(m: &mortiflix_project::MediaClip, dur: Tick, pr: &Preset) -> u64 {
     let secs = dur.seconds().max(0.0);
     let audio = m.info.audio().map_or(0.0, |a| a.sample_rate as f64 * 2.0 * 2.0 * secs);
     let Some(v) = &m.info.video else { return audio as u64 };
     let fps = v.frame_rate.num as f64 / v.frame_rate.den.max(1) as f64;
     let px = (v.width * v.height) as f64 * (pr.scale * pr.scale) as f64;
     let mbps = match pr.format {
-        filmcraft_export::Format::ProRes => filmcraft_export::prores_profile(pr.prores).nominal_mbps_1080p30() * px / (1920.0 * 1080.0) * fps / 29.97,
+        mortiflix_export::Format::ProRes => mortiflix_export::prores_profile(pr.prores).nominal_mbps_1080p30() * px / (1920.0 * 1080.0) * fps / 29.97,
         _ => (px / 200.0).max(800.0) / 1000.0,
     };
     (mbps * 1e6 / 8.0 * secs + audio) as u64

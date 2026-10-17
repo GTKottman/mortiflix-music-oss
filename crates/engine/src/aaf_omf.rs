@@ -19,9 +19,9 @@ use std::sync::{Arc, Mutex};
 
 use serde_json::{Value, json};
 
-use filmcraft_interchange::essence::{AudioEssence, AudioNeed, EssenceData, EssenceKey, MediaOptions, MixdownVideo, NeedOptions, NestNeeds, audio_needs};
-use filmcraft_project::{ClipId, ItemId, Project, Sequence, SequenceSettings, Track, TrackItem, TrackKind};
-use filmcraft_time::{Tick, TimeRange};
+use mortiflix_interchange::essence::{AudioEssence, AudioNeed, EssenceData, EssenceKey, MediaOptions, MixdownVideo, NeedOptions, NestNeeds, audio_needs};
+use mortiflix_project::{ClipId, ItemId, Project, Sequence, SequenceSettings, Track, TrackItem, TrackKind};
+use mortiflix_time::{Tick, TimeRange};
 
 use crate::commands::{bad, bool_p, str_p, u64_p};
 use crate::{EngineError, Result, Session};
@@ -173,8 +173,8 @@ fn render_clip(s: &Session, seq: ItemId, need: &AudioNeed, sample_rate: u32, bit
     c.reverse = false;
     c.link = None;
     let channels = match track.channels {
-        filmcraft_project::AudioChannels::Mono => 1,
-        filmcraft_project::AudioChannels::Surround51 => 6,
+        mortiflix_project::AudioChannels::Mono => 1,
+        mortiflix_project::AudioChannels::Surround51 => 6,
         _ => 2,
     };
     if let Some(t) = p.sequence_mut(rs).and_then(|r| r.audio_tracks.first_mut()) {
@@ -183,12 +183,12 @@ fn render_clip(s: &Session, seq: ItemId, need: &AudioNeed, sample_rate: u32, bit
     }
     let buf: Arc<Mutex<Vec<u8>>> = Arc::default();
     let sink_buf = buf.clone();
-    let mut settings = filmcraft_export::ExportSettings {
-        format: filmcraft_export::Format::Wav,
+    let mut settings = mortiflix_export::ExportSettings {
+        format: mortiflix_export::Format::Wav,
         path: "render.wav".into(),
         range: Some(TimeRange::new(Tick::ZERO, dur)),
         part_of_batch: true,
-        sink: Some(filmcraft_export::OutputSink(Arc::new(move |_: &str, d: Vec<u8>| {
+        sink: Some(mortiflix_export::OutputSink(Arc::new(move |_: &str, d: Vec<u8>| {
             *sink_buf.lock().unwrap_or_else(|e| e.into_inner()) = d;
             Ok(())
         }))),
@@ -199,9 +199,9 @@ fn render_clip(s: &Session, seq: ItemId, need: &AudioNeed, sample_rate: u32, bit
     settings.audio.bits = bits;
     let project = Arc::new(p);
     let provider = s.media.full_res_provider(project.clone(), s.services.clone());
-    filmcraft_export::export(&project, rs, &settings, &provider, &Default::default()).map_err(|e| EngineError::Other(e.to_string()))?;
+    mortiflix_export::export(&project, rs, &settings, &provider, &Default::default()).map_err(|e| EngineError::Other(e.to_string()))?;
     let wav = std::mem::take(&mut *buf.lock().unwrap_or_else(|e| e.into_inner()));
-    let (pcm, ch, _, b) = filmcraft_interchange::wav::parse_wav(&wav).ok_or_else(|| EngineError::Other("audio render produced no WAVE data".into()))?;
+    let (pcm, ch, _, b) = mortiflix_interchange::wav::parse_wav(&wav).ok_or_else(|| EngineError::Other("audio render produced no WAVE data".into()))?;
     Ok(dequantize(&pcm, ch as usize, b))
 }
 
@@ -304,19 +304,19 @@ pub fn prepare_audio(s: &Session, seq: ItemId, plan: &AudioPlan, media_dir: &str
                             .chunks_exact(bps)
                             .map(|b| if bps == 3 { i32::from_le_bytes([0, b[0], b[1], b[2]]) >> 8 } else { i16::from_le_bytes([b[0], b[1]]) as i32 })
                             .collect();
-                        let opts = filmcraft_mxf::OpAtomPcm {
+                        let opts = mortiflix_mxf::OpAtomPcm {
                             sample_rate: plan.sample_rate,
                             bits: plan.bits as u32,
                             channels: n,
                             edit_rate: None,
-                            ids: filmcraft_mxf::PackageIds::from_seed(&path, &name),
+                            ids: mortiflix_mxf::PackageIds::from_seed(&path, &name),
                             timecode: None,
                         };
-                        filmcraft_mxf::write_opatom_pcm(&opts, &samples).map_err(|e| EngineError::Other(format!("{path}: {e}")))?
+                        mortiflix_mxf::write_opatom_pcm(&opts, &samples).map_err(|e| EngineError::Other(format!("{path}: {e}")))?
                     } else if plan.aiff {
-                        filmcraft_interchange::wav::aiff_file(&pcm, n as u16, plan.sample_rate, plan.bits)
+                        mortiflix_interchange::wav::aiff_file(&pcm, n as u16, plan.sample_rate, plan.bits)
                     } else {
-                        filmcraft_interchange::wav::wav_file(&pcm, n as u16, plan.sample_rate, plan.bits)
+                        mortiflix_interchange::wav::wav_file(&pcm, n as u16, plan.sample_rate, plan.bits)
                     };
                     s.services.write_file(&path, &bytes).map_err(|e| EngineError::Other(format!("{path}: {e}")))?;
                     files.push(path.clone());
@@ -347,11 +347,11 @@ fn mixdown(s: &Session, seq: ItemId, path: &str) -> Result<MixdownVideo> {
         return Err(EngineError::Other("the sequence is empty".into()));
     }
     let format = if path.to_ascii_lowercase().ends_with(".mxf") {
-        filmcraft_export::Format::from_name("mxf-opatom").unwrap_or(filmcraft_export::Format::DnxHr)
+        mortiflix_export::Format::from_name("mxf-opatom").unwrap_or(mortiflix_export::Format::DnxHr)
     } else {
-        filmcraft_export::Format::DnxHr
+        mortiflix_export::Format::DnxHr
     };
-    let mut settings = filmcraft_export::ExportSettings {
+    let mut settings = mortiflix_export::ExportSettings {
         format,
         path: path.to_string(),
         range: Some(TimeRange::new(Tick::ZERO, dur)),
@@ -362,15 +362,15 @@ fn mixdown(s: &Session, seq: ItemId, path: &str) -> Result<MixdownVideo> {
     };
     if s.services.export_in_memory() {
         let services = s.services.clone();
-        settings.sink = Some(filmcraft_export::OutputSink(Arc::new(move |p: &str, d: Vec<u8>| services.write_file(p, &d))));
+        settings.sink = Some(mortiflix_export::OutputSink(Arc::new(move |p: &str, d: Vec<u8>| services.write_file(p, &d))));
     }
     let project = s.project.clone();
     let provider = s.media.full_res_provider(project.clone(), s.services.clone());
-    filmcraft_export::export(&project, seq, &settings, &provider, &Default::default()).map_err(|e| EngineError::Other(format!("video mixdown: {e}")))?;
+    mortiflix_export::export(&project, seq, &settings, &provider, &Default::default()).map_err(|e| EngineError::Other(format!("video mixdown: {e}")))?;
     Ok(MixdownVideo { path: path.to_string(), start: Tick::ZERO, duration: dur, width: q.settings.width, height: q.settings.height })
 }
 
-fn report_json(r: &filmcraft_interchange::Report) -> Vec<String> {
+fn report_json(r: &mortiflix_interchange::Report) -> Vec<String> {
     r.entries.iter().map(|e| if e.count > 1 { format!("{} (×{})", e.message, e.count) } else { e.message.clone() }).collect()
 }
 
@@ -408,12 +408,12 @@ pub fn export_aaf(s: &mut Session, p: &Value) -> Result<Value> {
     } else {
         None
     };
-    let opts = filmcraft_interchange::aaf::AafOptions {
+    let opts = mortiflix_interchange::aaf::AafOptions {
         name: s.project.item(seq).map(|i| i.name.clone()),
         media: MediaOptions { breakout_to_mono: plan.breakout, audio_only: false, essence, mixdown_video },
         small_sectors: bool_p(p, "smallSectors").unwrap_or(false),
     };
-    let (bytes, report) = filmcraft_interchange::aaf::export(&s.project, seq, &opts).map_err(|e| EngineError::Other(e.to_string()))?;
+    let (bytes, report) = mortiflix_interchange::aaf::export(&s.project, seq, &opts).map_err(|e| EngineError::Other(e.to_string()))?;
     s.services.write_file(&path, &bytes).map_err(|e| EngineError::Other(format!("{path}: {e}")))?;
     Ok(json!({"path": path, "bytes": bytes.len(), "mediaFiles": files, "report": report_json(&report)}))
 }
@@ -430,11 +430,11 @@ pub fn export_omf(s: &mut Session, p: &Value) -> Result<Value> {
         ensure_dir(s, &media_dir);
     }
     let (essence, files) = prepare_audio(s, seq, &plan, &media_dir)?;
-    let opts = filmcraft_interchange::omf::OmfOptions {
+    let opts = mortiflix_interchange::omf::OmfOptions {
         name: str_p(p, "title").map(str::to_string).or_else(|| s.project.item(seq).map(|i| i.name.clone())),
         media: MediaOptions { breakout_to_mono: plan.breakout, audio_only: true, essence, mixdown_video: None },
     };
-    let (bytes, report) = filmcraft_interchange::omf::export(&s.project, seq, &opts).map_err(|e| EngineError::Other(e.to_string()))?;
+    let (bytes, report) = mortiflix_interchange::omf::export(&s.project, seq, &opts).map_err(|e| EngineError::Other(e.to_string()))?;
     if bytes.len() as u64 > i32::MAX as u64 {
         return Err(EngineError::Other("the OMF file would exceed 2 GB; use separate audio files or trim the audio".into()));
     }
@@ -446,7 +446,7 @@ pub fn export_omf(s: &mut Session, p: &Value) -> Result<Value> {
 pub fn import_document(s: &mut Session, p: &Value, cmd: &str) -> Result<Value> {
     let path = str_p(p, "path").ok_or_else(|| bad(cmd, "need `path`"))?.to_string();
     let bytes = s.services.read_file(&path).map_err(|e| EngineError::Other(format!("{path}: {e}")))?;
-    let format = crate::interchange::detect(&path, &bytes).filter(|f| matches!(f, filmcraft_interchange::Format::Aaf | filmcraft_interchange::Format::Omf));
+    let format = crate::interchange::detect(&path, &bytes).filter(|f| matches!(f, mortiflix_interchange::Format::Aaf | mortiflix_interchange::Format::Omf));
     let format = format.ok_or_else(|| bad(cmd, format!("{path} is not an AAF or OMF file")))?;
     crate::interchange::import(s, &path, &bytes, format)
 }

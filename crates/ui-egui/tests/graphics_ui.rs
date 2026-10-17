@@ -2,19 +2,19 @@
 //! creates a text layer on the Program monitor, typing and keys edit it, the Properties panel's
 //! controls style it, the Selection tool moves it.
 //!
-//! With `FILMCRAFT_UI_SHOTS=<dir>` the test also renders the UI with wgpu (works without a
+//! With `MFX_STUDIO_UI_SHOTS=<dir>` the test also renders the UI with wgpu (works without a
 //! window or an unlocked screen) and writes PNGs there for review.
 
 use std::sync::mpsc::{Sender, channel};
 
 use egui_kittest::Harness;
-use filmcraft_engine::Session;
-use filmcraft_ui_egui::FilmcraftApp;
-use filmcraft_ui_egui::control::ControlRequest;
+use mortiflix_engine::Session;
+use mortiflix_ui_egui::StudioApp;
+use mortiflix_ui_egui::control::ControlRequest;
 use serde_json::{Value, json};
 
 struct Driver {
-    harness: Harness<'static, FilmcraftApp>,
+    harness: Harness<'static, StudioApp>,
     tx: Sender<ControlRequest>,
     shots: Option<std::path::PathBuf>,
 }
@@ -24,8 +24,8 @@ impl Driver {
         let mut session = Session::default();
         session.execute("file.openDemoProject", json!({})).expect("demo project");
         let (tx, rx) = channel();
-        let app = FilmcraftApp::new(session).with_control(rx);
-        let shots = std::env::var_os("FILMCRAFT_UI_SHOTS").map(std::path::PathBuf::from);
+        let app = StudioApp::new(session).with_control(rx);
+        let shots = std::env::var_os("MFX_STUDIO_UI_SHOTS").map(std::path::PathBuf::from);
         let mut b = Harness::builder().with_size(egui::vec2(1600.0, 980.0)).with_max_steps(10_000);
         if shots.is_some() {
             b = b.wgpu().with_pixels_per_point(1.0);
@@ -154,11 +154,11 @@ fn type_tool_edit_style_and_move() {
 }
 
 /// The value of `param` on the text layer of graphic clip `clip`, at its first frame.
-fn text_param(d: &mut Driver, clip: u64, param: &str) -> Option<filmcraft_project::ParamValue> {
+fn text_param(d: &mut Driver, clip: u64, param: &str) -> Option<mortiflix_project::ParamValue> {
     let s = &d.harness.state().session;
-    let (_, it) = s.active_sequence()?.find_item(filmcraft_project::ClipId(clip))?;
+    let (_, it) = s.active_sequence()?.find_item(mortiflix_project::ClipId(clip))?;
     let e = it.effects.iter().find(|e| e.effect == "graphic_text")?;
-    Some(e.param(param)?.value_at(filmcraft_time::Tick::ZERO))
+    Some(e.param(param)?.value_at(mortiflix_time::Tick::ZERO))
 }
 
 /// A drag of a property in the Properties panel is one undo step, so one Cmd+Z restores the

@@ -6,14 +6,14 @@ use std::path::Path;
 use std::process::Command;
 use std::sync::Arc;
 
-use filmcraft_media::FrameRequest;
+use mortiflix_media::FrameRequest;
 
 use crate::tests::{ffmpeg, fixture_path, reference_yuv, yuv_bytes};
 
 const PIC: [&str; 4] = ["-f", "lavfi", "-i", "testsrc2=s=160x120:r=25:d=2"];
 const TONE: [&str; 4] = ["-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:d=2"];
 
-fn avi(name: &str, video: &[&str], audio: &[&str]) -> Option<(std::path::PathBuf, filmcraft_media::SharedSource)> {
+fn avi(name: &str, video: &[&str], audio: &[&str]) -> Option<(std::path::PathBuf, mortiflix_media::SharedSource)> {
     let mut args: Vec<&str> = PIC.to_vec();
     args.extend_from_slice(&TONE);
     args.extend_from_slice(video);
@@ -34,12 +34,12 @@ fn reference_audio(path: &Path) -> Vec<f32> {
     out.stdout.as_chunks::<4>().0.iter().map(|b| f32::from_le_bytes(*b)).collect()
 }
 
-/// The first `n` mono samples of stream 0 as FilmCraft decodes them.
-fn ours(src: &filmcraft_media::SharedSource, n: usize) -> Vec<f32> {
+/// The first `n` mono samples of stream 0 as Mortiflix Studio decodes them.
+fn ours(src: &mortiflix_media::SharedSource, n: usize) -> Vec<f32> {
     src.audio(0, n, 48_000).unwrap().channels[0].clone()
 }
 
-fn check_info(name: &str, src: &filmcraft_media::SharedSource, vcodec: &str, acodec: &str) {
+fn check_info(name: &str, src: &mortiflix_media::SharedSource, vcodec: &str, acodec: &str) {
     let info = src.info();
     assert_eq!(info.container, "AVI", "{name}");
     let v = info.video.as_ref().unwrap();
@@ -168,7 +168,7 @@ fn drop_frames_hold_the_previous_picture() {
 fn mpeg4_part2_is_named_and_its_audio_plays() {
     let Some((_, src)) = avi("avi_xvid.avi", &["-c:v", "mpeg4", "-vtag", "XVID"], &["-c:a", "pcm_s16le"]) else { return };
     assert_eq!(src.info().video.as_ref().unwrap().codec, "MPEG-4 Part 2 (DivX / Xvid)");
-    let e = src.video_frame(FrameRequest::full(filmcraft_time::Tick::ZERO)).unwrap_err().to_string();
+    let e = src.video_frame(FrameRequest::full(mortiflix_time::Tick::ZERO)).unwrap_err().to_string();
     assert!(e.contains("MPEG-4 Part 2"), "{e}");
     assert!(ours(&src, 4_800).iter().any(|s| s.abs() > 0.1));
 }
@@ -222,11 +222,11 @@ fn copied_h264_keeps_its_timing_with_a_fine_time_base() {
     let reference = reference_yuv(&path, "yuv420p").unwrap();
     let frame = reference.len() / 50;
     for k in [37usize, 3, 24, 49, 0, 13, 12, 11, 30] {
-        let at = filmcraft_time::Tick::from_rational(k as i64, 1, 25);
+        let at = mortiflix_time::Tick::from_rational(k as i64, 1, 25);
         let f = src.video_frame(FrameRequest::full(at)).unwrap();
         assert!(yuv_bytes(&f) == reference[k * frame..(k + 1) * frame], "picture {k} at {:.2} s differs from ffmpeg", k as f64 / 25.0);
     }
     // between pictures, the one before holds
-    let mid = src.video_frame(FrameRequest::full(filmcraft_time::Tick::from_rational(1, 1, 50))).unwrap();
+    let mid = src.video_frame(FrameRequest::full(mortiflix_time::Tick::from_rational(1, 1, 50))).unwrap();
     assert!(yuv_bytes(&mid) == reference[0..frame]);
 }

@@ -1,6 +1,6 @@
 [package]
-name = "filmcraft-audio-dsp"
-description = "Real-time audio DSP for FilmCraft: BS.1770 / EBU R128 loudness metering and audio effects"
+name = "mortiflix-audio-dsp"
+description = "Real-time audio DSP for Mortiflix Studio: BS.1770 / EBU R128 loudness metering and audio effects"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -13,4 +13,4 @@ workspace = true
 [dependencies]
 
 [dev-dependencies]
-filmcraft-testkit = { workspace = true }
+mortiflix-testkit = { workspace = true }

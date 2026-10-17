@@ -1,10 +1,10 @@
 //! `scopes.read`: Lumetri Scopes as numbers (M8.9), so agents can check colour without looking.
 //! It renders the active sequence at the playhead (or `time`), computes the scopes with
-//! `filmcraft-scopes` and returns levels in percent (per channel and per column range), histogram
+//! `mortiflix-scopes` and returns levels in percent (per channel and per column range), histogram
 //! bins, and the densest vectorscope spots with their angle and saturation.
 
-use filmcraft_scopes::{self as scopes, ColorSpace, ParadeType, Params, ScopeKind, Signal, WaveformType, summary};
-use filmcraft_time::Tick;
+use mortiflix_scopes::{self as scopes, ColorSpace, ParadeType, Params, ScopeKind, Signal, WaveformType, summary};
+use mortiflix_time::Tick;
 use serde_json::{Value, json};
 
 use crate::commands::{CommandSpec, bad, bool_p, has_seq, str_p, time_p, u64_p};
@@ -16,12 +16,12 @@ pub fn scope_signal(s: &Session, t: Tick, scale: f32, hdr: bool) -> Option<Signa
     let seq = s.state.active_sequence?;
     let provider = s.media.provider(s.project.clone(), s.services.clone());
     if hdr {
-        let opts = filmcraft_render::RenderOptions { scale, working_output: true, ..Default::default() };
-        let img = filmcraft_render::render_sequence(&s.project, seq, t, opts, &provider);
+        let opts = mortiflix_render::RenderOptions { scale, working_output: true, ..Default::default() };
+        let img = mortiflix_render::render_sequence(&s.project, seq, t, opts, &provider);
         return Some(Signal::from_rgba_f32_with(img.w, img.h, &img.px, scopes::MAX_W, scopes::MAX_H, scopes::linear_to_pq));
     }
-    let opts = filmcraft_render::RenderOptions { scale, captions: true, ..Default::default() };
-    let img = filmcraft_render::render_sequence(&s.project, seq, t, opts, &provider);
+    let opts = mortiflix_render::RenderOptions { scale, captions: true, ..Default::default() };
+    let img = mortiflix_render::render_sequence(&s.project, seq, t, opts, &provider);
     Some(Signal::from_rgba8(img.w, img.h, &img.over_black_rgba8()))
 }
 

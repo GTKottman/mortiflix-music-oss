@@ -17,7 +17,7 @@
 //! both sides.
 //!
 //! **Upmix** places the source on the front speakers without inventing content: mono → C (5.1) or
-//! both sides at unity (2.0, as mono clips are played everywhere else in FilmCraft); stereo → L, R.
+//! both sides at unity (2.0, as mono clips are played everywhere else in Mortiflix Studio); stereo → L, R.
 //!
 //! **5.1 panner** ([`Pan51`]): a puck at `(x, y)` in the listening square (x −1 left … +1 right,
 //! y −1 rear … +1 front). A point source at `(x, y)` is split front/rear and left/right with the

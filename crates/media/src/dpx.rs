@@ -17,7 +17,7 @@
 //! Not decoded (an "unsupported" error): run-length encoded elements, 1-bit and floating-point
 //! components, transposed orientations.
 
-use filmcraft_color::{Matrix, Range, normalize_c, normalize_y, ycbcr_to_rgb};
+use mortiflix_color::{Matrix, Range, normalize_c, normalize_y, ycbcr_to_rgb};
 
 use crate::{MediaError, Result, still::Raster};
 
@@ -222,7 +222,7 @@ pub fn decode(name: &str, bytes: &[u8]) -> Result<Raster> {
     let matrix = match colorimetric {
         5 | 6 => Matrix::Bt709,
         7..=10 => Matrix::Bt601,
-        _ => filmcraft_frame::default_matrix(w as u32, h as u32),
+        _ => mortiflix_frame::default_matrix(w as u32, h as u32),
     };
     let ycbcr = |n, sub, alpha| Components::YCbCr { n, sub, alpha, matrix, range };
     let components = match descriptor {

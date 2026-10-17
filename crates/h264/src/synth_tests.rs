@@ -6,7 +6,7 @@
 
 use crate::Decoder;
 use crate::cabac::{Cabac, NEXT_STATE, RANGE_TAB_LPS};
-use filmcraft_bitstream::{BitWriter, escape_rbsp};
+use mortiflix_bitstream::{BitWriter, escape_rbsp};
 
 const MB_W: usize = 4;
 const MB_H: usize = 3;
@@ -437,10 +437,10 @@ type Planes3 = (Vec<u8>, Vec<u8>, Vec<u8>);
 
 /// Validate the hand-built stream and its expected output with ffmpeg when available.
 fn cross_check_ffmpeg(stream: &[u8], expected: &[Planes3], name: &str) {
-    let Some(ff) = filmcraft_testkit::ffmpeg_or_skip(name) else { return };
-    let dir = filmcraft_testkit::fixtures_dir("h264");
-    let src = filmcraft_testkit::temp_path(&dir.join(format!("{name}.h264")));
-    let dst = filmcraft_testkit::temp_path(&dir.join(format!("{name}.yuv")));
+    let Some(ff) = mortiflix_testkit::ffmpeg_or_skip(name) else { return };
+    let dir = mortiflix_testkit::fixtures_dir("h264");
+    let src = mortiflix_testkit::temp_path(&dir.join(format!("{name}.h264")));
+    let dst = mortiflix_testkit::temp_path(&dir.join(format!("{name}.yuv")));
     std::fs::write(&src, stream).unwrap();
     let ok = std::process::Command::new(&ff)
         .args(["-hide_banner", "-loglevel", "error", "-y", "-i"])

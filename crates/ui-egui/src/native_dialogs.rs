@@ -1,19 +1,19 @@
 //! Native file dialogs that don't stop the frame loop (#260).
 //!
-//! A dialog is asked for with [`FilmcraftApp::pick`]: what to show ([`FileDialog`]) and what to do
+//! A dialog is asked for with [`StudioApp::pick`]: what to show ([`FileDialog`]) and what to do
 //! with the chosen paths. A host that can show dialogs without blocking ([`HostHooks::run_dialog`]:
 //! the desktop app on Linux, where the XDG portal call would otherwise hold the UI thread until the
 //! user chooses, and GNOME offers to force-quit the window after about five seconds) gets the
 //! dialog and answers on a channel; the frame loop keeps running, and the continuation runs on the
-//! frame the answer arrives ([`FilmcraftApp::poll_native_dialog`]). Without it the host's
+//! frame the answer arrives ([`StudioApp::poll_native_dialog`]). Without it the host's
 //! synchronous pickers (`pick_files`, `pick_save_as`, …) are called and the continuation runs at
 //! once, as before: headless tests, the control channel's stand-ins and other hosts are unchanged.
 //!
 //! Two entry points:
-//! - [`FilmcraftApp::pick`] for menu and control-channel commands: with the synchronous pickers
+//! - [`StudioApp::pick`] for menu and control-channel commands: with the synchronous pickers
 //!   the continuation runs at once and its result is the command's (agents and tests see what
 //!   they saw before); with the runner the command answers `{"dialog": "open"}`.
-//! - [`FilmcraftApp::pick_ui`] for a panel's Browse… / Import… / Export… button: the continuation
+//! - [`StudioApp::pick_ui`] for a panel's Browse… / Import… / Export… button: the continuation
 //!   always runs at the start of a later frame, before the panels draw, since a panel works on a
 //!   copy of its state that it writes back at the end of the frame. It writes into the dialog's
 //!   stored state (`app.ui.…`, an egui temporary); when the user has closed that dialog meanwhile
@@ -26,7 +26,7 @@ use std::time::Duration;
 
 use serde_json::{Value, json};
 
-use crate::{FilmcraftApp, HostHooks, RelinkHint};
+use crate::{HostHooks, RelinkHint, StudioApp};
 
 /// A native file dialog. Filters are a name and extensions without dots.
 #[derive(Clone, Debug)]
@@ -35,9 +35,9 @@ pub enum FileDialog {
     OpenFiles { exts: Vec<String> },
     /// Choose one file.
     OpenFile { filter: String, exts: Vec<String> },
-    /// Choose a FilmCraft project to open.
+    /// Choose a Mortiflix Studio project to open.
     OpenProject,
-    /// Save a FilmCraft project, suggesting `name`.
+    /// Save a Mortiflix Studio project, suggesting `name`.
     SaveProject { name: String },
     /// Save a file, suggesting `name`.
     SaveAs { filter: String, exts: Vec<String>, name: String },
@@ -50,7 +50,7 @@ pub enum FileDialog {
 
 /// What to do with the chosen paths (none: cancelled). Its result is the request's (control
 /// channel, menu) when the dialog answers at once; otherwise an error goes to the status line.
-pub(crate) type Continuation = Box<dyn FnOnce(&mut FilmcraftApp, Vec<String>) -> Result<Value, String>>;
+pub(crate) type Continuation = Box<dyn FnOnce(&mut StudioApp, Vec<String>) -> Result<Value, String>>;
 
 /// The dialog a host is showing, and what to do with its answer.
 pub(crate) struct PendingDialog {
@@ -112,12 +112,12 @@ fn refs(v: &[String]) -> Vec<&str> {
     v.iter().map(String::as_str).collect()
 }
 
-impl FilmcraftApp {
+impl StudioApp {
     /// Show `dialog`, then call `then` with the chosen paths (empty when cancelled). With a host
     /// that shows dialogs without blocking, this returns `{"dialog": "open"}` and `then` runs on a
     /// later frame; otherwise `then` runs now and its result is returned. While a dialog is open
     /// another one is refused.
-    pub fn pick(&mut self, dialog: FileDialog, then: impl FnOnce(&mut FilmcraftApp, Vec<String>) -> Result<Value, String> + 'static) -> Result<Value, String> {
+    pub fn pick(&mut self, dialog: FileDialog, then: impl FnOnce(&mut StudioApp, Vec<String>) -> Result<Value, String> + 'static) -> Result<Value, String> {
         if self.native_dialog.is_some() {
             return Err(tl!("A file dialog is already open").into());
         }
@@ -133,7 +133,7 @@ impl FilmcraftApp {
     /// open) goes to the status line. `then` always runs at the start of a later frame, also with
     /// the host's synchronous pickers: a panel works on a copy of its state and writes it back at
     /// the end of the frame, which would overwrite a path written in the middle of it.
-    pub fn pick_ui(&mut self, dialog: FileDialog, then: impl FnOnce(&mut FilmcraftApp, Vec<String>) + 'static) {
+    pub fn pick_ui(&mut self, dialog: FileDialog, then: impl FnOnce(&mut StudioApp, Vec<String>) + 'static) {
         if self.native_dialog.is_some() {
             self.ui.status = tl!("A file dialog is already open").into();
             return;

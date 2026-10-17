@@ -1,13 +1,13 @@
-# filmcraft-isobmff
+# mortiflix-isobmff
 
 A clean-room ISO Base Media File Format (MP4, ISO/IEC 14496-12/14/15) and QuickTime (MOV) demuxer and muxer,
-written from the public specifications. Layer L0: it depends only on `filmcraft-bitstream` and `thiserror`,
+written from the public specifications. Layer L0: it depends only on `mortiflix-bitstream` and `thiserror`,
 has no `unsafe`, and builds for `wasm32-unknown-unknown`.
 
 ## Demuxing
 
 ```rust
-use filmcraft_isobmff::{open, TrackKind};
+use mortiflix_isobmff::{open, TrackKind};
 
 let file = std::fs::File::open("clip.mov")?;
 let mp4 = open(&file)?;                        // any ByteSource: &[u8], Vec<u8>, Arc<[u8]>, File, ...
@@ -70,7 +70,7 @@ Boxes with 64-bit sizes and with size 0 (runs to the end of the file) are suppor
 | anything else | `Unknown { fourcc, raw }` |
 
 Video entries also parse `colr` (`nclx`/`nclc`/ICC), `pasp`, `clap`, `fiel`, `gama` and `btrt` into
-`VideoParams`. The MP4 source in `filmcraft-codecs` crops every frame to `clap`'s clean aperture
+`VideoParams`. The MP4 source in `mortiflix-codecs` crops every frame to `clap`'s clean aperture
 before the track's display rotation, and reports that size. Audio entries parse QuickTime sound description v0/v1/v2 into `AudioParams`.
 
 ### Robustness
@@ -83,7 +83,7 @@ clamped to what fits in the file. `trun` counts are checked, and each track is c
 ## Muxing
 
 ```rust
-use filmcraft_isobmff::*;
+use mortiflix_isobmff::*;
 let mut w = Mp4Writer::new(std::io::Cursor::new(Vec::new()), WriterOptions::new(Brand::Mp4))?;
 let v = w.add_track(TrackConfig::new(SampleEntry::avc(avcc, 1920, 1080), 90_000))?;
 let mut acfg = TrackConfig::new(SampleEntry::aac(asc, 2, 48_000), 48_000);

@@ -16,7 +16,7 @@
 //! - Units are read back on demand by re-reading the file from the unit's first packet, so the
 //!   index costs a few dozen bytes per access unit.
 //!
-//! The crate does no decoding; `filmcraft-codecs` pairs the streams with decoders.
+//! The crate does no decoding; `mortiflix-codecs` pairs the streams with decoders.
 
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable))]
 

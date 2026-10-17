@@ -5,12 +5,12 @@
 use serde_json::json;
 
 use crate::Session;
-use filmcraft_project::ItemId;
+use mortiflix_project::ItemId;
 
 fn fixture() -> Option<std::path::PathBuf> {
-    let ffmpeg = filmcraft_testkit::oracle::ffmpeg_or_skip("avi import")?;
-    let path = filmcraft_testkit::fixtures_dir("engine/avi").join("h264_mp3.avi");
-    filmcraft_testkit::fixtures::generate(&path, |tmp| {
+    let ffmpeg = mortiflix_testkit::oracle::ffmpeg_or_skip("avi import")?;
+    let path = mortiflix_testkit::fixtures_dir("engine/avi").join("h264_mp3.avi");
+    mortiflix_testkit::fixtures::generate(&path, |tmp| {
         std::process::Command::new(&ffmpeg)
             .args([
                 "-y",
@@ -50,7 +50,7 @@ fn avi_imports_plays_and_probes() {
     let q = s.active_sequence().unwrap().clone();
     assert!(!q.video_tracks[0].items.is_empty() && !q.audio_tracks[0].items.is_empty());
     let src = s.source(item).unwrap();
-    assert!(src.video_frame(filmcraft_media::FrameRequest::full(filmcraft_time::Tick(filmcraft_time::TICKS_PER_SECOND))).is_ok());
+    assert!(src.video_frame(mortiflix_media::FrameRequest::full(mortiflix_time::Tick(mortiflix_time::TICKS_PER_SECOND))).is_ok());
     assert!(src.audio(48_000, 4_800, 48_000).unwrap().channels[0].iter().any(|v| v.abs() > 0.05));
     // the Media Browser's probe streams it (index now, frames on demand)
     let probed = s.media.probe_file(&path.to_string_lossy(), &*s.services).unwrap();

@@ -1,8 +1,8 @@
 //! Graphics templates, responsive design, per-character styles, source graphics and font
 //! replacement (M10.7).
 //!
-//! - **Templates** (`graphics.template.*`): FilmCraft's own `.fcgt` format
-//!   ([`filmcraft_project::gtemplate`]). Built-in templates are original designs in code; user
+//! - **Templates** (`graphics.template.*`): Mortiflix Studio's own `.fcgt` format
+//!   ([`mortiflix_project::gtemplate`]). Built-in templates are original designs in code; user
 //!   templates live in `<data dir>/Graphics Templates/*.fcgt`. Export As Motion Graphics Template
 //!   makes one from a graphic clip with chosen editable properties; Install copies a `.fcgt` into
 //!   the user folder (Adobe `.mogrt` files are refused without being opened); Apply places a new
@@ -17,16 +17,16 @@
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex, OnceLock};
 
-use filmcraft_geom::{Affine, Vec2};
-use filmcraft_project::graphic::{self, layer_display_name, layer_indices};
-use filmcraft_project::graphic_design::{CharStyle, GraphicMeta, LayerExtra, Pin, PinTarget, RollMode, SourceGraphic, apply_char_style, clear_char_style};
-use filmcraft_project::gtemplate::{
+use mortiflix_geom::{Affine, Vec2};
+use mortiflix_project::graphic::{self, layer_display_name, layer_indices};
+use mortiflix_project::graphic_design::{CharStyle, GraphicMeta, LayerExtra, Pin, PinTarget, RollMode, SourceGraphic, apply_char_style, clear_char_style};
+use mortiflix_project::gtemplate::{
     self, ControlKind, FontResource, GraphicsTemplate, TEMPLATE_EXTENSION, TemplateControl, base64_decode, base64_encode, builtin_templates, ensure_uids,
     layer_uid,
 };
-use filmcraft_project::{ClipId, EffectInstance, ItemId, ItemKind, Label, ParamValue, Project, TrackItem};
-use filmcraft_render::graphic_clip::{item_layer_specs, layer_bounds};
-use filmcraft_time::Tick;
+use mortiflix_project::{ClipId, EffectInstance, ItemId, ItemKind, Label, ParamValue, Project, TrackItem};
+use mortiflix_render::graphic_clip::{item_layer_specs, layer_bounds};
+use mortiflix_time::Tick;
 use serde_json::{Value, json};
 
 use crate::commands::{CommandSpec, always, bad, bool_p, f64_p, has_seq, str_p, u64_p};
@@ -96,7 +96,8 @@ fn is_mogrt(path: &str) -> bool {
     path.to_ascii_lowercase().ends_with(".mogrt")
 }
 
-const MOGRT: &str = "FilmCraft does not open Adobe .mogrt files (or other applications' template packages); it reads only its own .fcgt graphics templates";
+const MOGRT: &str =
+    "Mortiflix Studio does not open Adobe .mogrt files (or other applications' template packages); it reads only its own .fcgt graphics templates";
 
 /// Find a template by id, name (case-insensitive) or `.fcgt` path.
 pub fn find_template(s: &Session, key: &str) -> Result<LibraryEntry> {
@@ -125,7 +126,7 @@ fn register_fonts(t: &GraphicsTemplate) -> usize {
         let h = data.iter().fold(0xcbf2_9ce4_8422_2325u64, |h, b| (h ^ *b as u64).wrapping_mul(0x100_0000_01b3));
         let mut seen = SEEN.get_or_init(Default::default).lock().unwrap_or_else(|e| e.into_inner());
         if seen.insert(h) {
-            n += filmcraft_text::fonts::add_font_data(data).len();
+            n += mortiflix_text::fonts::add_font_data(data).len();
         }
     }
     n
@@ -155,13 +156,13 @@ pub fn thumbnail(t: &GraphicsTemplate, w: u32) -> (u32, u32, Vec<u8>) {
     let mut meta = t.graphic.clone();
     meta.roll.mode = RollMode::Off;
     let mut p = Project::new("thumb");
-    let rate = filmcraft_time::FrameRate::FPS_30;
+    let rate = mortiflix_time::FrameRate::FPS_30;
     let g = p.add_item("G", Label::Rose, ItemKind::Graphic { width: t.canvas[0], height: t.canvas[1], rate }, None);
     let Some(mut it) = p.make_track_item(
         g,
-        filmcraft_project::TrackKind::Video,
+        mortiflix_project::TrackKind::Video,
         Tick::ZERO,
-        filmcraft_time::TimeRange::new(Tick::ZERO, t.duration.max(rate.frame_duration())),
+        mortiflix_time::TimeRange::new(Tick::ZERO, t.duration.max(rate.frame_duration())),
         rate,
     ) else {
         return (w, h, vec![0; w as usize * h as usize * 4]);
@@ -169,10 +170,10 @@ pub fn thumbnail(t: &GraphicsTemplate, w: u32) -> (u32, u32, Vec<u8>) {
     it.effects.extend(t.layers.iter().cloned());
     it.graphic = Some(Box::new(meta));
     // a moment into the clip, so intro animations have settled a little
-    let at = Tick((t.duration.0 / 2).min(filmcraft_time::TICKS_PER_SECOND));
-    let mut img = filmcraft_render::image::Image::new(w as usize, h as usize);
+    let at = Tick((t.duration.0 / 2).min(mortiflix_time::TICKS_PER_SECOND));
+    let mut img = mortiflix_render::image::Image::new(w as usize, h as usize);
     let k = w as f64 / t.canvas[0].max(1) as f64;
-    filmcraft_render::graphic_clip::render_graphic(&it, at, (t.canvas[0], t.canvas[1]), &Affine::scale(k, k), &mut img);
+    mortiflix_render::graphic_clip::render_graphic(&it, at, (t.canvas[0], t.canvas[1]), &Affine::scale(k, k), &mut img);
     (w, h, img.to_rgba8())
 }
 
@@ -322,7 +323,7 @@ fn apply_template(s: &mut Session, p: &Value) -> Result<Value> {
     })?;
     let meta2 = meta.clone();
     s.edit_sequence("Apply Graphics Template", move |q, _, _| {
-        let (_, it) = q.find_item_mut(clip).ok_or(filmcraft_edit::EditError::NoItem(clip))?;
+        let (_, it) = q.find_item_mut(clip).ok_or(mortiflix_edit::EditError::NoItem(clip))?;
         it.graphic = Some(Box::new(meta2));
         Ok(())
     })?;
@@ -410,8 +411,8 @@ fn export_controls(it: &TrackItem, layers: &[EffectInstance], p: &Value) -> Resu
         });
         let (mut min, mut max) = (f64_p(c, "min"), f64_p(c, "max"));
         if kind == ControlKind::Slider && (min.is_none() || max.is_none()) {
-            let d = filmcraft_project::find_effect(&layer.effect).and_then(|d| d.param(&param)).map(|d| d.kind.clone());
-            if let Some(filmcraft_project::ParamKind::Float { soft_min, soft_max, .. }) = d {
+            let d = mortiflix_project::find_effect(&layer.effect).and_then(|d| d.param(&param)).map(|d| d.kind.clone());
+            if let Some(mortiflix_project::ParamKind::Float { soft_min, soft_max, .. }) = d {
                 min = min.or(Some(soft_min));
                 max = max.or(Some(soft_max));
             }
@@ -466,8 +467,8 @@ fn export_template(s: &mut Session, p: &Value) -> Result<Value> {
                 Some(ParamValue::Text(f)) => f.clone(),
                 _ => "Regular".into(),
             };
-            let r = filmcraft_text::resolve(&fam, &st);
-            let face = filmcraft_text::fonts::face(r.face);
+            let r = mortiflix_text::resolve(&fam, &st);
+            let face = mortiflix_text::fonts::face(r.face);
             if r.missing || face.info.origin == "bundled" || !seen.insert(r.face) {
                 continue;
             }
@@ -518,7 +519,7 @@ fn export_template(s: &mut Session, p: &Value) -> Result<Value> {
         let uids: Vec<u64> = t.layers.iter().map(layer_uid).collect();
         let before = s.history.undo.len();
         let _ = s.edit_sequence("Export Graphics Template", move |q, _, _| {
-            let (_, it) = q.find_item_mut(clip).ok_or(filmcraft_edit::EditError::NoItem(clip))?;
+            let (_, it) = q.find_item_mut(clip).ok_or(mortiflix_edit::EditError::NoItem(clip))?;
             for (ei, uid) in layer_indices(&it.effects).into_iter().zip(uids) {
                 it.effects[ei].layer.get_or_insert_with(Default::default).uid = uid;
             }
@@ -563,7 +564,7 @@ fn template_thumbnail(s: &mut Session, p: &Value) -> Result<Value> {
     let key = str_p(p, "template").ok_or_else(|| bad("graphics.template.thumbnail", "need `template`"))?;
     let e = find_template(s, key)?;
     let (w, h, rgba) = thumbnail(&e.template, u64_p(p, "width").unwrap_or(320) as u32);
-    let png = filmcraft_export::encode_png(rgba, w, h).map_err(|x| EngineError::Other(x.to_string()))?;
+    let png = mortiflix_export::encode_png(rgba, w, h).map_err(|x| EngineError::Other(x.to_string()))?;
     if let Some(path) = str_p(p, "path") {
         s.services.write_file(path, &png).map_err(|x| EngineError::Other(format!("{path}: {x}")))?;
         return Ok(json!({"width": w, "height": h, "path": path}));
@@ -589,7 +590,7 @@ fn dur_p(s: &Session, p: &Value, key: &str) -> Option<Tick> {
 
 fn edit_meta(s: &mut Session, clip: ClipId, label: &str, f: impl FnOnce(&mut GraphicMeta, &TrackItem) -> Result<()>) -> Result<GraphicMeta> {
     s.edit_sequence(label, |q, _, _| {
-        let (_, it) = q.find_item_mut(clip).ok_or(filmcraft_edit::EditError::NoItem(clip))?;
+        let (_, it) = q.find_item_mut(clip).ok_or(mortiflix_edit::EditError::NoItem(clip))?;
         let mut m = it.graphic.as_deref().cloned().unwrap_or_default();
         f(&mut m, it)?;
         it.graphic = (!m.is_empty()).then(|| Box::new(m.clone()));
@@ -710,7 +711,7 @@ fn pin_layer(s: &mut Session, p: &Value) -> Result<Value> {
         Some(Some(t)) => Some((PinTarget::Layer(0), bounds_of(idx[t]).ok_or_else(|| bad("graphics.pin", "bad target"))?, Some(idx[t]))),
     };
     let r = s.edit_sequence("Responsive Design - Position", move |q, _, _| {
-        let (_, it) = q.find_item_mut(clip).ok_or(filmcraft_edit::EditError::NoItem(clip))?;
+        let (_, it) = q.find_item_mut(clip).ok_or(mortiflix_edit::EditError::NoItem(clip))?;
         let li = layer_indices(&it.effects);
         let mut layers: Vec<EffectInstance> = li.iter().map(|&i| it.effects[i].clone()).collect();
         ensure_uids(&mut layers);
@@ -776,7 +777,7 @@ fn set_char_style(s: &mut Session, p: &Value) -> Result<Value> {
     let tl = s.playhead();
     let (start, end) = (u64_p(p, "start").map(|v| v as usize), u64_p(p, "end").map(|v| v as usize));
     let runs = s.edit_sequence("Character Style", move |q, _, _| {
-        let (_, it) = q.find_item_mut(clip).ok_or(filmcraft_edit::EditError::NoItem(clip))?;
+        let (_, it) = q.find_item_mut(clip).ok_or(mortiflix_edit::EditError::NoItem(clip))?;
         let mt = it.source_time_at(tl.clamp(it.start, it.end() - Tick(1)));
         let e = &mut it.effects[ei];
         if e.effect != graphic::TEXT_LAYER {
@@ -803,9 +804,9 @@ fn set_char_style(s: &mut Session, p: &Value) -> Result<Value> {
 // ------------------------------------------------------------------------------------------------
 
 /// Caption text with `<i>`/`<b>`/`<u>` → plain text and character style runs.
-fn caption_runs(text: &str) -> (String, Vec<filmcraft_project::StyleRun>) {
+fn caption_runs(text: &str) -> (String, Vec<mortiflix_project::StyleRun>) {
     let mut out = String::new();
-    let mut runs: Vec<filmcraft_project::StyleRun> = Vec::new();
+    let mut runs: Vec<mortiflix_project::StyleRun> = Vec::new();
     let (mut it, mut bo, mut ul) = (false, false, false);
     let mut rest = text;
     let mut n = 0usize;
@@ -874,19 +875,19 @@ fn upgrade_caption(s: &mut Session, p: &Value) -> Result<Value> {
         let lines = text.lines().count().max(1) as f64;
         let line_h = size * st.line_spacing as f64;
         let x = match st.align {
-            filmcraft_project::CaptionAlign::Left => w as f64 * 0.1,
-            filmcraft_project::CaptionAlign::Center => w as f64 / 2.0,
-            filmcraft_project::CaptionAlign::Right => w as f64 * 0.9,
+            mortiflix_project::CaptionAlign::Left => w as f64 * 0.1,
+            mortiflix_project::CaptionAlign::Center => w as f64 / 2.0,
+            mortiflix_project::CaptionAlign::Right => w as f64 * 0.9,
         };
         let margin = st.margin as f64 * h as f64;
         let first_baseline = match st.anchor {
-            filmcraft_project::CaptionAnchor::Bottom => h as f64 - margin - (lines - 1.0) * line_h - size * 0.25,
-            filmcraft_project::CaptionAnchor::Top => margin + size,
-            filmcraft_project::CaptionAnchor::Middle => h as f64 / 2.0 - (lines - 1.0) * line_h / 2.0 + size * 0.35,
+            mortiflix_project::CaptionAnchor::Bottom => h as f64 - margin - (lines - 1.0) * line_h - size * 0.25,
+            mortiflix_project::CaptionAnchor::Top => margin + size,
+            mortiflix_project::CaptionAnchor::Middle => h as f64 / 2.0 - (lines - 1.0) * line_h / 2.0 + size * 0.35,
         };
         let mut layer = graphic::new_text_layer(&text, Vec2::new(x, first_baseline), size);
         let set = |e: &mut EffectInstance, k: &str, v: ParamValue| {
-            e.params.insert(k.into(), filmcraft_project::Param::new(v));
+            e.params.insert(k.into(), mortiflix_project::Param::new(v));
         };
         let col = |c: [u8; 4]| [c[0] as f32 / 255.0, c[1] as f32 / 255.0, c[2] as f32 / 255.0, 1.0];
         set(&mut layer, "font", ParamValue::Text(st.font.clone()));
@@ -918,7 +919,7 @@ fn upgrade_caption(s: &mut Session, p: &Value) -> Result<Value> {
     }
     let del: Vec<ClipId> = jobs.iter().map(|j| j.0.id).collect();
     s.edit_sequence("Upgrade Caption to Graphic", move |q, _, st| {
-        filmcraft_edit::captions::delete_captions(q, &del, false)?;
+        mortiflix_edit::captions::delete_captions(q, &del, false)?;
         st.caption_selection.clear();
         Ok(())
     })?;
@@ -1079,9 +1080,9 @@ fn replace_fonts(s: &mut Session, p: &Value) -> Result<Value> {
         for_each_layer(pr, |e| {
             let (fam, st) = (text_of(e, "font"), text_of(e, "font_style"));
             if matches(&fam, &st) {
-                e.params.insert("font".into(), filmcraft_project::Param::new(ParamValue::Text(to.clone())));
+                e.params.insert("font".into(), mortiflix_project::Param::new(ParamValue::Text(to.clone())));
                 if let Some(ts) = &to_style {
-                    e.params.insert("font_style".into(), filmcraft_project::Param::new(ParamValue::Text(ts.clone())));
+                    e.params.insert("font_style".into(), mortiflix_project::Param::new(ParamValue::Text(ts.clone())));
                 }
                 n += 1;
             }
@@ -1120,7 +1121,7 @@ fn list_fonts_used(s: &mut Session, _: &Value) -> Result<Value> {
         fonts_used(s)
             .into_iter()
             .map(|(f, st, n)| {
-                let missing = filmcraft_text::resolve(&f, &st).missing;
+                let missing = mortiflix_text::resolve(&f, &st).missing;
                 json!({"family": f, "style": st, "uses": n, "missing": missing})
             })
             .collect(),

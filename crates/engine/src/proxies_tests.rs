@@ -2,8 +2,8 @@
 //! resolution (scale-aware effects and Motion), attach checks, export ignores proxies, toggling
 //! doesn't dirty the project, ingest copies on import.
 
-use filmcraft_media::DemoScene;
-use filmcraft_project::{ParamValue, find_effect};
+use mortiflix_media::DemoScene;
+use mortiflix_project::{ParamValue, find_effect};
 use serde_json::json;
 
 use crate::Session;
@@ -44,7 +44,7 @@ fn create_attach_toggle_renders_the_same_picture() {
     let job = s.execute("jobs.list", json!({})).unwrap();
     assert_eq!(job[0]["finished"], json!(true), "{job}");
     let m = s.project.item(items[0]).unwrap().as_media().unwrap().clone();
-    assert_eq!(m.proxy, Some(filmcraft_project::MediaRef::File { path: out.clone() }), "attached when the job finished");
+    assert_eq!(m.proxy, Some(mortiflix_project::MediaRef::File { path: out.clone() }), "attached when the job finished");
     // proxies off: unchanged
     assert_eq!(frame_rgba(&mut s, 5, 1.0), full);
     let rev = s.revision;
@@ -106,7 +106,7 @@ fn ingest_copies_and_creates_proxies_on_import() {
     )
     .unwrap();
     let r = s.execute("file.import", json!({"paths": [a.to_string_lossy()]})).unwrap();
-    let item = filmcraft_project::ItemId(r["items"][0].as_u64().unwrap());
+    let item = mortiflix_project::ItemId(r["items"][0].as_u64().unwrap());
     let job = r["ingest"]["job"]["job"].as_u64().unwrap_or_else(|| panic!("{r}"));
     // wait for the background proxy job, then let the session apply it
     for _ in 0..600 {
@@ -118,9 +118,9 @@ fn ingest_copies_and_creates_proxies_on_import() {
     s.poll_persistence();
     let m = s.project.item(item).unwrap().as_media().unwrap();
     let copy = dest.join("A001.mov").to_string_lossy().into_owned();
-    assert_eq!(m.media, filmcraft_project::MediaRef::File { path: copy.clone() }, "the clip uses the verified copy");
+    assert_eq!(m.media, mortiflix_project::MediaRef::File { path: copy.clone() }, "the clip uses the verified copy");
     assert_eq!(m.identity, Some(crate::relink::identity_of(&crate::FsServices, &a.to_string_lossy()).unwrap()));
-    assert_eq!(m.proxy, Some(filmcraft_project::MediaRef::File { path: dest.join("A001_Proxy.mp4").to_string_lossy().into_owned() }));
+    assert_eq!(m.proxy, Some(mortiflix_project::MediaRef::File { path: dest.join("A001_Proxy.mp4").to_string_lossy().into_owned() }));
     let _ = std::fs::remove_dir_all(&root);
 }
 
@@ -128,9 +128,9 @@ fn ingest_copies_and_creates_proxies_on_import() {
 /// that name. Check the saved project with a new media pool so cached decoders cannot hide a
 /// replaced file.
 fn check_ingest_collision(action: &str) {
-    use filmcraft_media::FrameRequest;
-    use filmcraft_project::{ItemId, MediaRef};
-    use filmcraft_time::FrameRate;
+    use mortiflix_media::FrameRequest;
+    use mortiflix_project::{ItemId, MediaRef};
+    use mortiflix_time::FrameRate;
     use std::collections::BTreeSet;
     use std::sync::atomic::Ordering;
 
@@ -188,7 +188,7 @@ fn check_ingest_collision(action: &str) {
         let source = reopened.media.open_file(&paths[index].to_string_lossy(), &*reopened.services).unwrap();
         let expected = source.video_frame(request).unwrap();
         let ingested = reopened.source(*item).unwrap().video_frame(request).unwrap();
-        let quality = |frame: &filmcraft_frame::VideoFrame| {
+        let quality = |frame: &mortiflix_frame::VideoFrame| {
             let rgba = image::RgbaImage::from_raw(frame.width, frame.height, frame.to_rgba8()).unwrap();
             let expected = image::RgbaImage::from_raw(expected.width, expected.height, expected.to_rgba8()).unwrap();
             let expected = image::imageops::resize(&expected, frame.width, frame.height, image::imageops::FilterType::Triangle);
@@ -222,7 +222,7 @@ fn ingest_transcode_preserves_same_named_takes_and_existing_files() {
 
 #[test]
 fn ingest_copy_keeps_sources_already_at_destination_and_extensionless_names() {
-    use filmcraft_project::{ItemId, MediaRef};
+    use mortiflix_project::{ItemId, MediaRef};
 
     for (name, numbered) in [("Take.wav", "Take 2.wav"), ("Take", "Take 2")] {
         let root = tmp_dir("ingest-copy-existing-source");
@@ -231,7 +231,7 @@ fn ingest_copy_keeps_sources_already_at_destination_and_extensionless_names() {
         std::fs::create_dir_all(&dest).unwrap();
         std::fs::create_dir_all(&card).unwrap();
         let paths = [dest.join(name), card.join(name)];
-        let takes = [filmcraft_media::wav::write_wav16(&[0.25; 960], 1, 48_000), filmcraft_media::wav::write_wav16(&[-0.25; 960], 1, 48_000)];
+        let takes = [mortiflix_media::wav::write_wav16(&[0.25; 960], 1, 48_000), mortiflix_media::wav::write_wav16(&[-0.25; 960], 1, 48_000)];
         for (path, bytes) in paths.iter().zip(&takes) {
             std::fs::write(path, bytes).unwrap();
         }
@@ -255,11 +255,11 @@ fn ingest_copy_keeps_sources_already_at_destination_and_extensionless_names() {
 
 #[test]
 fn ingest_copy_does_not_create_a_destination_when_the_source_is_missing() {
-    use filmcraft_project::ItemId;
+    use mortiflix_project::ItemId;
 
     let root = tmp_dir("ingest-copy-missing-source");
     let source = root.join("Take.wav");
-    std::fs::write(&source, filmcraft_media::wav::write_wav16(&[0.25; 960], 1, 48_000)).unwrap();
+    std::fs::write(&source, mortiflix_media::wav::write_wav16(&[0.25; 960], 1, 48_000)).unwrap();
     let mut s = Session::default();
     let imported = s.execute("file.import", json!({"paths": [source.to_string_lossy()]})).unwrap();
     let item = ItemId(imported["items"][0].as_u64().unwrap());
@@ -275,13 +275,13 @@ fn ingest_copy_does_not_create_a_destination_when_the_source_is_missing() {
 
 /// Measure: Program-monitor playback cost of 4K H.264 with and without proxies (sequential frames
 /// at ½ resolution). Run with `RAYON_NUM_THREADS=1` so wall time ≈ CPU time:
-/// `cargo test --release -p filmcraft-engine proxy_playback_perf_4k -- --ignored --nocapture`.
+/// `cargo test --release -p mortiflix-engine proxy_playback_perf_4k -- --ignored --nocapture`.
 #[test]
 #[ignore = "benchmark: 4K fixture via ffmpeg"]
 fn proxy_playback_perf_4k() {
-    let Some(ffmpeg) = filmcraft_testkit::oracle::ffmpeg_or_skip("proxy_playback_perf_4k") else { return };
-    let out = filmcraft_testkit::fixtures_dir("proxies").join("uhd_h264.mp4");
-    let src = filmcraft_testkit::fixtures::generate(&out, |tmp| {
+    let Some(ffmpeg) = mortiflix_testkit::oracle::ffmpeg_or_skip("proxy_playback_perf_4k") else { return };
+    let out = mortiflix_testkit::fixtures_dir("proxies").join("uhd_h264.mp4");
+    let src = mortiflix_testkit::fixtures::generate(&out, |tmp| {
         std::process::Command::new(&ffmpeg)
             .args([
                 "-y",
@@ -314,10 +314,10 @@ fn proxy_playback_perf_4k() {
     let measure = |s: &mut Session| {
         let rate = s.sequence_rate();
         let src = s.source(items[0]).unwrap();
-        let _ = src.video_frame(filmcraft_media::FrameRequest { time: rate.tick_of(0), scale: 0.5 });
+        let _ = src.video_frame(mortiflix_media::FrameRequest { time: rate.tick_of(0), scale: 0.5 });
         let t0 = std::time::Instant::now();
         for f in 1..n {
-            let _ = src.video_frame(filmcraft_media::FrameRequest { time: rate.tick_of(f), scale: 0.5 }).unwrap();
+            let _ = src.video_frame(mortiflix_media::FrameRequest { time: rate.tick_of(f), scale: 0.5 }).unwrap();
         }
         let decode = t0.elapsed().as_secs_f64() * 1000.0 / (n - 1) as f64;
         let mut comp = [0.0; 2];

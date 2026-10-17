@@ -12,7 +12,7 @@ use rmcp::model::{CallToolResult, ContentBlock as Content, ProgressNotificationP
 use rmcp::service::{Peer, RequestContext};
 use serde_json::{Value, json};
 
-use crate::server::FilmcraftMcp;
+use crate::server::StudioMcp;
 
 /// Engine commands that block until a render is written when called with `wait: true`.
 pub const LONG_COMMANDS: &[&str] = &["file.exportMedia"];
@@ -47,7 +47,7 @@ impl Reporter {
     }
 }
 
-impl FilmcraftMcp {
+impl StudioMcp {
     /// Run `id` (a [`LONG_COMMANDS`] entry, `wait: true`) as a job, reporting progress and
     /// honouring cancellation.
     pub(crate) async fn run_long(&self, id: &str, mut params: Value, context: &RequestContext<RoleServer>) -> CallToolResult {
@@ -155,7 +155,7 @@ fn is_export_output(name: &str, file: &str, stem: &str, ext: &str) -> bool {
 
 /// Whether an export to a file with extension `ext` writes an image sequence (one still per frame).
 fn is_sequence_extension(ext: &str) -> bool {
-    use filmcraft_engine::export::Format;
+    use mortiflix_engine::export::Format;
     Format::from_name(ext).is_some_and(Format::is_image_sequence)
 }
 

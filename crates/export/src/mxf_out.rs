@@ -1,11 +1,11 @@
 //! MXF output of the stepped exporter: OP1a (one file, frame-wrapped picture + one PCM track) or
 //! OP-Atom (Avid style: the picture in `path`, one mono PCM file per audio channel next to it,
-//! `<stem>_A1.mxf`, `<stem>_A2.mxf`, …), written with [`filmcraft_mxf::MxfWriter`].
+//! `<stem>_A1.mxf`, `<stem>_A2.mxf`, …), written with [`mortiflix_mxf::MxfWriter`].
 
-use filmcraft_mxf::{
+use mortiflix_mxf::{
     CodedKind, ColorSpace, FrameInfo, MxfWriter, PackageIds, Pattern, PictureCoding, PictureDesc, Rational, SoundDesc, StartTimecode, Timestamp, WriterConfig,
 };
-use filmcraft_time::FrameRate;
+use mortiflix_time::FrameRate;
 
 use crate::{ColorSignal, EncodedPacket, ExportError, ExportSettings, Format, H264Profile, Out, Result};
 
@@ -32,7 +32,7 @@ fn io(e: std::io::Error) -> ExportError {
 fn picture(settings: &ExportSettings, w: u32, h: u32) -> PictureDesc {
     let coding = match settings.video_format() {
         Format::ProRes => {
-            use filmcraft_prores::Profile;
+            use mortiflix_prores::Profile;
             PictureCoding::ProRes {
                 profile: match crate::prores_profile(&settings.prores_profile) {
                     Profile::Proxy => 1,
@@ -126,7 +126,7 @@ impl MxfMux {
                     rate,
                     PackageIds {
                         material: ids.material,
-                        file: filmcraft_mxf::Umid::from_seed(format!("file:{seed}:A{}", k + 1).as_bytes()),
+                        file: mortiflix_mxf::Umid::from_seed(format!("file:{seed}:A{}", k + 1).as_bytes()),
                         material_name: ids.material_name.clone(),
                         file_name: format!("{} A{}", s.name, k + 1),
                     },
@@ -186,12 +186,12 @@ impl MxfMux {
         if self.atom {
             for (k, (_, w)) in self.audio.iter_mut().enumerate() {
                 if let Some(c) = planar.get(k) {
-                    w.push_sound(0, &filmcraft_mxf::encode_pcm(std::slice::from_ref(c), self.bits)).map_err(io)?;
+                    w.push_sound(0, &mortiflix_mxf::encode_pcm(std::slice::from_ref(c), self.bits)).map_err(io)?;
                 }
             }
             Ok(())
         } else {
-            self.video.push_sound(0, &filmcraft_mxf::encode_pcm(planar, self.bits)).map_err(io)
+            self.video.push_sound(0, &mortiflix_mxf::encode_pcm(planar, self.bits)).map_err(io)
         }
     }
 

@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use filmcraft_time::Tick;
+use mortiflix_time::Tick;
 
 use super::ids::{META_DICTIONARY, ROOT, cls, ddef, def, path, pid};
 use super::store::{self, Auid, Obj, Value, rational, utf16z};
@@ -35,7 +35,7 @@ pub(crate) fn fnv(s: &[u8], h: u64) -> u64 {
 }
 
 fn timestamp() -> Vec<u8> {
-    // 1970-01-01 00:00:00.00: FilmCraft writes reproducible files
+    // 1970-01-01 00:00:00.00: Mortiflix Studio writes reproducible files
     let mut v = 1970i16.to_le_bytes().to_vec();
     v.extend_from_slice(&[1, 1, 0, 0, 0, 0]);
     v
@@ -96,7 +96,7 @@ fn source_rate(s: &Source) -> (i64, i64) {
 }
 
 /// Serialise a composition document.
-pub(crate) fn write(doc: &Document, version: filmcraft_cfb::Version, report: &mut Report) -> Result<Vec<u8>> {
+pub(crate) fn write(doc: &Document, version: mortiflix_cfb::Version, report: &mut Report) -> Result<Vec<u8>> {
     let comp = doc.compositions.first().ok_or(Error::Empty)?;
     let mut w = W { report, inexact: false };
     let mut seed = fnv(comp.name.as_bytes(), 0xCBF2_9CE4_8422_2325);
@@ -333,12 +333,12 @@ pub(crate) fn write(doc: &Document, version: filmcraft_cfb::Version, report: &mu
         content.set(pid::ESSENCE_DATA, Value::StrongSet(essence, pid::ESSENCE_MOB_ID));
     }
     let ident = Obj::new(cls::IDENTIFICATION)
-        .data_prop(pid::COMPANY_NAME, utf16z("FilmCraft"))
-        .data_prop(pid::PRODUCT_NAME, utf16z("FilmCraft"))
+        .data_prop(pid::COMPANY_NAME, utf16z("Mortiflix Studio"))
+        .data_prop(pid::PRODUCT_NAME, utf16z("Mortiflix Studio"))
         .data_prop(pid::PRODUCT_VERSION_STRING, utf16z(env!("CARGO_PKG_VERSION")))
         .data_prop(pid::PRODUCT_ID, super::ids::guid(0x46494C4D, 0x4352, 0x4146, *b"T-AAF-EP").to_vec())
         .data_prop(pid::DATE, timestamp())
-        .data_prop(pid::PLATFORM, utf16z("FilmCraft"))
+        .data_prop(pid::PLATFORM, utf16z("Mortiflix Studio"))
         .data_prop(pid::GENERATION_AUID, mob_id(seed, 0)[16..].to_vec());
     let header = Obj::new(cls::HEADER)
         .data_prop(pid::BYTE_ORDER, 0x4949i16.to_le_bytes().to_vec())
@@ -490,7 +490,7 @@ fn composition_mob(
                         .with(pid::DATA_DEFINITION, weak(path::DATA_DEFS, dd))
                         .data_prop(pid::LENGTH, n.to_le_bytes().to_vec())
                         .with(pid::OPERATION, weak(path::OPERATION_DEFS, op))
-                        .with(pid::COMPONENT_USER_COMMENTS, Value::StrongVec(vec![tagged("FilmCraft Effect", &x.effect)]));
+                        .with(pid::COMPONENT_USER_COMMENTS, Value::StrongVec(vec![tagged("Mortiflix Studio Effect", &x.effect)]));
                     if op == def::VIDEO_DISSOLVE {
                         *uses_varying = true;
                         let pts = [(0, 0), (1, 1)]
@@ -552,8 +552,8 @@ fn composition_mob(
     mob.with(pid::SLOTS, Value::StrongVec(slots)).with(
         pid::MOB_USER_COMMENTS,
         Value::StrongVec(vec![
-            tagged("FilmCraft Frame Size", &format!("{}x{}", comp.width, comp.height)),
-            tagged("FilmCraft Audio Sample Rate", &comp.sample_rate.to_string()),
+            tagged("Mortiflix Studio Frame Size", &format!("{}x{}", comp.width, comp.height)),
+            tagged("Mortiflix Studio Audio Sample Rate", &comp.sample_rate.to_string()),
         ]),
     )
 }

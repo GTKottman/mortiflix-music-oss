@@ -4,8 +4,8 @@
 
 use std::sync::Arc;
 
-use filmcraft_frame::{AudioBuffer, VideoFrame};
-use filmcraft_time::Tick;
+use mortiflix_frame::{AudioBuffer, VideoFrame};
+use mortiflix_time::Tick;
 
 use crate::reader::{MemReader, SharedReader, read_range};
 use crate::{AudioStreamInfo, FrameRequest, MediaError, MediaInfo, MediaKind, MediaSource, Result};
@@ -321,7 +321,7 @@ mod tests {
         bext[342..346].copy_from_slice(&((tr >> 32) as u32).to_le_bytes());
         let src = WavSource::parse("bwf.wav", with_chunk(&wav, b"bext", &bext).into()).unwrap();
         assert_eq!(src.time_reference(), Some(tr));
-        assert_eq!(src.info().frame_rate(), filmcraft_time::FrameRate::FPS_23_976);
+        assert_eq!(src.info().frame_rate(), mortiflix_time::FrameRate::FPS_23_976);
         assert_eq!(src.info().start_timecode, Some(86_400));
         assert_eq!(src.info().container, "Broadcast WAV");
         // the audio is unaffected

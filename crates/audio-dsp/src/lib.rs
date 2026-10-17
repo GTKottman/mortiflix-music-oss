@@ -1,4 +1,4 @@
-//! Real-time audio DSP for FilmCraft (layer L1, dependency-free, `wasm32` clean).
+//! Real-time audio DSP for Mortiflix Studio (layer L1, dependency-free, `wasm32` clean).
 //!
 //! * [`loudness`] — ITU-R BS.1770-4 / EBU R128 loudness meter (momentary, short-term,
 //!   integrated, loudness range, sample peak, true peak) and the loudness-normalisation helper.

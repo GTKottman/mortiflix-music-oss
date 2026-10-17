@@ -8,7 +8,7 @@
 
 use serde_json::{Value, json};
 
-use crate::FilmcraftApp;
+use crate::StudioApp;
 
 #[derive(Clone, Debug, PartialEq)]
 struct Draft {
@@ -24,7 +24,7 @@ fn draft_id() -> egui::Id {
 }
 
 /// Open the dialog for the selected remixed clip (the menu entry without parameters).
-pub fn open(app: &mut FilmcraftApp, ctx: &egui::Context) -> Result<Value, String> {
+pub fn open(app: &mut StudioApp, ctx: &egui::Context) -> Result<Value, String> {
     let v = app.session.execute("clip.remix.properties", json!({})).map_err(|e| e.to_string())?;
     let d = Draft {
         clip: v["clip"].as_u64().unwrap_or(0),
@@ -42,7 +42,7 @@ pub fn is_open(ctx: &egui::Context) -> bool {
     ctx.data(|m| m.get_temp::<Option<Draft>>(draft_id())).flatten().is_some()
 }
 
-pub fn show(app: &mut FilmcraftApp, ctx: &egui::Context) {
+pub fn show(app: &mut StudioApp, ctx: &egui::Context) {
     let Some(Some(mut d)) = ctx.data(|m| m.get_temp::<Option<Draft>>(draft_id())) else { return };
     crate::widgets::revert_drag_on_escape(ctx, egui::Id::new("remix-dialog-before-drag"), &mut d);
     let mut close = false;

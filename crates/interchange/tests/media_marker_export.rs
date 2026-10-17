@@ -2,13 +2,13 @@
 
 mod support;
 
-use filmcraft_interchange::{ExportOptions, Format, export, import};
-use filmcraft_project::{Label, Marker, MarkerId, MarkerKind, TrackKind};
-use filmcraft_time::{FrameRate, Tick};
+use mortiflix_interchange::{ExportOptions, Format, export, import};
+use mortiflix_project::{Label, Marker, MarkerId, MarkerKind, TrackKind};
+use mortiflix_time::{FrameRate, Tick};
 use support::*;
 
-fn project_with_media_marker(rate: FrameRate) -> (filmcraft_project::Project, filmcraft_project::ItemId) {
-    let mut p = filmcraft_project::Project::new("Markers");
+fn project_with_media_marker(rate: FrameRate) -> (mortiflix_project::Project, mortiflix_project::ItemId) {
+    let mut p = mortiflix_project::Project::new("Markers");
     let a = media(&mut p, "/m/src.mov", true, true, rate);
     if let Some(m) = p.item_mut(a).and_then(|i| i.as_media_mut()) {
         m.markers.push(Marker {

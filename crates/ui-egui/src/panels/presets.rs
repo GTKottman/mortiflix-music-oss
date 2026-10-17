@@ -8,14 +8,14 @@
 use egui::{Align2, Rect, Sense, pos2, vec2};
 use serde_json::json;
 
-use crate::FilmcraftApp;
+use crate::StudioApp;
 use crate::icons::{self, Icon};
 use crate::native_dialogs::FileDialog;
 use crate::state::SavePresetDraft;
 use crate::theme::Tokens;
 
 /// The rows of the Presets folder (inside the Effects panel's scroll area).
-pub fn folder_rows(app: &mut FilmcraftApp, ui: &mut egui::Ui, filter: &str) -> Option<(String, String)> {
+pub fn folder_rows(app: &mut StudioApp, ui: &mut egui::Ui, filter: &str) -> Option<(String, String)> {
     let t = app.tokens;
     let mut action = None;
     for p in app.session.presets.all() {
@@ -62,7 +62,7 @@ pub fn folder_rows(app: &mut FilmcraftApp, ui: &mut egui::Ui, filter: &str) -> O
 }
 
 /// Run a Presets-bin action.
-pub fn run(app: &mut FilmcraftApp, cmd: &str, name: &str) {
+pub fn run(app: &mut StudioApp, cmd: &str, name: &str) {
     let r = match cmd {
         "presets.apply" => app.session.execute(cmd, json!({"preset": name})),
         "presets.delete" => app.session.execute(cmd, json!({"name": name})),
@@ -93,11 +93,11 @@ pub fn run(app: &mut FilmcraftApp, cmd: &str, name: &str) {
 }
 
 /// Open the Save Preset dialog for effects of a clip.
-pub fn open_save(app: &mut FilmcraftApp, clip: u64, effects: Vec<usize>, name: &str) {
+pub fn open_save(app: &mut StudioApp, clip: u64, effects: Vec<usize>, name: &str) {
     app.ui.save_preset = Some(SavePresetDraft { clip, effects, name: name.to_string(), description: String::new(), keyframes: "scale".into() });
 }
 
-pub fn save_dialog(app: &mut FilmcraftApp, ctx: &egui::Context) {
+pub fn save_dialog(app: &mut StudioApp, ctx: &egui::Context) {
     let Some(mut d) = app.ui.save_preset.clone() else { return };
     let mut open = true;
     let mut close = false;

@@ -1,4 +1,4 @@
-//! Paste files and images from the system clipboard (#611): the real `FilmcraftApp` under
+//! Paste files and images from the system clipboard (#611): the real `StudioApp` under
 //! `egui_kittest`, with a stand-in for the desktop app's clipboard hook.
 
 use std::cell::Cell;
@@ -6,13 +6,13 @@ use std::rc::Rc;
 use std::sync::mpsc::{Sender, channel};
 
 use egui_kittest::Harness;
-use filmcraft_engine::Session;
-use filmcraft_ui_egui::control::ControlRequest;
-use filmcraft_ui_egui::{ClipboardMedia, FilmcraftApp};
+use mortiflix_engine::Session;
+use mortiflix_ui_egui::control::ControlRequest;
+use mortiflix_ui_egui::{ClipboardMedia, StudioApp};
 use serde_json::{Value, json};
 
 struct Driver {
-    harness: Harness<'static, FilmcraftApp>,
+    harness: Harness<'static, StudioApp>,
     tx: Sender<ControlRequest>,
     dir: std::path::PathBuf,
 }
@@ -20,14 +20,14 @@ struct Driver {
 impl Driver {
     /// The demo project saved (in name) in a fresh folder, so pasted images are written there.
     fn demo(name: &str) -> Self {
-        let dir = std::env::temp_dir().join(format!("filmcraft-clipboard-{name}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("mortiflix-studio-clipboard-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let mut session = Session::default();
         session.execute("file.openDemoProject", json!({})).expect("demo project");
         session.path = Some(dir.join("film.fcproj").to_string_lossy().into_owned());
         let (tx, rx) = channel();
-        let app = FilmcraftApp::new(session).with_control(rx);
+        let app = StudioApp::new(session).with_control(rx);
         let harness = Harness::builder().with_size(egui::vec2(1600.0, 980.0)).with_max_steps(10_000).build_eframe(move |_cc| app);
         let mut d = Driver { harness, tx, dir };
         d.frames(4);
@@ -57,7 +57,7 @@ impl Driver {
         panic!("no reply to {method} {params}");
     }
 
-    fn app(&mut self) -> &mut FilmcraftApp {
+    fn app(&mut self) -> &mut StudioApp {
         self.harness.state_mut()
     }
 
@@ -175,7 +175,7 @@ fn ctrl_v_in_the_project_panel_imports() {
     assert!(d.app().session.project.items.values().any(|i| i.name == "Pasted Image 1.png"));
 }
 
-/// With nothing but clips copied in FilmCraft, Ctrl+V pastes the clips as before, also when the
+/// With nothing but clips copied in Mortiflix Studio, Ctrl+V pastes the clips as before, also when the
 /// system clipboard holds no text at all. A plain V press and release (the Selection tool) pastes
 /// nothing and doesn't read the clipboard.
 #[test]

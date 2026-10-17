@@ -2,8 +2,8 @@
 
 mod common;
 
-use filmcraft_bitstream::annexb_nals;
-use filmcraft_h264::Decoder;
+use mortiflix_bitstream::annexb_nals;
+use mortiflix_h264::Decoder;
 
 /// Build an avcC record and length-prefixed samples from an Annex-B stream.
 fn to_avcc(data: &[u8]) -> (Vec<u8>, Vec<Vec<u8>>) {

@@ -1,6 +1,6 @@
 //! Text-based editing: the sequence transcript and the edits made through it.
 //!
-//! Clip transcripts (`filmcraft_project::Transcript`) hold words in **media time**. The sequence
+//! Clip transcripts (`mortiflix_project::Transcript`) hold words in **media time**. The sequence
 //! transcript ([`sequence_words`]) maps them through the audio track items that play them:
 //!
 //! - audio tracks are read top first (A1, A2…); a word is taken from the first track whose
@@ -18,8 +18,8 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use filmcraft_project::{Caption, ClipId, ItemId, Sequence, TrackId, Transcript};
-use filmcraft_time::{FrameRate, TICKS_PER_SECOND, Tick, TimeRange};
+use mortiflix_project::{Caption, ClipId, ItemId, Sequence, TrackId, Transcript};
+use mortiflix_time::{FrameRate, TICKS_PER_SECOND, Tick, TimeRange};
 
 use crate::EditCtx;
 
@@ -43,7 +43,7 @@ pub struct SeqWord {
 
 impl SeqWord {
     pub fn normalized(&self) -> String {
-        filmcraft_project::transcript::normalize_word(&self.text)
+        mortiflix_project::transcript::normalize_word(&self.text)
     }
     pub fn range(&self) -> TimeRange {
         TimeRange::from_bounds(self.start, self.end.max(self.start))
@@ -126,7 +126,7 @@ pub fn paragraphs(words: &[SeqWord], gap: Tick) -> Vec<std::ops::Range<usize>> {
 /// Matches of `query` (one or more words, case and punctuation ignored; the last query word may be
 /// a prefix) as word index ranges.
 pub fn search(words: &[SeqWord], query: &str) -> Vec<std::ops::Range<usize>> {
-    let q: Vec<String> = query.split_whitespace().map(filmcraft_project::transcript::normalize_word).filter(|s| !s.is_empty()).collect();
+    let q: Vec<String> = query.split_whitespace().map(mortiflix_project::transcript::normalize_word).filter(|s| !s.is_empty()).collect();
     if q.is_empty() {
         return Vec::new();
     }
@@ -199,7 +199,7 @@ pub fn find_fillers(words: &[SeqWord], fillers: &[String]) -> Vec<std::ops::Rang
     let norm: Vec<String> = words.iter().map(SeqWord::normalized).collect();
     let mut phrases: Vec<Vec<String>> = fillers
         .iter()
-        .map(|f| f.split_whitespace().map(filmcraft_project::transcript::normalize_word).filter(|s| !s.is_empty()).collect::<Vec<_>>())
+        .map(|f| f.split_whitespace().map(mortiflix_project::transcript::normalize_word).filter(|s| !s.is_empty()).collect::<Vec<_>>())
         .filter(|p| !p.is_empty())
         .collect();
     // longest phrases first, so "you know" wins over a lone "you"

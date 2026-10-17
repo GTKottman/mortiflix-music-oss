@@ -3,8 +3,8 @@
 
 use std::path::Path;
 
-use filmcraft_frame::PixelData;
-use filmcraft_media::FrameRequest;
+use mortiflix_frame::PixelData;
+use mortiflix_media::FrameRequest;
 
 const W: usize = 70; // 8..=32767, so scan lines may use the new run-length form
 const H: usize = 9;
@@ -59,7 +59,7 @@ fn write(path: &Path, res: &str, body: &[u8]) {
 }
 
 fn check(ff: &Path, name: &str, res: &str, body: &[u8]) {
-    let dir = filmcraft_testkit::fixtures::fixtures_dir("media/hdr");
+    let dir = mortiflix_testkit::fixtures::fixtures_dir("media/hdr");
     let path = dir.join(name);
     write(&path, res, body);
     let out = std::process::Command::new(ff).args(["-v", "error", "-i"]).arg(&path).args(["-f", "rawvideo", "-pix_fmt", "gbrpf32le", "-"]).output().unwrap();
@@ -68,8 +68,8 @@ fn check(ff: &Path, name: &str, res: &str, body: &[u8]) {
     let n = W * H;
     assert_eq!(v.len(), 3 * n, "{name}: ffmpeg frame size");
 
-    let src = filmcraft_media::open_bytes(name, std::fs::read(&path).unwrap().into(), &[]).unwrap();
-    let f = src.video_frame(FrameRequest::full(filmcraft_time::Tick::ZERO)).unwrap();
+    let src = mortiflix_media::open_bytes(name, std::fs::read(&path).unwrap().into(), &[]).unwrap();
+    let f = src.video_frame(FrameRequest::full(mortiflix_time::Tick::ZERO)).unwrap();
     assert_eq!((f.width as usize, f.height as usize), (W, H));
     let PixelData::RgbaF32(p) = &f.data else { panic!("HDR frames are float") };
     let mut worst = 0f32;
@@ -87,7 +87,7 @@ fn check(ff: &Path, name: &str, res: &str, body: &[u8]) {
 
 #[test]
 fn matches_ffmpeg() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let pic = picture();
     let rows: Vec<&[[u8; 4]]> = pic.chunks(W).collect();
     let flat: Vec<u8> = pic.iter().flatten().copied().collect();

@@ -15,7 +15,7 @@
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 
-use filmcraft_frame::{PixelData, VideoFrame};
+use mortiflix_frame::{PixelData, VideoFrame};
 
 use crate::video::{DecodedFrame, VideoDecoder};
 
@@ -240,20 +240,20 @@ pub(crate) fn set_alpha(frame: &mut VideoFrame, a: &VideoFrame) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use filmcraft_frame::Chroma;
+    use mortiflix_frame::Chroma;
 
     fn yuv8(w: u32, h: u32, luma: Vec<u8>) -> VideoFrame {
         let n = (w * h) as usize;
         let c = n / 4;
         let data = PixelData::Yuv8 { planes: [Arc::new(luma), Arc::new(vec![128; c]), Arc::new(vec![128; c])], chroma: Chroma::C420, alpha: None };
-        VideoFrame { width: w, height: h, data, color: Default::default(), par: (1, 1), pts: filmcraft_time::Tick::ZERO }
+        VideoFrame { width: w, height: h, data, color: Default::default(), par: (1, 1), pts: mortiflix_time::Tick::ZERO }
     }
 
     fn yuv16(w: u32, h: u32, bits: u32) -> VideoFrame {
         let n = (w * h) as usize;
         let data =
             PixelData::Yuv16 { planes: [Arc::new(vec![0; n]), Arc::new(vec![0; n / 4]), Arc::new(vec![0; n / 4])], chroma: Chroma::C420, bits, alpha: None };
-        VideoFrame { width: w, height: h, data, color: Default::default(), par: (1, 1), pts: filmcraft_time::Tick::ZERO }
+        VideoFrame { width: w, height: h, data, color: Default::default(), par: (1, 1), pts: mortiflix_time::Tick::ZERO }
     }
 
     #[test]

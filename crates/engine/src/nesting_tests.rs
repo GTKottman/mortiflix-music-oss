@@ -2,8 +2,8 @@
 //! command is asked to put it there, and Nest… keeps what was selected.
 
 use super::*;
-use filmcraft_project::TrackKind;
-use filmcraft_time::TimeRange;
+use mortiflix_project::TrackKind;
+use mortiflix_time::TimeRange;
 use serde_json::json;
 
 fn demo() -> Session {
@@ -87,7 +87,7 @@ fn a_project_opened_with_a_cycle_can_still_be_edited_and_repaired() {
     // what a damaged project file would hold: the sequence on its own track
     let mut p = (*s.project).clone();
     let rate = p.sequence(a).unwrap().settings.frame_rate;
-    let it = p.make_track_item(a, TrackKind::Video, Tick(900 * filmcraft_time::TICKS_PER_SECOND), TimeRange::new(Tick::ZERO, rate.tick_of(24)), rate).unwrap();
+    let it = p.make_track_item(a, TrackKind::Video, Tick(900 * mortiflix_time::TICKS_PER_SECOND), TimeRange::new(Tick::ZERO, rate.tick_of(24)), rate).unwrap();
     let bad = it.id;
     p.sequence_mut(a).unwrap().video_tracks[0].items.push(it);
     s.project = Arc::new(p);
@@ -104,17 +104,17 @@ fn a_project_opened_with_a_cycle_can_still_be_edited_and_repaired() {
 }
 
 /// The first V1 transition that joins two clips: (transition, outgoing clip, incoming clip).
-fn joining_transition(s: &Session) -> (filmcraft_project::Transition, ClipId, ClipId) {
+fn joining_transition(s: &Session) -> (mortiflix_project::Transition, ClipId, ClipId) {
     let v1 = &s.active_sequence().unwrap().video_tracks[0];
     let t = v1.transitions.iter().find(|t| t.from.is_some() && t.to.is_some()).expect("the demo has a transition between two clips").clone();
     let (from, to) = (t.from.unwrap(), t.to.unwrap());
     (t, from, to)
 }
 
-fn frame_at(s: &Session, t: Tick) -> filmcraft_render::Image {
+fn frame_at(s: &Session, t: Tick) -> mortiflix_render::Image {
     let provider = s.media.full_res_provider(s.project.clone(), s.services.clone());
-    let opts = filmcraft_render::RenderOptions { scale: 0.25, ..Default::default() };
-    filmcraft_render::render_sequence(&s.project, s.state.active_sequence.unwrap(), t, opts, &provider)
+    let opts = mortiflix_render::RenderOptions { scale: 0.25, ..Default::default() };
+    mortiflix_render::render_sequence(&s.project, s.state.active_sequence.unwrap(), t, opts, &provider)
 }
 
 #[test]
@@ -124,7 +124,7 @@ fn nest_keeps_transitions_track_names_and_channel_layouts() {
     s.edit_sequence("setup", |q, _, _| {
         q.video_tracks[0].name = "Picture".into();
         q.audio_tracks[0].name = "Dialogue".into();
-        q.audio_tracks[0].channels = filmcraft_project::AudioChannels::Mono;
+        q.audio_tracks[0].channels = mortiflix_project::AudioChannels::Mono;
         Ok(())
     })
     .unwrap();
@@ -150,7 +150,7 @@ fn nest_keeps_transitions_track_names_and_channel_layouts() {
     // tracks are laid out like the parent's
     assert_eq!(q.video_tracks[0].name, "Picture");
     assert_eq!(q.audio_tracks[0].name, "Dialogue");
-    assert_eq!(q.audio_tracks[0].channels, filmcraft_project::AudioChannels::Mono);
+    assert_eq!(q.audio_tracks[0].channels, mortiflix_project::AudioChannels::Mono);
     // and there are only as many as the nested clips need (Premiere: V1 + A1 here, not the parent's three each)
     assert_eq!((q.video_tracks.len(), q.audio_tracks.len()), (1, 1));
     // the parent no longer holds the transition, and shows the same picture through the nest
@@ -186,15 +186,15 @@ fn nest_two(s: &mut Session) -> (ItemId, ClipId, [(ClipId, Tick); 2]) {
     (nested, nest, pair)
 }
 
-fn nest_clip(s: &Session, id: ClipId) -> filmcraft_project::TrackItem {
+fn nest_clip(s: &Session, id: ClipId) -> mortiflix_project::TrackItem {
     s.active_sequence().unwrap().find_item(id).unwrap().1.clone()
 }
 
-fn mix_at(s: &Session, t: Tick, frames: usize) -> filmcraft_frame::AudioBuffer {
+fn mix_at(s: &Session, t: Tick, frames: usize) -> mortiflix_frame::AudioBuffer {
     let q = s.active_sequence().unwrap();
     let sr = q.settings.sample_rate as i64;
     let provider = s.media.full_res_provider(s.project.clone(), s.services.clone());
-    filmcraft_render::audio::mix_sequence(&s.project, q, t.to_units_floor(sr), frames, &provider)
+    mortiflix_render::audio::mix_sequence(&s.project, q, t.to_units_floor(sr), frames, &provider)
 }
 
 #[test]
@@ -307,7 +307,7 @@ fn after_nest_nothing_is_selected_and_the_new_sequence_is_selected_in_the_projec
 }
 
 /// Move the sound of V1 clip `n` alone to audio track `track` ("A3"), keeping its time.
-fn move_sound(s: &mut Session, n: usize, track: &str) -> (filmcraft_project::TrackItem, filmcraft_project::TrackItem) {
+fn move_sound(s: &mut Session, n: usize, track: &str) -> (mortiflix_project::TrackItem, mortiflix_project::TrackItem) {
     let q = s.active_sequence().unwrap();
     let picture = q.video_tracks[0].items[n].clone();
     let sound = q.all_tracks().flat_map(|t| t.items.iter()).find(|i| i.id != picture.id && i.link == picture.link).unwrap().clone();
@@ -394,7 +394,7 @@ fn a_nest_whose_sound_track_is_taken_is_picture_only_and_moves_up_a_video_track(
         let v1 = &s.active_sequence().unwrap().video_tracks[0].items;
         (v1[0].clone(), v1[1].clone(), v1[2].clone())
     };
-    let sounds: Vec<filmcraft_project::TrackItem> =
+    let sounds: Vec<mortiflix_project::TrackItem> =
         s.active_sequence().unwrap().audio_tracks[0].items.iter().filter(|i| i.link == first.link || i.link == third.link).cloned().collect();
     let before = (*s.project).clone();
     let (nested, clips) = nest_of(&mut s, &[first.id, third.id], "Around");

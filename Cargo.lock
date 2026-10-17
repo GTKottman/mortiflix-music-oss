@@ -1694,742 +1694,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "filmcraft"
-version = "0.8.0"
-dependencies = [
- "arboard",
- "chrono",
- "cpal",
- "eframe",
- "egui",
- "filmcraft-engine",
- "filmcraft-export",
- "filmcraft-gpu",
- "filmcraft-mortiflix-ui",
- "filmcraft-platform",
- "filmcraft-project",
- "filmcraft-render",
- "filmcraft-time",
- "filmcraft-ui-egui",
- "glob",
- "log",
- "muda",
- "objc2 0.6.4",
- "objc2-app-kit 0.3.2",
- "objc2-foundation 0.3.2",
- "open",
- "pollster 0.4.0",
- "rfd",
- "serde_json",
- "sys-locale",
- "winit",
- "winresource",
- "zbus",
-]
-
-[[package]]
-name = "filmcraft-aac"
-version = "0.8.0"
-dependencies = [
- "filmcraft-bitstream",
- "filmcraft-testkit",
- "rayon",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "filmcraft-ac3"
-version = "0.8.0"
-dependencies = [
- "filmcraft-testkit",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "filmcraft-apv"
-version = "0.8.0"
-dependencies = [
- "filmcraft-bitstream",
- "filmcraft-testkit",
- "rayon",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "filmcraft-audio-dsp"
-version = "0.8.0"
-dependencies = [
- "filmcraft-testkit",
-]
-
-[[package]]
-name = "filmcraft-automation"
-version = "0.8.0"
-dependencies = [
- "base64 0.22.1",
- "filmcraft-engine",
- "filmcraft-time",
- "image",
- "rmcp",
- "schemars",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "tokio",
-]
-
-[[package]]
-name = "filmcraft-av1"
-version = "0.8.0"
-dependencies = [
- "filmcraft-bitstream",
- "filmcraft-testkit",
- "rayon",
- "rustix 1.1.5",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "filmcraft-avi"
-version = "0.8.0"
-dependencies = [
- "filmcraft-testkit",
-]
-
-[[package]]
-name = "filmcraft-bitstream"
-version = "0.8.0"
-dependencies = [
- "proptest",
-]
-
-[[package]]
-name = "filmcraft-captions"
-version = "0.8.0"
-dependencies = [
- "filmcraft-color",
- "filmcraft-project",
- "filmcraft-text",
- "filmcraft-time",
- "proptest",
- "roxmltree 0.21.1",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "filmcraft-cfb"
-version = "0.8.0"
-
-[[package]]
-name = "filmcraft-cli"
-version = "0.8.0"
-dependencies = [
- "filmcraft-automation",
- "filmcraft-codecs",
- "filmcraft-engine",
- "filmcraft-export",
- "filmcraft-gpu",
- "filmcraft-media",
- "filmcraft-mpegts",
- "filmcraft-mxf",
- "filmcraft-ogg",
- "filmcraft-platform",
- "filmcraft-project",
- "filmcraft-render",
- "filmcraft-testkit",
- "filmcraft-time",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "filmcraft-codecs"
-version = "0.8.0"
-dependencies = [
- "filmcraft-aac",
- "filmcraft-ac3",
- "filmcraft-apv",
- "filmcraft-av1",
- "filmcraft-avi",
- "filmcraft-bitstream",
- "filmcraft-color",
- "filmcraft-dnx",
- "filmcraft-frame",
- "filmcraft-h264",
- "filmcraft-hevc",
- "filmcraft-isobmff",
- "filmcraft-matroska",
- "filmcraft-media",
- "filmcraft-mpa",
- "filmcraft-mpeg2v",
- "filmcraft-mpegts",
- "filmcraft-mxf",
- "filmcraft-ogg",
- "filmcraft-opus",
- "filmcraft-prores",
- "filmcraft-testkit",
- "filmcraft-time",
- "filmcraft-vp8",
- "filmcraft-vp9",
- "image",
- "log",
- "rayon",
- "serde_json",
- "symphonia",
- "thiserror 2.0.21",
- "web-time",
-]
-
-[[package]]
-name = "filmcraft-color"
-version = "0.8.0"
-dependencies = [
- "proptest",
- "serde",
-]
-
-[[package]]
-name = "filmcraft-dng"
-version = "0.8.0"
-dependencies = [
- "filmcraft-dng",
- "rayon",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "filmcraft-dnx"
-version = "0.8.0"
-dependencies = [
- "filmcraft-bitstream",
- "filmcraft-testkit",
- "rayon",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "filmcraft-edit"
-version = "0.8.0"
-dependencies = [
- "filmcraft-geom",
- "filmcraft-media",
- "filmcraft-project",
- "filmcraft-time",
- "proptest",
- "serde_json",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "filmcraft-engine"
-version = "0.8.0"
-dependencies = [
- "filmcraft-audio-dsp",
- "filmcraft-captions",
- "filmcraft-codecs",
- "filmcraft-color",
- "filmcraft-dng",
- "filmcraft-edit",
- "filmcraft-export",
- "filmcraft-format",
- "filmcraft-frame",
- "filmcraft-geom",
- "filmcraft-interchange",
- "filmcraft-isobmff",
- "filmcraft-media",
- "filmcraft-mxf",
- "filmcraft-project",
- "filmcraft-render",
- "filmcraft-scopes",
- "filmcraft-speech",
- "filmcraft-testkit",
- "filmcraft-text",
- "filmcraft-time",
- "filmcraft-tts",
- "image",
- "log",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "web-time",
-]
-
-[[package]]
-name = "filmcraft-export"
-version = "0.8.0"
-dependencies = [
- "filmcraft-aac",
- "filmcraft-apv",
- "filmcraft-audio-dsp",
- "filmcraft-codecs",
- "filmcraft-color",
- "filmcraft-dnx",
- "filmcraft-flac",
- "filmcraft-frame",
- "filmcraft-geom",
- "filmcraft-h264enc",
- "filmcraft-isobmff",
- "filmcraft-media",
- "filmcraft-mxf",
- "filmcraft-project",
- "filmcraft-prores",
- "filmcraft-render",
- "filmcraft-testkit",
- "filmcraft-text",
- "filmcraft-time",
- "image",
- "rayon",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "web-time",
-]
-
-[[package]]
-name = "filmcraft-flac"
-version = "0.8.0"
-dependencies = [
- "filmcraft-bitstream",
- "filmcraft-testkit",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "filmcraft-format"
-version = "0.8.0"
-dependencies = [
- "filmcraft-media",
- "filmcraft-project",
- "filmcraft-time",
- "log",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "filmcraft-frame"
-version = "0.8.0"
-dependencies = [
- "filmcraft-color",
- "filmcraft-time",
- "rayon",
- "serde",
-]
-
-[[package]]
-name = "filmcraft-geom"
-version = "0.8.0"
-dependencies = [
- "proptest",
- "serde",
-]
-
-[[package]]
-name = "filmcraft-golden"
-version = "0.8.0"
-dependencies = [
- "filmcraft-color",
- "filmcraft-frame",
- "filmcraft-geom",
- "filmcraft-gpu",
- "filmcraft-media",
- "filmcraft-project",
- "filmcraft-render",
- "filmcraft-testkit",
- "filmcraft-time",
- "pollster 0.4.0",
- "wgpu",
-]
-
-[[package]]
-name = "filmcraft-gpu"
-version = "0.8.0"
-dependencies = [
- "filmcraft-color",
- "filmcraft-export",
- "filmcraft-frame",
- "filmcraft-geom",
- "filmcraft-media",
- "filmcraft-project",
- "filmcraft-render",
- "filmcraft-time",
- "image",
- "log",
- "pollster 0.4.0",
- "rayon",
- "wgpu",
-]
-
-[[package]]
-name = "filmcraft-h264"
-version = "0.8.0"
-dependencies = [
- "filmcraft-bitstream",
- "filmcraft-testkit",
- "rayon",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "filmcraft-h264enc"
-version = "0.8.0"
-dependencies = [
- "filmcraft-bitstream",
- "filmcraft-testkit",
- "rayon",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "filmcraft-hevc"
-version = "0.8.0"
-dependencies = [
- "filmcraft-bitstream",
- "filmcraft-testkit",
- "rayon",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "filmcraft-interchange"
-version = "0.8.0"
-dependencies = [
- "filmcraft-cfb",
- "filmcraft-color",
- "filmcraft-geom",
- "filmcraft-media",
- "filmcraft-project",
- "filmcraft-time",
- "proptest",
- "roxmltree 0.21.1",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "filmcraft-isobmff"
-version = "0.8.0"
-dependencies = [
- "filmcraft-bitstream",
- "filmcraft-testkit",
- "proptest",
- "serde_json",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "filmcraft-matroska"
-version = "0.8.0"
-dependencies = [
- "filmcraft-testkit",
- "serde_json",
-]
-
-[[package]]
-name = "filmcraft-media"
-version = "0.8.0"
-dependencies = [
- "filmcraft-color",
- "filmcraft-dng",
- "filmcraft-frame",
- "filmcraft-testkit",
- "filmcraft-time",
- "image",
- "png 0.18.1",
- "rayon",
- "serde",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "filmcraft-mortiflix-ui"
-version = "0.8.0"
-dependencies = [
- "egui",
- "image",
- "log",
- "resvg",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "filmcraft-mpa"
-version = "0.8.0"
-dependencies = [
- "filmcraft-bitstream",
- "filmcraft-testkit",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "filmcraft-mpeg2v"
-version = "0.8.0"
-dependencies = [
- "filmcraft-testkit",
- "rayon",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "filmcraft-mpegts"
-version = "0.8.0"
-dependencies = [
- "filmcraft-testkit",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "filmcraft-mxf"
-version = "0.8.0"
-dependencies = [
- "filmcraft-testkit",
-]
-
-[[package]]
-name = "filmcraft-ogg"
-version = "0.8.0"
-dependencies = [
- "filmcraft-testkit",
-]
-
-[[package]]
-name = "filmcraft-opus"
-version = "0.8.0"
-dependencies = [
- "filmcraft-testkit",
-]
-
-[[package]]
-name = "filmcraft-platform"
-version = "0.8.0"
-dependencies = [
- "filmcraft-bitstream",
- "filmcraft-codecs",
- "filmcraft-color",
- "filmcraft-export",
- "filmcraft-frame",
- "filmcraft-h264",
- "filmcraft-hevc",
- "filmcraft-isobmff",
- "filmcraft-media",
- "filmcraft-project",
- "filmcraft-render",
- "filmcraft-testkit",
- "filmcraft-time",
- "libloading",
- "log",
- "objc2-core-foundation",
- "objc2-core-media",
- "objc2-core-video",
- "objc2-video-toolbox",
- "windows 0.62.2",
-]
-
-[[package]]
-name = "filmcraft-project"
-version = "0.8.0"
-dependencies = [
- "filmcraft-color",
- "filmcraft-geom",
- "filmcraft-media",
- "filmcraft-time",
- "proptest",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "filmcraft-prores"
-version = "0.8.0"
-dependencies = [
- "filmcraft-bitstream",
- "filmcraft-testkit",
- "rayon",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "filmcraft-render"
-version = "0.8.0"
-dependencies = [
- "filmcraft-audio-dsp",
- "filmcraft-captions",
- "filmcraft-color",
- "filmcraft-frame",
- "filmcraft-geom",
- "filmcraft-media",
- "filmcraft-project",
- "filmcraft-text",
- "filmcraft-time",
- "image",
- "rayon",
- "rustix 1.1.5",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "filmcraft-scopes"
-version = "0.8.0"
-dependencies = [
- "filmcraft-color",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "filmcraft-speech"
-version = "0.8.0"
-dependencies = [
- "candle-core",
- "candle-nn",
- "filmcraft-project",
- "filmcraft-time",
- "rayon",
- "rustls",
- "rustls-rustcrypto",
- "serde",
- "serde_json",
- "sha2",
- "thiserror 2.0.21",
- "ureq",
-]
-
-[[package]]
-name = "filmcraft-testkit"
-version = "0.8.0"
-dependencies = [
- "png 0.18.1",
-]
-
-[[package]]
-name = "filmcraft-text"
-version = "0.8.0"
-dependencies = [
- "filmcraft-color",
- "harfrust",
- "skrifa",
- "unicode-bidi",
- "unicode-linebreak",
- "unicode-segmentation",
-]
-
-[[package]]
-name = "filmcraft-time"
-version = "0.8.0"
-dependencies = [
- "proptest",
- "serde",
-]
-
-[[package]]
-name = "filmcraft-tts"
-version = "0.8.0"
-dependencies = [
- "candle-core",
- "candle-nn",
- "filmcraft-audio-dsp",
- "filmcraft-tts-text",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "zip",
-]
-
-[[package]]
-name = "filmcraft-tts-text"
-version = "0.8.0"
-dependencies = [
- "serde",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "filmcraft-ui-egui"
-version = "0.8.0"
-dependencies = [
- "cpu-time",
- "craft-ui",
- "eframe",
- "egui",
- "egui_kittest",
- "filmcraft-audio-dsp",
- "filmcraft-codecs",
- "filmcraft-color",
- "filmcraft-edit",
- "filmcraft-engine",
- "filmcraft-export",
- "filmcraft-frame",
- "filmcraft-geom",
- "filmcraft-gpu",
- "filmcraft-interchange",
- "filmcraft-media",
- "filmcraft-mortiflix-ui",
- "filmcraft-platform",
- "filmcraft-project",
- "filmcraft-render",
- "filmcraft-scopes",
- "filmcraft-speech",
- "filmcraft-text",
- "filmcraft-time",
- "filmcraft-tts",
- "image",
- "log",
- "pollster 0.4.0",
- "rayon",
- "rustix 1.1.5",
- "serde",
- "serde_json",
- "toml 1.1.6+spec-1.1.0",
- "unicode-bidi",
- "web-time",
-]
-
-[[package]]
-name = "filmcraft-vp8"
-version = "0.8.0"
-dependencies = [
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "filmcraft-vp9"
-version = "0.8.0"
-dependencies = [
- "filmcraft-bitstream",
- "rayon",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "filmcraft-web"
-version = "0.8.0"
-dependencies = [
- "eframe",
- "egui",
- "filmcraft-codecs",
- "filmcraft-color",
- "filmcraft-engine",
- "filmcraft-format",
- "filmcraft-frame",
- "filmcraft-isobmff",
- "filmcraft-media",
- "filmcraft-time",
- "filmcraft-ui-egui",
- "js-sys",
- "log",
- "serde_json",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
- "web-time",
-]
-
-[[package]]
 name = "find-msvc-tools"
 version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3701,6 +2965,742 @@ dependencies = [
  "libc",
  "wasi",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "mortiflix-aac"
+version = "0.8.0"
+dependencies = [
+ "mortiflix-bitstream",
+ "mortiflix-testkit",
+ "rayon",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "mortiflix-ac3"
+version = "0.8.0"
+dependencies = [
+ "mortiflix-testkit",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "mortiflix-apv"
+version = "0.8.0"
+dependencies = [
+ "mortiflix-bitstream",
+ "mortiflix-testkit",
+ "rayon",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "mortiflix-audio-dsp"
+version = "0.8.0"
+dependencies = [
+ "mortiflix-testkit",
+]
+
+[[package]]
+name = "mortiflix-automation"
+version = "0.8.0"
+dependencies = [
+ "base64 0.22.1",
+ "image",
+ "mortiflix-engine",
+ "mortiflix-time",
+ "rmcp",
+ "schemars",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+]
+
+[[package]]
+name = "mortiflix-av1"
+version = "0.8.0"
+dependencies = [
+ "mortiflix-bitstream",
+ "mortiflix-testkit",
+ "rayon",
+ "rustix 1.1.5",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "mortiflix-avi"
+version = "0.8.0"
+dependencies = [
+ "mortiflix-testkit",
+]
+
+[[package]]
+name = "mortiflix-bitstream"
+version = "0.8.0"
+dependencies = [
+ "proptest",
+]
+
+[[package]]
+name = "mortiflix-captions"
+version = "0.8.0"
+dependencies = [
+ "mortiflix-color",
+ "mortiflix-project",
+ "mortiflix-text",
+ "mortiflix-time",
+ "proptest",
+ "roxmltree 0.21.1",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "mortiflix-cfb"
+version = "0.8.0"
+
+[[package]]
+name = "mortiflix-codecs"
+version = "0.8.0"
+dependencies = [
+ "image",
+ "log",
+ "mortiflix-aac",
+ "mortiflix-ac3",
+ "mortiflix-apv",
+ "mortiflix-av1",
+ "mortiflix-avi",
+ "mortiflix-bitstream",
+ "mortiflix-color",
+ "mortiflix-dnx",
+ "mortiflix-frame",
+ "mortiflix-h264",
+ "mortiflix-hevc",
+ "mortiflix-isobmff",
+ "mortiflix-matroska",
+ "mortiflix-media",
+ "mortiflix-mpa",
+ "mortiflix-mpeg2v",
+ "mortiflix-mpegts",
+ "mortiflix-mxf",
+ "mortiflix-ogg",
+ "mortiflix-opus",
+ "mortiflix-prores",
+ "mortiflix-testkit",
+ "mortiflix-time",
+ "mortiflix-vp8",
+ "mortiflix-vp9",
+ "rayon",
+ "serde_json",
+ "symphonia",
+ "thiserror 2.0.21",
+ "web-time",
+]
+
+[[package]]
+name = "mortiflix-color"
+version = "0.8.0"
+dependencies = [
+ "proptest",
+ "serde",
+]
+
+[[package]]
+name = "mortiflix-dng"
+version = "0.8.0"
+dependencies = [
+ "mortiflix-dng",
+ "rayon",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "mortiflix-dnx"
+version = "0.8.0"
+dependencies = [
+ "mortiflix-bitstream",
+ "mortiflix-testkit",
+ "rayon",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "mortiflix-edit"
+version = "0.8.0"
+dependencies = [
+ "mortiflix-geom",
+ "mortiflix-media",
+ "mortiflix-project",
+ "mortiflix-time",
+ "proptest",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "mortiflix-engine"
+version = "0.8.0"
+dependencies = [
+ "image",
+ "log",
+ "mortiflix-audio-dsp",
+ "mortiflix-captions",
+ "mortiflix-codecs",
+ "mortiflix-color",
+ "mortiflix-dng",
+ "mortiflix-edit",
+ "mortiflix-export",
+ "mortiflix-format",
+ "mortiflix-frame",
+ "mortiflix-geom",
+ "mortiflix-interchange",
+ "mortiflix-isobmff",
+ "mortiflix-media",
+ "mortiflix-mxf",
+ "mortiflix-project",
+ "mortiflix-render",
+ "mortiflix-scopes",
+ "mortiflix-speech",
+ "mortiflix-testkit",
+ "mortiflix-text",
+ "mortiflix-time",
+ "mortiflix-tts",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "web-time",
+]
+
+[[package]]
+name = "mortiflix-export"
+version = "0.8.0"
+dependencies = [
+ "image",
+ "mortiflix-aac",
+ "mortiflix-apv",
+ "mortiflix-audio-dsp",
+ "mortiflix-codecs",
+ "mortiflix-color",
+ "mortiflix-dnx",
+ "mortiflix-flac",
+ "mortiflix-frame",
+ "mortiflix-geom",
+ "mortiflix-h264enc",
+ "mortiflix-isobmff",
+ "mortiflix-media",
+ "mortiflix-mxf",
+ "mortiflix-project",
+ "mortiflix-prores",
+ "mortiflix-render",
+ "mortiflix-testkit",
+ "mortiflix-text",
+ "mortiflix-time",
+ "rayon",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "web-time",
+]
+
+[[package]]
+name = "mortiflix-flac"
+version = "0.8.0"
+dependencies = [
+ "mortiflix-bitstream",
+ "mortiflix-testkit",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "mortiflix-format"
+version = "0.8.0"
+dependencies = [
+ "log",
+ "mortiflix-media",
+ "mortiflix-project",
+ "mortiflix-time",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "mortiflix-frame"
+version = "0.8.0"
+dependencies = [
+ "mortiflix-color",
+ "mortiflix-time",
+ "rayon",
+ "serde",
+]
+
+[[package]]
+name = "mortiflix-geom"
+version = "0.8.0"
+dependencies = [
+ "proptest",
+ "serde",
+]
+
+[[package]]
+name = "mortiflix-golden"
+version = "0.8.0"
+dependencies = [
+ "mortiflix-color",
+ "mortiflix-frame",
+ "mortiflix-geom",
+ "mortiflix-gpu",
+ "mortiflix-media",
+ "mortiflix-project",
+ "mortiflix-render",
+ "mortiflix-testkit",
+ "mortiflix-time",
+ "pollster 0.4.0",
+ "wgpu",
+]
+
+[[package]]
+name = "mortiflix-gpu"
+version = "0.8.0"
+dependencies = [
+ "image",
+ "log",
+ "mortiflix-color",
+ "mortiflix-export",
+ "mortiflix-frame",
+ "mortiflix-geom",
+ "mortiflix-media",
+ "mortiflix-project",
+ "mortiflix-render",
+ "mortiflix-time",
+ "pollster 0.4.0",
+ "rayon",
+ "wgpu",
+]
+
+[[package]]
+name = "mortiflix-h264"
+version = "0.8.0"
+dependencies = [
+ "mortiflix-bitstream",
+ "mortiflix-testkit",
+ "rayon",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "mortiflix-h264enc"
+version = "0.8.0"
+dependencies = [
+ "mortiflix-bitstream",
+ "mortiflix-testkit",
+ "rayon",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "mortiflix-hevc"
+version = "0.8.0"
+dependencies = [
+ "mortiflix-bitstream",
+ "mortiflix-testkit",
+ "rayon",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "mortiflix-interchange"
+version = "0.8.0"
+dependencies = [
+ "mortiflix-cfb",
+ "mortiflix-color",
+ "mortiflix-geom",
+ "mortiflix-media",
+ "mortiflix-project",
+ "mortiflix-time",
+ "proptest",
+ "roxmltree 0.21.1",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "mortiflix-isobmff"
+version = "0.8.0"
+dependencies = [
+ "mortiflix-bitstream",
+ "mortiflix-testkit",
+ "proptest",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "mortiflix-matroska"
+version = "0.8.0"
+dependencies = [
+ "mortiflix-testkit",
+ "serde_json",
+]
+
+[[package]]
+name = "mortiflix-media"
+version = "0.8.0"
+dependencies = [
+ "image",
+ "mortiflix-color",
+ "mortiflix-dng",
+ "mortiflix-frame",
+ "mortiflix-testkit",
+ "mortiflix-time",
+ "png 0.18.1",
+ "rayon",
+ "serde",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "mortiflix-mpa"
+version = "0.8.0"
+dependencies = [
+ "mortiflix-bitstream",
+ "mortiflix-testkit",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "mortiflix-mpeg2v"
+version = "0.8.0"
+dependencies = [
+ "mortiflix-testkit",
+ "rayon",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "mortiflix-mpegts"
+version = "0.8.0"
+dependencies = [
+ "mortiflix-testkit",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "mortiflix-mxf"
+version = "0.8.0"
+dependencies = [
+ "mortiflix-testkit",
+]
+
+[[package]]
+name = "mortiflix-ogg"
+version = "0.8.0"
+dependencies = [
+ "mortiflix-testkit",
+]
+
+[[package]]
+name = "mortiflix-opus"
+version = "0.8.0"
+dependencies = [
+ "mortiflix-testkit",
+]
+
+[[package]]
+name = "mortiflix-platform"
+version = "0.8.0"
+dependencies = [
+ "libloading",
+ "log",
+ "mortiflix-bitstream",
+ "mortiflix-codecs",
+ "mortiflix-color",
+ "mortiflix-export",
+ "mortiflix-frame",
+ "mortiflix-h264",
+ "mortiflix-hevc",
+ "mortiflix-isobmff",
+ "mortiflix-media",
+ "mortiflix-project",
+ "mortiflix-render",
+ "mortiflix-testkit",
+ "mortiflix-time",
+ "objc2-core-foundation",
+ "objc2-core-media",
+ "objc2-core-video",
+ "objc2-video-toolbox",
+ "windows 0.62.2",
+]
+
+[[package]]
+name = "mortiflix-project"
+version = "0.8.0"
+dependencies = [
+ "mortiflix-color",
+ "mortiflix-geom",
+ "mortiflix-media",
+ "mortiflix-time",
+ "proptest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "mortiflix-prores"
+version = "0.8.0"
+dependencies = [
+ "mortiflix-bitstream",
+ "mortiflix-testkit",
+ "rayon",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "mortiflix-render"
+version = "0.8.0"
+dependencies = [
+ "image",
+ "mortiflix-audio-dsp",
+ "mortiflix-captions",
+ "mortiflix-color",
+ "mortiflix-frame",
+ "mortiflix-geom",
+ "mortiflix-media",
+ "mortiflix-project",
+ "mortiflix-text",
+ "mortiflix-time",
+ "rayon",
+ "rustix 1.1.5",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "mortiflix-scopes"
+version = "0.8.0"
+dependencies = [
+ "mortiflix-color",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "mortiflix-speech"
+version = "0.8.0"
+dependencies = [
+ "candle-core",
+ "candle-nn",
+ "mortiflix-project",
+ "mortiflix-time",
+ "rayon",
+ "rustls",
+ "rustls-rustcrypto",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.21",
+ "ureq",
+]
+
+[[package]]
+name = "mortiflix-studio"
+version = "0.8.0"
+dependencies = [
+ "arboard",
+ "chrono",
+ "cpal",
+ "eframe",
+ "egui",
+ "glob",
+ "log",
+ "mortiflix-engine",
+ "mortiflix-export",
+ "mortiflix-gpu",
+ "mortiflix-platform",
+ "mortiflix-project",
+ "mortiflix-render",
+ "mortiflix-time",
+ "mortiflix-ui",
+ "mortiflix-ui-egui",
+ "muda",
+ "objc2 0.6.4",
+ "objc2-app-kit 0.3.2",
+ "objc2-foundation 0.3.2",
+ "open",
+ "pollster 0.4.0",
+ "rfd",
+ "serde_json",
+ "sys-locale",
+ "winit",
+ "winresource",
+ "zbus",
+]
+
+[[package]]
+name = "mortiflix-studio-cli"
+version = "0.8.0"
+dependencies = [
+ "mortiflix-automation",
+ "mortiflix-codecs",
+ "mortiflix-engine",
+ "mortiflix-export",
+ "mortiflix-gpu",
+ "mortiflix-media",
+ "mortiflix-mpegts",
+ "mortiflix-mxf",
+ "mortiflix-ogg",
+ "mortiflix-platform",
+ "mortiflix-project",
+ "mortiflix-render",
+ "mortiflix-testkit",
+ "mortiflix-time",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "mortiflix-studio-web"
+version = "0.8.0"
+dependencies = [
+ "eframe",
+ "egui",
+ "js-sys",
+ "log",
+ "mortiflix-codecs",
+ "mortiflix-color",
+ "mortiflix-engine",
+ "mortiflix-format",
+ "mortiflix-frame",
+ "mortiflix-isobmff",
+ "mortiflix-media",
+ "mortiflix-time",
+ "mortiflix-ui-egui",
+ "serde_json",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "web-time",
+]
+
+[[package]]
+name = "mortiflix-testkit"
+version = "0.8.0"
+dependencies = [
+ "png 0.18.1",
+]
+
+[[package]]
+name = "mortiflix-text"
+version = "0.8.0"
+dependencies = [
+ "harfrust",
+ "mortiflix-color",
+ "skrifa",
+ "unicode-bidi",
+ "unicode-linebreak",
+ "unicode-segmentation",
+]
+
+[[package]]
+name = "mortiflix-time"
+version = "0.8.0"
+dependencies = [
+ "proptest",
+ "serde",
+]
+
+[[package]]
+name = "mortiflix-tts"
+version = "0.8.0"
+dependencies = [
+ "candle-core",
+ "candle-nn",
+ "mortiflix-audio-dsp",
+ "mortiflix-tts-text",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "zip",
+]
+
+[[package]]
+name = "mortiflix-tts-text"
+version = "0.8.0"
+dependencies = [
+ "serde",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "mortiflix-ui"
+version = "0.8.0"
+dependencies = [
+ "egui",
+ "image",
+ "log",
+ "resvg",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "mortiflix-ui-egui"
+version = "0.8.0"
+dependencies = [
+ "cpu-time",
+ "craft-ui",
+ "eframe",
+ "egui",
+ "egui_kittest",
+ "image",
+ "log",
+ "mortiflix-audio-dsp",
+ "mortiflix-codecs",
+ "mortiflix-color",
+ "mortiflix-edit",
+ "mortiflix-engine",
+ "mortiflix-export",
+ "mortiflix-frame",
+ "mortiflix-geom",
+ "mortiflix-gpu",
+ "mortiflix-interchange",
+ "mortiflix-media",
+ "mortiflix-platform",
+ "mortiflix-project",
+ "mortiflix-render",
+ "mortiflix-scopes",
+ "mortiflix-speech",
+ "mortiflix-text",
+ "mortiflix-time",
+ "mortiflix-tts",
+ "mortiflix-ui",
+ "pollster 0.4.0",
+ "rayon",
+ "rustix 1.1.5",
+ "serde",
+ "serde_json",
+ "toml 1.1.6+spec-1.1.0",
+ "unicode-bidi",
+ "web-time",
+]
+
+[[package]]
+name = "mortiflix-vp8"
+version = "0.8.0"
+dependencies = [
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "mortiflix-vp9"
+version = "0.8.0"
+dependencies = [
+ "mortiflix-bitstream",
+ "rayon",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -7677,7 +7677,7 @@ checksum = "ec7a2a501ed189703dba8b08142f057e887dfc4b2cc4db2d343ac6376ba3e0b9"
 name = "xtask"
 version = "0.8.0"
 dependencies = [
- "filmcraft-testkit",
+ "mortiflix-testkit",
  "serde_json",
 ]
 

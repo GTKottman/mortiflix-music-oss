@@ -4,7 +4,7 @@
 //! sub-scanlines with an active-edge list and accumulates the non-zero winding spans of each
 //! sub-scanline with exact horizontal coverage at the span ends. Coverage is linear (fractional
 //! area), so compositing it in linear light gives correct anti-aliasing. Original implementation
-//! for FilmCraft (it started as the caption rasteriser).
+//! for Mortiflix Studio (it started as the caption rasteriser).
 
 /// Vertical sub-samples per pixel row.
 pub const SUB: usize = 5;

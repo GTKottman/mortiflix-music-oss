@@ -1,7 +1,7 @@
 //! Numeric summaries of scopes, for agents checking colour without looking (`scopes.read`).
 //! Levels are in percent of full scale (IRE-like: code value / 255 × 100 for 8-bit signals).
 
-use filmcraft_color::rgb_to_ycbcr;
+use mortiflix_color::rgb_to_ycbcr;
 use serde::Serialize;
 
 use crate::{Grid, Matrix, Signal, Vectorscope, Waveform, angle_deg};

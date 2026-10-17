@@ -7,11 +7,11 @@ Docs 37 (Talking with the AI) and 32b (Assets tab). Code: `crates/mortiflix-ui/s
 
 ## What it does
 
-- **One panel, one history.** Left on stages 1-4 (tab group with Assets), docked right in FilmCraft on stage 5, same
+- **One panel, one history.** Left on stages 1-4 (tab group with Assets), docked right in Edit on stage 5, same
   thread. On connect it loads `chat.history` and `questions.list` once per project; new rows arrive as
   `chat.message` events.
 - **Talking about.** Crumbs `The whole video › beat › node` follow `MfxState::selected_node` both ways: the node area
-  (or a FilmCraft clip) sets it, a link / crumb / folded row / History entry in the chat sets it, and the chat tells the
+  (or a Mortiflix Studio clip) sets it, a link / crumb / folded row / History entry in the chat sets it, and the chat tells the
   service (`chat.context`); a `chat.context` event from elsewhere moves the selection. ✕ or Esc = the whole video.
 - **Thread.** Stage dividers (click = go to that stage), your messages as pills, Mortiflix's messages with links
   (refs, "shot N", "line N"), cards, one question at a time (accent rule, default ticked, "Going with X unless you
@@ -43,18 +43,18 @@ Docs 37 (Talking with the AI) and 32b (Assets tab). Code: `crates/mortiflix-ui/s
   player (`mortiflix.reveal {open: true}`).
 - `MfxState::files_in` + `push_files` / `take_files(purpose)`: files from the OS dialog or a desktop drop.
   `mortiflix.chooseFiles {purpose, multiple}` opens the dialog (`paths` skips it, for agents and tests). On stages 1-4
-  (or with New project open) files dropped on the window arrive with purpose `drop` instead of going to FilmCraft's
+  (or with New project open) files dropped on the window arrive with purpose `drop` instead of going to Mortiflix Studio's
   bin: **part 01** takes `drop` while its window is open; otherwise the chat (node context: attach; whole video:
   Assets) or the Assets tab takes them.
 - `chat::AssetDrag {id, name}`: the egui drag payload of an asset row. **Part 03 (nodes)**: on drop over a shot, send
   `assets.use {asset, node}`.
-- `chat::model::set_local_offset(fn)`: `apps/filmcraft` gives the chat local time for message times.
+- `chat::model::set_local_offset(fn)`: `apps/mortiflix-studio` gives the chat local time for message times.
 - `mortiflix.reveal {path, open?}`: Show in folder / open a file.
 
 ## Layout fix (stages 1-4 show only Mortiflix panels)
 
-Window ▸ Timeline (Shift+3) or a sequence opened on stages 1-4 put FilmCraft's Timeline ("Main Edit") into the chat's
+Window ▸ Timeline (Shift+3) or a sequence opened on stages 1-4 put Mortiflix Studio's Timeline ("Main Edit") into the chat's
 tab group (`restore_timeline` falls back to the first group when the workspace has no Project panel).
-`mortiflix::keep_mortiflix_only` closes any FilmCraft panel in the Mortiflix workspace (status line: "FilmCraft's own
-panels open on stage 5 FilmCraft."), run when a stage 1-4 is applied and every frame; `frame_begin` also puts stages
+`mortiflix::keep_mortiflix_only` closes any Mortiflix Studio panel in the Mortiflix workspace (status line: "Mortiflix Studio's own
+panels open on stage 5 Edit."), run when a stage 1-4 is applied and every frame; `frame_begin` also puts stages
 1-4 back in the Mortiflix workspace if another one was picked.

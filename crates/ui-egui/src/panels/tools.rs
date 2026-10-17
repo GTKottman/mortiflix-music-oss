@@ -3,11 +3,11 @@
 
 use egui::{Rect, Sense, pos2, vec2};
 
-use crate::FilmcraftApp;
+use crate::StudioApp;
 use crate::icons;
 use crate::state::Tool;
 
-pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
+pub fn show(app: &mut StudioApp, ui: &mut egui::Ui, rect: Rect) {
     let t = app.tokens;
     let mut y = rect.min.y + 4.0;
     let size = 32.0;
@@ -96,7 +96,7 @@ pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
 mod tests {
     use super::*;
 
-    fn frame(app: &mut FilmcraftApp, ctx: &egui::Context, time: f64, events: Vec<egui::Event>) {
+    fn frame(app: &mut StudioApp, ctx: &egui::Context, time: f64, events: Vec<egui::Event>) {
         app.auto.begin_frame();
         let mut out = ctx.run_ui(
             egui::RawInput { time: Some(time), events, screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, vec2(1000.0, 800.0))), ..Default::default() },
@@ -105,7 +105,7 @@ mod tests {
         out.textures_delta.clear();
     }
 
-    fn center_of(app: &FilmcraftApp, id: &str) -> Option<egui::Pos2> {
+    fn center_of(app: &StudioApp, id: &str) -> Option<egui::Pos2> {
         let [x, y, w, h] = app.auto.elements.iter().find(|w| w.id == id)?.rect;
         Some(egui::pos2(x + w / 2.0, y + h / 2.0))
     }
@@ -116,8 +116,8 @@ mod tests {
 
     /// The panel shown twice, then the button pressed on the Type tool group and dragged by `by`
     /// within 0.1 s, well before a long press.
-    fn press_and_drag_type(by: egui::Vec2) -> (FilmcraftApp, egui::Context) {
-        let mut app = FilmcraftApp::new(filmcraft_engine::Session::default());
+    fn press_and_drag_type(by: egui::Vec2) -> (StudioApp, egui::Context) {
+        let mut app = StudioApp::new(mortiflix_engine::Session::default());
         let ctx = egui::Context::default();
         crate::theme::install(&ctx, &app.tokens);
         frame(&mut app, &ctx, 0.0, vec![]);
@@ -157,7 +157,7 @@ mod tests {
 
     #[test]
     fn a_right_click_on_a_grouped_tool_still_opens_its_flyout() {
-        let mut app = FilmcraftApp::new(filmcraft_engine::Session::default());
+        let mut app = StudioApp::new(mortiflix_engine::Session::default());
         let ctx = egui::Context::default();
         crate::theme::install(&ctx, &app.tokens);
         frame(&mut app, &ctx, 0.0, vec![]);
@@ -173,7 +173,7 @@ mod tests {
 
     #[test]
     fn long_press_type_selects_vertical_without_selecting_on_release() {
-        let mut app = FilmcraftApp::new(filmcraft_engine::Session::default());
+        let mut app = StudioApp::new(mortiflix_engine::Session::default());
         let ctx = egui::Context::default();
         crate::theme::install(&ctx, &app.tokens);
         frame(&mut app, &ctx, 0.0, vec![]);
@@ -213,10 +213,10 @@ mod tests {
         }
         let edit = app.ui.gfx_edit.as_ref().unwrap();
         let sequence = app.session.active_sequence().unwrap();
-        let (_, item) = sequence.find_item(filmcraft_project::ClipId(edit.clip)).unwrap();
-        let effect_index = filmcraft_project::graphic::layer_indices(&item.effects)[edit.layer];
-        let layer = filmcraft_project::graphic::eval_layer(&item.effects[effect_index], filmcraft_time::Tick::ZERO, (1920, 1080)).unwrap();
-        let filmcraft_project::graphic::LayerContent::Text(text) = layer.content else { panic!("text layer expected") };
+        let (_, item) = sequence.find_item(mortiflix_project::ClipId(edit.clip)).unwrap();
+        let effect_index = mortiflix_project::graphic::layer_indices(&item.effects)[edit.layer];
+        let layer = mortiflix_project::graphic::eval_layer(&item.effects[effect_index], mortiflix_time::Tick::ZERO, (1920, 1080)).unwrap();
+        let mortiflix_project::graphic::LayerContent::Text(text) = layer.content else { panic!("text layer expected") };
         assert!(text.vertical, "the actual monitor click dispatches the existing vertical text command");
     }
 }

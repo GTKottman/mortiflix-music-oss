@@ -1,5 +1,5 @@
 [package]
-name = "filmcraft-testkit"
+name = "mortiflix-testkit"
 description = "Test-only helpers: ffmpeg/ffprobe oracle discovery, fixture directories, golden-image comparison"
 version.workspace = true
 edition.workspace = true
@@ -10,7 +10,7 @@ publish = false
 [lints]
 workspace = true
 
-# Used only as a dev-dependency. No FilmCraft dependencies, so any crate (including L0 codecs) can
+# Used only as a dev-dependency. No Mortiflix Studio dependencies, so any crate (including L0 codecs) can
 # use it without creating dependency cycles.
 [dependencies]
 png = "0.18"

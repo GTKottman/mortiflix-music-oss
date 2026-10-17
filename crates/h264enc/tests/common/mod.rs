@@ -13,8 +13,8 @@ pub struct Yuv {
 }
 
 impl Yuv {
-    pub fn frame(&self) -> filmcraft_h264enc::YuvFrame<'_> {
-        filmcraft_h264enc::YuvFrame { y: &self.y, u: &self.u, v: &self.v, y_stride: self.w, uv_stride: self.w / 2 }
+    pub fn frame(&self) -> mortiflix_h264enc::YuvFrame<'_> {
+        mortiflix_h264enc::YuvFrame { y: &self.y, u: &self.u, v: &self.v, y_stride: self.w, uv_stride: self.w / 2 }
     }
     pub fn bytes(&self) -> Vec<u8> {
         let mut v = self.y.clone();
@@ -95,19 +95,19 @@ pub fn synth(w: usize, h: usize, t: usize) -> Yuv {
     Yuv { w, h, y, u, v }
 }
 
-/// ffmpeg (see `filmcraft_testkit::oracle`); `None` after printing `SKIPPED`.
+/// ffmpeg (see `mortiflix_testkit::oracle`); `None` after printing `SKIPPED`.
 pub fn ffmpeg() -> Option<PathBuf> {
-    filmcraft_testkit::ffmpeg_or_skip("h264enc oracle")
+    mortiflix_testkit::ffmpeg_or_skip("h264enc oracle")
 }
 
-/// ffprobe (see `filmcraft_testkit::oracle`); `None` after printing `SKIPPED`.
+/// ffprobe (see `mortiflix_testkit::oracle`); `None` after printing `SKIPPED`.
 pub fn ffprobe() -> Option<PathBuf> {
-    filmcraft_testkit::ffprobe_or_skip("h264enc oracle")
+    mortiflix_testkit::ffprobe_or_skip("h264enc oracle")
 }
 
 /// Per-test output directory under `<workspace>/target/fixtures/h264enc/`.
 pub fn out_dir(name: &str) -> PathBuf {
-    filmcraft_testkit::fixtures_dir(&format!("h264enc/{name}"))
+    mortiflix_testkit::fixtures_dir(&format!("h264enc/{name}"))
 }
 
 /// Strict decode of an Annex-B file with ffmpeg; returns (diagnostics, raw yuv420p bytes). Any diagnostic

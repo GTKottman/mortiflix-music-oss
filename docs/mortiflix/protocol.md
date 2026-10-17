@@ -44,7 +44,7 @@ stdout (its logs go to stderr, which the app copies into its log).
 | `node.list` | `{project?}` | `{nodes: [...], open_edits}` | `canvasView`; current project when `project` is left out |
 | `node.edit` | `{node, action: ok\|fix\|cut\|clear, text?, bars?, part?, project?}` | the canvas `nodeAction` result | OK / Fix / Cut it (doc 35) |
 
-Stage keys: `script`, `look`, `shots`, `voiceMusic`, `filmcraft`, `render` (index 0-5).
+Stage keys: `script`, `look`, `shots`, `voiceMusic`, `edit`, `render` (index 0-5).
 
 ## Events
 
@@ -184,7 +184,7 @@ exists (a Fix each: the line's voice line and its beat's shots; versions kept); 
 panel-scoped) sends `delete: false`: the same line, words, links and voice line (its OK too), nothing remade.
 Unsaved changes never vanish: switching or opening another project (`project.open` / `project.new` / `project.close`
 through `mortiflix.request`, New project's Create, File ▸ Open / Open Recent), closing the project (File ▸ Close
-Project) and quitting (the window's close request, before FilmCraft's own "Save changes…?") ask first: Save / Discard /
+Project) and quitting (the window's close request, before Mortiflix Studio's own "Save changes…?") ask first: Save / Discard /
 Keep editing; after Save it goes on once the save is in. The draft is sent with `script.draft` whenever it changes (for
 the project it belongs to, also when another project is opened from elsewhere) and comes back from `script.get` after a
 service restart or a crash ("kept from last time"). The panel reads the script again on `script.changed` / `node.changed` and shows
@@ -245,7 +245,7 @@ lands on (`lands_on: "… in B03"`, `to_beat`: the cut into that beat's first sh
 shot was added after the board); a cut the board left without a transition is a straight cut.
 
 Beat names (`src/svc/beatnames.mjs`): every beat has a short title for the nodes, the ribbon, the Script panel, the
-preview's beats lane and FilmCraft's bins and chapter markers: the script's own `name` (sessions write it in
+preview's beats lane and Mortiflix Studio's bins and chapter markers: the script's own `name` (sessions write it in
 `script/beats.json`, the owner renames with `script.edit {beat_name}`), else one the user's own AI gave (one short call
 for all unnamed beats, once per words, kept in `state/<id>/canvas/beat-names.json`; a `node.changed` with
 `{kind: beat, named: true}` rows follows), else a title from the words ("Look up! On a sunny day, the sky is bright
@@ -257,11 +257,11 @@ blue." → "The sky is bright blue"), never the first words cut off.
 |---|---|---|
 | `preview.plan` | `{scope?: all\|from\|shot\|beat, node?}` | `{rev, range: [from, to], length_sec, fps, shots: [{node, start_sec, dur_sec, version, colour, beat_no, media: {kind: video\|still\|card, path, from_sec, to_sec}}], voice[], music, cues[]}`: best media per shot (its piece of the animatic, else its look's still, else a beat card), in film order |
 
-#### Into FilmCraft (doc 38)
+#### Into Edit (doc 38)
 
 | Type | Params | Result |
 |---|---|---|
-| `handoff.plan` | `{}` | `{fcproj, sequence: {name, width, height, fps, length_sec}, tracks, bins, clips: [{node, kind, track, bin, name, label, version, start_sec, dur_sec, media}], markers: [{kind: chapter\|comment, time_sec, name, label, comment}], captions, your_assets, older_versions, cut_on_board, notes, previews}`; `fcproj` = where the app saves the FilmCraft project (`<studio>/state/<id>/filmcraft/<title>.fcproj`, or the one saved before); transitions carry `native` + the FilmCraft transition name |
+| `handoff.plan` | `{}` | `{fcproj, sequence: {name, width, height, fps, length_sec}, tracks, bins, clips: [{node, kind, track, bin, name, label, version, start_sec, dur_sec, media}], markers: [{kind: chapter\|comment, time_sec, name, label, comment}], captions, your_assets, older_versions, cut_on_board, notes, previews}`; `fcproj` = where the app saves the Mortiflix Studio project (`<studio>/state/<id>/edit/<title>.fcproj`, or the one saved before); transitions carry `native` + the Mortiflix Studio transition name |
 | `handoff.done` | `{map: {clips: [{node, version, clip, item}], fcproj?, rev?}}` | saves what the app imported (done once) |
 | `handoff.get` | `{}` | `{map}` |
 | `handoff.swaps` | `{}` | `{imported, swaps: [{node, version, clip, item, path, from_sec, to_sec}]}`: newer versions to swap in (`clip.replaceFromBin`) |
@@ -293,7 +293,7 @@ Cards: `script {beats}`, `looks {frames, using}`, `shots`/`transitions {nodes}`,
 | Type | Params | Result |
 |---|---|---|
 | `render.list` | `{project?}` | every job in the one queue (session renders and app exports) |
-| `render.add` | `{label, kind?: export}` | a job for the app's own FilmCraft export; start it when its `render.job` event says `running` |
+| `render.add` | `{label, kind?: export}` | a job for the app's own Mortiflix Studio export; start it when its `render.job` event says `running` |
 | `render.progress` | `{id, done, total, phase?}` | |
 | `render.finish` | `{id, ok, file?, error?}` | |
 | `render.cancel` | `{id}` | waiting: never starts; running: stopped (an app job gets `state: failed, cancelled: true`) |

@@ -7,4 +7,4 @@ publish = false
 
 [dependencies]
 serde_json = { workspace = true }
-filmcraft-testkit = { workspace = true }
+mortiflix-testkit = { workspace = true }

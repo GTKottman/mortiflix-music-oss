@@ -1,20 +1,20 @@
 //! Headless UI tests of the window chrome flags: `UiState::show_header` and
-//! `UiState::show_status_bar` default to on, and an app that embeds FilmCraft can turn them off
+//! `UiState::show_status_bar` default to on, and an app that embeds Mortiflix Studio can turn them off
 //! to give the panels the whole window.
 
 use egui_kittest::Harness;
-use filmcraft_engine::Session;
-use filmcraft_ui_egui::FilmcraftApp;
-use filmcraft_ui_egui::state::UiState;
+use mortiflix_engine::Session;
+use mortiflix_ui_egui::StudioApp;
+use mortiflix_ui_egui::state::UiState;
 use serde_json::json;
 
 const W: f32 = 1600.0;
 const H: f32 = 980.0;
 
-fn harness(show_header: bool, show_status_bar: bool) -> Harness<'static, FilmcraftApp> {
+fn harness(show_header: bool, show_status_bar: bool) -> Harness<'static, StudioApp> {
     let mut s = Session::default();
     s.execute("file.openDemoProject", json!({})).unwrap();
-    let mut app = FilmcraftApp::new(s);
+    let mut app = StudioApp::new(s);
     app.ui.show_header = show_header;
     app.ui.show_status_bar = show_status_bar;
     let mut harness = Harness::builder().with_size(egui::vec2(W, H)).with_max_steps(10_000).build_eframe(move |_cc| app);
@@ -25,7 +25,7 @@ fn harness(show_header: bool, show_status_bar: bool) -> Harness<'static, Filmcra
 }
 
 /// Top and bottom edge of every registered element outside the header (the menu bar, `menu.*`, is part of it).
-fn body_extent(h: &Harness<'static, FilmcraftApp>) -> (f32, f32) {
+fn body_extent(h: &Harness<'static, StudioApp>) -> (f32, f32) {
     let els = h.state().auto.query("");
     let body: Vec<_> = els.iter().filter(|e| !e.id.starts_with("header.") && !e.id.starts_with("menu.")).collect();
     assert!(!body.is_empty(), "no panel elements registered");

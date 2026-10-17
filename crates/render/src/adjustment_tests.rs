@@ -3,10 +3,10 @@
 //! and nesting scopes them to their own sequence.
 
 use super::*;
-use filmcraft_media::generators::GeneratorSource;
-use filmcraft_media::{DemoScene, Generator, MediaSource};
-use filmcraft_project::{ClipId, Label, Mask, MaskPath, MediaClip, MediaRef, SequenceSettings, TrackKind, find_effect};
-use filmcraft_time::{FrameRate, TICKS_PER_SECOND, TimeRange};
+use mortiflix_media::generators::GeneratorSource;
+use mortiflix_media::{DemoScene, Generator, MediaSource};
+use mortiflix_project::{ClipId, Label, Mask, MaskPath, MediaClip, MediaRef, SequenceSettings, TrackKind, find_effect};
+use mortiflix_time::{FrameRate, TICKS_PER_SECOND, TimeRange};
 
 const R: FrameRate = FrameRate::FPS_24;
 
@@ -116,7 +116,7 @@ fn opacity_and_blend_mode_mix_over_the_original() {
     let op = clip(&mut s, adj).effect_mut("opacity").unwrap();
     op.params.get_mut("opacity").unwrap().value = ParamValue::Float(100.0);
     op.params.get_mut("blend").unwrap().value =
-        ParamValue::Choice(filmcraft_project::effect::BLEND_MODES.iter().position(|b| *b == "Multiply").unwrap() as u32);
+        ParamValue::Choice(mortiflix_project::effect::BLEND_MODES.iter().position(|b| *b == "Multiply").unwrap() as u32);
     let c = render(&s).get(100, 100);
     assert!(near(c, [0.0, 0.0, 0.0], 1e-3), "{c:?}");
 }
@@ -209,7 +209,7 @@ fn nested_adjustment_layers_stay_in_their_sequence() {
 fn transform_shutter_on_an_adjustment_layer_spans_one_sequence_frame() {
     // A 60 fps sequence: at 360° the shutter is one 60 fps frame, so the frames just outside
     // the move stay sharp (they were blurred with a 24 fps shutter, #1088).
-    use filmcraft_project::{Interpolation, Keyframe};
+    use mortiflix_project::{Interpolation, Keyframe};
     let r60 = FrameRate::FPS_60;
     let mut s = scene(2);
     s.p.sequence_mut(s.seq).unwrap().settings.frame_rate = r60;
@@ -219,7 +219,7 @@ fn transform_shutter_on_an_adjustment_layer_spans_one_sequence_frame() {
     let adj = adjustment(&mut s.p, s.seq, 1);
     fx(&mut s, adj, "transform");
     let key = |sec: f64, x: f64| {
-        let mut k = Keyframe::new(Tick::from_seconds_f64(sec), ParamValue::Vec2(filmcraft_geom::Vec2::new(x, 90.0)));
+        let mut k = Keyframe::new(Tick::from_seconds_f64(sec), ParamValue::Vec2(mortiflix_geom::Vec2::new(x, 90.0)));
         k.interp = Interpolation::Linear;
         k
     };
@@ -240,8 +240,8 @@ fn transform_shutter_on_an_adjustment_layer_spans_one_sequence_frame() {
 }
 
 fn dissolve(s: &mut Scene, track: usize, from: Option<ClipId>, to: Option<ClipId>, start: i64) {
-    let tr = filmcraft_project::Transition {
-        id: filmcraft_project::TransitionId(900 + start as u64),
+    let tr = mortiflix_project::Transition {
+        id: mortiflix_project::TransitionId(900 + start as u64),
         effect: find_effect("cross_dissolve").unwrap().instance(),
         start: R.tick_of(start),
         duration: R.tick_of(12),
@@ -294,7 +294,7 @@ fn a_dissolve_on_an_adjustment_layer_keeps_its_opacity_and_blend_mode() {
     let op = clip(&mut s, adj).effect_mut("opacity").unwrap();
     op.params.get_mut("opacity").unwrap().value = ParamValue::Float(100.0);
     op.params.get_mut("blend").unwrap().value =
-        ParamValue::Choice(filmcraft_project::effect::BLEND_MODES.iter().position(|b| *b == "Multiply").unwrap() as u32);
+        ParamValue::Choice(mortiflix_project::effect::BLEND_MODES.iter().position(|b| *b == "Multiply").unwrap() as u32);
     assert!(near(at(&s, 6), [0.5, 0.0, 0.0], 1e-3), "{:?}", at(&s, 6));
     assert!(near(at(&s, 24), [0.0, 0.0, 0.0], 1e-3), "{:?}", at(&s, 24));
 }

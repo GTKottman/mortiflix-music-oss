@@ -1,7 +1,7 @@
 {
   "name": "Legacy Minimal",
   "settings": {
-    "renderer": "FilmCraft GPU Acceleration (wgpu)",
+    "renderer": "Mortiflix Studio GPU Acceleration (wgpu)",
     "video_display": "Timecode",
     "audio_display_samples": true,
     "default_still_duration": 1270080000000,

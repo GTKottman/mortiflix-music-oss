@@ -14,11 +14,11 @@
 
 use egui::text::LayoutJob;
 use egui::{Align2, Color32, CornerRadius, FontId, Rect, RichText, Sense, Stroke, StrokeKind, TextFormat, pos2, vec2};
-use filmcraft_engine::shortcuts::{APPLICATION, Chord, KEYS, Mods, PANELS, Platform};
+use mortiflix_engine::shortcuts::{APPLICATION, Chord, KEYS, Mods, PANELS, Platform};
 use serde::Serialize;
 use serde_json::{Value, json};
 
-use crate::FilmcraftApp;
+use crate::StudioApp;
 use crate::native_dialogs::FileDialog;
 use crate::theme::Tokens;
 
@@ -54,7 +54,7 @@ impl EditorState {
 }
 
 /// Open the dialog (Edit ▸ Keyboard Shortcuts…).
-pub fn open(app: &mut FilmcraftApp) {
+pub fn open(app: &mut StudioApp) {
     app.session.shortcuts.begin_editing();
     app.shortcut_editor = EditorState { context: APPLICATION.into(), ..Default::default() };
     app.dialog = Some(crate::Dialog::Shortcuts);
@@ -72,16 +72,16 @@ pub fn chord_of(key: egui::Key, m: egui::Modifiers) -> Option<String> {
     Some(format!("{}{}", mods.prefix(), name))
 }
 
-fn label_of(app: &FilmcraftApp, id: &str) -> String {
+fn label_of(app: &StudioApp, id: &str) -> String {
     app.session
         .shortcuts
         .command(id)
         .map(|c| c.label)
-        .or_else(|| filmcraft_engine::find_command(id).map(|c| c.label.to_string()))
+        .or_else(|| mortiflix_engine::find_command(id).map(|c| c.label.to_string()))
         .map_or_else(|| id.to_string(), |l| crate::i18n::t(&l).to_string())
 }
 
-fn exec(app: &mut FilmcraftApp, cmd: &str, params: Value) -> Option<Value> {
+fn exec(app: &mut StudioApp, cmd: &str, params: Value) -> Option<Value> {
     match app.session.execute(cmd, params) {
         Ok(v) => Some(v),
         Err(e) => {
@@ -92,7 +92,7 @@ fn exec(app: &mut FilmcraftApp, cmd: &str, params: Value) -> Option<Value> {
 }
 
 /// Assign a recorded chord.
-fn assign(app: &mut FilmcraftApp, command: &str, keys: &str, add: bool) {
+fn assign(app: &mut StudioApp, command: &str, keys: &str, add: bool) {
     let panel = app.shortcut_editor.panel().map(str::to_string);
     let p = Platform::current();
     if let Some(r) = exec(app, "shortcuts.set", json!({"command": command, "keys": keys, "panel": panel, "add": add})) {
@@ -115,7 +115,7 @@ fn is_modifier_key(key: egui::Key) -> bool {
 
 /// Take the next key press while recording (Esc cancels). Modifier keys on their own are skipped:
 /// the chord is recorded when the key they modify is pressed, with them as its modifiers.
-fn record(app: &mut FilmcraftApp, ctx: &egui::Context) {
+fn record(app: &mut StudioApp, ctx: &egui::Context) {
     let Some((cmd, add)) = app.shortcut_editor.recording.clone() else { return };
     let got = ctx.input_mut(|i| {
         let mut got = None;
@@ -142,7 +142,7 @@ fn record(app: &mut FilmcraftApp, ctx: &egui::Context) {
 }
 
 /// Show the dialog; false when it closed.
-pub fn show(app: &mut FilmcraftApp, ctx: &egui::Context) -> bool {
+pub fn show(app: &mut StudioApp, ctx: &egui::Context) -> bool {
     record(app, ctx);
     let t = app.tokens;
     let screen = ctx.content_rect();
@@ -200,13 +200,13 @@ pub fn show(app: &mut FilmcraftApp, ctx: &egui::Context) -> bool {
     }
 }
 
-fn small_button(app: &mut FilmcraftApp, ui: &mut egui::Ui, id: &str, label: &str, enabled: bool) -> bool {
+fn small_button(app: &mut StudioApp, ui: &mut egui::Ui, id: &str, label: &str, enabled: bool) -> bool {
     let r = ui.add_enabled(enabled, egui::Button::new(RichText::new(label).size(12.5)).min_size(vec2(0.0, 24.0)));
     app.auto.add(id, r.rect, label);
     r.clicked()
 }
 
-fn header(app: &mut FilmcraftApp, ui: &mut egui::Ui, t: &Tokens) {
+fn header(app: &mut StudioApp, ui: &mut egui::Ui, t: &Tokens) {
     let presets = app.session.execute("shortcuts.presets", json!({})).unwrap_or_default();
     let active = presets["active"].as_str().unwrap_or("").to_string();
     let modified = presets["modified"].as_bool().unwrap_or(false);
@@ -445,7 +445,7 @@ fn key_legend(name: &str, mac: bool) -> String {
     }
 }
 
-fn keyboard(app: &mut FilmcraftApp, ui: &mut egui::Ui, area: Rect, t: &Tokens) {
+fn keyboard(app: &mut StudioApp, ui: &mut egui::Ui, area: Rect, t: &Tokens) {
     let mac = cfg!(target_os = "macos");
     // held modifiers count as the filter too (outside recording)
     let held = ui.input(|i| i.modifiers);
@@ -590,7 +590,7 @@ fn legend(ui: &mut egui::Ui, t: &Tokens) {
     });
 }
 
-fn command_list(app: &mut FilmcraftApp, ui: &mut egui::Ui, height: f32, t: &Tokens) {
+fn command_list(app: &mut StudioApp, ui: &mut egui::Ui, height: f32, t: &Tokens) {
     let plat = Platform::current();
     ui.horizontal(|ui| {
         let mut q = app.shortcut_editor.search.clone();
@@ -705,7 +705,7 @@ fn matches_search(row: &serde_json::Value, query: &str) -> bool {
         })
 }
 
-fn key_detail(app: &mut FilmcraftApp, ui: &mut egui::Ui, height: f32, t: &Tokens) {
+fn key_detail(app: &mut StudioApp, ui: &mut egui::Ui, height: f32, t: &Tokens) {
     let plat = Platform::current();
     let key = app.shortcut_editor.key.clone();
     ui.horizontal(|ui| {
@@ -758,7 +758,7 @@ fn key_detail(app: &mut FilmcraftApp, ui: &mut egui::Ui, height: f32, t: &Tokens
 }
 
 /// Bottom row: messages / conflicts, Undo / Redo / Clear, Cancel / OK. Returns Some(ok) to close.
-fn footer(app: &mut FilmcraftApp, ui: &mut egui::Ui, t: &Tokens) -> Option<bool> {
+fn footer(app: &mut StudioApp, ui: &mut egui::Ui, t: &Tokens) -> Option<bool> {
     let plat = Platform::current();
     let conflicts = app.session.shortcuts.conflicts(plat);
     let mut close = None;

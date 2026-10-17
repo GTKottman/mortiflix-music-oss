@@ -7,7 +7,7 @@
 //! inside the new one (`min(W1/W0, H1/H0)`), so nothing is cropped and the old composition sits
 //! centred, letterboxed or pillarboxed, rather than filling the new frame.
 
-use filmcraft_project::{ParamValue, Sequence, TrackKind};
+use mortiflix_project::{ParamValue, Sequence, TrackKind};
 
 /// Motion Scale's upper bound (the parameter's range, in %).
 const MAX_SCALE: f64 = 10_000.0;
@@ -73,8 +73,8 @@ pub fn scale_motion(seq: &mut Sequence, from: (u32, u32), to: (u32, u32)) -> usi
 #[cfg(test)]
 mod tests {
     use super::*;
-    use filmcraft_project::{ClipId, ItemId, Keyframe, Label, Project, SequenceSettings, TrackItem, find_effect};
-    use filmcraft_time::Tick;
+    use mortiflix_project::{ClipId, ItemId, Keyframe, Label, Project, SequenceSettings, TrackItem, find_effect};
+    use mortiflix_time::Tick;
 
     fn seq_with(items: Vec<TrackItem>) -> Sequence {
         let mut p = Project::new("t");
@@ -86,7 +86,7 @@ mod tests {
 
     fn clip(id: u64, pos: (f64, f64), scale: f64) -> TrackItem {
         let mut motion = find_effect("motion").unwrap().instance();
-        motion.param_mut("position").unwrap().value = ParamValue::Vec2(filmcraft_geom::Vec2::new(pos.0, pos.1));
+        motion.param_mut("position").unwrap().value = ParamValue::Vec2(mortiflix_geom::Vec2::new(pos.0, pos.1));
         motion.param_mut("scale").unwrap().value = ParamValue::Float(scale);
         TrackItem {
             id: ClipId(id),
@@ -161,15 +161,15 @@ mod tests {
         let mut c = clip(1, (960.0, 540.0), 100.0);
         let m = c.effect_mut("motion").unwrap();
         m.param_mut("position").unwrap().keyframes = vec![
-            Keyframe::new(Tick::ZERO, ParamValue::Vec2(filmcraft_geom::Vec2::new(0.0, 0.0))),
-            Keyframe::new(Tick(10), ParamValue::Vec2(filmcraft_geom::Vec2::new(1920.0, 1080.0))),
+            Keyframe::new(Tick::ZERO, ParamValue::Vec2(mortiflix_geom::Vec2::new(0.0, 0.0))),
+            Keyframe::new(Tick(10), ParamValue::Vec2(mortiflix_geom::Vec2::new(1920.0, 1080.0))),
         ];
         m.param_mut("scale").unwrap().keyframes = vec![Keyframe::new(Tick::ZERO, ParamValue::Float(100.0)), Keyframe::new(Tick(10), ParamValue::Float(200.0))];
         let mut seq = seq_with(vec![c]);
         scale_motion(&mut seq, (1920, 1080), (3840, 2160));
         let m = seq.video_tracks[0].items[0].effect("motion").unwrap();
         let kp: Vec<_> = m.param("position").unwrap().keyframes.iter().map(|k| k.value.clone()).collect();
-        assert_eq!(kp, vec![ParamValue::Vec2(filmcraft_geom::Vec2::new(0.0, 0.0)), ParamValue::Vec2(filmcraft_geom::Vec2::new(3840.0, 2160.0))]);
+        assert_eq!(kp, vec![ParamValue::Vec2(mortiflix_geom::Vec2::new(0.0, 0.0)), ParamValue::Vec2(mortiflix_geom::Vec2::new(3840.0, 2160.0))]);
         let ks: Vec<_> = m.param("scale").unwrap().keyframes.iter().map(|k| k.value.clone()).collect();
         assert_eq!(ks, vec![ParamValue::Float(200.0), ParamValue::Float(400.0)]);
     }

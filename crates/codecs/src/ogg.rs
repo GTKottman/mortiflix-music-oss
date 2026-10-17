@@ -1,8 +1,8 @@
-//! Ogg audio source (`filmcraft-ogg` demux): Ogg Opus with our Opus decoder and Ogg Vorbis with the
+//! Ogg audio source (`mortiflix-ogg` demux): Ogg Opus with our Opus decoder and Ogg Vorbis with the
 //! bootstrap Vorbis decoder.
 //!
 //! Opus (RFC 7845): packet positions come from granule positions and TOC durations
-//! ([`filmcraft_ogg::OpusTiming`]); the pre-skip samples land before 0 and are never returned, the
+//! ([`mortiflix_ogg::OpusTiming`]); the pre-skip samples land before 0 and are never returned, the
 //! final page's end trimming is applied, and random access decodes [`crate::audio::OPUS_PRE_ROLL`]
 //! of preceding packets first (so a seek gives the same samples as continuous playback).
 //!
@@ -13,15 +13,15 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use filmcraft_frame::{AudioBuffer, VideoFrame};
-use filmcraft_media::{AudioStreamInfo, FrameRequest, MediaError, MediaInfo, MediaKind, MediaSource, SharedSource};
-use filmcraft_ogg::{Codec, OggFile, OpusTiming};
-use filmcraft_time::Tick;
+use mortiflix_frame::{AudioBuffer, VideoFrame};
+use mortiflix_media::{AudioStreamInfo, FrameRequest, MediaError, MediaInfo, MediaKind, MediaSource, SharedSource};
+use mortiflix_ogg::{Codec, OggFile, OpusTiming};
+use mortiflix_time::Tick;
 
 use crate::CodecError;
 use crate::audio::{OPUS_PRE_ROLL, OPUS_RATE, PacketDecoder, read_resampled};
 
-impl filmcraft_ogg::ByteSource for crate::Src {
+impl mortiflix_ogg::ByteSource for crate::Src {
     fn len(&self) -> u64 {
         self.0.len()
     }
@@ -31,7 +31,7 @@ impl filmcraft_ogg::ByteSource for crate::Src {
 }
 
 pub fn sniff(head: &[u8]) -> bool {
-    filmcraft_ogg::sniff(head)
+    mortiflix_ogg::sniff(head)
 }
 
 struct OpusState {
@@ -43,7 +43,7 @@ struct OpusState {
 
 enum Kind {
     Opus {
-        head: Box<filmcraft_opus::OpusHead>,
+        head: Box<mortiflix_opus::OpusHead>,
         timing: OpusTiming,
         state: Mutex<OpusState>,
     },
@@ -64,12 +64,12 @@ pub struct OggSource {
 
 impl OggSource {
     pub fn open(name: &str, bytes: Arc<[u8]>) -> crate::Result<Self> {
-        Self::open_reader(name, Arc::new(filmcraft_media::reader::MemReader(bytes)))
+        Self::open_reader(name, Arc::new(mortiflix_media::reader::MemReader(bytes)))
     }
 
-    pub fn open_reader(name: &str, reader: filmcraft_media::SharedReader) -> crate::Result<Self> {
+    pub fn open_reader(name: &str, reader: mortiflix_media::SharedReader) -> crate::Result<Self> {
         let bytes = crate::Src(reader);
-        let file = filmcraft_ogg::open(&bytes).map_err(|e| CodecError::Container(e.to_string()))?;
+        let file = mortiflix_ogg::open(&bytes).map_err(|e| CodecError::Container(e.to_string()))?;
         for w in &file.warnings {
             log::warn!("{name}: {w}");
         }
@@ -81,7 +81,7 @@ impl OggSource {
         let st = &file.streams[stream];
         let (kind, rate, channels, codec) = match st.codec {
             Codec::Opus => {
-                let head = filmcraft_opus::OpusHead::parse(&st.headers[0]).map_err(|e| CodecError::Unsupported(format!("Opus: {e}")))?;
+                let head = mortiflix_opus::OpusHead::parse(&st.headers[0]).map_err(|e| CodecError::Unsupported(format!("Opus: {e}")))?;
                 let timing = OpusTiming::of(st, head.pre_skip as u32);
                 let channels = head.channels as u32;
                 (
@@ -123,7 +123,7 @@ impl OggSource {
         &self.file
     }
 
-    fn opus_packet(&self, st: &mut OpusState, head: &filmcraft_opus::OpusHead, timing: &OpusTiming, i: usize) -> crate::Result<Arc<Vec<Vec<f32>>>> {
+    fn opus_packet(&self, st: &mut OpusState, head: &mortiflix_opus::OpusHead, timing: &OpusTiming, i: usize) -> crate::Result<Arc<Vec<Vec<f32>>>> {
         if let Some(p) = st.packets.get(&i) {
             return Ok(p.clone());
         }
@@ -163,7 +163,7 @@ fn decode_vorbis(file: &OggFile, bytes: &crate::Src, s: usize) -> crate::Result<
     if st.headers.len() < 3 {
         return Err(CodecError::Decode("Vorbis: missing header packets".into()));
     }
-    let vi = filmcraft_ogg::VorbisInfo::parse(&st.headers[0]).ok_or_else(|| CodecError::Decode("Vorbis: bad identification header".into()))?;
+    let vi = mortiflix_ogg::VorbisInfo::parse(&st.headers[0]).ok_or_else(|| CodecError::Decode("Vorbis: bad identification header".into()))?;
     let mut extra = st.headers[0].clone();
     extra.extend_from_slice(&st.headers[2]);
     let mut dec = PacketDecoder::new(CODEC_TYPE_VORBIS, vi.sample_rate, Some(extra))?;
@@ -278,8 +278,8 @@ pub fn opener(name: &str, bytes: Arc<[u8]>) -> Option<Result<SharedSource, Media
     Some(OggSource::open(name, bytes).map(|s| Arc::new(s) as SharedSource).map_err(Into::into))
 }
 
-/// [`filmcraft_media::ReaderOpener`] for Ogg Opus / Vorbis.
-pub fn reader_opener(name: &str, head: &[u8], reader: &filmcraft_media::SharedReader) -> Option<Result<SharedSource, MediaError>> {
+/// [`mortiflix_media::ReaderOpener`] for Ogg Opus / Vorbis.
+pub fn reader_opener(name: &str, head: &[u8], reader: &mortiflix_media::SharedReader) -> Option<Result<SharedSource, MediaError>> {
     if !handles(&head[..head.len().min(4096)]) {
         return None;
     }

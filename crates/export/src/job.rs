@@ -9,7 +9,7 @@
 //! then encodes for real with the first pass's statistics.
 //!
 //! When a source's bytes are not available yet (asynchronous web reads mark
-//! [`filmcraft_media::pending`]), the video batch is rendered again on the next call: nothing is encoded
+//! [`mortiflix_media::pending`]), the video batch is rendered again on the next call: nothing is encoded
 //! from frames with missing media. Known, pre-existing web issue (TODO, separate fix): the audio pull
 //! has already advanced its position when it hits a pending source, so a retried group loses its audio.
 //!
@@ -34,7 +34,7 @@
 //!   ones in particular) may be tied to a thread, and the exporter need not be `Send`; only the
 //!   render of the next batch moves to the pool. It needs no `&mut` access to the exporter: it
 //!   holds an `Arc<Pipeline>` and the source provider.
-//! * **Pending media.** [`filmcraft_media::pending`] is a thread-local flag, set by web readers
+//! * **Pending media.** [`mortiflix_media::pending`] is a thread-local flag, set by web readers
 //!   (whose export never overlaps: wasm has no threads, so [`Exporter::overlapping`] is false and
 //!   every step is the sequential render-then-encode of before). The render of a batch takes the
 //!   flag after every frame, on whatever thread drew it, and a batch that saw it is discarded:
@@ -63,10 +63,10 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use filmcraft_isobmff::{Brand, Mp4Writer, PcmConfig, SampleEntry, TrackConfig, WriteSample, WriterOptions};
-use filmcraft_project::{ItemId, Project};
-use filmcraft_render::SourceProvider;
-use filmcraft_time::FrameRate;
+use mortiflix_isobmff::{Brand, Mp4Writer, PcmConfig, SampleEntry, TrackConfig, WriteSample, WriterOptions};
+use mortiflix_project::{ItemId, Project};
+use mortiflix_render::SourceProvider;
+use mortiflix_time::FrameRate;
 use rayon::prelude::*;
 
 use crate::audio_out::AudioOut;
@@ -119,7 +119,7 @@ fn render_batch(pipe: &Pipeline, f: i64, end: i64, sources: &dyn SourceProvider)
         .into_par_iter()
         .map(|fi| {
             let frame = pipe.frame(fi, sources);
-            if filmcraft_media::pending::take() {
+            if mortiflix_media::pending::take() {
                 pending.store(true, Ordering::Relaxed);
             }
             frame
@@ -231,7 +231,7 @@ impl Exporter {
         let hdr_out = hdr_output(pipe.working.is_hdr(), settings.sdr, settings.video_format(), crate::hdr_available);
         let mut settings = settings.clone();
         settings.signal = match (hdr_out, pipe.working) {
-            (true, filmcraft_color::WorkingSpace::Rec2100Pq) => ColorSignal::PQ,
+            (true, mortiflix_color::WorkingSpace::Rec2100Pq) => ColorSignal::PQ,
             (true, _) => ColorSignal::HLG,
             _ => ColorSignal::default(),
         };
@@ -441,7 +441,7 @@ impl Exporter {
             self.ahead = None;
             return Err(ExportError::Cancelled);
         }
-        let _ = filmcraft_media::pending::take();
+        let _ = mortiflix_media::pending::take();
         if !self.measured {
             if !self.settings.part_of_batch {
                 progress.set_status("Measuring loudness");
@@ -449,7 +449,7 @@ impl Exporter {
             let a = self.audio.as_mut().ok_or_else(|| ExportError::Encode("internal: the audio pipeline was not created".into()))?;
             let settings = &self.settings;
             timed(Stage::Loudness, || a.measure(settings, sources, &|| progress.cancel.load(Ordering::Relaxed)))?;
-            if filmcraft_media::pending::take() {
+            if mortiflix_media::pending::take() {
                 return Ok(Step::Pending);
             }
             *progress.loudness.lock().unwrap_or_else(|e| e.into_inner()) = a.loudness;
@@ -475,7 +475,7 @@ impl Exporter {
         }
         let finishing = web_time::Instant::now();
         let mixed = self.audio.as_mut().and_then(|a| a.rest(sources));
-        if filmcraft_media::pending::take() {
+        if mortiflix_media::pending::take() {
             return Ok(Step::Pending);
         }
         if self.mux.is_none() && self.mxf.is_none() {
@@ -609,7 +609,7 @@ impl Exporter {
             note_stage(Stage::Audio, t.elapsed());
         }
         // taken right here, on the thread that pulled, before other work can touch the flag
-        if filmcraft_media::pending::take() {
+        if mortiflix_media::pending::take() {
             return Ok(Encoded::Pending);
         }
         let mut mixed = mixed.into_iter();

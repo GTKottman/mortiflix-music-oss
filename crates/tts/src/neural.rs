@@ -1,7 +1,7 @@
 //! The neural voices (feature `kokoro`): a script goes through the text front end
-//! (`filmcraft-tts-text`: normalizer, CMUdict + letter-to-sound, chunks of at most 400 phonemes
+//! (`mortiflix-tts-text`: normalizer, CMUdict + letter-to-sound, chunks of at most 400 phonemes
 //! and pause markers), each chunk through Kokoro-82M, pauses become exact silence, and the vocal
-//! pitch is applied afterwards with the pitch shifter from `filmcraft-audio-dsp` (Kokoro has no
+//! pitch is applied afterwards with the pitch shifter from `mortiflix-audio-dsp` (Kokoro has no
 //! pitch control). Pace is Kokoro's speed. The model, the dictionary and voice packs are loaded
 //! once per package directory and shared.
 
@@ -9,8 +9,8 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 
-use filmcraft_audio_dsp::AudioEffect;
-use filmcraft_tts_text::{Chunk, Lang, Lexicon, Overrides};
+use mortiflix_audio_dsp::AudioEffect;
+use mortiflix_tts_text::{Chunk, Lang, Lexicon, Overrides};
 
 use crate::catalog;
 use crate::kokoro::{KOKORO_RATE, Kokoro, VoicePack};
@@ -73,7 +73,7 @@ impl Voice for NeuralVoice {
     fn synthesize(&self, text: &str, params: &Params) -> Result<Audio, TtsError> {
         check_text(text)?;
         params.check()?;
-        let chunks = filmcraft_tts_text::phonemize(text, Lang::EnUs, &self.lexicon, &Overrides::default()).map_err(|e| TtsError::Invalid(e.to_string()))?;
+        let chunks = mortiflix_tts_text::phonemize(text, Lang::EnUs, &self.lexicon, &Overrides::default()).map_err(|e| TtsError::Invalid(e.to_string()))?;
         let rate = KOKORO_RATE;
         let max = (MAX_SECONDS * f64::from(rate)) as usize;
         let mut out: Vec<f32> = Vec::new();
@@ -118,7 +118,7 @@ impl Voice for NeuralVoice {
 
 /// Shift pitch by `semitones` keeping the length (latency compensated).
 fn pitch_shift(mut x: Vec<f32>, semitones: f64, rate: u32) -> Vec<f32> {
-    let mut ps = filmcraft_audio_dsp::effects::PitchShifter::new(rate as f32, 1);
+    let mut ps = mortiflix_audio_dsp::effects::PitchShifter::new(rate as f32, 1);
     ps.set_param("semitones", semitones as f32);
     ps.reset();
     let lat = ps.latency();

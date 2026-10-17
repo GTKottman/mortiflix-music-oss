@@ -2,7 +2,7 @@
 
 mod common;
 use common::*;
-use filmcraft_dnx::{DecodeOptions, decode_frame_with};
+use mortiflix_dnx::{DecodeOptions, decode_frame_with};
 
 fn specs() -> Vec<Spec> {
     let t = |s: &str, r: u32| format!("testsrc2=s={s}:r={r}");
@@ -69,7 +69,7 @@ fn decode_matches_ffmpeg() {
         println!(
             "{:<22} cid {} max {} mean {:.5} exact {:.3}% beyond ±1: {}",
             spec.name,
-            filmcraft_dnx::probe(&pk[0]).unwrap().cid,
+            mortiflix_dnx::probe(&pk[0]).unwrap().cid,
             st.max,
             st.mean(),
             st.exact_pct(),

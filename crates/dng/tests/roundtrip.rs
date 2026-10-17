@@ -2,10 +2,10 @@
 //! every depth, lossless JPEG with every predictor), the processing maths against hand-computed
 //! values, CinemaDNG metadata, and hostile files.
 
-use filmcraft_dng::color::{D50, D65, bradford, inverse, mul, rec709_to_xyz, xy_to_xyz};
-use filmcraft_dng::tiff::tags;
-use filmcraft_dng::writer::{Compression, Layout, Options, Value, lj92, write};
-use filmcraft_dng::{Dng, Error, Timecode, decode, ljpeg, probe, sniff};
+use mortiflix_dng::color::{D50, D65, bradford, inverse, mul, rec709_to_xyz, xy_to_xyz};
+use mortiflix_dng::tiff::tags;
+use mortiflix_dng::writer::{Compression, Layout, Options, Value, lj92, write};
+use mortiflix_dng::{Dng, Error, Timecode, decode, ljpeg, probe, sniff};
 
 /// A deterministic pseudo-random sequence.
 fn noise(n: usize, bits: u32, seed: u32) -> Vec<u16> {
@@ -46,7 +46,7 @@ fn sniff_and_container() {
             assert_eq!((info.raw_width, info.raw_height, info.width, info.height, info.bits), (16, 8, 16, 8, 12));
             assert!(info.cfa);
             assert_eq!(info.dng_version, [1, 4, 0, 0]);
-            assert_eq!(info.camera.as_deref(), Some("FilmCraft Synthetic"));
+            assert_eq!(info.camera.as_deref(), Some("Mortiflix Studio Synthetic"));
             assert_eq!(d.raw().unwrap().data, px, "be {be} preview {preview}");
         }
     }

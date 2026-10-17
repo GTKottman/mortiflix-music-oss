@@ -5,16 +5,16 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use filmcraft_frame::PixelData;
-use filmcraft_media::sequence::{ImageSequenceSource, Numbered, sequence_frames};
-use filmcraft_media::{FrameRequest, MediaKind, MediaSource};
-use filmcraft_time::{FrameRate, Tick};
+use mortiflix_frame::PixelData;
+use mortiflix_media::sequence::{ImageSequenceSource, Numbered, sequence_frames};
+use mortiflix_media::{FrameRequest, MediaKind, MediaSource};
+use mortiflix_time::{FrameRate, Tick};
 
 const W: usize = 95; // odd, so nothing lines up by accident
 const H: usize = 63;
 
 fn dir() -> PathBuf {
-    filmcraft_testkit::fixtures::fixtures_dir("media/exr")
+    mortiflix_testkit::fixtures::fixtures_dir("media/exr")
 }
 
 /// The filter making a 95×63 picture, translucent when `alpha`.
@@ -27,7 +27,7 @@ fn filter(alpha: bool) -> String {
 fn fixture(ff: &Path, pix_fmt: &str, format: &str, compression: &str) -> Option<PathBuf> {
     let out = dir().join(format!("{pix_fmt}_{format}_{compression}.exr"));
     let vf = filter(pix_fmt.starts_with("gbrap"));
-    filmcraft_testkit::fixtures::generate(&out, |tmp| {
+    mortiflix_testkit::fixtures::generate(&out, |tmp| {
         std::process::Command::new(ff)
             .args(["-y", "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=96x64", "-frames:v", "1", "-vf", &vf, "-pix_fmt", pix_fmt])
             .args(["-compression", compression, "-format", format])
@@ -67,7 +67,7 @@ fn ffmpeg_rgba(ff: &Path, file: &Path, pix_fmt: &str, half: bool) -> Vec<f32> {
         .collect()
 }
 
-fn floats(f: &filmcraft_frame::VideoFrame) -> Vec<f32> {
+fn floats(f: &mortiflix_frame::VideoFrame) -> Vec<f32> {
     match &f.data {
         PixelData::RgbaF32(p) => p.to_vec(),
         _ => panic!("EXR frames are float"),
@@ -81,7 +81,7 @@ fn max_diff(a: &[f32], b: &[f32]) -> f32 {
 
 #[test]
 fn exr_stills_match_ffmpeg() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     for pix_fmt in ["gbrpf32le", "gbrapf32le", "grayf32le"] {
         for format in ["float", "half"] {
             for compression in ["none", "rle", "zip1", "zip16"] {
@@ -90,7 +90,7 @@ fn exr_stills_match_ffmpeg() {
                     eprintln!("SKIPPED: ffmpeg cannot write {name}");
                     continue;
                 };
-                let src = filmcraft_media::open_bytes("still.exr", std::fs::read(&f).unwrap().into(), &[]).unwrap_or_else(|e| panic!("{name}: {e}"));
+                let src = mortiflix_media::open_bytes("still.exr", std::fs::read(&f).unwrap().into(), &[]).unwrap_or_else(|e| panic!("{name}: {e}"));
                 assert_eq!(src.info().kind, MediaKind::Still, "{name}");
                 let v = src.info().video.clone().unwrap();
                 assert_eq!((v.width as usize, v.height as usize), (W, H), "{name}");
@@ -106,11 +106,11 @@ fn exr_stills_match_ffmpeg() {
 
 #[test]
 fn exr_sequence_plays_linear_float_frames() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let d = dir().join("seq_v1");
     let last = d.join("img_0003.exr");
     if !last.exists() {
-        let tmp = filmcraft_testkit::fixtures::temp_path(&d);
+        let tmp = mortiflix_testkit::fixtures::temp_path(&d);
         std::fs::create_dir_all(&tmp).unwrap();
         let ok = std::process::Command::new(&ff)
             .args(["-y", "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=96x64:rate=25", "-frames:v", "3", "-vf", &filter(true)])
@@ -134,7 +134,7 @@ fn exr_sequence_plays_linear_float_frames() {
     assert_eq!(src.frame_count(), 3);
     let v = src.info().video.clone().unwrap();
     assert_eq!((v.codec.as_str(), v.pixel_format.as_str(), v.has_alpha), ("EXR sequence", "RGBA 16-bit float", true));
-    assert_eq!(v.color.transfer, filmcraft_color::Transfer::Linear);
+    assert_eq!(v.color.transfer, mortiflix_color::Transfer::Linear);
     for i in [2, 0, 1] {
         let ours = floats(&src.video_frame(FrameRequest::full(FrameRate::FPS_25.tick_of(i))).unwrap());
         let want = ffmpeg_rgba(&ff, &d.join(format!("img_{:04}.exr", i + 1)), "gbrapf32le", true);
@@ -156,7 +156,7 @@ fn exr_pxr24_matches_openexr() {
         let packed = dir().join(format!("pxr24_{name}.exr"));
         let plain = dir().join(format!("pxr24_{name}_plain.exr"));
         let ok = |p: &Path| {
-            filmcraft_testkit::fixtures::generate(p, |tmp| {
+            mortiflix_testkit::fixtures::generate(p, |tmp| {
                 let t = tmp.to_string_lossy().to_string();
                 if p == packed.as_path() {
                     tool(&[
@@ -183,7 +183,7 @@ fn exr_pxr24_matches_openexr() {
         };
         let plain = dir().join(format!("pxr24_{name}_plain.exr"));
         let decode = |p: &Path| {
-            floats(&filmcraft_media::open_bytes("still.exr", std::fs::read(p).unwrap().into(), &[]).unwrap().video_frame(FrameRequest::full(Tick(0))).unwrap())
+            floats(&mortiflix_media::open_bytes("still.exr", std::fs::read(p).unwrap().into(), &[]).unwrap().video_frame(FrameRequest::full(Tick(0))).unwrap())
         };
         let (ours, want) = (decode(&packed), decode(&plain));
         assert_eq!(max_diff(&ours, &want), 0.0, "{name}");

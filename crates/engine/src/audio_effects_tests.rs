@@ -3,8 +3,8 @@
 //! (`mixer.addInsert`), parameters settable by id, and the sequence still renders.
 
 use super::*;
-use filmcraft_project::ParamValue;
-use filmcraft_project::effect::PREMIERE_AUDIO_EFFECTS;
+use mortiflix_project::ParamValue;
+use mortiflix_project::effect::PREMIERE_AUDIO_EFFECTS;
 use serde_json::json;
 
 fn demo() -> Session {
@@ -17,9 +17,9 @@ fn a1_clip(s: &Session) -> u64 {
     s.active_sequence().unwrap().audio_tracks[0].items[0].id.0
 }
 
-fn render(s: &Session, frames: usize) -> filmcraft_frame::AudioBuffer {
+fn render(s: &Session, frames: usize) -> mortiflix_frame::AudioBuffer {
     let provider = s.media.provider(s.project.clone(), s.services.clone());
-    filmcraft_render::audio::mix_sequence(&s.project, s.active_sequence().unwrap(), 0, frames, &provider)
+    mortiflix_render::audio::mix_sequence(&s.project, s.active_sequence().unwrap(), 0, frames, &provider)
 }
 
 #[test]
@@ -49,7 +49,7 @@ fn every_audio_effect_applies_to_clips_and_tracks_and_renders() {
         let it = s.active_sequence().unwrap().find_item(ClipId(clip)).unwrap().1.clone();
         assert_eq!(it.effects.len(), n0 + 1, "{id}");
         assert_eq!(it.effects.last().unwrap().effect, id);
-        assert!(filmcraft_render::audio_fx::supported(id), "{id}");
+        assert!(mortiflix_render::audio_fx::supported(id), "{id}");
         s.execute("mixer.addInsert", json!({"strip": "A1", "effect": id})).unwrap_or_else(|e| panic!("{id}: {e}"));
         let b = render(&s, 2400);
         assert_eq!(b.frames(), 2400);
@@ -64,7 +64,7 @@ fn parameters_are_set_by_id_and_change_the_sound() {
     let mut s = demo();
     let clip = a1_clip(&s);
     let before = render(&s, 4800);
-    let peak = |b: &filmcraft_frame::AudioBuffer| b.channels.iter().flatten().fold(0.0f32, |a, v| a.max(v.abs()));
+    let peak = |b: &mortiflix_frame::AudioBuffer| b.channels.iter().flatten().fold(0.0f32, |a, v| a.max(v.abs()));
     assert!(peak(&before) > 1e-3, "the demo has audio on A1");
     // Mute (a loose item) silences the clip.
     s.execute("effects.apply", json!({"clips": [clip], "effect": "Mute"})).unwrap();
@@ -77,7 +77,7 @@ fn parameters_are_set_by_id_and_change_the_sound() {
     let it = s.active_sequence().unwrap().find_item(ClipId(clip)).unwrap().1.clone();
     let provider = s.media.provider(s.project.clone(), s.services.clone());
     let a0 = it.start.to_units_floor(48000);
-    let sig = filmcraft_render::audio::clip_signal(&it, a0, 4800, 48000, &provider).unwrap();
+    let sig = mortiflix_render::audio::clip_signal(&it, a0, 4800, 48000, &provider).unwrap();
     let pk = sig.iter().flatten().fold(0.0f32, |a, v| a.max(v.abs()));
     assert!(pk < 1e-6, "muted clip peak {pk}");
     s.execute("edit.undo", json!({})).unwrap();
@@ -89,7 +89,7 @@ fn parameters_are_set_by_id_and_change_the_sound() {
     s.execute("mixer.addInsert", json!({"strip": "A1", "effect": "graphic_eq_30"})).unwrap();
     s.execute("mixer.setInsert", json!({"strip": "A1", "slot": 0, "params": {"gain": -12.0}})).unwrap();
     let quieter = render(&s, 4800);
-    let rms = |b: &filmcraft_frame::AudioBuffer| {
+    let rms = |b: &mortiflix_frame::AudioBuffer| {
         (b.channels.iter().flatten().map(|v| (*v as f64).powi(2)).sum::<f64>() / (b.frames() * b.channel_count()) as f64).sqrt()
     };
     let d = 20.0 * (rms(&quieter) / rms(&before)).log10();

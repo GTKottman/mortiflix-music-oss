@@ -4,7 +4,7 @@
 # Clean-room: every entry was written from the plain meaning of the English text using ordinary
 # Korean video-editing vocabulary (시퀀스, 타임라인, 트랙, 클립, 재생 헤드, 빈, 렌더, 내보내기…). No
 # proprietary localisation resource, string table or product UI was consulted or copied; add entries
-# the same way. Product and technology names (FilmCraft, ArtCraft, Lumetri, ProRes, LUFS…) keep their
+# the same way. Product and technology names (Mortiflix Studio, ArtCraft, Lumetri, ProRes, LUFS…) keep their
 # spelling. Hangul is drawn with an installed system font (Malgun Gothic, Apple SD Gothic Neo, Noto
 # Sans CJK KR…, see cjk.rs); native-speaker review welcome.
 
@@ -73,7 +73,7 @@
 	AAF Export Settings	AAF 내보내기 설정
 	AAF…	AAF…
 	About	정보
-	About FilmCraft	FilmCraft 정보
+	About Mortiflix Studio	Mortiflix Studio 정보
 	Accent Color	강조 색상
 	Accessible color contrast	접근성 색상 대비
 	Action and Title Safe Areas	액션 및 제목 안전 영역
@@ -525,7 +525,7 @@
 	Ch. {n}	채널 {n}
 	Change Mask	마스크 변경
 	Change to Color	색상 변경
-	Changes are copied in the background a moment after each edit. If FilmCraft quits unexpectedly, they are offered the next time it starts.	변경 사항은 편집 직후 백그라운드에서 복사됩니다. FilmCraft가 비정상 종료되면 다음 실행 시 복구할 수 있습니다.
+	Changes are copied in the background a moment after each edit. If Mortiflix Studio quits unexpectedly, they are offered the next time it starts.	변경 사항은 편집 직후 백그라운드에서 복사됩니다. Mortiflix Studio가 비정상 종료되면 다음 실행 시 복구할 수 있습니다.
 	Channel	채널
 	Channel Blur	채널 흐림
 	Channel Format:	채널 형식:
@@ -1157,16 +1157,15 @@
 	Film Dissolve (Legacy)	필름 디졸브(레거시)
 	Film Emulation	필름 에뮬레이션
 	Film Roll	필름 롤
-	FilmCraft always composites in linear light	FilmCraft는 항상 선형 광원으로 합성합니다
-	FilmCraft Graphics Template	FilmCraft 그래픽 템플릿
-	FilmCraft Help…	FilmCraft 도움말…
-	FilmCraft hit an error	FilmCraft 오류 발생
-	FilmCraft keeps the rest of the RAM free for other applications.	FilmCraft는 나머지 RAM을 다른 앱용으로 비워 둡니다.
-	FilmCraft on getartcraft.com	getartcraft.com의 FilmCraft
-	FilmCraft on GitHub	GitHub의 FilmCraft
-	FilmCraft Project	FilmCraft 프로젝트
-	FilmCraft quit unexpectedly while “{name}” had unsaved changes.	“{name}”의 변경 사항을 저장하지 않은 채 FilmCraft가 비정상 종료되었습니다.
-	FilmCraft was closed while “{name}” had unsaved changes.	“{name}”의 변경 사항을 저장하지 않은 채 FilmCraft가 닫혔습니다.
+	Mortiflix Studio always composites in linear light	Mortiflix Studio는 항상 선형 광원으로 합성합니다
+	Mortiflix Studio Graphics Template	Mortiflix Studio 그래픽 템플릿
+	Mortiflix Studio Help…	Mortiflix Studio 도움말…
+	Mortiflix Studio hit an error	Mortiflix Studio 오류 발생
+	Mortiflix Studio keeps the rest of the RAM free for other applications.	Mortiflix Studio는 나머지 RAM을 다른 앱용으로 비워 둡니다.
+	Mortiflix Studio on mortiflix.com	getartcraft.com의 Mortiflix Studio
+	Mortiflix Studio Project	Mortiflix Studio 프로젝트
+	Mortiflix Studio quit unexpectedly while “{name}” had unsaved changes.	“{name}”의 변경 사항을 저장하지 않은 채 Mortiflix Studio가 비정상 종료되었습니다.
+	Mortiflix Studio was closed while “{name}” had unsaved changes.	“{name}”의 변경 사항을 저장하지 않은 채 Mortiflix Studio가 닫혔습니다.
 	Filter	필터
 	Filter and EQ	필터 및 EQ
 	Filter Frequency	필터 주파수
@@ -1398,7 +1397,7 @@
 	Hardware (AV1 has no software encoder)	하드웨어 (AV1은 소프트웨어 인코더 없음)
 	Hardware (H.265 has no software encoder)	하드웨어 (H.265는 소프트웨어 인코더 없음)
 	Hardware decoding	하드웨어 디코딩
-	Hardware decoding: Auto uses the system's video decoder (VideoToolbox on macOS, Media Foundation on Windows, VA-API or NVDEC for H.264 and HEVC on Linux) for the streams it supports, and FilmCraft's own decoder for everything else or if the hardware fails. Media that is already open keeps its decoder until it is reopened.	하드웨어 디코딩: 자동은 지원 스트림에 시스템 비디오 디코더(macOS는 VideoToolbox, Windows는 Media Foundation, Linux는 H.264·HEVC용 VA-API 또는 NVDEC)를 쓰고, 그 외나 하드웨어 실패 시 FilmCraft 자체 디코더를 씁니다. 이미 열린 미디어는 다시 열 때까지 기존 디코더를 유지합니다.
+	Hardware decoding: Auto uses the system's video decoder (VideoToolbox on macOS, Media Foundation on Windows, VA-API or NVDEC for H.264 and HEVC on Linux) for the streams it supports, and Mortiflix Studio's own decoder for everything else or if the hardware fails. Media that is already open keeps its decoder until it is reopened.	하드웨어 디코딩: 자동은 지원 스트림에 시스템 비디오 디코더(macOS는 VideoToolbox, Windows는 Media Foundation, Linux는 H.264·HEVC용 VA-API 또는 NVDEC)를 쓰고, 그 외나 하드웨어 실패 시 Mortiflix Studio 자체 디코더를 씁니다. 이미 열린 미디어는 다시 열 때까지 기존 디코더를 유지합니다.
 	HD Anamorphic 1080 (1.333)	HD 아나모픽 1080(1.333)
 	HDR	HDR
 	HDR Graphics White (Nits)	HDR 그래픽 흰색(Nits)
@@ -2058,7 +2057,7 @@
 	No model credits were built into this copy.	이 사본에 모델 크레딧이 포함되지 않았습니다.
 	No Motion	모션 없음
 	No multi-camera clip at the playhead	재생 헤드에 멀티 카메라 클립 없음
-	No plugins are installed. Changes will take effect the next time you start FilmCraft.	설치된 플러그인이 없습니다. 변경 사항은 FilmCraft를 다음에 시작할 때 적용됩니다.
+	No plugins are installed. Changes will take effect the next time you start Mortiflix Studio.	설치된 플러그인이 없습니다. 변경 사항은 Mortiflix Studio를 다음에 시작할 때 적용됩니다.
 	No saved guide templates.	저장된 안내선 템플릿 없음.
 	No Scroll	스크롤 없음
 	No templates match.	일치하는 템플릿 없음.
@@ -2079,8 +2078,8 @@
 	not available in this session	이 세션에서 사용할 수 없음
 	Not matched yet	아직 일치 안 됨
 	Not Now	나중에
-	Not supported by FilmCraft's encoders yet	FilmCraft 인코더에서 아직 지원 안 됨
-	Not supported in FilmCraft yet	FilmCraft에서 아직 지원되지 않음
+	Not supported by Mortiflix Studio's encoders yet	Mortiflix Studio 인코더에서 아직 지원 안 됨
+	Not supported in Mortiflix Studio yet	Mortiflix Studio에서 아직 지원되지 않음
 	Notch 1	노치 1
 	Notch 2	노치 2
 	Notch 3	노치 3
@@ -2404,7 +2403,7 @@
 	QuickTime, ProRes 4444 (4:4:4) with alpha channel, 24-bit 48 kHz PCM	QuickTime, ProRes 4444 (4:4:4) 알파 채널 포함, 24비트 48 kHz PCM
 	QuickTime, ProRes 4444 (4:4:4), 24-bit 48 kHz PCM	QuickTime, ProRes 4444 (4:4:4), 24비트 48 kHz PCM
 	QuickTime, ProRes 4444 XQ (4:4:4), 24-bit 48 kHz PCM	QuickTime, ProRes 4444 XQ (4:4:4), 24비트 48 kHz PCM
-	Quit FilmCraft	FilmCraft 종료
+	Quit Mortiflix Studio	Mortiflix Studio 종료
 	Radial	방사형
 	Radial Blur	방사형 흐림
 	Radial Ramp	방사형 램프
@@ -2651,7 +2650,7 @@
 	Save preset as:	사전 설정 저장 이름:
 	Save Preset…	사전 설정 저장…
 	Save Project	프로젝트 저장
-	Saved as a FilmCraft graphics template (.fcgt) in your templates folder.	템플릿 폴더에 FilmCraft 그래픽 템플릿(.fcgt)으로 저장했습니다.
+	Saved as a Mortiflix Studio graphics template (.fcgt) in your templates folder.	템플릿 폴더에 Mortiflix Studio 그래픽 템플릿(.fcgt)으로 저장했습니다.
 	Saved preset “{name}”	사전 설정 “{name}” 저장됨
 	Saved template {path}	템플릿 저장됨: {path}
 	Saves the view, columns, sort, thumbnail and font size.	보기, 열, 정렬, 썸네일, 글꼴 크기를 저장합니다.
@@ -2735,7 +2734,7 @@
 	Select to Segment End	세그먼트 끝까지 선택
 	Select to Segment Start	세그먼트 시작까지 선택
 	Selected: {command}	선택됨: {command}
-	Selection as FilmCraft Project…	선택 항목을 FilmCraft 프로젝트로…
+	Selection as Mortiflix Studio Project…	선택 항목을 Mortiflix Studio 프로젝트로…
 	Selection Follows Playhead	재생 헤드 따라 선택
 	Selection Order	선택 순서
 	Selection Tool	선택 도구
@@ -2935,7 +2934,6 @@
 	Sort Order	정렬 순서
 	Source	소스
 	Source channels the selected audio clips play:	선택한 오디오 클립이 재생할 소스 채널:
-	Source code on GitHub	GitHub 소스 코드
 	Source In/Out	소스 시작/끝
 	Source Play/Stop	소스 재생/정지
 	Source Point	소스 지점
@@ -3131,7 +3129,7 @@
 	TextPanel	텍스트 패널
 	The default graphics are used from the next start.	다음 시작부터 기본 그래픽을 사용합니다.
 	The language changed but could not be saved: {e}	언어가 변경되었으나 저장하지 못했습니다: {e}
-	The media cache holds render previews of unsaved projects and other files FilmCraft can recreate. Deleting them is always safe; FilmCraft rebuilds them as needed.	미디어 캐시에는 저장되지 않은 프로젝트의 렌더 미리 보기 등 FilmCraft가 다시 만들 수 있는 파일이 있습니다. 삭제해도 안전하며 필요 시 FilmCraft가 다시 생성합니다.
+	The media cache holds render previews of unsaved projects and other files Mortiflix Studio can recreate. Deleting them is always safe; Mortiflix Studio rebuilds them as needed.	미디어 캐시에는 저장되지 않은 프로젝트의 렌더 미리 보기 등 Mortiflix Studio가 다시 만들 수 있는 파일이 있습니다. 삭제해도 안전하며 필요 시 Mortiflix Studio가 다시 생성합니다.
 	The project had not been saved yet.	프로젝트가 아직 저장되지 않았습니다.
 	The selected clips have different audio types. Assign one type to edit them together.	선택한 클립의 오디오 유형이 다릅니다. 함께 편집하려면 한 유형을 지정하세요.
 	The sequence has no caption track.	시퀀스에 자막 트랙이 없습니다.
@@ -3593,6 +3591,6 @@
 	Opens in your web browser: {url}	웹 브라우저에서 엽니다: {url}
 	Saves this session's log and shows it in your file manager.	이 세션의 로그를 저장하고 파일 관리자에서 보여 줍니다.
 	Shows a report on this computer.	이 컴퓨터에 대한 보고서를 보여 줍니다.
-	Shows the version, community links and credits in a FilmCraft window.	FilmCraft 창에 버전, 커뮤니티 링크, 제작진을 보여 줍니다.
+	Shows the version, community links and credits in a Mortiflix Studio window.	Mortiflix Studio 창에 버전, 커뮤니티 링크, 제작진을 보여 줍니다.
 	Couldn't open your web browser	웹 브라우저를 열 수 없습니다
 	Open this address in your browser yourself:	이 주소를 브라우저에서 직접 여세요:

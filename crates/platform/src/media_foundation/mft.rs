@@ -6,7 +6,7 @@
 //! the public items are safe and return `Result<_, String>`.
 //!
 //! `mfplat.dll` is loaded at run time instead of linked: Windows "N" editions ship without the
-//! Media Feature Pack, and FilmCraft must still start (and decode in software) on them.
+//! Media Feature Pack, and Mortiflix Studio must still start (and decode in software) on them.
 
 use std::ffi::c_void;
 use std::mem::ManuallyDrop;

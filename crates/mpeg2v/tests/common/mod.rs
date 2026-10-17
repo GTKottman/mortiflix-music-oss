@@ -5,10 +5,10 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use filmcraft_mpeg2v::{ChromaFormat, Decoder, Picture};
+use mortiflix_mpeg2v::{ChromaFormat, Decoder, Picture};
 
 pub fn fixture_dir() -> PathBuf {
-    filmcraft_testkit::fixtures_dir("mpeg2v")
+    mortiflix_testkit::fixtures_dir("mpeg2v")
 }
 
 /// An elementary-stream fixture: a lavfi source encoded by ffmpeg's MPEG-1/2 video encoder.
@@ -37,7 +37,7 @@ pub fn path(spec: &Spec) -> PathBuf {
 /// Generate (or reuse) the fixture.
 pub fn make(ff: &Path, spec: &Spec) -> Option<PathBuf> {
     let out = path(spec);
-    filmcraft_testkit::fixtures::generate(&out, |tmp| {
+    mortiflix_testkit::fixtures::generate(&out, |tmp| {
         let frames = spec.frames.to_string();
         let fmt = if spec.enc.contains(&"mpeg1video") { "mpeg1video" } else { "mpeg2video" };
         let st = Command::new(ff)
@@ -69,7 +69,7 @@ pub fn decode_es(es: &[u8], threads: bool) -> (Vec<Picture>, Decoder) {
     let mut d = Decoder::new();
     d.set_threads(threads);
     let mut out = Vec::new();
-    for (i, r) in filmcraft_mpeg2v::access_units(es).into_iter().enumerate() {
+    for (i, r) in mortiflix_mpeg2v::access_units(es).into_iter().enumerate() {
         out.extend(d.decode(&es[r], i as i64).expect("decode"));
     }
     out.extend(d.flush());

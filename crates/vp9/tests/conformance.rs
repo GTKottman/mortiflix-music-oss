@@ -75,7 +75,7 @@ fn draft_mode_changes_only_flagged_non_reference_frames() {
     let data = std::fs::read(&ivf).unwrap();
     let fsize = common::raw_size(f.width as usize, f.height as usize, f.pix_fmt);
     for threads in [1, 3] {
-        let mut dec = filmcraft_vp9::Decoder::with_threads(threads);
+        let mut dec = mortiflix_vp9::Decoder::with_threads(threads);
         dec.set_draft(true);
         let mut pics = Vec::new();
         for (i, c) in common::ivf_frames(&data).into_iter().enumerate() {
@@ -139,7 +139,7 @@ fn coverage_report() {
     for f in common::FIXTURES {
         let Some((ivf, _)) = common::ensure(f) else { continue };
         let data = std::fs::read(ivf).unwrap();
-        let mut dec = filmcraft_vp9::Decoder::new();
+        let mut dec = mortiflix_vp9::Decoder::new();
         for fr in common::ivf_frames(&data) {
             let _ = dec.decode(fr, 0);
         }
@@ -169,13 +169,13 @@ fn keyframes_and_reset() {
     let Some((ivf, _)) = common::ensure(f) else { return };
     let data = std::fs::read(ivf).unwrap();
     let chunks = common::ivf_frames(&data);
-    let keys: Vec<usize> = (0..chunks.len()).filter(|&i| filmcraft_vp9::is_keyframe(chunks[i])).collect();
+    let keys: Vec<usize> = (0..chunks.len()).filter(|&i| mortiflix_vp9::is_keyframe(chunks[i])).collect();
     assert_eq!(keys.first(), Some(&0));
     assert!(keys.len() >= 2, "key frames {keys:?}");
-    let info = filmcraft_vp9::keyframe_info(chunks[0]).unwrap();
+    let info = mortiflix_vp9::keyframe_info(chunks[0]).unwrap();
     assert_eq!((info.width, info.height, info.bit_depth), (f.width, f.height, 8));
     assert!(info.subsampling_x && info.subsampling_y);
-    let mut dec = filmcraft_vp9::Decoder::with_threads(1);
+    let mut dec = mortiflix_vp9::Decoder::with_threads(1);
     let mut all = Vec::new();
     for (i, c) in chunks.iter().enumerate() {
         all.extend(dec.decode(c, i as i64).unwrap());

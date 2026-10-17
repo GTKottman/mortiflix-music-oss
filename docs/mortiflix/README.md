@@ -1,16 +1,16 @@
-# Mortiflix FilmCraft: the foundation
+# Mortiflix Studio: the foundation
 
-Mortiflix FilmCraft is FilmCraft 0.8.0 plus the Mortiflix stages: **1 Script · 2 Look · 3 Shots ·
-4 Voice & music · 5 FilmCraft · 6 Render** (docs 30-40 in Morti Drive ›
-Design Docs › Mortiflix FilmCraft). The binary is still `filmcraft`; the window is "Mortiflix FilmCraft".
+Mortiflix Studio is an open-source video editor (0.8.0; credits in NOTICE) plus the Mortiflix stages: **1 Script · 2 Look · 3 Shots ·
+4 Voice & music · 5 Edit · 6 Render** (docs 30-40 in Morti Drive ›
+Design Docs › Mortiflix Studio). The binary is `mortiflix-studio`; the window is "Mortiflix Studio".
 
 ## How it fits together
 
-- **Stages 1-4:** FilmCraft's Edit mode in the **Mortiflix** workspace: Mortiflix Chat (+ Assets tab)
+- **Stages 1-4:** Mortiflix Studio's Edit mode in the **Mortiflix** workspace: Mortiflix Chat (+ Assets tab)
   left, Preview and the stage's own panel (Mortiflix Stage) in the middle/right, Node area along the
-  bottom. FilmCraft's Import/Edit/Export tabs are hidden.
-- **Stage 5:** FilmCraft's Edit mode in the user's editing workspace, Mortiflix Chat docked right.
-- **Stage 6:** FilmCraft's Export mode. Clicking FilmCraft's Export tab lights stage 6, Edit lights 5.
+  bottom. Mortiflix Studio's Import/Edit/Export tabs are hidden.
+- **Stage 5:** Mortiflix Studio's Edit mode in the user's editing workspace, Mortiflix Chat docked right.
+- **Stage 6:** Mortiflix Studio's Export mode. Clicking Mortiflix Studio's Export tab lights stage 6, Edit lights 5.
 - **Stage bar:** 44 px under the header (`stagebar.rs`): Back · six stages with status · hint · Next; on
   4 Voice & music: Edit the video + **Get the video** (straight to Render).
 - **Stages menu / commands:** `stages.back` Ctrl+Alt+Page Up, `stages.next` Ctrl+Alt+Page Down,
@@ -30,7 +30,7 @@ Design Docs › Mortiflix FilmCraft). The binary is still `filmcraft`; the windo
 
 ## Who owns which file
 
-All Mortiflix UI is in `crates/mortiflix-ui/src/` (layer L5, no FilmCraft dependency). Each part fills
+All Mortiflix UI is in `crates/mortiflix-ui/src/` (layer L5, no Mortiflix Studio dependency). Each part fills
 its own file and keeps its `pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx)`.
 
 | Part | File | Shown in |
@@ -40,7 +40,7 @@ its own file and keeps its `pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx)`.
 | 35 Node area | `nodes.rs` (`show`, `show_stage` for stage 3) | Mortiflix Nodes panel |
 | 36 Preview | `preview.rs` | Mortiflix Preview panel |
 | 34 / 33b Voice & music | `voice_music.rs` | Mortiflix Stage on stage 4 |
-| 38 Into FilmCraft | `into_filmcraft.rs` | Mortiflix Stage on stage 5; the import hooks `stages.editVideo` |
+| 38 Into Edit | `into_edit.rs` | Mortiflix Stage on stage 5; the import hooks `stages.editVideo` |
 | 39 Render / export | `export.rs` | Mortiflix Stage on stage 6; `mortiflix.renderVideo` |
 | Setup | `setup.rs` | Setup window (`mortiflix.setup`, every "service not running" line) |
 | Stage 1 Script / 2 Look | `script.rs` / `look.rs` | Mortiflix Stage on stages 1 / 2 |
@@ -48,28 +48,28 @@ its own file and keeps its `pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx)`.
 
 `MfxCtx` gives a part: `state` (`MfxState`: project id, stage, statuses, selected node, chat, `graph` /
 `presets` JSON slots to type later), `service` (`request`, `take_reply`, `events_since`, `status`),
-`theme` (FilmCraft's colours), `command(id, params)` (run any FilmCraft/Mortiflix command after drawing)
+`theme` (Mortiflix Studio's colours), `command(id, params)` (run any Mortiflix Studio/Mortiflix command after drawing)
 and `auto(id, &response, label)` (automation id; required for every interactive widget).
 
-FilmCraft-side glue is one file, `crates/ui-egui/src/mortiflix.rs` (commands, layouts, panel dispatch,
+Mortiflix Studio-side glue is one file, `crates/ui-egui/src/mortiflix.rs` (commands, layouts, panel dispatch,
 windows). Small edits elsewhere: `dock.rs` (5 `Mfx*` PanelKinds + the "Mortiflix" layout),
 `panels/mod.rs` (dispatch line), `menus.rs` (Stages menu, command chaining, route), `header.rs` (mode
 tabs hidden on 1-4), `lib.rs` (field, stage bar row, frame hook, Timeline not forced into stages 1-4),
-`i18n/*.tsv` (menu and panel names), `apps/filmcraft/src/main.rs` (title, activate, start service).
+`i18n/*.tsv` (menu and panel names), `apps/mortiflix-studio/src/main.rs` (title, activate, start service).
 
-The Node side: `~/Documents/programs/mortiflix-oss-filmcraft`, branch `mfx-service/base`:
+The Node side: the mortiflix-oss checkout (`MFX_SERVICE`), branch `mfx-service/base`:
 `bin/mortiflix-service.mjs`, `src/service.mjs` (one handler per message), `test/service.test.mjs`.
 
 ## Build, run, screenshot
 
 ```sh
-cd ~/Documents/programs/mortiflix-filmcraft
+cd <this repo>
 export CARGO_TARGET_DIR=/mnt/storage/drive_1/mfc-targets/<part>
-flock /tmp/mfc-cargo.lock cargo build -p filmcraft -j 6
-flock /tmp/mfc-cargo.lock cargo test -p filmcraft-mortiflix-ui
+flock /tmp/mfc-cargo.lock cargo build -p mortiflix-studio -j 6
+flock /tmp/mfc-cargo.lock cargo test -p mortiflix-ui
 # rustfmt/clippy: the rustup proxies have no components here; use the system ones
 PATH=/usr/bin:$PATH /usr/bin/cargo-fmt --all -- --check
-PATH=/usr/bin:$PATH flock /tmp/mfc-cargo.lock /usr/bin/cargo-clippy clippy -p filmcraft-mortiflix-ui --all-targets -- -D warnings
+PATH=/usr/bin:$PATH flock /tmp/mfc-cargo.lock /usr/bin/cargo-clippy clippy -p mortiflix-ui --all-targets -- -D warnings
 ```
 
 Run it headless (a hidden Hyprland special workspace gets no frames, so `ui.screenshot` times out;
@@ -80,8 +80,8 @@ cat > run.sh <<'EOF'
 #!/bin/sh
 echo $$ > app.pid            # close it later with: kill $(cat app.pid)
 unset WAYLAND_DISPLAY
-export MFX_SERVICE=$HOME/Documents/programs/mortiflix-oss-filmcraft MORTIFLIX_STUDIO=$PWD/studio
-exec $CARGO_TARGET_DIR/debug/filmcraft --control 198NN --demo --no-recover --data-dir $PWD/fcdata
+export MFX_SERVICE=<mortiflix-oss checkout> MORTIFLIX_STUDIO=$PWD/studio
+exec $CARGO_TARGET_DIR/debug/mortiflix-studio --control 198NN --demo --no-recover --data-dir $PWD/fcdata
 EOF
 xvfb-run -a -s "-screen 0 1920x1080x24" ./run.sh &
 # control channel: one JSON line per request on 127.0.0.1:198NN

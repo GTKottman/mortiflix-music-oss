@@ -5,13 +5,13 @@
 
 use std::time::{Duration, Instant};
 
-use filmcraft_platform::hardware_encode::{hevc_available, hevc_probed, warm_hevc_probe};
+use mortiflix_platform::hardware_encode::{hevc_available, hevc_probed, warm_hevc_probe};
 
 #[test]
 fn register_answers_the_hevc_probe_in_the_background() {
     assert!(!hevc_probed(), "nothing has asked yet");
 
-    filmcraft_platform::register();
+    mortiflix_platform::register();
 
     // nobody calls `hevc_available()` here: only the thread `register` started can answer
     let t0 = Instant::now();
@@ -23,7 +23,7 @@ fn register_answers_the_hevc_probe_in_the_background() {
     // asking again, or registering again, changes nothing
     let answer = hevc_available();
     warm_hevc_probe();
-    filmcraft_platform::register();
+    mortiflix_platform::register();
     assert_eq!(hevc_available(), answer);
     assert!(hevc_probed());
 }

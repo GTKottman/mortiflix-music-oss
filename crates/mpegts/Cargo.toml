@@ -1,5 +1,5 @@
 [package]
-name = "filmcraft-mpegts"
+name = "mortiflix-mpegts"
 description = "Clean-room MPEG-2 Systems (ISO/IEC 13818-1) demuxer: Transport Stream (188-byte, 192-byte M2TS) and Program Stream (MPEG-1/2 PS, VOB, MOD)"
 version.workspace = true
 edition.workspace = true
@@ -13,4 +13,4 @@ workspace = true
 thiserror = { workspace = true }
 
 [dev-dependencies]
-filmcraft-testkit = { workspace = true }
+mortiflix-testkit = { workspace = true }

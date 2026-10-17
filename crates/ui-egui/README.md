@@ -1,4 +1,4 @@
-# FilmCraft interface
+# Mortiflix Studio interface
 
 The egui frontend draws panels and dialogs, and dispatches project changes through the engine.
 Interactive controls keep stable automation ids regardless of the interface language.
@@ -13,7 +13,7 @@ incompatible clip types show no valid transition preview. Ordinary effects retai
 outline. `timeline.transitionDropPreview` exposes the span and edge to automation.
 
 `transition_drop_ui` covers both edges of short video/audio clips, hover without project edits,
-the committed span and undo. Set `FILMCRAFT_UI_SNAPSHOT_DIR` to render screenshots with wgpu.
+the committed span and undo. Set `MFX_STUDIO_UI_SNAPSHOT_DIR` to render screenshots with wgpu.
 
 ## Localisation
 
@@ -38,7 +38,7 @@ and preference values retain their original values. Engine errors, CLI and MCP m
 English. Ukrainian and Russian currently cover the core menus, German every menu; they fall back
 to English elsewhere.
 
-Verification: `cargo test -p filmcraft-ui-egui` checks catalog syntax, duplicate keys, placeholders,
+Verification: `cargo test -p mortiflix-ui-egui` checks catalog syntax, duplicate keys, placeholders,
 literal/menu/registry coverage and UI behaviour; `cargo xtask ci` runs the workspace gates. Visual
 checks use the control channel to switch language and capture the resulting panels.
 
@@ -63,7 +63,7 @@ keeps Source navigation, markers and marked-range playback separate from Program
 ## Pane layout controls
 
 Dock transactions and pointer targets use `craft-ui::docking`; bounded split geometry and
-keyboard-accessible resize handles use `craft-ui::layout`. FilmCraft adapts its existing saved
+keyboard-accessible resize handles use `craft-ui::layout`. Mortiflix Studio adapts its existing saved
 dock tree and panel identities to the shared model. Panel tabs or their header grip can move
 between tab groups, split at an edge, reorder, or float when released with Cmd/Ctrl. Floating
 panels move by their empty header and resize from the bottom-right corner. Timeline sequence

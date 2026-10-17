@@ -20,7 +20,7 @@ pub(crate) mod bento;
 mod read;
 mod write;
 
-use filmcraft_project::{ItemId, Project};
+use mortiflix_project::{ItemId, Project};
 use serde::{Deserialize, Serialize};
 
 use crate::comp::{self, ExtractedMedia};

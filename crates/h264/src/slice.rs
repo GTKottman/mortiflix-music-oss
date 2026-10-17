@@ -2,7 +2,7 @@
 
 use crate::error::{Result, ensure};
 use crate::params::{Pps, Sps};
-use filmcraft_bitstream::BitReader;
+use mortiflix_bitstream::BitReader;
 
 /// NAL unit types used by the decoder.
 pub mod nal_type {

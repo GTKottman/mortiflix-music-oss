@@ -1,4 +1,4 @@
-# filmcraft-mxf
+# mortiflix-mxf
 
 A clean-room MXF demuxer and writer. Layer L0: no dependencies beyond `std`, no `unsafe`, builds for
 `wasm32-unknown-unknown`. No GPL/LGPL code (FFmpeg, libMXF, bmx, MXFLib) was consulted; FFmpeg is
@@ -15,7 +15,7 @@ Implemented from the SMPTE documents (editions used):
 | SMPTE ST 378 | 2004 | OP1a |
 | SMPTE ST 390 | 2011 | OP-Atom |
 | SMPTE ST 379-1 / 379-2 | 2009 / 2010 | generic container: content packages, element keys, frame / clip wrapping |
-| SMPTE ST 381-1 | 2005 | MPEG video mapping (MPEG-2 identified, MPEG video descriptor; decoded by `filmcraft-mpeg2v` in `filmcraft-codecs`) |
+| SMPTE ST 381-1 | 2005 | MPEG video mapping (MPEG-2 identified, MPEG video descriptor; decoded by `mortiflix-mpeg2v` in `mortiflix-codecs`) |
 | SMPTE ST 381-3 | 2013 | AVC byte-stream mapping and AVC sub-descriptor |
 | SMPTE ST 382 | 2007 | AES3 and Broadcast Wave audio mapping (wave / AES3 descriptors) |
 | SMPTE ST 331 | 2011 | element data of 8-channel AES3 sound (D-10) |
@@ -29,13 +29,13 @@ Implemented from the SMPTE documents (editions used):
 
 ```rust
 let file = std::fs::read("clip.mxf")?;
-let mxf = filmcraft_mxf::open(&file)?;
+let mxf = mortiflix_mxf::open(&file)?;
 println!("{} {:?}", mxf.operational_pattern.name(), mxf.timecode.map(|t| t.format()));
-let v = mxf.track_of_kind(filmcraft_mxf::TrackKind::Picture).unwrap();
+let v = mxf.track_of_kind(mortiflix_mxf::TrackKind::Picture).unwrap();
 let t = &mxf.tracks[v];
 let key = t.sync_before(t.sample_at(42).unwrap());    // stored index of the random-access picture
 let bytes = mxf.read_sample(&file, v, key)?;           // one edit unit's essence
-let a = mxf.track_of_kind(filmcraft_mxf::TrackKind::Sound).unwrap();
+let a = mxf.track_of_kind(mortiflix_mxf::TrackKind::Sound).unwrap();
 let pcm = mxf.read_pcm(&file, a, 48_000, 1920)?;       // planar f32, sample-exact
 ```
 
@@ -59,9 +59,9 @@ let pcm = mxf.read_pcm(&file, a, 48_000, 1920)?;       // planar f32, sample-exa
   essence is scanned (AVC IDR, MPEG-2 sequence header). Presentation order from the index temporal
   offsets (display position *n* is stored at *n* + `TemporalOffset[n]`). When the index marks B
   pictures but has no temporal offsets (FFmpeg-written AVC), `needs_reorder` is set: the caller
-  orders by the bitstream (`filmcraft-codecs` uses the AVC picture order counts).
+  orders by the bitstream (`mortiflix-codecs` uses the AVC picture order counts).
 - **Codecs.** From the picture essence coding label, then the essence container label, then the
-  essence bytes: AVC / AVC-Intra, VC-3, ProRes (profile from the label), MPEG-2 (decoded in `filmcraft-codecs`),
+  essence bytes: AVC / AVC-Intra, VC-3, ProRes (profile from the label), MPEG-2 (decoded in `mortiflix-codecs`),
   MPEG-4 visual, JPEG 2000, DV, uncompressed.
 - **Sound.** PCM chunks (frame- or clip-wrapped) with sample counts; `read_pcm` decodes
   little-endian 8/16/24/32-bit PCM (wave / AES3 descriptors) and ST 331 AES3 elements (D-10).
@@ -76,7 +76,7 @@ encrypted essence (ST 429-6), and descriptive metadata (parsed sets are ignored)
 ## Writing a file
 
 ```rust
-use filmcraft_mxf::*;
+use mortiflix_mxf::*;
 let ids = PackageIds::from_seed("unique seed (path + time)", "Clip name"); // material + file UMIDs
 let mut cfg = WriterConfig::new(Pattern::Op1a, Rational::new(25, 1), ids);
 cfg.picture = Some(PictureDesc::new(PictureCoding::Vc3 { cid: 1272 }, 1920, 1080));

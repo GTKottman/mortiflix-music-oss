@@ -3,9 +3,9 @@ use std::sync::Arc;
 use serde_json::json;
 
 use crate::Session;
-use filmcraft_project::{ItemId, Transcript, Word};
-use filmcraft_speech::FixedTranscriber;
-use filmcraft_time::Tick;
+use mortiflix_project::{ItemId, Transcript, Word};
+use mortiflix_speech::FixedTranscriber;
+use mortiflix_time::Tick;
 
 /// The demo project with a fake transcriber whose transcript fits the first A1 clip's media:
 /// "Hello um world." (Speaker 1), a 1.2 s pause, "Second speaker here." (Speaker 2).
@@ -145,8 +145,8 @@ fn set_delete_and_models() {
     assert!(s.execute("transcript.set", json!({"item": item.0, "transcript": {"words": 3}})).is_err());
 
     // survives save/load
-    let bytes = filmcraft_format::encode(&s.project, true);
-    let back = filmcraft_format::decode(&bytes).unwrap();
+    let bytes = mortiflix_format::encode(&s.project, true);
+    let back = mortiflix_format::decode(&bytes).unwrap();
     assert_eq!(back.project.transcripts[&item].words.len(), 2);
 
     s.execute("transcript.delete", json!({"items": [item.0]})).unwrap();
@@ -154,7 +154,7 @@ fn set_delete_and_models() {
     assert!(s.execute("transcript.delete", json!({})).is_err());
 
     let m = s.execute("transcript.models", json!({})).unwrap();
-    assert_eq!(m["available"], filmcraft_speech::available());
+    assert_eq!(m["available"], mortiflix_speech::available());
     assert!(m["models"].as_array().unwrap().iter().any(|x| x["id"] == "whisper-base"));
 }
 
@@ -164,9 +164,9 @@ fn generate_without_a_transcriber() {
     s.transcriber = None;
     let e = s.execute("transcript.generate", json!({"items": [item.0], "model": "nope"})).unwrap_err().to_string();
     // a build without speech-to-text says that first: the command is disabled (#97)
-    let why = if filmcraft_speech::available() { "unknown speech model" } else { "not available in this build" };
+    let why = if mortiflix_speech::available() { "unknown speech model" } else { "not available in this build" };
     assert!(e.contains(why), "{e}");
-    if !filmcraft_speech::available() {
+    if !mortiflix_speech::available() {
         assert!(!s.is_enabled("sequence.transcribe"), "Transcribe Sequence follows transcript.generate");
         let e = s.execute("transcript.generate", json!({"items": [item.0]})).unwrap_err().to_string();
         assert!(e.contains("whisper") && e.contains("not available"), "{e}");

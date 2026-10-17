@@ -2,8 +2,8 @@
 //! `timeline.selectGap` selects the empty time on one track, `edit.clear` and `edit.rippleDelete`
 //! close it as one "Ripple Delete" undo step.
 
-use filmcraft_project::ClipId;
-use filmcraft_time::Tick;
+use mortiflix_project::ClipId;
+use mortiflix_time::Tick;
 use serde_json::json;
 
 use crate::{GapSelection, Session};
@@ -120,7 +120,7 @@ fn a_stale_gap_is_refused() {
     let rate = s.sequence_rate();
     let f = |n: i64| rate.tick_of(n);
     let track = s.active_sequence().unwrap().video_tracks[0].id;
-    s.state.gap_selection = Some(GapSelection { track, range: filmcraft_time::TimeRange::from_bounds(f(10), f(20)) });
+    s.state.gap_selection = Some(GapSelection { track, range: mortiflix_time::TimeRange::from_bounds(f(10), f(20)) });
     assert!(s.execute("edit.clear", json!({})).is_err());
     assert!(s.state.gap_selection.is_none());
     assert_eq!(range(&s, picture2).0, f(96));

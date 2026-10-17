@@ -402,7 +402,7 @@ pub struct Editing {
 pub enum Leave {
     /// A stage command (`stages.<what>`).
     Stage { what: String },
-    /// A FilmCraft command that opens or closes a project (File ▸ Open, Open Recent, Close Project),
+    /// A Mortiflix Studio command that opens or closes a project (File ▸ Open, Open Recent, Close Project),
     /// run again by the host.
     Command { id: String, params: Value },
     /// A service request that opens, makes or closes a project (`project.open {id}` …).
@@ -424,7 +424,7 @@ impl Leave {
             Leave::Request { ty, .. } if ty == "project.new" => "You're making a new project.",
             Leave::Request { .. } => "You're opening another project.",
             Leave::NewProject => "You're making a new project.",
-            Leave::Quit => "You're quitting Mortiflix FilmCraft.",
+            Leave::Quit => "You're quitting Mortiflix Studio.",
         }
     }
 }

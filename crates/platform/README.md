@@ -1,14 +1,14 @@
-# filmcraft-platform
+# mortiflix-platform
 
-OS media integration for FilmCraft (layer L5): hardware video decoding through the operating
-system's codecs, behind `filmcraft_codecs::VideoDecoder`, and hardware H.264 and H.265 (HEVC)
-encoding, behind `filmcraft_export::VideoEncoder`. It holds OS media FFI and nothing else.
+OS media integration for Mortiflix Studio (layer L5): hardware video decoding through the operating
+system's codecs, behind `mortiflix_codecs::VideoDecoder`, and hardware H.264 and H.265 (HEVC)
+encoding, behind `mortiflix_export::VideoEncoder`. It holds OS media FFI and nothing else.
 It is the one crate of the workspace allowed to contain `unsafe`, under the rules of
 [ADR 0001](../../docs/adr/0001-platform-ffi.md) and [AGENTS.md](../../AGENTS.md) §0.3.
 
 ```rust
-// at startup (the desktop app, filmcraft-cli, the bench)
-let availability = filmcraft_platform::register(); // Available("VideoToolbox") on macOS, Available("Media Foundation") on Windows, Available("VA-API") on Linux with a driver
+// at startup (the desktop app, mortiflix-studio-cli, the bench)
+let availability = mortiflix_platform::register(); // Available("VideoToolbox") on macOS, Available("Media Foundation") on Windows, Available("VA-API") on Linux with a driver
 ```
 
 ## What it does
@@ -27,7 +27,7 @@ let availability = filmcraft_platform::register(); // Available("VideoToolbox") 
   10-bit 4:2:0 (HEVC Main 10, VP9 profile 2, AV1 main 10)
   (`media_foundation/`). A Direct3D-aware decoder MFT (Microsoft's H.264 decoder, the HEVC Video
   Extensions' decoder, or a vendor's synchronous hardware MFT) is driven at the level of single
-  access units, so there is no Source Reader and no second demuxer: the container samples FilmCraft
+  access units, so there is no Source Reader and no second demuxer: the container samples Mortiflix Studio
   already read go in as Annex B (`annexb.rs`; parameter sets are put in front of the first sample of
   a run). The process-wide Direct3D 11 device (`D3D11_CREATE_DEVICE_VIDEO_SUPPORT`, multithread
   protected) is handed to the MFT through an `IMFDXGIDeviceManager`, which makes it decode with DXVA
@@ -57,7 +57,7 @@ let availability = filmcraft_platform::register(); // Available("VideoToolbox") 
     `av1_color` are shared with them). A VP9 key frame of another size or format, or an AV1 sequence
     header unlike `av1C`'s, hands the stream to the software decoder (`HybridDecoder`).
   - `mfplat.dll` is loaded at run time (`mft.rs`), not linked: Windows "N" editions without the Media
-    Feature Pack still start FilmCraft, which then decodes in software.
+    Feature Pack still start Mortiflix Studio, which then decodes in software.
   - After a `flush` (which drains the MFT) the MFT only restarts at an IDR picture; the GOP cache
     always seeks after a flush, and a caller that continues from the middle of a GOP gets an error
     that `HybridDecoder` answers by replaying the run in software.
@@ -97,7 +97,7 @@ let availability = filmcraft_platform::register(); // Available("VideoToolbox") 
   VA-API decoding is *stateless*: the host parses the stream and keeps the decoded picture buffer,
   and the GPU decodes one picture's slice data at a time into a surface. That host side
   (`vaapi/h264.rs`, `vaapi/hevc.rs`, safe code) is the software decoders' own: their parameter-set
-  and slice-header parsers, POC computation and DPBs (`filmcraft_h264::dpb`, `filmcraft_hevc::dpb`,
+  and slice-header parsers, POC computation and DPBs (`mortiflix_h264::dpb`, `mortiflix_hevc::dpb`,
   generic over what a picture is: H.264 reference marking including MMCOs and reference lists with
   modifications; HEVC reference picture sets and lists, RASL pictures of a CRA the run starts at
   left out; output order). The two decoders therefore make
@@ -123,7 +123,7 @@ let availability = filmcraft_platform::register(); // Available("VideoToolbox") 
     leaves out its RASL pictures); the GOP cache always seeks after a flush.
 - **Other systems:** `register()` does nothing and returns `Availability::Unavailable`.
 - **`HybridDecoder`** (`hybrid.rs`, safe code): the hardware decoder plus the means to build our
-  software decoder for the same `SampleEntry` (`filmcraft_codecs::software_video_decoder`). On a
+  software decoder for the same `SampleEntry` (`mortiflix_codecs::software_video_decoder`). On a
   mid-stream failure (decode error, invalidated session, changed in-band parameter sets) it replays
   the samples since the last restart point (IDR / IRAP; for an HEVC CRA the one before, so its RASL
   pictures decode) through the software decoder, drops pictures already returned, keeps the ones
@@ -135,7 +135,7 @@ let availability = filmcraft_platform::register(); // Available("VideoToolbox") 
 
 `videotoolbox_encode.rs` (FFI) wraps a VideoToolbox compression session with a hardware encoder
 *required*; `hardware_encode.rs` (safe code) is the `VideoEncoder` adapter and the factory that
-`register()` puts in front of the built-in encoders (`filmcraft_export::register_encoder`).
+`register()` puts in front of the built-in encoders (`mortiflix_export::register_encoder`).
 
 - **Opt-in per export:** `ExportSettings::hardware_encoding` (`Off` | `Auto`; Export ▸ Video ▸
   Hardware Encoding, `"hardwareEncoding": "off|auto"` in `file.exportMedia`), off by default. The built-in encoder's
@@ -166,7 +166,7 @@ built-in encoder, which changes three things from H.264:
   (HEVC), or `"format": "hevc"` in `file.exportMedia` (`h265` is accepted too). The format is
   listed as available only on a machine with a hardware HEVC encoder: `register()` hands
   `hardware_encode::hevc_available` (one small hardware session, about 0.1 s) to
-  `filmcraft_export::register_format_probe`, and asks it right away on a thread of its own
+  `mortiflix_export::register_format_probe`, and asks it right away on a thread of its own
   (`warm_hevc_probe`), so the first draw of the format list does not create the session on the UI
   thread.
 - **There is no fallback encoder.** What the hardware path does not take is an error, not a
@@ -200,7 +200,7 @@ level 4 High tier, which many hardware decoders refuse; it is now level 4.1 Main
 
 - **Choosing the format is the opt-in,** as on macOS: Export ▸ Format ▸ H.265 (HEVC) or
   `"format": "hevc"`. `register()` hands `nvenc::hevc_available` to
-  `filmcraft_export::register_format_probe`: one small HEVC session (a 640×360 encoder, the answer
+  `mortiflix_export::register_format_probe`: one small HEVC session (a 640×360 encoder, the answer
   kept; about half a second in a fresh process, nearly all of it opening the Direct3D 11 device and
   the NVENC session, which every NVENC export pays too). `register()` also asks it on a thread of its
   own (`nvenc::warm_hevc_probe`), so the first draw of the format list does not wait for it; a
@@ -218,7 +218,7 @@ level 4 High tier, which many hardware decoders refuse; it is now level 4.1 Main
   PPS, access unit delimiters and end-of-sequence / bitstream markers are dropped; slices and SEI
   stay. `nvEncGetSequenceParams` returns all three parameter sets.
 - **The `hvcC` is built from the SPS the encoder wrote** (`nvenc/hevc.rs`, parsed with
-  `filmcraft_hevc`): profile space, tier, profile, compatibility flags and level from the SPS's
+  `mortiflix_hevc`): profile space, tier, profile, compatibility flags and level from the SPS's
   profile / tier / level; the 48 general constraint flags and `sps_temporal_id_nesting_flag` read from
   the SPS bits that carry them; chroma format, bit depths and temporal layers from the SPS; the
   arrays complete (`array_completeness` 1). Nothing is a constant of ours except what the format
@@ -238,12 +238,12 @@ level 4 High tier, which many hardware decoders refuse; it is now level 4.1 Main
 - **Main 10 HDR (PQ / HLG).** An HDR sequence (Rec. 2100 PQ or HLG working space) exports as HEVC
   Main 10 when `settings.sdr` is off and this GPU has a 10-bit HEVC encoder. `register()` hands
   `nvenc::hevc_hdr_available` (a Main 10 session, cached, asked on the same background thread as the
-  8-bit probe and short-circuiting when HEVC itself is missing) to `filmcraft_export::register_hdr_probe`,
+  8-bit probe and short-circuiting when HEVC itself is missing) to `mortiflix_export::register_hdr_probe`,
   and the export job makes the export HDR for `Format::Hevc` only when
-  `filmcraft_export::hdr_available(Format::Hevc)` says so: on macOS (VideoToolbox is 8-bit) and on GPUs
+  `mortiflix_export::hdr_available(Format::Hevc)` says so: on macOS (VideoToolbox is 8-bit) and on GPUs
   without 10-bit an HDR sequence is tone-mapped to 8-bit SDR HEVC exactly as before, and `settings.sdr`
   still forces that. The pixels are real: `EncoderFrame::hdr` (encoded BT.2020 R'G'B', 3 floats per
-  pixel) goes through `filmcraft_export::rgbf_to_yuv420_10` (BT.2020 non-constant-luminance matrix,
+  pixel) goes through `mortiflix_export::rgbf_to_yuv420_10` (BT.2020 non-constant-luminance matrix,
   Y = 64 + 876·Y', C = 512 + 896·C, 2x2 chroma average, NaN counts as 0, values clamp to 0..1 and codes
   to 4..1019, wrong-length input is an error) and into a **P010** input buffer (`code << 6`,
   little-endian, chroma interleaved after the luma rows, pitch in bytes; a driver pitch under 2 bytes
@@ -277,13 +277,13 @@ level 4 High tier, which many hardware decoders refuse; it is now level 4.1 Main
   8-bit 4:2:0 progressive H.264 and 4:2:0 HEVC Main / Main 10) and when the OS cannot create a hardware session (VideoToolbox), a
   GPU-backed decoder (Media Foundation) or a VA-API configuration and context (Linux).
 - **Interchangeable:** colour, pixel aspect, pts, presentation order, `is_random_access` and
-  `is_disposable` come from the software decoders' own helpers (`filmcraft_codecs::hw`,
+  `is_disposable` come from the software decoders' own helpers (`mortiflix_codecs::hw`,
   `video::vui_color`, `sar_par`).
 - **Never crash:** no `unwrap` / `expect` / `panic!` outside tests; the output callback (and
   libva's error-message callback) runs under `catch_unwind`; every `unsafe` block has a `// SAFETY:` comment; the public API is safe.
 - **Counted:** `perf.stats` `decode.hardware` (frames, software frames, sessions, declined,
-  fallbacks; `filmcraft_codecs::hw::hw_stats`) and `backend` (the registered backend's name,
-  `filmcraft_codecs::hw::hw_backend`). `export.hardware` counts the NVENC encoder's frames, sessions and declines.
+  fallbacks; `mortiflix_codecs::hw::hw_stats`) and `backend` (the registered backend's name,
+  `mortiflix_codecs::hw::hw_backend`). `export.hardware` counts the NVENC encoder's frames, sessions and declines.
 
 ## Tests
 
@@ -292,7 +292,7 @@ level 4 High tier, which many hardware decoders refuse; it is now level 4.1 Main
 | `tests/videotoolbox.rs` (macOS) | H.264 High, HEVC Main (open GOP: CRA + RASL) and HEVC Main 10, 640×360 (coded 368: cropping) with B-frames: every picture **bit-exact** with our software decoder, same pts order, count, colour and aspect, also after `reset` + reseek to every later sync sample, mid-stream `flush`, and a full pass after resets; forced mid-stream failures (`VtDecoder::fail_after`) at five points continue with the software decoder's exact output; seeded mutation of samples and parameter sets (bit flips, truncation, corrupt length prefixes) never panics or hangs; HEVC 4:2:2 10-bit is bit-exact with ffmpeg's decode |
 | `tests/fallback.rs` (every OS) | `HybridDecoder` with a stand-in hardware decoder failing after N samples (every sync sample ± a few, first / last sample, after a seek): output identical to the software decoder; in-band parameter sets identical to the sample entry's stay in hardware, different ones switch to software |
 | `tests/setting.rs` | Hardware decoding Off gives the software decoder through `make_video_decoder` and the media stack (no hardware frames); Auto gives VideoToolbox where available |
-| `tests/hardware_encode.rs` (macOS) | what the hardware path takes and declines; round trip through our software decoder (every picture, in order, luma PSNR above 30 dB, keyframes no further apart than asked, no composition offsets); an export through `filmcraft_export` that decodes in our decoder and in ffmpeg / ffprobe (profile, size, frame count, BT.709); the built-in encoder still exporting everything hardware declines; exact output size at sizes that are not multiples of 16; hostile configurations (zero, huge, odd sizes, frame rates, bitrates, keyframe intervals, wrong planes) give errors and never panic; encoders dropped at any point do not crash or hang. The same for **HEVC**: Main profile, 8-bit 4:2:0, `hvc1` entry with VPS / SPS / PPS and 4-byte lengths, MP4 and QuickTime, AAC audio, two-pass refused, the format list agreeing with the probe, ffprobe reading `codec_name=hevc`, `profile=Main`, `codec_tag_string=hvc1`, `pix_fmt=yuv420p`, BT.709 |
+| `tests/hardware_encode.rs` (macOS) | what the hardware path takes and declines; round trip through our software decoder (every picture, in order, luma PSNR above 30 dB, keyframes no further apart than asked, no composition offsets); an export through `mortiflix_export` that decodes in our decoder and in ffmpeg / ffprobe (profile, size, frame count, BT.709); the built-in encoder still exporting everything hardware declines; exact output size at sizes that are not multiples of 16; hostile configurations (zero, huge, odd sizes, frame rates, bitrates, keyframe intervals, wrong planes) give errors and never panic; encoders dropped at any point do not crash or hang. The same for **HEVC**: Main profile, 8-bit 4:2:0, `hvc1` entry with VPS / SPS / PPS and 4-byte lengths, MP4 and QuickTime, AAC audio, two-pass refused, the format list agreeing with the probe, ffprobe reading `codec_name=hevc`, `profile=Main`, `codec_tag_string=hvc1`, `pix_fmt=yuv420p`, BT.709 |
 | `tests/nvenc.rs` (Windows / Linux, NVIDIA) | H.264 from NVENC (1280×720, 6 Mbps, 72 frames) decodes with our decoder at worst 46.9 dB luma PSNR; IDR at 0, 24 and 48; dts / pts right |
 | `tests/nvenc_export.rs` (Windows / Linux; fallback also tested without NVIDIA) | Export with hardware encoding against the software encoder through the export pipeline: the two decoded files at worst 54.8 dB luma PSNR; ffmpeg decodes the file without errors; declined cases go to the software encoder; the counters |
 | `tests/nvenc_hevc.rs` (Windows, NVIDIA with HEVC) | HEVC from NVENC (1280×720, 6 Mbps, 72 frames, keyframe every 24) decodes with our HEVC decoder at worst 48.9 dB luma / 51.0 dB chroma PSNR; IDR at 0, 24, 48; dts strictly increasing, pts a permutation, `sps_max_num_reorder_pics` within the dts shift; no parameter sets in the samples; the `hvcC`'s profile / tier / level bytes are the SPS's own; VUI BT.709 limited and timing `(1, 24)`; hostile configurations, sizes, planes and encoders dropped mid-stream give errors, never panics; keyframes every 1–2 pictures without B-frames |

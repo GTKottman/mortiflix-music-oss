@@ -1,4 +1,4 @@
-//! Decode an IVF file: `cargo run --release -p filmcraft-vp9 --example vp9dec -- in.ivf [out.yuv]`.
+//! Decode an IVF file: `cargo run --release -p mortiflix-vp9 --example vp9dec -- in.ivf [out.yuv]`.
 //! Writes raw planar output (8-bit or 16-bit little endian) and prints decoder statistics.
 
 use std::io::Write;
@@ -8,7 +8,7 @@ fn main() {
     let data = std::fs::read(&args[1]).expect("read input");
     let mut out = args.get(2).map(|p| std::io::BufWriter::new(std::fs::File::create(p).expect("create output")));
     let threads = std::env::var("VP9_THREADS").ok().and_then(|s| s.parse().ok()).unwrap_or(0);
-    let mut dec = if threads > 0 { filmcraft_vp9::Decoder::with_threads(threads) } else { filmcraft_vp9::Decoder::new() };
+    let mut dec = if threads > 0 { mortiflix_vp9::Decoder::with_threads(threads) } else { mortiflix_vp9::Decoder::new() };
     // VP9_DRAFT=1: draft mode (non-reference frames skip the loop filter).
     dec.set_draft(std::env::var_os("VP9_DRAFT").is_some());
     // VP9_LOOPS=n decodes the file n times (for profiling; the stream starts with a key frame).

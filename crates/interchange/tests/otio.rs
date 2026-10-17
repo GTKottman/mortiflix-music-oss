@@ -1,12 +1,12 @@
 //! OpenTimelineIO: a hand-written plain OTIO document (from the public OTIO schema docs) with gaps,
-//! transitions, markers and legacy `Clip.1`; lossless round trips through `metadata.filmcraft`.
+//! transitions, markers and legacy `Clip.1`; lossless round trips through `metadata.mortiflix`.
 
 mod support;
 
-use filmcraft_interchange::{ExportOptions, Format, detect, import};
-use filmcraft_media::Generator;
-use filmcraft_project::{Keyframe, Label, Marker, MarkerId, MarkerKind, MediaRef, Param, ParamValue, Project, TrackKind, TransitionAlign};
-use filmcraft_time::{FrameRate, TICKS_PER_SECOND, Tick};
+use mortiflix_interchange::{ExportOptions, Format, detect, import};
+use mortiflix_media::Generator;
+use mortiflix_project::{Keyframe, Label, Marker, MarkerId, MarkerKind, MediaRef, Param, ParamValue, Project, TrackKind, TransitionAlign};
+use mortiflix_time::{FrameRate, TICKS_PER_SECOND, Tick};
 use proptest::prelude::*;
 use support::*;
 
@@ -140,7 +140,7 @@ fn golden_gaps_and_transitions() {
     assert_eq!(s.markers[0].start, r.tick_of(60));
 }
 
-fn project() -> (Project, filmcraft_project::ItemId) {
+fn project() -> (Project, mortiflix_project::ItemId) {
     let r = FrameRate::FPS_23_976;
     let mut p = Project::new("P");
     let a = media(&mut p, "/m/a.mov", true, true, r);
@@ -162,7 +162,7 @@ fn project() -> (Project, filmcraft_project::ItemId) {
         let q = p.sequence_mut(s).unwrap();
         // sub-frame audio position
         let mut ai = q.audio_tracks[0].items[0].clone();
-        ai.id = filmcraft_project::ClipId(9999);
+        ai.id = mortiflix_project::ClipId(9999);
         ai.link = None;
         ai.start = Tick(TICKS_PER_SECOND * 3 + TICKS_PER_SECOND / 48_000 * 7);
         ai.duration = Tick(TICKS_PER_SECOND / 48_000 * 33_333);
@@ -174,7 +174,7 @@ fn project() -> (Project, filmcraft_project::ItemId) {
         op.keyframes.push(Keyframe::new(r.tick_of(24), ParamValue::Float(0.0)));
         op.keyframes.push(Keyframe::new(r.tick_of(36), ParamValue::Float(100.0)));
         it.effect_mut("opacity").unwrap().params.insert("opacity".into(), op);
-        it.effects.push(filmcraft_project::find_effect("gaussian_blur").unwrap().instance());
+        it.effects.push(mortiflix_project::find_effect("gaussian_blur").unwrap().instance());
         it.markers.push(Marker {
             id: MarkerId(5),
             start: r.tick_of(30),
@@ -203,7 +203,7 @@ fn project() -> (Project, filmcraft_project::ItemId) {
 }
 
 #[test]
-fn lossless_roundtrip_with_filmcraft_metadata() {
+fn lossless_roundtrip_with_mortiflix_metadata() {
     let (p, s) = project();
     let (imp, text, rep) = roundtrip(&p, s, Format::Otio, &ExportOptions::default());
     assert!(!rep.has_warnings(), "{rep}");
@@ -245,7 +245,7 @@ fn lossless_roundtrip_with_filmcraft_metadata() {
     assert_eq!(q.sequence(nested).unwrap().video_tracks[0].items[0].source_in, FrameRate::FPS_23_976.tick_of(5));
     // relative media paths
     let o = ExportOptions { relative_to: Some("/m/otio".into()), ..Default::default() };
-    let (bytes, _) = filmcraft_interchange::export(&p, s, Format::Otio, &o).unwrap();
+    let (bytes, _) = mortiflix_interchange::export(&p, s, Format::Otio, &o).unwrap();
     let t = String::from_utf8(bytes.clone()).unwrap();
     assert!(t.contains("\"target_url\": \"../a.mov\""), "{t}");
     let (imp2, _) = import(&bytes, Format::Otio, Some("/m/otio")).unwrap();
@@ -314,7 +314,7 @@ proptest! {
         let ms = [media(&mut p, "/x/one.mov", true, true, rate), media(&mut p, "/x/two.mov", true, true, rate), media(&mut p, "/y/three four.mxf", true, true, rate)];
         let s = sequence(&mut p, "S", rate, rate == FrameRate::FPS_29_97);
         let mut ends = [0i64; 3];
-        let mut prev: [Option<filmcraft_project::ClipId>; 3] = [None; 3];
+        let mut prev: [Option<mortiflix_project::ClipId>; 3] = [None; 3];
         let mut aend = [Tick::ZERO; 3];
         for g in &clips {
             let t = ends[g.track] + g.gap;

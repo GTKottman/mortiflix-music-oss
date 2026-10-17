@@ -5,7 +5,7 @@ use crate::boolcoder::BoolDecoder;
 use crate::error::{Error, Result, ensure};
 use crate::probs::FrameContext;
 use crate::tables::*;
-use filmcraft_bitstream::BitReader;
+use mortiflix_bitstream::BitReader;
 
 pub const KEY_FRAME: u8 = 0;
 

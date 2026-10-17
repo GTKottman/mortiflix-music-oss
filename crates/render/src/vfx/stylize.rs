@@ -2,8 +2,8 @@
 
 use std::collections::VecDeque;
 
-use filmcraft_project::EffectInstance;
-use filmcraft_time::Tick;
+use mortiflix_project::EffectInstance;
+use mortiflix_time::Tick;
 use rayon::prelude::*;
 
 use super::*;
@@ -407,7 +407,7 @@ pub fn gradient_wipe(img: &mut Image, e: &EffectInstance, cx: &FxCtx) {
                 },
                 None => own.get(x, y),
             };
-            let mut g = filmcraft_color::linear_to_srgb(luma([s[0], s[1], s[2]]).clamp(0.0, 1.0));
+            let mut g = mortiflix_color::linear_to_srgb(luma([s[0], s[1], s[2]]).clamp(0.0, 1.0));
             if invert {
                 g = 1.0 - g;
             }
@@ -620,7 +620,7 @@ pub fn cell_pattern(img: &mut Image, e: &EffectInstance, cx: &FxCtx) {
         if invert {
             val = 1.0 - val;
         }
-        let g = filmcraft_color::srgb_to_linear(val);
+        let g = mortiflix_color::srgb_to_linear(val);
         [g, g, g, 1.0]
     });
 }

@@ -1,6 +1,6 @@
 //! Property tests: write with our muxers, read back, compare sample tables and bytes.
 
-use filmcraft_isobmff::*;
+use mortiflix_isobmff::*;
 use proptest::prelude::*;
 use std::io::Cursor;
 

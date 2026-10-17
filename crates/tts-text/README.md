@@ -1,12 +1,12 @@
-# filmcraft-tts-text
+# mortiflix-tts-text
 
-Text-to-speech text front end for FilmCraft (L2, phases P2a + P2b). Takes a
+Text-to-speech text front end for Mortiflix Studio (L2, phases P2a + P2b). Takes a
 narration script and returns plain spoken words, structured as tokens: `Word`,
 `Pause` (from `[pause 1s]` markers), `SentenceEnd` and `Punct`
 (`normalize`), and turns those words into Kokoro phoneme symbols (`phonemize`).
 
 ```rust
-use filmcraft_tts_text::{normalize, Lang, Token};
+use mortiflix_tts_text::{normalize, Lang, Token};
 
 let tokens = normalize("Call 555-0134 by 3:30 p.m. on Oct. 7th, it's $3.50 (20% off)", Lang::EnUs)?;
 // → Call | five five five zero one three four | by | three thirty p m | on |
@@ -142,7 +142,7 @@ entry held out, lexicon rebuilt without them, letter-to-sound output compared
 with the dictionary pronunciation. On 2026-10-08, machine: mjcamacho's Linux
 workstation (rustc 1.99.0, release build): **229 held-out words, 9.1 % exact
 word accuracy, 37.9 % phoneme error rate** (Levenshtein over phoneme symbols).
-The test runs whenever `FILMCRAFT_CMUDICT` points at a CMUdict file and prints
+The test runs whenever `MFX_STUDIO_CMUDICT` points at a CMUdict file and prints
 the numbers; it asserts only that it runs. CMUdict is downloaded with the voices
 at run time, never committed (BSD-style licence, attributed in the download
 dialog).

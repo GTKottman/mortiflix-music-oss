@@ -6,16 +6,16 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::Arc;
 
-use filmcraft_frame::{PixelData, VideoFrame};
+use mortiflix_frame::{PixelData, VideoFrame};
 
 pub fn dir() -> PathBuf {
-    filmcraft_testkit::fixtures_dir("codecs")
+    mortiflix_testkit::fixtures_dir("codecs")
 }
 
 /// Generate `name` with `ffmpeg -y -v error <args> <out>` (cached).
 pub fn fixture(ff: &Path, name: &str, args: &[&str]) -> Option<PathBuf> {
     let out = dir().join(name);
-    filmcraft_testkit::fixtures::generate(&out, |tmp| {
+    mortiflix_testkit::fixtures::generate(&out, |tmp| {
         let st = Command::new(ff).args(["-y", "-v", "error"]).args(args).arg(tmp).stdin(Stdio::null()).status();
         match st {
             Ok(s) if s.success() => true,

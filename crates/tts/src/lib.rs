@@ -1,4 +1,4 @@
-//! Text to speech for FilmCraft's Text to Speech panel (narrations).
+//! Text to speech for Mortiflix Studio's Text to Speech panel (narrations).
 //!
 //! - [`Voice`]: the trait every voice implements: a script in, mono samples out.
 //! - [`voices`] / [`voice`]: the voice catalogue (id, name, language, gender, engine, licence).
@@ -23,7 +23,7 @@ use serde::Serialize;
 pub const SAMPLE_RATE: u32 = 24_000;
 /// Longest narration a voice produces, in seconds.
 pub const MAX_SECONDS: f64 = 30.0 * 60.0;
-/// Longest script accepted, in bytes (same as `filmcraft_project::narration::MAX_TEXT_BYTES`).
+/// Longest script accepted, in bytes (same as `mortiflix_project::narration::MAX_TEXT_BYTES`).
 pub const MAX_TEXT_BYTES: usize = 64 * 1024;
 /// Pace limits.
 pub const MIN_PACE: f64 = 0.5;
@@ -125,7 +125,7 @@ pub trait Voice: Send + Sync {
 /// Languages offered (English only for now).
 pub const LANGUAGES: &[(&str, &str)] = &[("en-US", "English (United States)")];
 
-/// Every voice FilmCraft knows: the built-in voices, then the neural voices (installed when their
+/// Every voice Mortiflix Studio knows: the built-in voices, then the neural voices (installed when their
 /// package is downloaded into `models_dir`).
 pub fn voices_in(models_dir: Option<&std::path::Path>) -> Vec<VoiceInfo> {
     let installed = models_dir.is_some_and(catalog::installed) && cfg!(feature = "kokoro");

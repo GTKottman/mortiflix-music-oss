@@ -10,12 +10,12 @@
 //! `program.mask.roundness`, `program.maskPen`.
 
 use egui::{Align2, Color32, Pos2, Rect, Sense, Stroke, pos2, vec2};
-use filmcraft_geom::{Affine, Vec2};
-use filmcraft_project::{ClipId, EffectInstance, MaskMode, MaskPath, MaskVertex, TrackItem};
-use filmcraft_time::Tick;
+use mortiflix_geom::{Affine, Vec2};
+use mortiflix_project::{ClipId, EffectInstance, MaskMode, MaskPath, MaskVertex, TrackItem};
+use mortiflix_time::Tick;
 use serde_json::{Value, json};
 
-use crate::FilmcraftApp;
+use crate::StudioApp;
 use crate::icons::{self, Icon};
 use crate::theme::Tokens;
 
@@ -24,13 +24,13 @@ const ROW_H: f32 = 22.0;
 /// Whether an effect instance takes masks (video effects and Opacity; not Motion or graphic layers).
 pub fn maskable(e: &EffectInstance) -> bool {
     let Some(d) = e.def() else { return false };
-    d.kind == filmcraft_project::EffectKind::Video && (!d.intrinsic || e.effect == "opacity") && !filmcraft_project::graphic::is_layer(e)
+    d.kind == mortiflix_project::EffectKind::Video && (!d.intrinsic || e.effect == "opacity") && !mortiflix_project::graphic::is_layer(e)
 }
 
 /// Mask rows under an effect in Effect Controls.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn effect_rows(
-    app: &mut FilmcraftApp,
+    app: &mut StudioApp,
     ui: &mut egui::Ui,
     body: Rect,
     clip: ClipId,
@@ -76,11 +76,11 @@ pub(crate) fn effect_rows(
             }
         }
     }
-    let defs = filmcraft_project::mask::mask_param_defs();
+    let defs = mortiflix_project::mask::mask_param_defs();
     for (k, m) in e.masks.iter().enumerate() {
         let key = format!("mask:{}:{}:{}", clip.0, idx, k);
         let open = !app.ui.collapsed_fx.contains(&key);
-        let selected = app.session.state.selected_mask == Some(filmcraft_engine::masks::MaskSel { clip, effect: idx, mask: k });
+        let selected = app.session.state.selected_mask == Some(mortiflix_engine::masks::MaskSel { clip, effect: idx, mask: k });
         let (r, resp) = ui.allocate_exact_size(vec2(body.width(), ROW_H), Sense::click());
         if selected {
             ui.painter().rect_filled(crate::panels::effect_controls::row_fill(r), 0.0, t.row_selected);
@@ -177,10 +177,10 @@ pub(crate) fn effect_rows(
 const LEFT: egui::PointerButton = egui::PointerButton::Primary;
 
 /// Clip pixels → screen points for the clip's current Motion and the monitor picture rect.
-fn clip_to_screen(app: &FilmcraftApp, it: &TrackItem, mt: Tick, pic: Rect, frame: (u32, u32)) -> Option<Affine> {
+fn clip_to_screen(app: &StudioApp, it: &TrackItem, mt: Tick, pic: Rect, frame: (u32, u32)) -> Option<Affine> {
     let seq = app.session.active_sequence()?;
-    let size = filmcraft_render::source_size(&app.session.project, it.item).unwrap_or(frame);
-    let motion = filmcraft_render::motion_matrix(seq, it, size, filmcraft_render::source_par(&app.session.project, it.item), mt);
+    let size = mortiflix_render::source_size(&app.session.project, it.item).unwrap_or(frame);
+    let motion = mortiflix_render::motion_matrix(seq, it, size, mortiflix_render::source_par(&app.session.project, it.item), mt);
     let view = Affine::translate(pic.min.x as f64, pic.min.y as f64)
         .then_apply(&Affine::scale(pic.width() as f64 / frame.0 as f64, pic.height() as f64 / frame.1 as f64));
     Some(view.then_apply(&motion))
@@ -227,7 +227,7 @@ fn inside(pts: &[Vec2], p: Vec2) -> bool {
 
 /// Mask editing on the Program monitor (selected mask, while its clip is selected, as for the
 /// transform box) and the pen tool.
-pub fn monitor_overlay(app: &mut FilmcraftApp, ui: &mut egui::Ui, pic: Rect, frame: (u32, u32)) {
+pub fn monitor_overlay(app: &mut StudioApp, ui: &mut egui::Ui, pic: Rect, frame: (u32, u32)) {
     if app.ui.mask_pen.is_some() {
         pen_overlay(app, ui, pic, frame);
         return;
@@ -507,7 +507,7 @@ fn drag_radius(dist: f64, c: &RoundableCorner, max_radius: f64) -> f64 {
 /// corner with one `masks.roundCorners` (one undo step per drag). Masks without a sharp corner
 /// between straight edges (ellipses, pen masks, corners already rounded) show no handle.
 fn roundness_handle(
-    app: &mut FilmcraftApp,
+    app: &mut StudioApp,
     ui: &mut egui::Ui,
     painter: &egui::Painter,
     path: &MaskPath,
@@ -580,7 +580,7 @@ pub fn draft_path(points: &[[f64; 4]]) -> MaskPath {
 /// draft is outside the undo history: run before the shortcuts, so the keys reach neither Clear
 /// (of the clip being masked) nor Undo (of the previous project edit). Taking back the last point
 /// drops the draft.
-pub(crate) fn pen_take_back(app: &mut FilmcraftApp, ctx: &egui::Context, text_focused: bool) {
+pub(crate) fn pen_take_back(app: &mut StudioApp, ctx: &egui::Context, text_focused: bool) {
     let Some(d) = app.ui.mask_pen.as_mut() else { return };
     let n = ctx.input_mut(|i| {
         // Shift+Cmd+Z is Redo: consume_key ignores an extra Shift
@@ -603,7 +603,7 @@ pub(crate) fn pen_take_back(app: &mut FilmcraftApp, ctx: &egui::Context, text_fo
     }
 }
 
-fn pen_overlay(app: &mut FilmcraftApp, ui: &mut egui::Ui, pic: Rect, frame: (u32, u32)) {
+fn pen_overlay(app: &mut StudioApp, ui: &mut egui::Ui, pic: Rect, frame: (u32, u32)) {
     let Some(draft) = app.ui.mask_pen.clone() else { return };
     let ph = app.session.playhead();
     let clip = ClipId(draft.clip);
@@ -691,7 +691,7 @@ fn pen_overlay(app: &mut FilmcraftApp, ui: &mut egui::Ui, pic: Rect, frame: (u32
         app.ui.mask_pen = None;
         let r = app
             .session
-            .execute("masks.add", json!({"clip": draft.clip, "effect": draft.effect, "shape": "bezier", "path": filmcraft_engine::masks::path_to_json(&path)}));
+            .execute("masks.add", json!({"clip": draft.clip, "effect": draft.effect, "shape": "bezier", "path": mortiflix_engine::masks::path_to_json(&path)}));
         if let Err(e) = r {
             app.ui.status = e.to_string();
         } else {
@@ -710,7 +710,7 @@ fn open_polyline(path: &MaskPath, to_screen: &Affine) -> Vec<Pos2> {
     }
     for [p0, c1, c2, p3] in path.segments() {
         for k in 1..=16 {
-            out.push(sp(to_screen, filmcraft_project::mask::cubic(p0, c1, c2, p3, k as f64 / 16.0)));
+            out.push(sp(to_screen, mortiflix_project::mask::cubic(p0, c1, c2, p3, k as f64 / 16.0)));
         }
     }
     out
@@ -752,14 +752,14 @@ fn constrain_45(from: Pos2, to: Pos2) -> Pos2 {
 
 /// The Mask Path row's value area: mask tracking (backward continuously / one frame, forward one
 /// frame / continuously; clicking while a track runs stops it) and the tracking-method menu.
-pub fn path_value(app: &mut FilmcraftApp, ui: &mut egui::Ui, clip: ClipId, effect: usize, mask: Option<usize>, actions: &mut Vec<(String, Value)>) {
+pub fn path_value(app: &mut StudioApp, ui: &mut egui::Ui, clip: ClipId, effect: usize, mask: Option<usize>, actions: &mut Vec<(String, Value)>) {
     let Some(k) = mask else { return };
     let t = app.tokens;
     let Some(it) = app.session.active_sequence().and_then(|q| q.find_item(clip)).map(|(_, i)| i.clone()) else { return };
     let Some(e) = it.effects.get(effect) else { return };
     let Some(m) = e.masks.get(k) else { return };
     let base = format!("effectControls.{}.mask{k}", e.effect);
-    let target = filmcraft_engine::masks::MaskSel { clip, effect, mask: k };
+    let target = mortiflix_engine::masks::MaskSel { clip, effect, mask: k };
     let running = app.session.mask_jobs.iter().find(|j| j.target == target).map(|j| j.job);
     for (icon, dir, frames, id, tip) in [
         (Icon::TrackMaskBack, "backward", None, "back", tl!("Track selected mask backward")),
@@ -793,7 +793,7 @@ pub fn path_value(app: &mut FilmcraftApp, ui: &mut egui::Ui, clip: ClipId, effec
     app.auto.add(&format!("{base}.trackMethod"), r, "Tracking method");
     let resp = resp.on_hover_text(tlf!("Tracking method: {method}", method = crate::i18n::t(m.track_method.label())));
     egui::Popup::menu(&resp).show(|ui| {
-        for tm in filmcraft_project::TrackMethod::ALL {
+        for tm in mortiflix_project::TrackMethod::ALL {
             if ui.selectable_label(tm == m.track_method, crate::i18n::t(tm.label())).clicked() {
                 actions.push(("masks.set".into(), json!({"clip": clip.0, "effect": effect, "mask": k, "trackMethod": tm.label()})));
             }

@@ -1,4 +1,4 @@
-//! FilmCraft captions.
+//! Mortiflix Studio captions.
 //!
 //! - **Files:** [SubRip](srt) (`.srt`), [WebVTT](vtt) (`.vtt`), [Scenarist SCC](scc) (`.scc`,
 //!   CEA-608 pop-on, roll-up and paint-on on read; pop-on on write), [MacCaption MCC](mcc)
@@ -13,7 +13,7 @@
 //! - **Model:** [`track_from_document`] / [`document_from_track`] convert to and from the project's
 //!   [`CaptionTrack`].
 //! - **Burn-in:** [`burn`] lays a caption out with the track style and draws it with the
-//!   `filmcraft-text` engine (Inter SemiBold, shaped and kerned).
+//!   `mortiflix-text` engine (Inter SemiBold, shaped and kerned).
 
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable))]
 
@@ -26,8 +26,8 @@ pub mod stl;
 pub mod ttml;
 pub mod vtt;
 
-use filmcraft_project::{Caption, CaptionFormat, CaptionTrack, ClipId, TrackId};
-use filmcraft_time::{FrameRate, TICKS_PER_SECOND, Tick};
+use mortiflix_project::{Caption, CaptionFormat, CaptionTrack, ClipId, TrackId};
+use mortiflix_time::{FrameRate, TICKS_PER_SECOND, Tick};
 
 /// A caption file format.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

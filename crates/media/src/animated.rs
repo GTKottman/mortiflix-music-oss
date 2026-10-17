@@ -19,11 +19,11 @@
 use std::io::Cursor;
 use std::sync::Arc;
 
-use filmcraft_frame::{AudioBuffer, VideoFrame};
-use filmcraft_time::{FrameRate, TICKS_PER_SECOND, Tick};
 use image::codecs::gif::GifDecoder;
 use image::codecs::png::PngDecoder;
 use image::{AnimationDecoder, Delay, Frames, ImageDecoder, Limits};
+use mortiflix_frame::{AudioBuffer, VideoFrame};
+use mortiflix_time::{FrameRate, TICKS_PER_SECOND, Tick};
 
 use crate::{FrameRequest, MediaError, MediaInfo, MediaKind, MediaSource, Result, VideoStreamInfo};
 
@@ -152,7 +152,7 @@ impl AnimatedSource {
                 par: (1, 1),
                 codec: format.codec().into(),
                 pixel_format: if has_alpha { "RGBA 8-bit".into() } else { "RGB 8-bit".into() },
-                color: filmcraft_color::ColorInfo::SRGB_FULL,
+                color: mortiflix_color::ColorInfo::SRGB_FULL,
                 has_alpha,
                 bitrate: None,
                 hdr: None,

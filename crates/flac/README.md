@@ -1,17 +1,17 @@
-# filmcraft-flac
+# mortiflix-flac
 
 A clean-room FLAC encoder (Free Lossless Audio Codec, [RFC 9639](https://www.rfc-editor.org/rfc/rfc9639)),
-written from the RFC. Layer L0: it depends only on `filmcraft-bitstream` and `thiserror`, has no
+written from the RFC. Layer L0: it depends only on `mortiflix-bitstream` and `thiserror`, has no
 `unsafe`, and builds for `wasm32-unknown-unknown`.
 
 No libFLAC, FFmpeg or other FLAC implementation was read or ported. ffmpeg is used only as an
-external **test oracle** (decoding our streams). Decoding FLAC in FilmCraft is still done by the
-symphonia bootstrap decoder in `filmcraft-codecs`.
+external **test oracle** (decoding our streams). Decoding FLAC in Mortiflix Studio is still done by the
+symphonia bootstrap decoder in `mortiflix-codecs`.
 
 ## API
 
 ```rust
-use filmcraft_flac::{Encoder, EncoderConfig, STREAMINFO_OFFSET};
+use mortiflix_flac::{Encoder, EncoderConfig, STREAMINFO_OFFSET};
 
 let mut cfg = EncoderConfig::new(48_000, 2, 24);   // rate, channels (1–8), bits (8–32)
 cfg.level = 8;                                     // 0 fastest … 8 smallest; 5 by default
@@ -55,7 +55,7 @@ ffmpeg 6+).
 
 ## Tests
 
-`cargo test -p filmcraft-flac`: CRC check values, the RFC 1321 MD5 suite, frame-number coding,
+`cargo test -p mortiflix-flac`: CRC check values, the RFC 1321 MD5 suite, frame-number coding,
 predictor round trips, and `tests/ffmpeg_oracle.rs`, which decodes every stream with ffmpeg and
 requires every sample back exactly, no decoder errors, and the STREAMINFO MD5 equal to ffmpeg's
 hash of the decoded audio. It covers music-like, sweep, noise, full-scale square, silence and click

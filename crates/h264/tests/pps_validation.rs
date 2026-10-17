@@ -1,11 +1,11 @@
 //! #1441: malformed PPS fields must return `Error::Invalid`, not panic.
 
-use filmcraft_h264::Decoder;
+use mortiflix_h264::Decoder;
 
 /// Valid, synthetic Baseline SPS (176x144, 8-bit).
 const SPS: [u8; 12] = [0x00, 0x00, 0x00, 0x01, 0x67, 0x42, 0x00, 0x1e, 0xda, 0x0b, 0x13, 0x90];
 
-fn decode_pps(pps: &[u8]) -> Result<(), filmcraft_h264::Error> {
+fn decode_pps(pps: &[u8]) -> Result<(), mortiflix_h264::Error> {
     let mut decoder = Decoder::with_threads(1);
     decoder.decode(&SPS, 0).expect("sps decodes");
     decoder.decode(pps, 0).map(|_| ())

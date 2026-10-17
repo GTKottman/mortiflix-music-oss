@@ -2,7 +2,7 @@
 
 mod common;
 use common::*;
-use filmcraft_prores::{ChromaFormat, DecodeOptions, Encoder, Frame, Profile, decode_frame, decode_frame_with};
+use mortiflix_prores::{ChromaFormat, DecodeOptions, Encoder, Frame, Profile, decode_frame, decode_frame_with};
 
 struct Content {
     name: &'static str,

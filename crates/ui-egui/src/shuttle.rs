@@ -1,9 +1,9 @@
 //! Pitch-preserving shuttle playback. Pitch is corrected before changing the sample rate,
 //! so faster playback does not first discard the upper part of the audible spectrum.
 
-use filmcraft_audio_dsp::{AudioEffect, effects::PitchShifter, resample::StreamResampler};
-use filmcraft_engine::Session;
-use filmcraft_project::ItemId;
+use mortiflix_audio_dsp::{AudioEffect, effects::PitchShifter, resample::StreamResampler};
+use mortiflix_engine::Session;
+use mortiflix_project::ItemId;
 
 type Mixer = Box<dyn FnMut(i64, &mut [f32], usize) + Send>;
 const BLOCK: usize = 1024;

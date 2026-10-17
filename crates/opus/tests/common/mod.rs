@@ -138,13 +138,13 @@ pub fn opus_quality(reference: &[f32], test: &[f32], channels: usize, rate: u32)
     100.0 * (1.0 - 0.5 * (1.0 + err).ln() / 1.13f64.ln())
 }
 
-/// ffmpeg (see `filmcraft_testkit::oracle`); `None` after printing `SKIPPED`.
+/// ffmpeg (see `mortiflix_testkit::oracle`); `None` after printing `SKIPPED`.
 pub fn ffmpeg() -> Option<PathBuf> {
-    filmcraft_testkit::ffmpeg_or_skip("opus oracle")
+    mortiflix_testkit::ffmpeg_or_skip("opus oracle")
 }
 
 pub fn fixtures() -> PathBuf {
-    filmcraft_testkit::fixtures_dir("opus/oracle")
+    mortiflix_testkit::fixtures_dir("opus/oracle")
 }
 
 /// Minimal Ogg demuxer: returns (packets, last granule position).

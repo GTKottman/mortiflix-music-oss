@@ -2,7 +2,7 @@
 //! a camera-like 8-bit 4:2:0 picture and a ProRes-4444-like 10-bit 4:4:4 banner whose alpha is
 //! transparent except for its bottom 100 rows.
 //!
-//!     cargo run --release -p filmcraft-render --example frame_bench
+//!     cargo run --release -p mortiflix-render --example frame_bench
 //!
 //! Prints the median of 40 frames (after 6 warm-up frames) in milliseconds, wall time on the
 //! global rayon pool, and a checksum of the final 8-bit picture of each scenario so two builds can
@@ -11,13 +11,13 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use filmcraft_frame::{AudioBuffer, Chroma, PixelData, VideoFrame};
-use filmcraft_media::generators::GeneratorSource;
-use filmcraft_media::{FrameRequest, Generator, MediaInfo, MediaSource};
-use filmcraft_project::{ItemKind, Label, MediaClip, MediaRef, Project, SequenceSettings, TrackKind};
-use filmcraft_render::blend::{self, Blend};
-use filmcraft_render::{Image, RenderOptions, SourceMap, render_sequence};
-use filmcraft_time::{FrameRate, TICKS_PER_SECOND, Tick, TimeRange};
+use mortiflix_frame::{AudioBuffer, Chroma, PixelData, VideoFrame};
+use mortiflix_media::generators::GeneratorSource;
+use mortiflix_media::{FrameRequest, Generator, MediaInfo, MediaSource};
+use mortiflix_project::{ItemKind, Label, MediaClip, MediaRef, Project, SequenceSettings, TrackKind};
+use mortiflix_render::blend::{self, Blend};
+use mortiflix_render::{Image, RenderOptions, SourceMap, render_sequence};
+use mortiflix_time::{FrameRate, TICKS_PER_SECOND, Tick, TimeRange};
 
 const W: usize = 1920;
 const H: usize = 1080;
@@ -32,10 +32,10 @@ impl MediaSource for Still {
     fn info(&self) -> &MediaInfo {
         &self.info
     }
-    fn video_frame(&self, _req: FrameRequest) -> filmcraft_media::Result<Arc<VideoFrame>> {
+    fn video_frame(&self, _req: FrameRequest) -> mortiflix_media::Result<Arc<VideoFrame>> {
         Ok(self.frame.clone())
     }
-    fn audio(&self, _start: i64, frames: usize, sample_rate: u32) -> filmcraft_media::Result<AudioBuffer> {
+    fn audio(&self, _start: i64, frames: usize, sample_rate: u32) -> mortiflix_media::Result<AudioBuffer> {
         Ok(AudioBuffer::silence(sample_rate, 2, frames))
     }
 }
@@ -50,7 +50,7 @@ fn camera() -> Arc<VideoFrame> {
         width: W as u32,
         height: H as u32,
         data: PixelData::Yuv8 { planes: [Arc::new(y), Arc::new(u), Arc::new(v)], chroma: Chroma::C420, alpha: None },
-        color: filmcraft_color::ColorInfo::REC709,
+        color: mortiflix_color::ColorInfo::REC709,
         par: (1, 1),
         pts: Tick::ZERO,
     })
@@ -77,13 +77,13 @@ fn banner(bar: usize) -> Arc<VideoFrame> {
             bits: 10,
             alpha: Some(Arc::new(alpha)),
         },
-        color: filmcraft_color::ColorInfo::REC709,
+        color: mortiflix_color::ColorInfo::REC709,
         par: (1, 1),
         pts: Tick::ZERO,
     })
 }
 
-fn project(layers: &[Arc<VideoFrame>]) -> (Project, filmcraft_project::ItemId, SourceMap) {
+fn project(layers: &[Arc<VideoFrame>]) -> (Project, mortiflix_project::ItemId, SourceMap) {
     let mut p = Project::new("bench");
     let mut map = SourceMap::default();
     let seq = p.new_sequence("s", SequenceSettings { width: W as u32, height: H as u32, frame_rate: FPS, ..Default::default() }, layers.len().max(1), 1, None);
@@ -161,13 +161,13 @@ fn main() {
             let img = render_sequence(&p, seq, FPS.tick_of(10), opts, &map);
             last = img.over_black_rgba8();
             if recycle {
-                filmcraft_frame::pool::recycle_f32(img.px);
+                mortiflix_frame::pool::recycle_f32(img.px);
             }
         });
         let render_only = median_ms(|| {
             let img = std::hint::black_box(render_sequence(&p, seq, FPS.tick_of(10), opts, &map));
             if recycle {
-                filmcraft_frame::pool::recycle_f32(img.px);
+                mortiflix_frame::pool::recycle_f32(img.px);
             }
         });
         println!("{name:16}: render {render_only:6.2}   render + 8-bit {ms:6.2}   checksum {:016x}", checksum(&last));

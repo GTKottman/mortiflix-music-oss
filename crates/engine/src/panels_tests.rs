@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use filmcraft_project::{ItemId, Label};
+use mortiflix_project::{ItemId, Label};
 use serde_json::{Value, json};
 
 use crate::Session;
@@ -72,8 +72,8 @@ fn metadata_edits_are_undoable_and_saved_in_the_project() {
     }
     assert_eq!(s.history.undo.len(), n);
     // saved in the project file and read back
-    let bytes = filmcraft_format::encode(&s.project, false);
-    let back = filmcraft_format::decode(&bytes).unwrap().project;
+    let bytes = mortiflix_format::encode(&s.project, false);
+    let back = mortiflix_format::decode(&bytes).unwrap().project;
     assert_eq!(back.item(id).unwrap().metadata["Scene"], "12");
 }
 
@@ -142,7 +142,7 @@ fn events_report_background_jobs() {
     s.poll_persistence();
     assert_eq!(s.log.entries.iter().filter(|e| e.message.starts_with("Started:")).count(), 3);
     *a.result.lock().unwrap() =
-        Some(Ok(filmcraft_export::Report { path: "a.mp4".into(), frames: 1, seconds: 0.1, bytes: 1, render_fps: 10.0, extra_files: Vec::new() }));
+        Some(Ok(mortiflix_export::Report { path: "a.mp4".into(), frames: 1, seconds: 0.1, bytes: 1, render_fps: 10.0, extra_files: Vec::new() }));
     *b.result.lock().unwrap() = Some(Err("disk full".into()));
     c.progress.cancel.store(true, std::sync::atomic::Ordering::Relaxed);
     *c.result.lock().unwrap() = Some(Err("cancelled".into()));
@@ -173,12 +173,12 @@ fn project_notes_are_saved_and_typing_is_one_undo_step() {
     assert_eq!(r["changed"], json!(false));
     assert_eq!(s.history.undo.len(), undo0 + 1);
 
-    let loaded = filmcraft_format::decode(&filmcraft_format::encode(&s.project, false)).unwrap();
+    let loaded = mortiflix_format::decode(&mortiflix_format::encode(&s.project, false)).unwrap();
     assert_eq!(loaded.project.notes, "To do: fix the logo at 00:01:02:03");
     // an older file without notes still loads, with none
-    let mut doc: Value = serde_json::from_slice(&filmcraft_format::encode(&filmcraft_project::Project::new("old"), false)).unwrap();
+    let mut doc: Value = serde_json::from_slice(&mortiflix_format::encode(&mortiflix_project::Project::new("old"), false)).unwrap();
     doc["schema_version"] = json!(14);
-    assert_eq!(filmcraft_format::decode(&serde_json::to_vec(&doc).unwrap()).unwrap().project.notes, "");
+    assert_eq!(mortiflix_format::decode(&serde_json::to_vec(&doc).unwrap()).unwrap().project.notes, "");
 
     s.execute("edit.undo", json!({})).unwrap();
     assert_eq!(s.project.notes, "");

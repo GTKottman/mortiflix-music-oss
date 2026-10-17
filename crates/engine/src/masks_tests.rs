@@ -1,8 +1,8 @@
 use serde_json::json;
 
 use crate::Session;
-use filmcraft_project::ClipId;
-use filmcraft_time::Tick;
+use mortiflix_project::ClipId;
+use mortiflix_time::Tick;
 
 fn demo() -> (Session, ClipId) {
     let mut s = Session::default();
@@ -15,7 +15,7 @@ fn demo() -> (Session, ClipId) {
     (s, it.id)
 }
 
-fn px(img: &filmcraft_render::Image, fx: f32, fy: f32) -> [f32; 4] {
+fn px(img: &mortiflix_render::Image, fx: f32, fy: f32) -> [f32; 4] {
     img.get(((img.w as f32 * fx) as usize).min(img.w - 1), ((img.h as f32 * fy) as usize).min(img.h - 1))
 }
 
@@ -150,8 +150,8 @@ fn merged_drag_is_one_undo_step_and_project_round_trips() {
     }
     assert_eq!(s.history.undo.len(), n + 1);
     s.execute("masks.set", json!({"mode": "subtract", "trackMethod": "position", "expansion": -4})).unwrap();
-    let bytes = filmcraft_format::encode(&s.project, false);
-    let back = filmcraft_format::decode(&bytes).unwrap().project;
+    let bytes = mortiflix_format::encode(&s.project, false);
+    let back = mortiflix_format::decode(&bytes).unwrap().project;
     assert_eq!(&back, &*s.project);
     let l = s.execute("masks.list", json!({})).unwrap();
     assert_eq!(l["masks"][0]["mode"], "Subtract");
@@ -164,7 +164,7 @@ fn merged_drag_is_one_undo_step_and_project_round_trips() {
 /// A 320×240 24 fps clip of a textured disc moving under a known similarity motion over a static
 /// textured background.
 struct Moving {
-    info: filmcraft_media::MediaInfo,
+    info: mortiflix_media::MediaInfo,
 }
 
 fn texture(u: f64, v: f64) -> f64 {
@@ -178,21 +178,21 @@ fn texture(u: f64, v: f64) -> f64 {
 }
 
 /// Ground-truth pose of the disc at frame `k`: translation, 1.5°/frame rotation, +1 %/frame scale.
-fn truth(k: f64) -> filmcraft_geom::Affine {
-    filmcraft_geom::Affine::motion(
-        filmcraft_geom::Vec2::new(120.0 + 3.0 * k, 110.0 + 1.2 * k),
-        filmcraft_geom::Vec2::new(1.0 + 0.01 * k, 1.0 + 0.01 * k),
+fn truth(k: f64) -> mortiflix_geom::Affine {
+    mortiflix_geom::Affine::motion(
+        mortiflix_geom::Vec2::new(120.0 + 3.0 * k, 110.0 + 1.2 * k),
+        mortiflix_geom::Vec2::new(1.0 + 0.01 * k, 1.0 + 0.01 * k),
         1.5 * k,
-        filmcraft_geom::Vec2::ZERO,
+        mortiflix_geom::Vec2::ZERO,
     )
 }
 
-impl filmcraft_media::MediaSource for Moving {
-    fn info(&self) -> &filmcraft_media::MediaInfo {
+impl mortiflix_media::MediaSource for Moving {
+    fn info(&self) -> &mortiflix_media::MediaInfo {
         &self.info
     }
-    fn video_frame(&self, req: filmcraft_media::FrameRequest) -> filmcraft_media::Result<std::sync::Arc<filmcraft_frame::VideoFrame>> {
-        let rate = filmcraft_time::FrameRate::FPS_24;
+    fn video_frame(&self, req: mortiflix_media::FrameRequest) -> mortiflix_media::Result<std::sync::Arc<mortiflix_frame::VideoFrame>> {
+        let rate = mortiflix_time::FrameRate::FPS_24;
         let k = rate.frame_at(req.time) as f64;
         let inv = truth(k).inverse().unwrap();
         let (w, h) = (320usize, 240usize);
@@ -201,7 +201,7 @@ impl filmcraft_media::MediaSource for Moving {
             for x in 0..w {
                 let mut acc = 0.0;
                 for (ox, oy) in [(0.25, 0.25), (0.75, 0.25), (0.25, 0.75), (0.75, 0.75)] {
-                    let p = filmcraft_geom::Vec2::new(x as f64 + ox, y as f64 + oy);
+                    let p = mortiflix_geom::Vec2::new(x as f64 + ox, y as f64 + oy);
                     let o = inv.apply(p);
                     acc += if o.length() < 70.0 { texture(o.x + 200.0, o.y + 300.0) } else { 0.25 + 0.1 * texture(p.x * 0.5 + 900.0, p.y * 0.5) };
                 }
@@ -209,30 +209,30 @@ impl filmcraft_media::MediaSource for Moving {
                 px[(y * w + x) * 4..][..4].copy_from_slice(&[v, v, v, 255]);
             }
         }
-        Ok(std::sync::Arc::new(filmcraft_frame::VideoFrame::rgba8(w as u32, h as u32, px)))
+        Ok(std::sync::Arc::new(mortiflix_frame::VideoFrame::rgba8(w as u32, h as u32, px)))
     }
-    fn audio(&self, _start: i64, frames: usize, sample_rate: u32) -> filmcraft_media::Result<filmcraft_frame::AudioBuffer> {
-        Ok(filmcraft_frame::AudioBuffer::silence(sample_rate, 2, frames))
+    fn audio(&self, _start: i64, frames: usize, sample_rate: u32) -> mortiflix_media::Result<mortiflix_frame::AudioBuffer> {
+        Ok(mortiflix_frame::AudioBuffer::silence(sample_rate, 2, frames))
     }
 }
 
 fn tracking_session() -> (Session, ClipId) {
-    use filmcraft_media::MediaSource;
-    let rate = filmcraft_time::FrameRate::FPS_24;
-    let g = filmcraft_media::generators::GeneratorSource::new(
-        filmcraft_media::Generator::ColorMatte { color: [0.5, 0.5, 0.5, 1.0] },
+    use mortiflix_media::MediaSource;
+    let rate = mortiflix_time::FrameRate::FPS_24;
+    let g = mortiflix_media::generators::GeneratorSource::new(
+        mortiflix_media::Generator::ColorMatte { color: [0.5, 0.5, 0.5, 1.0] },
         320,
         240,
         rate,
         rate.tick_of(48),
     );
     let info = g.info().clone();
-    let mut p = filmcraft_project::Project::new("track");
+    let mut p = mortiflix_project::Project::new("track");
     let item = p.add_item(
         "moving",
-        filmcraft_project::Label::Iris,
-        filmcraft_project::ItemKind::Media(filmcraft_project::MediaClip {
-            media: filmcraft_project::MediaRef::Generator(g.generator.clone()),
+        mortiflix_project::Label::Iris,
+        mortiflix_project::ItemKind::Media(mortiflix_project::MediaClip {
+            media: mortiflix_project::MediaRef::Generator(g.generator.clone()),
             info: info.clone(),
             interpret: Default::default(),
             mark_in: None,
@@ -244,9 +244,9 @@ fn tracking_session() -> (Session, ClipId) {
         }),
         None,
     );
-    let seq = p.new_sequence("s", filmcraft_project::SequenceSettings { width: 320, height: 240, frame_rate: rate, ..Default::default() }, 1, 0, None);
+    let seq = p.new_sequence("s", mortiflix_project::SequenceSettings { width: 320, height: 240, frame_rate: rate, ..Default::default() }, 1, 0, None);
     let ti =
-        p.make_track_item(item, filmcraft_project::TrackKind::Video, Tick::ZERO, filmcraft_time::TimeRange::new(Tick::ZERO, rate.tick_of(48)), rate).unwrap();
+        p.make_track_item(item, mortiflix_project::TrackKind::Video, Tick::ZERO, mortiflix_time::TimeRange::new(Tick::ZERO, rate.tick_of(48)), rate).unwrap();
     let clip = ti.id;
     p.sequence_mut(seq).unwrap().video_tracks[0].items.push(ti);
     let mut s = Session { project: std::sync::Arc::new(p), ..Default::default() };
@@ -259,16 +259,16 @@ fn tracking_session() -> (Session, ClipId) {
 #[test]
 fn tracking_follows_known_motion_forward_and_backward() {
     let (mut s, _) = tracking_session();
-    let rate = filmcraft_time::FrameRate::FPS_24;
+    let rate = mortiflix_time::FrameRate::FPS_24;
     s.set_playhead(rate.tick_of(10));
     // a circle of radius 45 inside the disc at frame 10
-    let c = truth(10.0).apply(filmcraft_geom::Vec2::ZERO);
+    let c = truth(10.0).apply(mortiflix_geom::Vec2::ZERO);
     s.execute("masks.add", json!({"effect": "opacity", "shape": "ellipse", "center": [c.x, c.y], "size": [90, 90]})).unwrap();
     let path0 = s.execute("masks.list", json!({})).unwrap()["masks"][0]["path"].clone();
     let p0 = crate::masks::path_from_json(&path0).unwrap();
     // object coordinates of the mask vertices (they ride on the disc)
     let inv10 = truth(10.0).inverse().unwrap();
-    let obj: Vec<filmcraft_geom::Vec2> = p0.vertices.iter().map(|v| inv10.apply(v.p)).collect();
+    let obj: Vec<mortiflix_geom::Vec2> = p0.vertices.iter().map(|v| inv10.apply(v.p)).collect();
     let r = s.execute("masks.track", json!({"direction": "forward", "frames": 12, "wait": true})).unwrap();
     assert_eq!(r["frames"], 12, "{r}");
     assert!(s.mask_jobs.is_empty());
@@ -297,7 +297,7 @@ fn tracking_follows_known_motion_forward_and_backward() {
 #[test]
 fn tracking_runs_in_the_background_and_can_be_cancelled() {
     let (mut s, _) = tracking_session();
-    let c = truth(0.0).apply(filmcraft_geom::Vec2::ZERO);
+    let c = truth(0.0).apply(mortiflix_geom::Vec2::ZERO);
     s.execute("masks.add", json!({"effect": "opacity", "shape": "ellipse", "center": [c.x, c.y], "size": [90, 90]})).unwrap();
     let r = s.execute("masks.track", json!({"direction": "forward"})).unwrap();
     let job = r["job"].as_u64().unwrap();
@@ -370,7 +370,7 @@ fn rounding_an_animated_mask_rounds_every_keyframe_and_only_the_chosen_corners()
     let m = &s.active_sequence().unwrap().find_item(clip).unwrap().1.effects.iter().find(|e| e.effect == "opacity").unwrap().masks[0];
     assert_eq!(m.path.keyframes.len(), 2);
     for k in &m.path.keyframes {
-        let filmcraft_project::ParamValue::Path(p) = &k.value else { panic!("path keyframe") };
+        let mortiflix_project::ParamValue::Path(p) = &k.value else { panic!("path keyframe") };
         assert_eq!(p.len(), 6, "both keyframes rounded the same corners");
         assert_eq!(p.vertices.iter().filter(|v| v.is_corner()).count(), 2, "vertices 1 and 3 stay sharp");
     }
@@ -385,8 +385,8 @@ fn rounding_an_animated_mask_rounds_every_keyframe_and_only_the_chosen_corners()
 /// a pen mask's dragged-out curves were committed as corners; #853).
 #[test]
 fn path_json_round_trip_keeps_tangents() {
-    use filmcraft_geom::Vec2;
-    use filmcraft_project::mask::{MaskPath, MaskVertex};
+    use mortiflix_geom::Vec2;
+    use mortiflix_project::mask::{MaskPath, MaskVertex};
     let path = MaskPath {
         vertices: vec![
             MaskVertex { p: Vec2::new(10.0, 20.0), t_in: Vec2::new(-5.0, 0.0), t_out: Vec2::new(5.0, 0.0) },

@@ -2,9 +2,9 @@
 
 use std::sync::Arc;
 
-use filmcraft_project::{ItemKind, MarkerKind, Transcript, Word};
-use filmcraft_speech::FixedTranscriber;
-use filmcraft_time::Tick;
+use mortiflix_project::{ItemKind, MarkerKind, Transcript, Word};
+use mortiflix_speech::FixedTranscriber;
+use mortiflix_time::Tick;
 use serde_json::json;
 
 use crate::Session;
@@ -181,7 +181,7 @@ fn simplify_sequence_makes_a_clean_copy() {
     let n_items = s.project.items.len();
     let r = s.execute("sequence.simplify", json!({"removeDisabled": true, "removeEmptyTracks": true, "closeGaps": true, "removeVideoEffects": true})).unwrap();
     assert_eq!(s.project.items.len(), n_items + 1);
-    let new_id = filmcraft_project::ItemId(r["sequence"].as_u64().unwrap());
+    let new_id = mortiflix_project::ItemId(r["sequence"].as_u64().unwrap());
     assert_eq!(s.state.active_sequence, Some(new_id), "the copy opens");
     assert_eq!(s.project.item(new_id).unwrap().name, "Main Edit (Simplified)");
     let q = s.project.sequence(new_id).unwrap();
@@ -207,7 +207,7 @@ fn simplify_sequence_makes_a_clean_copy() {
     // keep audio only
     s.execute("sequence.open", json!({"item": orig_id.0})).unwrap();
     let r2 = s.execute("sequence.simplify", json!({"keep": "audio", "name": "Audio Only"})).unwrap();
-    let q2 = s.project.sequence(filmcraft_project::ItemId(r2["sequence"].as_u64().unwrap())).unwrap();
+    let q2 = s.project.sequence(mortiflix_project::ItemId(r2["sequence"].as_u64().unwrap())).unwrap();
     assert!(q2.video_tracks.is_empty() && !q2.audio_tracks.is_empty());
     assert!(q2.all_tracks().flat_map(|t| &t.items).all(|i| i.link.is_none()), "links to removed video are dropped");
     assert!(s.execute("sequence.simplify", json!({"keep": "nope"})).is_err());
@@ -229,7 +229,7 @@ fn simplify_moves_clips_down_where_they_fit() {
     crate::sequence_extras::simplify_sequence(&s.project, &mut a, &o);
     assert!(a.video_tracks[1].item(ov.id).is_some());
     let under: Vec<_> = q.video_tracks[0].items.iter().filter(|i| i.range().overlaps(&ov.range())).map(|i| i.id).collect();
-    filmcraft_edit::delete_items(&mut q, &under);
+    mortiflix_edit::delete_items(&mut q, &under);
     for t in &mut q.video_tracks {
         t.transitions.clear();
     }
@@ -267,7 +267,7 @@ fn flash_cue_markers_round_trip() {
     let m = q.markers.iter().find(|m| m.id.0 == id).unwrap();
     assert_eq!((m.kind, m.name.as_str(), m.comment.as_str()), (MarkerKind::FlashCue, "Cue Point 1", "cue"));
     assert_eq!(m.start, s.sequence_rate().snap(Tick::from_seconds_f64(2.0)));
-    let back = filmcraft_format::decode(&filmcraft_format::encode(&s.project, false)).unwrap().project;
+    let back = mortiflix_format::decode(&mortiflix_format::encode(&s.project, false)).unwrap().project;
     assert_eq!(back, *s.project);
     let r2 = s.execute("markers.addFlashCue", json!({})).unwrap();
     let q = s.active_sequence().unwrap();

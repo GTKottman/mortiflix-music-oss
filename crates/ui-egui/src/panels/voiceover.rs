@@ -13,12 +13,12 @@
 
 use crate::widgets::CenteredDialog as _;
 use egui::{Align2, Color32, Rect, RichText, Sense, Stroke, pos2, vec2};
-use filmcraft_engine::voiceover::VoiceOverPrefs;
-use filmcraft_project::TrackId;
-use filmcraft_time::Tick;
+use mortiflix_engine::voiceover::VoiceOverPrefs;
+use mortiflix_project::TrackId;
+use mortiflix_time::Tick;
 use serde_json::{Value, json};
 
-use crate::FilmcraftApp;
+use crate::StudioApp;
 use crate::icons::{self, Icon};
 use crate::theme::Tokens;
 
@@ -42,7 +42,7 @@ fn draft_id() -> egui::Id {
 }
 
 /// The microphone button of an audio track header. Returns the requested action.
-pub fn header_button(app: &mut FilmcraftApp, ui: &mut egui::Ui, track: TrackId, r: Rect, visible: Rect, label: &str, t: &Tokens) -> Option<Action> {
+pub fn header_button(app: &mut StudioApp, ui: &mut egui::Ui, track: TrackId, r: Rect, visible: Rect, label: &str, t: &Tokens) -> Option<Action> {
     let recording_here = app.session.voiceover.rec.as_ref().is_some_and(|x| x.track == track);
     let resp = ui.interact(r.intersect(visible), egui::Id::new(("vo", track.0)), Sense::click());
     if resp.hovered() {
@@ -68,7 +68,7 @@ pub fn header_button(app: &mut FilmcraftApp, ui: &mut egui::Ui, track: TrackId, 
     act
 }
 
-pub fn run(app: &mut FilmcraftApp, ctx: &egui::Context, a: Action) {
+pub fn run(app: &mut StudioApp, ctx: &egui::Context, a: Action) {
     let r = match a {
         Action::Toggle(t) => toggle(app, Some(t.0)),
         Action::Settings => {
@@ -82,7 +82,7 @@ pub fn run(app: &mut FilmcraftApp, ctx: &egui::Context, a: Action) {
 }
 
 /// Start recording on `track` (None = the engine's choice), or stop the recording in progress.
-pub fn toggle(app: &mut FilmcraftApp, track: Option<u64>) -> Result<Value, String> {
+pub fn toggle(app: &mut StudioApp, track: Option<u64>) -> Result<Value, String> {
     if app.session.voiceover.recording() {
         if app.playback.playing {
             app.stop(); // runs `audio.voiceover.stop` (see `on_stop`)
@@ -105,7 +105,7 @@ pub fn toggle(app: &mut FilmcraftApp, track: Option<u64>) -> Result<Value, Strin
     Ok(r)
 }
 
-fn stop(app: &mut FilmcraftApp) -> Result<Value, String> {
+fn stop(app: &mut StudioApp) -> Result<Value, String> {
     let t = app.session.playhead();
     let r = app.session.execute("audio.voiceover.stop", json!({"time": t.0})).map_err(|e| e.to_string())?;
     app.ui.status = match r["path"].as_str() {
@@ -116,7 +116,7 @@ fn stop(app: &mut FilmcraftApp) -> Result<Value, String> {
 }
 
 /// Playback (and the audio clock) really started: capture from here.
-pub fn on_play(app: &mut FilmcraftApp) {
+pub fn on_play(app: &mut StudioApp) {
     if app.session.voiceover.recording() {
         let t = app.session.playhead();
         if let Err(e) = app.session.execute("audio.voiceover.sync", json!({"time": t.0})) {
@@ -126,7 +126,7 @@ pub fn on_play(app: &mut FilmcraftApp) {
 }
 
 /// Playback stopped: finish the take.
-pub fn on_stop(app: &mut FilmcraftApp) {
+pub fn on_stop(app: &mut StudioApp) {
     if app.session.voiceover.recording()
         && let Err(e) = stop(app)
     {
@@ -135,11 +135,11 @@ pub fn on_stop(app: &mut FilmcraftApp) {
 }
 
 /// Countdown cue beeps of the recording in progress, for an output at `sr`: (start sample, tone).
-pub fn cues(s: &filmcraft_engine::Session, sr: u32) -> (Vec<i64>, Vec<f32>) {
+pub fn cues(s: &mortiflix_engine::Session, sr: u32) -> (Vec<i64>, Vec<f32>) {
     match &s.voiceover.rec {
         Some(rec) if s.prefs.voice_over.countdown_sound_cues => {
-            let at = filmcraft_engine::voiceover::cue_times(rec.capture_start, rec.record_start).into_iter().map(|t| t.to_units_floor(sr as i64)).collect();
-            (at, filmcraft_engine::voiceover::cue_tone(sr))
+            let at = mortiflix_engine::voiceover::cue_times(rec.capture_start, rec.record_start).into_iter().map(|t| t.to_units_floor(sr as i64)).collect();
+            (at, mortiflix_engine::voiceover::cue_tone(sr))
         }
         _ => (Vec::new(), Vec::new()),
     }
@@ -162,14 +162,14 @@ pub fn mix_cues(buf: &mut [f32], ch: usize, cursor: i64, cues: &(Vec<i64>, Vec<f
 }
 
 /// UI commands `voiceover.recordToggle {track?}` and `voiceover.settingsDialog`.
-pub fn route(app: &mut FilmcraftApp, ctx: &egui::Context, id: &str, p: &Value) -> Option<Result<Value, String>> {
+pub fn route(app: &mut StudioApp, ctx: &egui::Context, id: &str, p: &Value) -> Option<Result<Value, String>> {
     match id {
         "voiceover.recordToggle" => {
             let track = match p.get("track") {
                 None => None,
                 Some(v) => {
                     let seq = app.session.active_sequence()?;
-                    match filmcraft_engine::mixer::strip_ref(seq, v) {
+                    match mortiflix_engine::mixer::strip_ref(seq, v) {
                         Some(t) => Some(t.0),
                         None => return Some(Err(format!("no audio track {v}"))),
                     }
@@ -185,7 +185,7 @@ pub fn route(app: &mut FilmcraftApp, ctx: &egui::Context, id: &str, p: &Value) -
     }
 }
 
-fn open_settings(app: &mut FilmcraftApp, ctx: &egui::Context) {
+fn open_settings(app: &mut StudioApp, ctx: &egui::Context) {
     let v = app.session.execute("audio.voiceover.settings", json!({})).unwrap_or_default();
     let d = Draft {
         prefs: app.session.prefs.voice_over.clone(),
@@ -196,7 +196,7 @@ fn open_settings(app: &mut FilmcraftApp, ctx: &egui::Context) {
 }
 
 /// Every frame: the settings dialog, the countdown overlay, and the punch-out + post-roll stop.
-pub fn show(app: &mut FilmcraftApp, ctx: &egui::Context) {
+pub fn show(app: &mut StudioApp, ctx: &egui::Context) {
     settings_dialog(app, ctx);
     let Some(rec) = app.session.voiceover.rec.clone() else { return };
     if !app.playback.playing {
@@ -230,7 +230,7 @@ pub fn show(app: &mut FilmcraftApp, ctx: &egui::Context) {
     ctx.request_repaint();
 }
 
-fn settings_dialog(app: &mut FilmcraftApp, ctx: &egui::Context) {
+fn settings_dialog(app: &mut StudioApp, ctx: &egui::Context) {
     let Some(Some(mut d)) = ctx.data(|m| m.get_temp::<Option<Draft>>(draft_id())) else { return };
     crate::widgets::revert_drag_on_escape(ctx, egui::Id::new("voiceover-settings-before-drag"), &mut d);
     let mut elems: Vec<(String, Rect, String)> = Vec::new();

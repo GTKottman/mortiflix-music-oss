@@ -10,21 +10,21 @@ use std::path::Path;
 use std::process::Command;
 use std::sync::Arc;
 
-use filmcraft_export::{
+use mortiflix_export::{
     BitrateMode, ColorSignal, ExportSettings, FieldOrder, Format, H264Pass, HardwareEncoding, Multiplexer, Progress, export, hw_encode_stats,
 };
-use filmcraft_media::generators::GeneratorSource;
-use filmcraft_media::{DemoScene, FrameRequest, Generator, MediaSource};
-use filmcraft_platform::nvenc::export::factory;
-use filmcraft_platform::nvenc::hevc_available;
-use filmcraft_project::{ItemKind, Label, MediaClip, MediaRef, Project, SequenceSettings, TrackKind};
-use filmcraft_render::SourceMap;
-use filmcraft_time::{FrameRate, Tick, TimeRange};
+use mortiflix_media::generators::GeneratorSource;
+use mortiflix_media::{DemoScene, FrameRequest, Generator, MediaSource};
+use mortiflix_platform::nvenc::export::factory;
+use mortiflix_platform::nvenc::hevc_available;
+use mortiflix_project::{ItemKind, Label, MediaClip, MediaRef, Project, SequenceSettings, TrackKind};
+use mortiflix_render::SourceMap;
+use mortiflix_time::{FrameRate, Tick, TimeRange};
 
 /// The encoder counters are process-wide: one test at a time.
 static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
-fn project(w: u32, h: u32, frames: i64) -> (Arc<Project>, filmcraft_project::ItemId, SourceMap) {
+fn project(w: u32, h: u32, frames: i64) -> (Arc<Project>, mortiflix_project::ItemId, SourceMap) {
     let rate = FrameRate::FPS_24;
     let mut p = Project::new("x");
     let g = GeneratorSource::new(Generator::Demo(DemoScene::OceanSunset), w, h, rate, rate.tick_of(frames));
@@ -59,15 +59,15 @@ fn tmp(name: &str) -> String {
     d.join(name).to_string_lossy().to_string()
 }
 
-fn decode(path: &str) -> Vec<Arc<filmcraft_frame::VideoFrame>> {
+fn decode(path: &str) -> Vec<Arc<mortiflix_frame::VideoFrame>> {
     let bytes: Arc<[u8]> = std::fs::read(path).unwrap().into();
-    let src = filmcraft_codecs::open_bytes(path, bytes).unwrap();
+    let src = mortiflix_codecs::open_bytes(path, bytes).unwrap();
     let rate = src.info().frame_rate();
     let n = rate.frame_at(src.info().duration);
     (0..n).map(|i| src.video_frame(FrameRequest::full(rate.tick_of(i))).unwrap()).collect()
 }
 
-fn luma_psnr(a: &filmcraft_frame::VideoFrame, b: &filmcraft_frame::VideoFrame) -> f64 {
+fn luma_psnr(a: &mortiflix_frame::VideoFrame, b: &mortiflix_frame::VideoFrame) -> f64 {
     let (x, y) = (a.luma8(), b.luma8());
     let mse = x.iter().zip(&y).map(|(p, q)| (f64::from(*p) - f64::from(*q)).powi(2)).sum::<f64>() / x.len() as f64;
     if mse == 0.0 { 99.0 } else { 10.0 * (255.0f64 * 255.0 / mse).log10() }
@@ -108,7 +108,7 @@ fn assert_ffmpeg_decodes(ffmpeg: &Path, path: &str) {
     assert!(out.status.success() && out.stderr.is_empty(), "ffmpeg: {}", String::from_utf8_lossy(&out.stderr));
 }
 
-fn delta(before: filmcraft_export::HwEncodeStats) -> (u64, u64, u64) {
+fn delta(before: mortiflix_export::HwEncodeStats) -> (u64, u64, u64) {
     let after = hw_encode_stats();
     (after.frames - before.frames, after.sessions - before.sessions, after.declined - before.declined)
 }
@@ -116,8 +116,8 @@ fn delta(before: filmcraft_export::HwEncodeStats) -> (u64, u64, u64) {
 #[test]
 fn hevc_exports_play_everywhere() {
     let _one = SERIAL.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-    filmcraft_platform::register();
-    assert_eq!(filmcraft_export::available(Format::Hevc), hevc_available(), "the format is available iff NVENC can encode HEVC");
+    mortiflix_platform::register();
+    assert_eq!(mortiflix_export::available(Format::Hevc), hevc_available(), "the format is available iff NVENC can encode HEVC");
     if !hevc_available() {
         eprintln!("SKIPPED: no NVENC HEVC here");
         return;
@@ -132,8 +132,8 @@ fn hevc_exports_play_everywhere() {
     assert_eq!(delta(before), (0, 0, 0), "H.264 with hardware encoding Off never touches NVENC");
     let reference = decode(&soft_path);
 
-    let ffprobe = filmcraft_testkit::ffprobe_or_skip("nvenc hevc export");
-    let ffmpeg = filmcraft_testkit::ffmpeg_or_skip("nvenc hevc export");
+    let ffprobe = mortiflix_testkit::ffprobe_or_skip("nvenc hevc export");
+    let ffmpeg = mortiflix_testkit::ffmpeg_or_skip("nvenc hevc export");
     for (name, multiplexer, toggle) in [
         ("hevc.mp4", Multiplexer::Mp4, HardwareEncoding::Auto),
         ("hevc.mov", Multiplexer::Mov, HardwareEncoding::Auto),
@@ -174,7 +174,7 @@ fn hevc_exports_play_everywhere() {
 #[test]
 fn hevc_export_with_audio() {
     let _one = SERIAL.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-    filmcraft_platform::register();
+    mortiflix_platform::register();
     if !hevc_available() {
         eprintln!("SKIPPED: no NVENC HEVC here");
         return;
@@ -184,11 +184,11 @@ fn hevc_export_with_audio() {
     let s = ExportSettings { include_audio: true, keyframe_distance: Some(24), ..hevc(path.clone()) };
     export(&p, seq, &s, &m, &Progress::default()).expect("export");
     let bytes = std::fs::read(&path).unwrap();
-    let file = filmcraft_isobmff::open(bytes.as_slice()).unwrap();
-    assert!(file.track_of_kind(filmcraft_isobmff::TrackKind::Video).is_some());
-    let at = file.track_of_kind(filmcraft_isobmff::TrackKind::Audio).expect("an audio track");
-    assert!(matches!(&file.tracks[at].entries[0].codec, filmcraft_isobmff::CodecConfig::Aac(_)));
-    if let (Some(ffprobe), Some(ffmpeg)) = (filmcraft_testkit::ffprobe_or_skip("nvenc hevc export"), filmcraft_testkit::ffmpeg_or_skip("nvenc hevc export")) {
+    let file = mortiflix_isobmff::open(bytes.as_slice()).unwrap();
+    assert!(file.track_of_kind(mortiflix_isobmff::TrackKind::Video).is_some());
+    let at = file.track_of_kind(mortiflix_isobmff::TrackKind::Audio).expect("an audio track");
+    assert!(matches!(&file.tracks[at].entries[0].codec, mortiflix_isobmff::CodecConfig::Aac(_)));
+    if let (Some(ffprobe), Some(ffmpeg)) = (mortiflix_testkit::ffprobe_or_skip("nvenc hevc export"), mortiflix_testkit::ffmpeg_or_skip("nvenc hevc export")) {
         let out = Command::new(&ffprobe)
             .args(["-v", "error", "-show_entries", "stream=codec_name,codec_type,codec_tag_string", "-of", "csv=p=0", &path])
             .output()
@@ -203,7 +203,7 @@ fn hevc_export_with_audio() {
 #[test]
 fn sizes_that_are_not_multiples_of_the_coding_block_are_cropped_back() {
     let _one = SERIAL.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-    filmcraft_platform::register();
+    mortiflix_platform::register();
     if !hevc_available() {
         eprintln!("SKIPPED: no NVENC HEVC here");
         return;
@@ -219,7 +219,7 @@ fn sizes_that_are_not_multiples_of_the_coding_block_are_cropped_back() {
         let pictures = decode(&path);
         assert_eq!(pictures.len(), 12);
         assert!(pictures.iter().all(|f| (f.width, f.height) == (w, h)), "{w}x{h}: decoded {}x{}", pictures[0].width, pictures[0].height);
-        if let (Some(ffprobe), Some(ffmpeg)) = (filmcraft_testkit::ffprobe_or_skip("nvenc hevc export"), filmcraft_testkit::ffmpeg_or_skip("nvenc hevc export"))
+        if let (Some(ffprobe), Some(ffmpeg)) = (mortiflix_testkit::ffprobe_or_skip("nvenc hevc export"), mortiflix_testkit::ffmpeg_or_skip("nvenc hevc export"))
         {
             let v = probe(&ffprobe, &path);
             assert_eq!((v["width"].as_str(), v["height"].as_str()), (w.to_string().as_str(), h.to_string().as_str()), "{v:?}");
@@ -231,7 +231,7 @@ fn sizes_that_are_not_multiples_of_the_coding_block_are_cropped_back() {
 #[test]
 fn what_nvenc_cannot_do_is_an_error_that_says_why() {
     let _one = SERIAL.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-    filmcraft_platform::register();
+    mortiflix_platform::register();
     let rate = FrameRate::FPS_24;
     let base = hevc(tmp("declined.mp4"));
     // (what, settings, size): each declined by the configuration alone, so even a machine without
@@ -260,7 +260,7 @@ fn what_nvenc_cannot_do_is_an_error_that_says_why() {
     for signal in [ColorSignal::PQ, ColorSignal::HLG] {
         let before = hw_encode_stats();
         let r = factory(Format::Hevc, 640, 360, rate, &ExportSettings { signal, ..base.clone() });
-        if filmcraft_platform::nvenc::hevc_hdr_available() {
+        if mortiflix_platform::nvenc::hevc_hdr_available() {
             assert!(matches!(r, Some(Ok(_))), "{signal:?}");
             assert_eq!(delta(before), (0, 1, 0), "{signal:?}");
         } else if hevc_available() {

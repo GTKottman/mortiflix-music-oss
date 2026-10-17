@@ -5,11 +5,11 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use filmcraft_media::generators::GeneratorSource;
-use filmcraft_media::{FrameRequest, Generator, MediaSource};
-use filmcraft_project::{ItemKind, Label, MediaClip, MediaRef, SequenceSettings, TrackKind};
-use filmcraft_render::SourceMap;
-use filmcraft_time::TICKS_PER_SECOND;
+use mortiflix_media::generators::GeneratorSource;
+use mortiflix_media::{FrameRequest, Generator, MediaSource};
+use mortiflix_project::{ItemKind, Label, MediaClip, MediaRef, SequenceSettings, TrackKind};
+use mortiflix_render::SourceMap;
+use mortiflix_time::TICKS_PER_SECOND;
 
 use super::*;
 
@@ -18,7 +18,7 @@ struct Scratch(PathBuf);
 
 impl Scratch {
     fn new(name: &str) -> Self {
-        let d = filmcraft_testkit::fixtures::workspace_root().join("target").join("export-tests").join(format!("{name}-{}", std::process::id()));
+        let d = mortiflix_testkit::fixtures::workspace_root().join("target").join("export-tests").join(format!("{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         Scratch(d)
@@ -74,7 +74,7 @@ fn matte(color: [f32; 4], w: u32, h: u32, tone_db: Option<f32>) -> (Arc<Project>
 }
 
 fn ffprobe_json(args: &[&str], path: &str) -> Option<serde_json::Value> {
-    let ffprobe = filmcraft_testkit::ffprobe_or_skip("export settings")?;
+    let ffprobe = mortiflix_testkit::ffprobe_or_skip("export settings")?;
     let mut a = vec!["-v", "error", "-of", "json"];
     a.extend_from_slice(args);
     a.push(path);
@@ -142,7 +142,7 @@ fn jpeg_targa_and_dpx_sequences() {
             Format::DpxSequence => assert_eq!(bytes.len(), 2048 + 64 * 36 * 4),
             _ => assert_eq!(bytes.len(), 18 + 64 * 36 * if alpha { 4 } else { 3 } + 26),
         }
-        let Some(ffmpeg) = filmcraft_testkit::ffmpeg_or_skip("jpeg / targa / dpx sequences") else { continue };
+        let Some(ffmpeg) = mortiflix_testkit::ffmpeg_or_skip("jpeg / targa / dpx sequences") else { continue };
         let first = first.to_string_lossy().to_string();
         let out = std::process::Command::new(ffmpeg).args(["-v", "error", "-i", &first, "-f", "rawvideo", "-pix_fmt", "rgba", "-"]).output().unwrap();
         assert!(out.status.success(), "{first}: {}", String::from_utf8_lossy(&out.stderr));
@@ -178,7 +178,7 @@ fn openexr_sequences() {
         let first = dir.0.join(&want[0]);
         let bytes = std::fs::read(&first).unwrap();
         assert_eq!(&bytes[..4], &[0x76, 0x2F, 0x31, 0x01]);
-        let Some(ffmpeg) = filmcraft_testkit::ffmpeg_or_skip("OpenEXR sequences") else { continue };
+        let Some(ffmpeg) = mortiflix_testkit::ffmpeg_or_skip("OpenEXR sequences") else { continue };
         let out = std::process::Command::new(ffmpeg)
             .args(["-v", "error", "-i"])
             .arg(&first)
@@ -224,7 +224,7 @@ fn openexr_sequences_compress() {
     for (c, _, len, _) in &files[1..] {
         assert!(*len < plain / 2, "{c:?}: {len} bytes vs {plain} uncompressed");
     }
-    let Some(ffmpeg) = filmcraft_testkit::ffmpeg_or_skip("compressed OpenEXR sequences") else { return };
+    let Some(ffmpeg) = mortiflix_testkit::ffmpeg_or_skip("compressed OpenEXR sequences") else { return };
     let decode = |path: &Path| {
         let out =
             std::process::Command::new(&ffmpeg).args(["-v", "error", "-i"]).arg(path).args(["-f", "rawvideo", "-pix_fmt", "gbrapf32le", "-"]).output().unwrap();
@@ -316,13 +316,13 @@ fn aac_audio_writes_m4a_and_adts() {
     let r = export(&p, seq, &s, &m, &Progress::default()).unwrap();
     assert_eq!(r.frames, 48_000, "one second of samples");
     let bytes = std::fs::read(&m4a).unwrap();
-    let file = filmcraft_isobmff::open(bytes.clone()).unwrap();
+    let file = mortiflix_isobmff::open(bytes.clone()).unwrap();
     assert_eq!(file.tracks.len(), 1, "audio only");
     let t = &file.tracks[0];
-    let filmcraft_isobmff::CodecConfig::Aac(cfg) = &t.entries[0].codec else { panic!("not AAC: {:?}", t.entries[0].codec) };
+    let mortiflix_isobmff::CodecConfig::Aac(cfg) = &t.entries[0].codec else { panic!("not AAC: {:?}", t.entries[0].codec) };
     assert_eq!((cfg.object_type, cfg.sample_rate, cfg.channel_config), (2, 48_000, 2));
     assert!(t.samples.len() >= 48_000 / 1024, "{} access units", t.samples.len());
-    let mut dec = filmcraft_aac::Decoder::new(&cfg.asc).unwrap();
+    let mut dec = mortiflix_aac::Decoder::new(&cfg.asc).unwrap();
     let mut pcm: Vec<Vec<f32>> = Vec::new();
     for i in 0..t.samples.len() {
         let out = dec.decode(&file.read_sample(&bytes, 0, i).unwrap()).unwrap();
@@ -348,7 +348,7 @@ fn aac_audio_writes_m4a_and_adts() {
     export(&p, seq, &s, &m, &Progress::default()).unwrap();
     let b = std::fs::read(&adts).unwrap();
     // AAC-LC 44.1 kHz (index 4) mono: 00010 0100 0001 000
-    let mut dec = filmcraft_aac::Decoder::new(&[0x12, 0x08]).unwrap();
+    let mut dec = mortiflix_aac::Decoder::new(&[0x12, 0x08]).unwrap();
     let (mut pos, mut units, mut pcm) = (0usize, 0usize, vec![Vec::new()]);
     while pos < b.len() {
         let h = &b[pos..pos + 7];
@@ -370,7 +370,7 @@ fn aac_audio_writes_m4a_and_adts() {
         assert_eq!(st["sample_rate"], "44100");
         assert_eq!(st["channels"], 1);
     }
-    if let Some(ffmpeg) = filmcraft_testkit::ffmpeg_or_skip("AAC Audio decode") {
+    if let Some(ffmpeg) = mortiflix_testkit::ffmpeg_or_skip("AAC Audio decode") {
         for f in [&m4a, &adts] {
             let out = std::process::Command::new(&ffmpeg).args(["-v", "error", "-xerror", "-i", f, "-f", "null", "-"]).output().unwrap();
             assert!(out.status.success() && out.stderr.is_empty(), "{f}: {}", String::from_utf8_lossy(&out.stderr));
@@ -459,8 +459,8 @@ fn flac_is_lossless_against_wav() {
     let si = &fb[8..42];
     assert_eq!((u64::from(si[13] & 0x0F) << 32) | u64::from(u32::from_be_bytes(si[14..18].try_into().unwrap())), 72_000);
 
-    // the same samples through FilmCraft's own readers
-    let decode = |name: &str, bytes: Vec<u8>| filmcraft_codecs::open_bytes(name, bytes.into()).unwrap().audio(0, 72_000, 48_000).unwrap();
+    // the same samples through Mortiflix Studio's own readers
+    let decode = |name: &str, bytes: Vec<u8>| mortiflix_codecs::open_bytes(name, bytes.into()).unwrap().audio(0, 72_000, 48_000).unwrap();
     let (a, b) = (decode("a.wav", wb), decode("a.flac", fb));
     assert_eq!(a.channels.len(), 2);
     for (ca, cb) in a.channels.iter().zip(&b.channels) {
@@ -470,7 +470,7 @@ fn flac_is_lossless_against_wav() {
         assert!(ca.iter().any(|v| v.abs() > 0.1), "the tone is there");
     }
     // and bit for bit through ffmpeg
-    if let Some(ffmpeg) = filmcraft_testkit::ffmpeg_or_skip("flac export") {
+    if let Some(ffmpeg) = mortiflix_testkit::ffmpeg_or_skip("flac export") {
         let raw = |path: &str| {
             let out = std::process::Command::new(&ffmpeg).args(["-v", "error", "-i", path, "-f", "s32le", "-c:a", "pcm_s32le", "-"]).output().unwrap();
             assert!(out.status.success() && out.stderr.is_empty(), "{}", String::from_utf8_lossy(&out.stderr));
@@ -512,8 +512,8 @@ fn flac_audio_in_mp4_and_mov() {
         assert!(si[4..10].iter().any(|&b| b != 0), "{name}: frame sizes");
         assert_eq!(u32::from_be_bytes(si[14..18].try_into().unwrap()), 72_000, "{name}: total samples");
         assert!(si[18..34].iter().any(|&b| b != 0), "{name}: MD5");
-        // FilmCraft's own importer reads the FLAC track back, sample-accurately long
-        let src = filmcraft_codecs::open_bytes(name, bytes.into()).unwrap();
+        // Mortiflix Studio's own importer reads the FLAC track back, sample-accurately long
+        let src = mortiflix_codecs::open_bytes(name, bytes.into()).unwrap();
         let a = src.audio(0, 72_000, 48_000).unwrap();
         assert!(a.channels.iter().all(|c| c.len() == 72_000) && a.channels[0].iter().any(|v| v.abs() > 0.1), "{name}");
         if let Some(j) = ffprobe_json(&["-show_streams", "-count_packets"], &path) {
@@ -523,7 +523,7 @@ fn flac_audio_in_mp4_and_mov() {
             assert_eq!(st["duration_ts"].as_u64(), Some(72_000), "{name}: the short last frame is timed exactly");
         }
         // the audio decodes to the WAV export's samples bit for bit
-        if let Some(ffmpeg) = filmcraft_testkit::ffmpeg_or_skip("flac in containers") {
+        if let Some(ffmpeg) = mortiflix_testkit::ffmpeg_or_skip("flac in containers") {
             let raw = |path: &str| {
                 let out = std::process::Command::new(&ffmpeg)
                     .args(["-v", "error", "-i", path, "-map", "0:a", "-f", "s32le", "-c:a", "pcm_s32le", "-"])
@@ -610,7 +610,7 @@ fn frame_size_rate_and_scaling() {
     let r = export(&p, seq, &s, &m, &Progress::default()).unwrap();
     assert_eq!(r.frames, 12, "1 s at 12 fps");
     let bytes: Arc<[u8]> = std::fs::read(&path).unwrap().into();
-    let src = filmcraft_codecs::open_bytes("square.mp4", bytes).unwrap();
+    let src = mortiflix_codecs::open_bytes("square.mp4", bytes).unwrap();
     let v = src.info().video.clone().unwrap();
     assert_eq!((v.width, v.height), (256, 256));
     let f = src.video_frame(FrameRequest::full(Tick(TICKS_PER_SECOND / 2))).unwrap().to_rgba8();
@@ -636,7 +636,7 @@ fn frame_size_rate_and_scaling() {
     };
     export(&p, seq, &s, &m, &Progress::default()).unwrap();
     let bytes: Arc<[u8]> = std::fs::read(&path).unwrap().into();
-    let src = filmcraft_codecs::open_bytes("fill.mov", bytes).unwrap();
+    let src = mortiflix_codecs::open_bytes("fill.mov", bytes).unwrap();
     let f = src.video_frame(FrameRequest::full(Tick(TICKS_PER_SECOND / 2))).unwrap().to_rgba8();
     assert!(f[(5 * 200 + 100) * 4] > 200, "filled to the top edge");
 }
@@ -644,7 +644,7 @@ fn frame_size_rate_and_scaling() {
 /// Integrated loudness of planar audio.
 fn lufs(planar: &[Vec<f32>], sr: u32) -> (f64, f64) {
     let refs: Vec<&[f32]> = planar.iter().map(Vec::as_slice).collect();
-    let s = filmcraft_audio_dsp::loudness::measure(&refs, sr as f64);
+    let s = mortiflix_audio_dsp::loudness::measure(&refs, sr as f64);
     (s.integrated_lufs, s.true_peak_dbtp)
 }
 
@@ -688,7 +688,7 @@ fn loudness_normalization_hits_target_and_true_peak() {
     s.effects.loudness = LoudnessNormalization { enabled: true, target_lufs: -20.0, true_peak_dbtp: -1.0 };
     export(&p, seq, &s, &m, &Progress::default()).unwrap();
     let bytes: Arc<[u8]> = std::fs::read(&path).unwrap().into();
-    let src = filmcraft_codecs::open_bytes("loud.mp4", bytes).unwrap();
+    let src = mortiflix_codecs::open_bytes("loud.mp4", bytes).unwrap();
     let a = src.audio(4800, 38_400, 48_000).unwrap();
     let (i, _) = lufs(&a.channels, 48_000);
     assert!((i + 20.0).abs() < 0.5, "AAC: {i:.2} LUFS");
@@ -708,7 +708,7 @@ fn two_pass_and_cbr_h264() {
         assert_eq!(prog.total.load(Ordering::Relaxed), 24 * passes);
         assert_eq!(prog.done.load(Ordering::Relaxed), 24 * passes);
         let bytes: Arc<[u8]> = std::fs::read(&path).unwrap().into();
-        let src = filmcraft_codecs::open_bytes("x.mp4", bytes).unwrap();
+        let src = mortiflix_codecs::open_bytes("x.mp4", bytes).unwrap();
         let f = src.video_frame(FrameRequest::full(Tick(TICKS_PER_SECOND / 2))).unwrap().to_rgba8();
         assert!((f[2] as i32 - 204).abs() < 12 && (f[1] as i32 - 127).abs() < 12, "{mode:?}: {:?}", &f[..4]);
     }
@@ -741,7 +741,7 @@ fn crf_h264() {
         assert_eq!((r.frames, prog.total.load(Ordering::Relaxed)), (24, 24));
         let bytes: Arc<[u8]> = std::fs::read(&path).unwrap().into();
         sizes.push(bytes.len());
-        let src = filmcraft_codecs::open_bytes("x.mp4", bytes).unwrap();
+        let src = mortiflix_codecs::open_bytes("x.mp4", bytes).unwrap();
         let f = src.video_frame(FrameRequest::full(Tick(TICKS_PER_SECOND / 2))).unwrap().to_rgba8();
         assert!((f[2] as i32 - 204).abs() < 12 && (f[1] as i32 - 127).abs() < 12, "CRF {crf}: {:?}", &f[..4]);
     }
@@ -822,7 +822,7 @@ fn metadata_and_quicktime_multiplexer() {
     let dir = Scratch::new("meta");
     let path = dir.path("m.mov");
     let mut s = ExportSettings { format: Format::H264, path: path.clone(), multiplexer: Multiplexer::Mov, ..Default::default() };
-    s.metadata = ExportMetadata { title: "Test Title".into(), creator: "FilmCraft Tests".into(), copyright: "CC0".into(), ..Default::default() };
+    s.metadata = ExportMetadata { title: "Test Title".into(), creator: "Mortiflix Studio Tests".into(), copyright: "CC0".into(), ..Default::default() };
     s.audio.codec = AudioCodec::Pcm;
     s.audio.bits = 24;
     assert_eq!(s.extension(), "mov");
@@ -1060,15 +1060,15 @@ fn gpu_rendering_is_off_by_default() {
 }
 
 /// Brief large peaks over a quiet bed exercise loudness lost during limiter release.
-struct CrestSource(filmcraft_media::SharedSource, Arc<std::sync::atomic::AtomicUsize>);
+struct CrestSource(mortiflix_media::SharedSource, Arc<std::sync::atomic::AtomicUsize>);
 impl MediaSource for CrestSource {
-    fn info(&self) -> &filmcraft_media::MediaInfo {
+    fn info(&self) -> &mortiflix_media::MediaInfo {
         self.0.info()
     }
-    fn video_frame(&self, req: FrameRequest) -> filmcraft_media::Result<Arc<filmcraft_frame::VideoFrame>> {
+    fn video_frame(&self, req: FrameRequest) -> mortiflix_media::Result<Arc<mortiflix_frame::VideoFrame>> {
         self.0.video_frame(req)
     }
-    fn audio(&self, start: i64, frames: usize, sample_rate: u32) -> filmcraft_media::Result<filmcraft_frame::AudioBuffer> {
+    fn audio(&self, start: i64, frames: usize, sample_rate: u32) -> mortiflix_media::Result<mortiflix_frame::AudioBuffer> {
         self.1.fetch_add(1, Ordering::Relaxed);
         let samples: Vec<f32> = (0..frames)
             .map(|i| {
@@ -1078,7 +1078,7 @@ impl MediaSource for CrestSource {
                 amplitude * (std::f32::consts::TAU * 1000.0 * at as f32 / sample_rate as f32).sin()
             })
             .collect();
-        Ok(filmcraft_frame::AudioBuffer { sample_rate, channels: vec![samples.clone(), samples] })
+        Ok(mortiflix_frame::AudioBuffer { sample_rate, channels: vec![samples.clone(), samples] })
     }
 }
 
@@ -1137,7 +1137,7 @@ fn loudness_normalization_corrects_limiter_loss_and_bounds_impossible_targets() 
 }
 
 /// 32-bit integer and float audio in every container that takes them, read back by ffprobe (an
-/// external oracle) and, where FilmCraft imports the format, by FilmCraft's own readers.
+/// external oracle) and, where Mortiflix Studio imports the format, by Mortiflix Studio's own readers.
 #[test]
 fn thirty_two_bit_audio_in_every_container() {
     let (p, seq, m) = matte([0.0, 0.0, 0.0, 1.0], 64, 36, Some(-6.0));
@@ -1160,9 +1160,9 @@ fn thirty_two_bit_audio_in_every_container() {
         assert!(s.supports_sample_format(sf), "{name}");
         export(&p, seq, &s, &m, &Progress::default()).unwrap_or_else(|e| panic!("{name}: {e}"));
         let bytes = std::fs::read(&path).unwrap();
-        // FilmCraft's own importer: the -6 dB tone at a peak of 0.5
+        // Mortiflix Studio's own importer: the -6 dB tone at a peak of 0.5
         if !matches!(format, Format::MxfOp1a) {
-            let src = filmcraft_codecs::open_bytes(name, bytes.into()).unwrap_or_else(|e| panic!("{name}: {e}"));
+            let src = mortiflix_codecs::open_bytes(name, bytes.into()).unwrap_or_else(|e| panic!("{name}: {e}"));
             let a = src.audio(0, 24_000, 48_000).unwrap();
             let peak = a.channels[0].iter().fold(0.0f32, |m, v| m.max(v.abs()));
             assert!((peak - 0.5).abs() < 0.01, "{name}: peak {peak}");
@@ -1175,7 +1175,7 @@ fn thirty_two_bit_audio_in_every_container() {
         }
     }
     // every 32-bit file holds the same samples (float exactly, integers within one step of 2^-31)
-    if let Some(ffmpeg) = filmcraft_testkit::ffmpeg_or_skip("32-bit audio") {
+    if let Some(ffmpeg) = mortiflix_testkit::ffmpeg_or_skip("32-bit audio") {
         let raw = |name: &str| {
             let out = std::process::Command::new(&ffmpeg)
                 .args(["-v", "error", "-i", &dir.path(name), "-map", "0:a", "-f", "f32le", "-c:a", "pcm_f32le", "-"])
@@ -1210,7 +1210,7 @@ fn float_export_keeps_peaks_above_full_scale() {
         let mut s = ExportSettings { format: Format::Wav, path: path.clone(), range, ..Default::default() };
         s.audio.set_sample_format(sf);
         export(&p, seq, &s, &m, &Progress::default()).unwrap();
-        let src = filmcraft_codecs::open_bytes(name, std::fs::read(&path).unwrap().into()).unwrap();
+        let src = mortiflix_codecs::open_bytes(name, std::fs::read(&path).unwrap().into()).unwrap();
         src.audio(0, 12_000, 48_000).unwrap().channels[0].iter().fold(0.0f32, |m, v| m.max(v.abs()))
     };
     let float = peak(SampleFormat::Float32, "f.wav");
@@ -1300,7 +1300,7 @@ fn sample_format_settings_round_trip_summary_and_estimate() {
     assert!(flac.starts_with("FLAC (lossless) 32-bit"), "{flac}");
 }
 
-/// FilmCraft imports its own 32-bit FLAC (symphonia rejected the frame header's 32-bit size code
+/// Mortiflix Studio imports its own 32-bit FLAC (symphonia rejected the frame header's 32-bit size code
 /// as reserved: "unsupported media"), at full scale and with noise, sample for sample.
 #[test]
 fn own_importer_reads_32_bit_flac_at_full_scale() {
@@ -1316,13 +1316,13 @@ fn own_importer_reads_32_bit_flac_at_full_scale() {
         .collect();
     let extremes: Vec<i32> = (0..n).map(|i| if i % 3 == 0 { i32::MAX } else { i32::MIN + 1 }).collect();
     for level in [0u8, 5, 8] {
-        let mut enc = filmcraft_flac::Encoder::new(filmcraft_flac::EncoderConfig { level, ..filmcraft_flac::EncoderConfig::new(48_000, 2, 32) }).unwrap();
+        let mut enc = mortiflix_flac::Encoder::new(mortiflix_flac::EncoderConfig { level, ..mortiflix_flac::EncoderConfig::new(48_000, 2, 32) }).unwrap();
         let mut file = enc.header();
         file.extend(enc.encode(&[&extremes, &noise]).unwrap());
         file.extend(enc.finish());
-        let at = filmcraft_flac::STREAMINFO_OFFSET as usize;
+        let at = mortiflix_flac::STREAMINFO_OFFSET as usize;
         file[at..at + 34].copy_from_slice(&enc.streaminfo());
-        let src = filmcraft_codecs::open_bytes("x.flac", file.into()).unwrap_or_else(|e| panic!("level {level}: {e}"));
+        let src = mortiflix_codecs::open_bytes("x.flac", file.into()).unwrap_or_else(|e| panic!("level {level}: {e}"));
         let a = src.audio(0, n, 48_000).unwrap();
         for (c, want) in [&extremes, &noise].iter().enumerate() {
             let got = &a.channels[c];

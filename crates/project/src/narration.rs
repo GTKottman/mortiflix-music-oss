@@ -5,7 +5,7 @@
 //! reopen the script and voice settings. Editing a narration writes a new WAV (a new item) and
 //! swaps the clip over to it; the old item and its narration stay, so undo restores them exactly.
 
-use filmcraft_time::Tick;
+use mortiflix_time::Tick;
 use serde::{Deserialize, Serialize};
 
 /// Longest script accepted, in bytes.

@@ -7,9 +7,9 @@ mod common;
 use std::path::{Path, PathBuf};
 
 use common::*;
-use filmcraft_codecs::MxfSource;
-use filmcraft_media::{FrameRequest, MediaKind, MediaSource};
-use filmcraft_time::FrameRate;
+use mortiflix_codecs::MxfSource;
+use mortiflix_media::{FrameRequest, MediaKind, MediaSource};
+use mortiflix_time::FrameRate;
 
 const V25: &[&str] = &["-f", "lavfi", "-i", "testsrc2=size=320x240:rate=25"];
 const TONE: &[&str] = &["-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000"];
@@ -133,7 +133,7 @@ fn open(p: &Path) -> MxfSource {
 
 /// Number of video packets ffprobe lists.
 fn ffprobe_video_packets(file: &Path) -> Option<usize> {
-    let fp = filmcraft_testkit::ffprobe()?;
+    let fp = mortiflix_testkit::ffprobe()?;
     let o = std::process::Command::new(fp)
         .args(["-v", "error", "-select_streams", "v:0", "-count_packets", "-show_entries", "stream=nb_read_packets", "-of", "csv=p=0"])
         .arg(file)
@@ -207,7 +207,7 @@ fn check_audio_exact(ff: &Path, file: &Path, extra: &[&str]) {
 
 #[test]
 fn h264_long_gop_with_b_frames_bit_exact() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let f = make(&ff, "mxf_h264_bf2.mxf");
     let src = open(&f);
     let info = src.info();
@@ -218,7 +218,7 @@ fn h264_long_gop_with_b_frames_bit_exact() {
     assert_eq!(v.codec, "H.264");
     assert_eq!(info.start_timecode, Some(90_000), "01:00:00:00 at 25 fps");
     assert_eq!(src.file().timecode.unwrap().format(), "01:00:00:00");
-    let t = &src.file().tracks[src.file().track_of_kind(filmcraft_mxf::TrackKind::Picture).unwrap()];
+    let t = &src.file().tracks[src.file().track_of_kind(mortiflix_mxf::TrackKind::Picture).unwrap()];
     assert!(t.needs_reorder && !t.temporal_offsets, "ffmpeg marks B pictures without temporal offsets");
     assert_eq!(t.samples.iter().filter(|s| s.key).count(), 5, "an IDR every 12 frames over 50");
     check_video(&ff, &f, "yuv420p", (2, 2), 1, 0, 25);
@@ -227,7 +227,7 @@ fn h264_long_gop_with_b_frames_bit_exact() {
 
 #[test]
 fn h264_2997_drop_frame_timecode_and_24_bit_audio() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let f = make(&ff, "mxf_h264_2997df.mxf");
     let src = open(&f);
     let info = src.info();
@@ -243,7 +243,7 @@ fn h264_2997_drop_frame_timecode_and_24_bit_audio() {
 
 #[test]
 fn dnxhr_op1a_within_two_lsb() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let f = make(&ff, "mxf_dnxhr_lb.mxf");
     let src = open(&f);
     assert_eq!(src.info().video.as_ref().unwrap().codec, "DNxHR LB");
@@ -253,7 +253,7 @@ fn dnxhr_op1a_within_two_lsb() {
 
 #[test]
 fn prores_op1a_within_one_lsb() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let f = make(&ff, "mxf_prores.mxf");
     let src = open(&f);
     assert!(src.info().video.as_ref().unwrap().codec.starts_with("Apple ProRes 422"), "{}", src.info().video.as_ref().unwrap().codec);
@@ -261,20 +261,20 @@ fn prores_op1a_within_one_lsb() {
     check_audio_exact(&ff, &f, &[]);
 }
 
-/// MPEG-2 frames are compared within the IDCT tolerance of `filmcraft-mpeg2v` (an
+/// MPEG-2 frames are compared within the IDCT tolerance of `mortiflix-mpeg2v` (an
 /// IEEE 1180-accurate IDCT against ffmpeg's integer one).
 const MPEG2_TOL: u16 = 4;
 
 #[test]
 fn mpeg2_long_gop_decodes() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let f = make(&ff, "mxf_mpeg2.mxf");
     let src = open(&f);
     let v = src.info().video.as_ref().unwrap();
     assert!(v.codec.starts_with("MPEG-2 Video (Main@"), "{}", v.codec);
     assert_eq!(v.pixel_format, "YUV 4:2:0 8-bit, progressive");
     // temporal offsets: ffmpeg's MPEG-2 index carries them
-    let t = &src.file().tracks[src.file().track_of_kind(filmcraft_mxf::TrackKind::Picture).unwrap()];
+    let t = &src.file().tracks[src.file().track_of_kind(mortiflix_mxf::TrackKind::Picture).unwrap()];
     assert!(t.temporal_offsets);
     check_video(&ff, &f, "yuv420p", (2, 2), 1, MPEG2_TOL, 12);
     check_audio_exact(&ff, &f, &[]);
@@ -282,7 +282,7 @@ fn mpeg2_long_gop_decodes() {
 
 #[test]
 fn xdcam_hd422_decodes() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let f = make(&ff, "mxf_xdcam_hd422.mxf");
     let src = open(&f);
     let v = src.info().video.as_ref().unwrap();
@@ -295,12 +295,12 @@ fn xdcam_hd422_decodes() {
 
 #[test]
 fn op_atom_video_and_audio_files() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let v = make(&ff, "mxf_atom_dnxhr.mxf");
     let src = open(&v);
     assert_eq!(src.info().container, "MXF OP-Atom");
     assert!(!src.info().has_audio());
-    assert_eq!(src.file().tracks[0].wrapping, filmcraft_mxf::Wrapping::Clip);
+    assert_eq!(src.file().tracks[0].wrapping, mortiflix_mxf::Wrapping::Clip);
     check_video(&ff, &v, "yuv422p", (2, 1), 1, 2, 10);
     let a = make(&ff, "mxf_atom_pcm.mxf");
     let src = open(&a);
@@ -308,13 +308,13 @@ fn op_atom_video_and_audio_files() {
     assert_eq!(src.info().container, "MXF OP-Atom");
     let ai = src.info().audio().cloned().unwrap();
     assert_eq!((ai.sample_rate, ai.channels, ai.bits_per_sample), (48_000, 1, Some(24)));
-    assert_eq!(src.info().duration, filmcraft_time::Tick::from_units(48_000, 48_000));
+    assert_eq!(src.info().duration, mortiflix_time::Tick::from_units(48_000, 48_000));
     check_audio_exact(&ff, &a, &[]);
 }
 
 #[test]
 fn d10_aes3_elements_sample_exact() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let f = make(&ff, "mxf_d10.mxf");
     let src = open(&f);
     let a = src.info().audio().cloned().unwrap();
@@ -331,7 +331,7 @@ fn d10_aes3_elements_sample_exact() {
 
 #[test]
 fn truncated_and_corrupt_files_never_panic() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     for name in ["mxf_h264_bf2.mxf", "mxf_atom_pcm.mxf", "mxf_prores.mxf"] {
         let f = make(&ff, name);
         let full = std::fs::read(&f).unwrap();
@@ -376,15 +376,15 @@ fn truncated_and_corrupt_files_never_panic() {
 #[test]
 #[ignore]
 fn generate_fixtures() {
-    let Some(ff) = filmcraft_testkit::ffmpeg() else {
+    let Some(ff) = mortiflix_testkit::ffmpeg() else {
         for n in ALL {
-            filmcraft_testkit::fixtures::report(n, filmcraft_testkit::fixtures::Status::Skipped);
+            mortiflix_testkit::fixtures::report(n, mortiflix_testkit::fixtures::Status::Skipped);
         }
         return;
     };
     for n in ALL {
         let out = dir().join(n);
-        filmcraft_testkit::fixtures::generate_and_report(n, std::slice::from_ref(&out), || {
+        mortiflix_testkit::fixtures::generate_and_report(n, std::slice::from_ref(&out), || {
             let args = spec(n);
             let refs: Vec<&str> = args.iter().map(String::as_str).collect();
             fixture(&ff, n, &refs)

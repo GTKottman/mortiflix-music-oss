@@ -7,7 +7,7 @@
 //! (10th percentile of the levels of frames above −100 dBFS) and its speech level (95th percentile): 30 % of the way up,
 //! and at least 6 dB above the floor. A word keeps at least 60 ms.
 
-use filmcraft_project::Word;
+use mortiflix_project::Word;
 
 use crate::{SAMPLE_RATE, TICKS_PER_SAMPLE};
 
@@ -68,10 +68,10 @@ pub fn tighten_words(audio: &[f32], words: &mut [Word]) {
             continue;
         }
         if s > a {
-            w.start = filmcraft_time::Tick(s as i64 * frame_ticks);
+            w.start = mortiflix_time::Tick(s as i64 * frame_ticks);
         }
         if e < b {
-            w.end = filmcraft_time::Tick(e as i64 * frame_ticks).max(w.start);
+            w.end = mortiflix_time::Tick(e as i64 * frame_ticks).max(w.start);
         }
     }
 }

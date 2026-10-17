@@ -57,7 +57,7 @@ fn ms(n: i64) -> Tick {
 
 fn pixels(s: &dyn MediaSource, t: Tick) -> Vec<u8> {
     match &s.video_frame(FrameRequest::full(t)).unwrap().data {
-        filmcraft_frame::PixelData::Rgba8(p) => p.to_vec(),
+        mortiflix_frame::PixelData::Rgba8(p) => p.to_vec(),
         _ => panic!("not RGBA"),
     }
 }

@@ -1,20 +1,20 @@
 //! Discovery of the external oracle tools (ffmpeg, ffprobe).
 //!
 //! Search order for a tool `T` (`ffmpeg` or `ffprobe`):
-//! 1. `FILMCRAFT_FFMPEG` / `FILMCRAFT_FFPROBE`: an explicit path (a set-but-wrong path is an error,
+//! 1. `MFX_STUDIO_FFMPEG` / `MFX_STUDIO_FFPROBE`: an explicit path (a set-but-wrong path is an error,
 //!    not a silent skip);
 //! 2. every directory on `PATH` (`T`, and `T.exe` on Windows);
 //! 3. well-known install locations (`/opt/homebrew/bin`, `/usr/local/bin`, `/usr/bin`,
 //!    `C:\ffmpeg\bin`, …).
 //!
 //! When a tool is missing, tests print `SKIPPED: …` and pass — unless
-//! `FILMCRAFT_REQUIRE_ORACLES=1` is set (CI), which turns every skip into a failure.
+//! `MFX_STUDIO_REQUIRE_ORACLES=1` is set (CI), which turns every skip into a failure.
 
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 /// Environment variable that makes missing oracles a hard failure.
-pub const REQUIRE_ENV: &str = "FILMCRAFT_REQUIRE_ORACLES";
+pub const REQUIRE_ENV: &str = "MFX_STUDIO_REQUIRE_ORACLES";
 
 const KNOWN_DIRS: &[&str] = &[
     "/opt/homebrew/bin",
@@ -65,7 +65,7 @@ pub fn find_tool_in(name: &str, explicit: Option<&std::ffi::OsStr>, path: Option
 }
 
 fn env_var(name: &str) -> String {
-    format!("FILMCRAFT_{}", name.to_ascii_uppercase())
+    format!("MFX_STUDIO_{}", name.to_ascii_uppercase())
 }
 
 /// Find a tool using the process environment (uncached).
@@ -90,13 +90,13 @@ pub fn ffprobe() -> Option<PathBuf> {
     F.get_or_init(|| find_tool("ffprobe")).clone()
 }
 
-/// Whether `FILMCRAFT_REQUIRE_ORACLES` is set to a true value.
+/// Whether `MFX_STUDIO_REQUIRE_ORACLES` is set to a true value.
 pub fn oracles_required() -> bool {
     std::env::var(REQUIRE_ENV).is_ok_and(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
 }
 
 /// Report a skipped test: prints `SKIPPED (<context>): <reason>`. With
-/// `FILMCRAFT_REQUIRE_ORACLES=1` it panics instead, so CI cannot pass by skipping.
+/// `MFX_STUDIO_REQUIRE_ORACLES=1` it panics instead, so CI cannot pass by skipping.
 pub fn skip(context: &str, reason: &str) {
     if oracles_required() {
         panic!("{context}: {reason}, and {REQUIRE_ENV}=1 forbids skipping oracle tests");
@@ -163,7 +163,7 @@ pub fn ffmpeg_version(ff: &Path) -> Option<String> {
 /// ffmpeg that can read `format_name`, or `None` after reporting a skip (see
 /// [`skip`]). An ffmpeg predating the format (APV needs 8.0+) skips with its
 /// detected version named, exactly like a missing tool — and fails under
-/// `FILMCRAFT_REQUIRE_ORACLES=1`.
+/// `MFX_STUDIO_REQUIRE_ORACLES=1`.
 pub fn ffmpeg_with_format_or_skip(context: &str, format_name: &str, min_version: &str) -> Option<PathBuf> {
     let ff = ffmpeg_or_skip(context)?;
     if ffmpeg_supports_format(&ff, format_name) {
@@ -180,7 +180,7 @@ mod tests {
     use std::ffi::OsString;
 
     fn tmpdir(tag: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("filmcraft-testkit-{tag}-{}", std::process::id()));
+        let d = std::env::temp_dir().join(format!("mortiflix-testkit-{tag}-{}", std::process::id()));
         std::fs::create_dir_all(&d).unwrap();
         d
     }

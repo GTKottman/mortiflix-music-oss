@@ -1,6 +1,6 @@
 use super::*;
-use filmcraft_project::{Label, Project, SequenceSettings, TrackKind};
-use filmcraft_time::FrameRate;
+use mortiflix_project::{Label, Project, SequenceSettings, TrackKind};
+use mortiflix_time::FrameRate;
 use proptest::prelude::*;
 
 const R: FrameRate = FrameRate::FPS_24;
@@ -377,7 +377,7 @@ fn ripple_trim_group_takes_a_split_edit_along() {
     }
     fx.seq.track_mut(a1).unwrap().transitions = vec![Transition {
         id: TransitionId(1),
-        effect: filmcraft_project::find_effect("cross_dissolve").unwrap().instance(),
+        effect: mortiflix_project::find_effect("cross_dissolve").unwrap().instance(),
         start: f(4),
         duration: f(4),
         from: Some(stays),
@@ -437,7 +437,7 @@ fn transitions_stay_on_their_cuts() {
     let c = fx.put(v1, 20, 10, 10);
     let cross = |id, start, from, to| Transition {
         id: TransitionId(id),
-        effect: filmcraft_project::find_effect("cross_dissolve").unwrap().instance(),
+        effect: mortiflix_project::find_effect("cross_dissolve").unwrap().instance(),
         start: f(start),
         duration: f(4),
         from,
@@ -482,7 +482,7 @@ fn fades_follow_a_regular_trim() {
     let a = fx.put(v1, 10, 20, 10);
     let fade = |id, start, from, to| Transition {
         id: TransitionId(id),
-        effect: filmcraft_project::find_effect("cross_dissolve").unwrap().instance(),
+        effect: mortiflix_project::find_effect("cross_dissolve").unwrap().instance(),
         start: f(start),
         duration: f(6),
         from,
@@ -511,7 +511,7 @@ fn fades_follow_a_non_ripple_speed_change() {
     let a = fx.put(v1, 0, 100, 0);
     fx.seq.track_mut(v1).unwrap().transitions = vec![Transition {
         id: TransitionId(1),
-        effect: filmcraft_project::find_effect("cross_dissolve").unwrap().instance(),
+        effect: mortiflix_project::find_effect("cross_dissolve").unwrap().instance(),
         start: f(90),
         duration: f(10),
         from: Some(a),
@@ -537,7 +537,7 @@ fn transitions_travel_with_moved_clips() {
     let c = fx.put(v1, 20, 10, 10);
     let tr = |id, start, from, to| Transition {
         id: TransitionId(id),
-        effect: filmcraft_project::find_effect("cross_dissolve").unwrap().instance(),
+        effect: mortiflix_project::find_effect("cross_dissolve").unwrap().instance(),
         start: f(start),
         duration: f(4),
         from,

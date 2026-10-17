@@ -15,7 +15,7 @@ use super::model::{Cut, Kind, Node, NodeState};
 use super::stills::{Stills, resolve};
 use crate::MfxTheme;
 
-/// FilmCraft's selected outline (`#ebebeb`).
+/// Mortiflix Studio's selected outline (`#ebebeb`).
 pub const SELECTED: Color32 = Color32::from_rgb(0xeb, 0xeb, 0xeb);
 /// The shot under the playhead (`#5895ec`, part 36).
 pub const PLAYHEAD: Color32 = Color32::from_rgb(0x58, 0x95, 0xec);
@@ -984,7 +984,7 @@ fn shot_node(
             }
         }
     }
-    // under the playhead: FilmCraft blue (part 36); selected: white 2 px
+    // under the playhead: Mortiflix Studio blue (part 36); selected: white 2 px
     if area.playhead_shot.as_deref() == Some(n.id.as_str()) {
         p.rect_stroke(r.expand(if sel { 5.0 } else { 2.0 }), radius + 2.0, Stroke::new(2.0, PLAYHEAD), StrokeKind::Outside);
     }

@@ -88,8 +88,8 @@ fn h264_slices_follow_the_frame_size_not_the_cores() {
     let (p, seq, m) = project();
     export(&p, seq, &s, &m, &Progress::default()).unwrap();
     let bytes = std::fs::read(&path).unwrap();
-    let file = filmcraft_isobmff::open(bytes.as_slice()).unwrap();
-    let vt = file.track_of_kind(filmcraft_isobmff::TrackKind::Video).unwrap();
+    let file = mortiflix_isobmff::open(bytes.as_slice()).unwrap();
+    let vt = file.track_of_kind(mortiflix_isobmff::TrackKind::Video).unwrap();
     assert_eq!(file.tracks[vt].samples.len(), 24);
     for i in 0..file.tracks[vt].samples.len() {
         let sample = file.read_sample(bytes.as_slice(), vt, i).unwrap();
@@ -101,8 +101,8 @@ fn h264_slices_follow_the_frame_size_not_the_cores() {
 // rendering the next batch while the current one is encoded (job.rs, "Overlapping render and encode")
 // ---------------------------------------------------------------------------------------------
 
-use filmcraft_media::SharedSource;
-use filmcraft_render::SourceMap;
+use mortiflix_media::SharedSource;
+use mortiflix_render::SourceMap;
 use std::sync::atomic::AtomicUsize;
 
 fn pool(threads: usize) -> rayon::ThreadPool {
@@ -164,7 +164,7 @@ fn rendering_ahead_in_a_two_pass_export() {
 
 #[test]
 fn hdr_with_audio_is_the_same_file_when_the_memory_budget_caps_the_batch() {
-    use filmcraft_color::{ColorPipeline, WorkingSpace};
+    use mortiflix_color::{ColorPipeline, WorkingSpace};
     for (format, ext) in [(Format::ProRes, "mov"), (Format::H264, "mp4")] {
         let run = |name: &str, batch: i64, overlap: bool, budget: Option<u64>| {
             let (p, seq, m) = project();
@@ -234,7 +234,7 @@ impl SourceProvider for Flaky<'_> {
             panic!("a source blew up (test)");
         }
         if self.loading.contains(&n) {
-            filmcraft_media::pending::mark();
+            mortiflix_media::pending::mark();
             return None;
         }
         self.inner.source(item)

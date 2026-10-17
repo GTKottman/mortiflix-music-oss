@@ -6,13 +6,13 @@ use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-/// (ffmpeg, ffprobe), or `None` after printing `SKIPPED` (see `filmcraft_testkit::oracle`).
+/// (ffmpeg, ffprobe), or `None` after printing `SKIPPED` (see `mortiflix_testkit::oracle`).
 pub fn tools() -> Option<(PathBuf, PathBuf)> {
-    Some((filmcraft_testkit::ffmpeg_or_skip("matroska oracle")?, filmcraft_testkit::ffprobe_or_skip("matroska oracle")?))
+    Some((mortiflix_testkit::ffmpeg_or_skip("matroska oracle")?, mortiflix_testkit::ffprobe_or_skip("matroska oracle")?))
 }
 
 pub fn fixture_dir() -> PathBuf {
-    filmcraft_testkit::fixtures_dir("matroska")
+    mortiflix_testkit::fixtures_dir("matroska")
 }
 
 const V: &[&str] = &["-f", "lavfi", "-i", "testsrc2=size=160x120:rate=25"];
@@ -75,7 +75,7 @@ pub fn spec(name: &str) -> Option<Vec<String>> {
             ],
         ]),
         "prores_pcm.mkv" => cat(&[V, A, &["-t", "1", "-c:v", "prores_ks", "-profile:v", "2", "-c:a", "pcm_s24le"]]),
-        "mjpeg_ac3.mkv" => cat(&[V, A, &["-t", "1", "-c:v", "mjpeg", "-q:v", "5", "-c:a", "ac3", "-metadata", "title=FilmCraft test"]]),
+        "mjpeg_ac3.mkv" => cat(&[V, A, &["-t", "1", "-c:v", "mjpeg", "-q:v", "5", "-c:a", "ac3", "-metadata", "title=Mortiflix Studio test"]]),
         "av1.mkv" => cat(&[V, &["-t", "1", "-c:v", "libsvtav1", "-preset", "12", "-g", "10"]]),
         "live.mkv" => return None,
         _ => panic!("unknown fixture {name}"),
@@ -90,7 +90,7 @@ pub fn fixture(ffmpeg: &Path, name: &str) -> Option<PathBuf> {
         return Some(out);
     }
     write_subs(&dir);
-    let tmp = filmcraft_testkit::temp_path(&out);
+    let tmp = mortiflix_testkit::temp_path(&out);
     let ok = match spec(name) {
         Some(args) => {
             let mut c = Command::new(ffmpeg);

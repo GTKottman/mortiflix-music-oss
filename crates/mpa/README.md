@@ -1,7 +1,7 @@
-# filmcraft-mpa
+# mortiflix-mpa
 
 Clean-room MPEG-1 / MPEG-2 Audio Layer I and Layer II decoder (MP1 / MP2) in pure Rust. Layer L0:
-depends only on `filmcraft-bitstream` and `thiserror`. Builds for `wasm32-unknown-unknown`; no
+depends only on `mortiflix-bitstream` and `thiserror`. Builds for `wasm32-unknown-unknown`; no
 `unsafe`. No GPL/LGPL code (FFmpeg, libmad, mpg123, twolame) was consulted; FFmpeg (and twolame,
 when installed) are used only as external fixture generators and test oracles.
 
@@ -26,8 +26,8 @@ the Layer II allocation table B.1 (its rows confirmed against FFmpeg's decode).
 ## API
 
 ```rust
-let mut dec = filmcraft_mpa::Decoder::new();
-let h = filmcraft_mpa::parse_header(frame)?;   // layer, rate, mode, frame size
+let mut dec = mortiflix_mpa::Decoder::new();
+let h = mortiflix_mpa::parse_header(frame)?;   // layer, rate, mode, frame size
 let out = dec.decode(frame)?;                  // h.samples() per channel (384 or 1152)
 dec.reset();                                    // before decoding from another position
 ```
@@ -65,7 +65,7 @@ requires 70 dB, and a wrong table entry or misread field costs tens of dB.
 
 No installed encoder writes Layer I, so Layer I is checked on synthetic frames (random
 allocations, scalefactors and samples) that FFmpeg decodes as it would any stream. Through
-`filmcraft-codecs` (`tests/mpeg_oracle.rs`), mono 384 kbit/s MP2 in MPEG-TS, Matroska and a raw
+`mortiflix-codecs` (`tests/mpeg_oracle.rs`), mono 384 kbit/s MP2 in MPEG-TS, Matroska and a raw
 `.mp2` file is within 3.1·10⁻⁵ of FFmpeg's decode.
 
 ## Gaps

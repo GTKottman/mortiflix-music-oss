@@ -5,10 +5,10 @@
 //! the size: 144 x 108 with 4:3 pixels shows 192 x 108.
 
 use super::*;
-use filmcraft_frame::AudioBuffer;
-use filmcraft_media::{MediaInfo, MediaKind, MediaSource, VideoStreamInfo};
-use filmcraft_project::{Label, MediaClip, MediaRef, SequenceSettings, TrackKind, resolve_auto_points};
-use filmcraft_time::{FrameRate, TICKS_PER_SECOND, TimeRange};
+use mortiflix_frame::AudioBuffer;
+use mortiflix_media::{MediaInfo, MediaKind, MediaSource, VideoStreamInfo};
+use mortiflix_project::{Label, MediaClip, MediaRef, SequenceSettings, TrackKind, resolve_auto_points};
+use mortiflix_time::{FrameRate, TICKS_PER_SECOND, TimeRange};
 
 const FPS: FrameRate = FrameRate::FPS_24;
 
@@ -22,10 +22,10 @@ impl MediaSource for Halves {
     fn info(&self) -> &MediaInfo {
         &self.info
     }
-    fn video_frame(&self, _req: FrameRequest) -> filmcraft_media::Result<Arc<VideoFrame>> {
+    fn video_frame(&self, _req: FrameRequest) -> mortiflix_media::Result<Arc<VideoFrame>> {
         Ok(self.frame.clone())
     }
-    fn audio(&self, _start: i64, frames: usize, sample_rate: u32) -> filmcraft_media::Result<AudioBuffer> {
+    fn audio(&self, _start: i64, frames: usize, sample_rate: u32) -> mortiflix_media::Result<AudioBuffer> {
         Ok(AudioBuffer::silence(sample_rate, 2, frames))
     }
 }
@@ -44,7 +44,7 @@ fn halves(w: u32, h: u32, par: (u32, u32)) -> Halves {
             par,
             codec: "test".into(),
             pixel_format: "RGBA 8-bit".into(),
-            color: filmcraft_color::ColorInfo::SRGB_FULL,
+            color: mortiflix_color::ColorInfo::SRGB_FULL,
             has_alpha: false,
             bitrate: None,
             hdr: None,
@@ -195,7 +195,7 @@ fn rotation_happens_at_the_display_aspect() {
         resolve_auto_points(e, (200, 100), (100, 100));
     }
     let seq = p.sequence(sid).unwrap();
-    let r = filmcraft_geom::Rect { x: 0.0, y: 0.0, w: 100.0, h: 100.0 };
+    let r = mortiflix_geom::Rect { x: 0.0, y: 0.0, w: 100.0, h: 100.0 };
     for rot in [0.0, 90.0, -270.0] {
         ti.effect_mut("motion").unwrap().params.get_mut("rotation").unwrap().value = ParamValue::Float(rot);
         let b = motion_matrix(seq, &ti, (100, 100), Some((1, 1)), Tick::ZERO).bounds(&r);

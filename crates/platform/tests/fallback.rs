@@ -8,9 +8,9 @@
 mod common;
 
 use common::*;
-use filmcraft_codecs::hw::NalStreamInfo;
-use filmcraft_codecs::{DecodedFrame, Result, VideoDecoder};
-use filmcraft_platform::HybridDecoder;
+use mortiflix_codecs::hw::NalStreamInfo;
+use mortiflix_codecs::{DecodedFrame, Result, VideoDecoder};
+use mortiflix_platform::HybridDecoder;
 
 /// Decodes like the software decoder until `fail_after` samples were fed, then fails every call
 /// (its pending pictures stay retrievable through `flush`, as with a real session).
@@ -24,7 +24,7 @@ impl VideoDecoder for Failing {
     fn decode(&mut self, sample: &[u8], pts: i64) -> Result<Vec<DecodedFrame>> {
         self.fed += 1;
         if self.fed > self.fail_after {
-            return Err(filmcraft_codecs::CodecError::Decode("session invalidated (test)".into()));
+            return Err(mortiflix_codecs::CodecError::Decode("session invalidated (test)".into()));
         }
         self.inner.decode(sample, pts)
     }
@@ -41,17 +41,17 @@ impl VideoDecoder for Failing {
 
 fn hybrid(s: &Stream, fail_after: usize) -> HybridDecoder {
     let info = NalStreamInfo::from_entry(&s.entry).unwrap().unwrap();
-    let inner = filmcraft_codecs::software_video_decoder(&s.entry).unwrap();
+    let inner = mortiflix_codecs::software_video_decoder(&s.entry).unwrap();
     HybridDecoder::new(Box::new(Failing { inner, fail_after, fed: 0 }), s.entry.clone(), info)
 }
 
 #[test]
 fn failures_anywhere_continue_with_the_software_output() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     for (name, _) in FIXTURES {
         let Some(path) = named(&ff, name) else { continue };
         let s = read_stream(&path);
-        let reference = decode_all(filmcraft_codecs::software_video_decoder(&s.entry).unwrap().as_mut(), &s.samples);
+        let reference = decode_all(mortiflix_codecs::software_video_decoder(&s.entry).unwrap().as_mut(), &s.samples);
         let syncs: Vec<usize> = (0..s.samples.len()).filter(|&i| s.sync[i]).collect();
         let mut points: Vec<usize> = vec![0, 1, 3, 7, s.samples.len() - 1, s.samples.len()];
         for &k in &syncs {
@@ -67,7 +67,7 @@ fn failures_anywhere_continue_with_the_software_output() {
         if let Some(&k) = syncs.get(1) {
             let tail = &s.samples[k..];
             let expect = {
-                let mut sw = filmcraft_codecs::software_video_decoder(&s.entry).unwrap();
+                let mut sw = mortiflix_codecs::software_video_decoder(&s.entry).unwrap();
                 decode_all(sw.as_mut(), tail)
             };
             let mut d = hybrid(&s, k + 4);
@@ -80,7 +80,7 @@ fn failures_anywhere_continue_with_the_software_output() {
 
 #[test]
 fn changed_in_band_parameter_sets_switch_to_software() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let Some(path) = named(&ff, "h264_high.mp4") else { return };
     let s = read_stream(&path);
     let info = NalStreamInfo::from_entry(&s.entry).unwrap().unwrap();
@@ -96,7 +96,7 @@ fn changed_in_band_parameter_sets_switch_to_software() {
     let mut d = hybrid(&s, usize::MAX);
     let out = decode_all(&mut d, &same);
     assert!(d.is_hardware());
-    assert_same("repeated SPS", &out, &decode_all(filmcraft_codecs::software_video_decoder(&s.entry).unwrap().as_mut(), &same));
+    assert_same("repeated SPS", &out, &decode_all(mortiflix_codecs::software_video_decoder(&s.entry).unwrap().as_mut(), &same));
     // a different SPS (same values, another nal_ref_idc: a trailing zero byte is not a change) at
     // the second sync sample: software
     let mut changed_sps = sps.clone();
@@ -106,7 +106,7 @@ fn changed_in_band_parameter_sets_switch_to_software() {
     let mut d = hybrid(&s, usize::MAX);
     let out = decode_all(&mut d, &changed);
     assert!(!d.is_hardware(), "changed SPS: software");
-    assert_same("changed SPS", &out, &decode_all(filmcraft_codecs::software_video_decoder(&s.entry).unwrap().as_mut(), &changed));
+    assert_same("changed SPS", &out, &decode_all(mortiflix_codecs::software_video_decoder(&s.entry).unwrap().as_mut(), &changed));
 }
 
 /// Like [`Failing`], but tolerant of one damaged sample the way a GPU can be: at `damaged_at` it
@@ -124,7 +124,7 @@ impl VideoDecoder for Tolerant {
         let i = self.fed;
         self.fed += 1;
         if self.fed > self.fail_after {
-            return Err(filmcraft_codecs::CodecError::Decode("session invalidated (test)".into()));
+            return Err(mortiflix_codecs::CodecError::Decode("session invalidated (test)".into()));
         }
         self.inner.decode(if i == self.damaged_at { &self.intact } else { sample }, pts)
     }
@@ -169,7 +169,7 @@ fn damaged(sample: &[u8], nal_header: usize) -> Vec<u8> {
 /// software decoder's.
 #[test]
 fn a_sample_software_rejects_during_the_replay_loses_no_pictures() {
-    let ff = filmcraft_testkit::require_ffmpeg!();
+    let ff = mortiflix_testkit::require_ffmpeg!();
     let mut checked = 0;
     for (name, _) in FIXTURES {
         let Some(path) = named(&ff, name) else { continue };
@@ -181,14 +181,14 @@ fn a_sample_software_rejects_during_the_replay_loses_no_pictures() {
         let Some(d) = (2..next.saturating_sub(2)).find(|&i| info.is_disposable(&s.samples[i].0)) else { continue };
         let mut stream = s.samples.clone();
         stream[d].0 = damaged(&s.samples[d].0, header);
-        let (reference, rejected) = decode_lenient(filmcraft_codecs::software_video_decoder(&s.entry).unwrap().as_mut(), &stream);
+        let (reference, rejected) = decode_lenient(mortiflix_codecs::software_video_decoder(&s.entry).unwrap().as_mut(), &stream);
         assert_eq!(rejected, [d], "{name}: the software decoder rejects the damaged sample (and only it)");
         let restart = stream[next..].iter().map(|x| x.1).min().unwrap();
         // failing at the damaged sample itself (the software decoder rejects the failed sample
         // too), and after the hardware had decoded it
         for fail_after in [d, d + 1, d + 2, next - 1] {
             let tolerant = Tolerant {
-                inner: filmcraft_codecs::software_video_decoder(&s.entry).unwrap(),
+                inner: mortiflix_codecs::software_video_decoder(&s.entry).unwrap(),
                 intact: s.samples[d].0.clone(),
                 damaged_at: d,
                 fail_after,

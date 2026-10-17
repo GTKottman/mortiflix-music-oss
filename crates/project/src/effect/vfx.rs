@@ -4,7 +4,7 @@
 //!
 //! Names, folders and parameter names follow the public effect list; parameter ranges/defaults are
 //! our own where the reference does not pin them. Pixel implementations live in
-//! `filmcraft_render::vfx`.
+//! `mortiflix_render::vfx`.
 
 use super::*;
 

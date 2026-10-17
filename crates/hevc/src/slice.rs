@@ -2,7 +2,7 @@
 
 use crate::error::{Result, ensure, invalid};
 use crate::params::{Pps, Sps, StRps};
-use filmcraft_bitstream::BitReader;
+use mortiflix_bitstream::BitReader;
 
 pub mod nal_type {
     pub const TRAIL_N: u8 = 0;

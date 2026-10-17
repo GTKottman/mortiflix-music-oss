@@ -8,60 +8,60 @@ version = "0.8.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 rust-version = "1.95"
-repository = "https://github.com/storytold/filmcraft"
+repository = "https://mortiflix.com"
 
 [workspace.dependencies]
 # internal
-filmcraft-time = { path = "crates/time" }
-filmcraft-geom = { path = "crates/geom" }
-filmcraft-color = { path = "crates/color" }
-filmcraft-bitstream = { path = "crates/bitstream" }
-filmcraft-isobmff = { path = "crates/isobmff" }
-filmcraft-avi = { path = "crates/avi" }
-filmcraft-matroska = { path = "crates/matroska" }
-filmcraft-mxf = { path = "crates/mxf" }
-filmcraft-cfb = { path = "crates/cfb" }
-filmcraft-mpegts = { path = "crates/mpegts" }
-filmcraft-mpeg2v = { path = "crates/mpeg2v" }
-filmcraft-ac3 = { path = "crates/ac3" }
-filmcraft-mpa = { path = "crates/mpa" }
-filmcraft-ogg = { path = "crates/ogg" }
-filmcraft-h264 = { path = "crates/h264" }
-filmcraft-hevc = { path = "crates/hevc" }
-filmcraft-vp8 = { path = "crates/vp8" }
-filmcraft-vp9 = { path = "crates/vp9" }
-filmcraft-prores = { path = "crates/prores" }
-filmcraft-dnx = { path = "crates/dnx" }
-filmcraft-apv = { path = "crates/apv" }
-filmcraft-dng = { path = "crates/dng" }
-filmcraft-av1 = { path = "crates/av1" }
-filmcraft-aac = { path = "crates/aac" }
-filmcraft-flac = { path = "crates/flac" }
-filmcraft-opus = { path = "crates/opus" }
-filmcraft-h264enc = { path = "crates/h264enc" }
-filmcraft-audio-dsp = { path = "crates/audio-dsp" }
-filmcraft-frame = { path = "crates/frame" }
-filmcraft-media = { path = "crates/media" }
-filmcraft-codecs = { path = "crates/codecs" }
-filmcraft-project = { path = "crates/project" }
-filmcraft-edit = { path = "crates/edit" }
-filmcraft-interchange = { path = "crates/interchange" }
-filmcraft-text = { path = "crates/text" }
-filmcraft-captions = { path = "crates/captions" }
-filmcraft-speech = { path = "crates/speech" }
-filmcraft-tts = { path = "crates/tts" }
-filmcraft-tts-text = { path = "crates/tts-text" }
-filmcraft-render = { path = "crates/render" }
-filmcraft-gpu = { path = "crates/gpu" }
-filmcraft-scopes = { path = "crates/scopes" }
-filmcraft-export = { path = "crates/export" }
-filmcraft-format = { path = "crates/format" }
-filmcraft-engine = { path = "crates/engine" }
-filmcraft-ui-egui = { path = "crates/ui-egui" }
-filmcraft-mortiflix-ui = { path = "crates/mortiflix-ui" }
-filmcraft-automation = { path = "crates/automation" }
-filmcraft-platform = { path = "crates/platform" }
-filmcraft-testkit = { path = "crates/testkit" }
+mortiflix-time = { path = "crates/time" }
+mortiflix-geom = { path = "crates/geom" }
+mortiflix-color = { path = "crates/color" }
+mortiflix-bitstream = { path = "crates/bitstream" }
+mortiflix-isobmff = { path = "crates/isobmff" }
+mortiflix-avi = { path = "crates/avi" }
+mortiflix-matroska = { path = "crates/matroska" }
+mortiflix-mxf = { path = "crates/mxf" }
+mortiflix-cfb = { path = "crates/cfb" }
+mortiflix-mpegts = { path = "crates/mpegts" }
+mortiflix-mpeg2v = { path = "crates/mpeg2v" }
+mortiflix-ac3 = { path = "crates/ac3" }
+mortiflix-mpa = { path = "crates/mpa" }
+mortiflix-ogg = { path = "crates/ogg" }
+mortiflix-h264 = { path = "crates/h264" }
+mortiflix-hevc = { path = "crates/hevc" }
+mortiflix-vp8 = { path = "crates/vp8" }
+mortiflix-vp9 = { path = "crates/vp9" }
+mortiflix-prores = { path = "crates/prores" }
+mortiflix-dnx = { path = "crates/dnx" }
+mortiflix-apv = { path = "crates/apv" }
+mortiflix-dng = { path = "crates/dng" }
+mortiflix-av1 = { path = "crates/av1" }
+mortiflix-aac = { path = "crates/aac" }
+mortiflix-flac = { path = "crates/flac" }
+mortiflix-opus = { path = "crates/opus" }
+mortiflix-h264enc = { path = "crates/h264enc" }
+mortiflix-audio-dsp = { path = "crates/audio-dsp" }
+mortiflix-frame = { path = "crates/frame" }
+mortiflix-media = { path = "crates/media" }
+mortiflix-codecs = { path = "crates/codecs" }
+mortiflix-project = { path = "crates/project" }
+mortiflix-edit = { path = "crates/edit" }
+mortiflix-interchange = { path = "crates/interchange" }
+mortiflix-text = { path = "crates/text" }
+mortiflix-captions = { path = "crates/captions" }
+mortiflix-speech = { path = "crates/speech" }
+mortiflix-tts = { path = "crates/tts" }
+mortiflix-tts-text = { path = "crates/tts-text" }
+mortiflix-render = { path = "crates/render" }
+mortiflix-gpu = { path = "crates/gpu" }
+mortiflix-scopes = { path = "crates/scopes" }
+mortiflix-export = { path = "crates/export" }
+mortiflix-format = { path = "crates/format" }
+mortiflix-engine = { path = "crates/engine" }
+mortiflix-ui-egui = { path = "crates/ui-egui" }
+mortiflix-ui = { path = "crates/mortiflix-ui" }
+mortiflix-automation = { path = "crates/automation" }
+mortiflix-platform = { path = "crates/platform" }
+mortiflix-testkit = { path = "crates/testkit" }
 
 # foundation
 thiserror = "2"
@@ -97,50 +97,50 @@ opt-level = 2
 opt-level = 1
 
 # Codec hot loops: debug-build tests (RFC/oracle vectors) are minutes slower below opt-level 3.
-[profile.dev.package.filmcraft-h264]
+[profile.dev.package.mortiflix-h264]
 opt-level = 3
 
-[profile.dev.package.filmcraft-h264enc]
+[profile.dev.package.mortiflix-h264enc]
 opt-level = 3
 
-[profile.dev.package.filmcraft-hevc]
+[profile.dev.package.mortiflix-hevc]
 opt-level = 3
 
-[profile.dev.package.filmcraft-prores]
+[profile.dev.package.mortiflix-prores]
 opt-level = 3
 
-[profile.dev.package.filmcraft-dnx]
+[profile.dev.package.mortiflix-dnx]
 opt-level = 3
 
-[profile.dev.package.filmcraft-apv]
+[profile.dev.package.mortiflix-apv]
 opt-level = 3
 
-[profile.dev.package.filmcraft-dng]
+[profile.dev.package.mortiflix-dng]
 opt-level = 3
 
-[profile.dev.package.filmcraft-av1]
+[profile.dev.package.mortiflix-av1]
 opt-level = 3
 
-[profile.dev.package.filmcraft-aac]
+[profile.dev.package.mortiflix-aac]
 opt-level = 3
 
-[profile.dev.package.filmcraft-flac]
+[profile.dev.package.mortiflix-flac]
 opt-level = 3
 
 # Audio effects: realtime-factor tests and long convolution / spectral runs.
-[profile.dev.package.filmcraft-audio-dsp]
+[profile.dev.package.mortiflix-audio-dsp]
 opt-level = 3
 
-[profile.dev.package.filmcraft-mxf]
+[profile.dev.package.mortiflix-mxf]
 opt-level = 3
 
-[profile.dev.package.filmcraft-opus]
+[profile.dev.package.mortiflix-opus]
 opt-level = 3
 
-[profile.dev.package.filmcraft-vp8]
+[profile.dev.package.mortiflix-vp8]
 opt-level = 3
 
-[profile.dev.package.filmcraft-vp9]
+[profile.dev.package.mortiflix-vp9]
 opt-level = 3
 
 [profile.release]

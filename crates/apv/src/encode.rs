@@ -1,6 +1,6 @@
 //! RFC 9924 APV intra frame encoder.
 
-use filmcraft_bitstream::BitWriter;
+use mortiflix_bitstream::BitWriter;
 
 use crate::dct::{fdct8x8, quantize8x8};
 use crate::header::{FrameHeader, MAX_DIMENSION, PBU_PRIMARY_FRAME, write_frame_header, write_metadata_pbu};

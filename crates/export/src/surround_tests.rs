@@ -5,11 +5,11 @@
 
 use std::sync::Arc;
 
-use filmcraft_frame::{AudioBuffer, VideoFrame};
-use filmcraft_media::{AudioStreamInfo, FrameRequest, MediaError, MediaInfo, MediaKind, MediaSource};
-use filmcraft_project::{AudioChannels, ItemKind, Label, MediaClip, MediaRef, SequenceSettings, TrackKind};
-use filmcraft_render::SourceMap;
-use filmcraft_time::TICKS_PER_SECOND;
+use mortiflix_frame::{AudioBuffer, VideoFrame};
+use mortiflix_media::{AudioStreamInfo, FrameRequest, MediaError, MediaInfo, MediaKind, MediaSource};
+use mortiflix_project::{AudioChannels, ItemKind, Label, MediaClip, MediaRef, SequenceSettings, TrackKind};
+use mortiflix_render::SourceMap;
+use mortiflix_time::TICKS_PER_SECOND;
 
 use super::*;
 
@@ -30,10 +30,10 @@ impl MediaSource for Tones6 {
     fn info(&self) -> &MediaInfo {
         &self.info
     }
-    fn video_frame(&self, _: FrameRequest) -> filmcraft_media::Result<Arc<VideoFrame>> {
+    fn video_frame(&self, _: FrameRequest) -> mortiflix_media::Result<Arc<VideoFrame>> {
         Err(MediaError::Unsupported("audio only".into()))
     }
-    fn audio(&self, start: i64, frames: usize, sample_rate: u32) -> filmcraft_media::Result<AudioBuffer> {
+    fn audio(&self, start: i64, frames: usize, sample_rate: u32) -> mortiflix_media::Result<AudioBuffer> {
         Ok(AudioBuffer { sample_rate, channels: (0..6).map(|c| (0..frames).map(|i| tone(c, start + i as i64)).collect()).collect() })
     }
 }
@@ -81,7 +81,7 @@ fn surround() -> (Arc<Project>, ItemId, SourceMap) {
 }
 
 fn out_path(name: &str) -> String {
-    let d = filmcraft_testkit::fixtures::workspace_root().join("target").join("export-tests").join(format!("surround-{}", std::process::id()));
+    let d = mortiflix_testkit::fixtures::workspace_root().join("target").join("export-tests").join(format!("surround-{}", std::process::id()));
     std::fs::create_dir_all(&d).unwrap();
     d.join(name).to_string_lossy().to_string()
 }
@@ -96,7 +96,7 @@ fn settings(format: Format, path: &str) -> ExportSettings {
 
 /// ffprobe's (channels, channel_layout) of the first audio stream.
 fn probe(path: &str) -> Option<(u64, String)> {
-    let ffprobe = filmcraft_testkit::ffprobe_or_skip("5.1 export")?;
+    let ffprobe = mortiflix_testkit::ffprobe_or_skip("5.1 export")?;
     let out = std::process::Command::new(ffprobe).args(["-v", "error", "-of", "json", "-select_streams", "a:0", "-show_streams", path]).output().unwrap();
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
     let j: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
@@ -106,7 +106,7 @@ fn probe(path: &str) -> Option<(u64, String)> {
 
 /// ffmpeg's decode of the first audio stream as planar f64 (from s32le: exact for 24-bit PCM).
 fn decode(path: &str) -> Option<Vec<Vec<f64>>> {
-    let ffmpeg = filmcraft_testkit::ffmpeg_or_skip("5.1 export")?;
+    let ffmpeg = mortiflix_testkit::ffmpeg_or_skip("5.1 export")?;
     let out =
         std::process::Command::new(ffmpeg).args(["-v", "error", "-i", path, "-map", "0:a:0", "-f", "s32le", "-acodec", "pcm_s32le", "-"]).output().unwrap();
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
@@ -184,7 +184,7 @@ fn aac_51_in_mp4_keeps_every_channel_in_place() {
     export(&p, seq, &st, &m, &Progress::default()).unwrap();
     // our own demuxer sees an AAC track with channel configuration 6
     let bytes: Arc<[u8]> = std::fs::read(&path).unwrap().into();
-    let src = filmcraft_codecs::open_bytes("s51.mp4", bytes).unwrap();
+    let src = mortiflix_codecs::open_bytes("s51.mp4", bytes).unwrap();
     assert_eq!(src.info().audio().unwrap().channels, 6);
     if let Some((n, layout)) = probe(&path) {
         assert_eq!(n, 6);

@@ -732,7 +732,7 @@ mod tests {
     }
 
     /// The Essential Sound "Dialogue" chain on 60 s of stereo 48 kHz.
-    /// `cargo test --release -p filmcraft-audio-dsp dialogue_chain_realtime -- --ignored --nocapture`
+    /// `cargo test --release -p mortiflix-audio-dsp dialogue_chain_realtime -- --ignored --nocapture`
     #[test]
     #[ignore]
     fn dialogue_chain_realtime() {

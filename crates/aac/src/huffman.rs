@@ -2,7 +2,7 @@
 
 use std::sync::OnceLock;
 
-use filmcraft_bitstream::{BitReader, BitWriter};
+use mortiflix_bitstream::{BitReader, BitWriter};
 
 use crate::huffman_tables::{
     SCALEFACTOR, SPECTRUM_1, SPECTRUM_2, SPECTRUM_3, SPECTRUM_4, SPECTRUM_5, SPECTRUM_6, SPECTRUM_7, SPECTRUM_8, SPECTRUM_9, SPECTRUM_10, SPECTRUM_11,

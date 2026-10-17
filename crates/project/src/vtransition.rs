@@ -2,7 +2,7 @@
 //! 10 folders, plus the Legacy folder) and each transition's Effect Controls parameters.
 //!
 //! Transition parameters are not animatable (as in Premiere). Pixel implementations live in
-//! `filmcraft-render` (`transitions`), looked up by id. Ids are stable: projects reference
+//! `mortiflix-render` (`transitions`), looked up by id. Ids are stable: projects reference
 //! transitions by id, so an id is never renamed (a few modern transitions reuse the id of the
 //! transition they replaced, e.g. `push`, `clock_wipe`, `page_peel`; the old behaviour lives on
 //! under a `*_legacy` id).

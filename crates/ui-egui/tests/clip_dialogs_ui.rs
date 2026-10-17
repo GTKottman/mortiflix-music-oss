@@ -5,14 +5,14 @@
 use std::sync::mpsc::{Sender, channel};
 
 use egui_kittest::Harness;
-use filmcraft_engine::Session;
-use filmcraft_engine::project::{ItemKind, Label};
-use filmcraft_ui_egui::FilmcraftApp;
-use filmcraft_ui_egui::control::ControlRequest;
+use mortiflix_engine::Session;
+use mortiflix_engine::project::{ItemKind, Label};
+use mortiflix_ui_egui::StudioApp;
+use mortiflix_ui_egui::control::ControlRequest;
 use serde_json::{Value, json};
 
 struct Driver {
-    harness: Harness<'static, FilmcraftApp>,
+    harness: Harness<'static, StudioApp>,
     tx: Sender<ControlRequest>,
 }
 
@@ -21,7 +21,7 @@ impl Driver {
         let mut s = Session::default();
         s.execute("file.openDemoProject", json!({})).unwrap();
         let (tx, rx) = channel();
-        let app = FilmcraftApp::new(s).with_control(rx);
+        let app = StudioApp::new(s).with_control(rx);
         let harness = Harness::builder().with_size(egui::vec2(1600.0, 980.0)).with_max_steps(10_000).build_eframe(move |_cc| app);
         let mut d = Driver { harness, tx };
         d.frames(4);
@@ -77,11 +77,11 @@ impl Driver {
         v.as_array().unwrap().iter().any(|e| e["id"] == json!(id))
     }
 
-    fn app(&mut self) -> &mut FilmcraftApp {
+    fn app(&mut self) -> &mut StudioApp {
         self.harness.state_mut()
     }
 
-    fn v1(&mut self, i: usize) -> filmcraft_engine::project::TrackItem {
+    fn v1(&mut self, i: usize) -> mortiflix_engine::project::TrackItem {
         self.app().session.active_sequence().unwrap().video_tracks[0].items[i].clone()
     }
 
@@ -148,7 +148,7 @@ fn make_subclip_frame_hold_and_audio_channel_dialogs() {
     let mut d = Driver::new();
     let ocean = d.item_named("Ocean_Sunset.mp4");
     d.exec("source.open", json!({"item": ocean}));
-    d.exec("project.setMarks", json!({"item": ocean, "in": filmcraft_time::FrameRate::FPS_23_976.tick_of(24).0}));
+    d.exec("project.setMarks", json!({"item": ocean, "in": mortiflix_time::FrameRate::FPS_23_976.tick_of(24).0}));
     d.menu("clip.makeSubclip");
     assert_eq!(d.app().ui.clip_dialog.as_ref().unwrap().params["startFrame"], 24);
     for id in ["makeSubclip.name", "makeSubclip.startFrame", "makeSubclip.endFrame", "makeSubclip.restrictTrims", "makeSubclip.ok"] {
@@ -158,12 +158,12 @@ fn make_subclip_frame_hold_and_audio_channel_dialogs() {
     d.click("makeSubclip.ok");
     let sub = d.app().session.project.items.values().find(|i| i.name == "Waves").cloned().expect("subclip made");
     let ItemKind::Subclip { range, .. } = sub.kind else { panic!() };
-    assert_eq!(range.duration, filmcraft_time::FrameRate::FPS_23_976.tick_of(24));
+    assert_eq!(range.duration, mortiflix_time::FrameRate::FPS_23_976.tick_of(24));
 
     // Frame Hold Options on the selected clip: Hold On ▸ Playhead
     let c = d.v1(1);
     d.exec("timeline.select", json!({"clips": [c.id.0]}));
-    d.exec("playhead.set", json!({"time": (c.start + filmcraft_time::FrameRate::FPS_23_976.tick_of(5)).0}));
+    d.exec("playhead.set", json!({"time": (c.start + mortiflix_time::FrameRate::FPS_23_976.tick_of(5)).0}));
     d.menu("clip.frameHoldOptions");
     assert_eq!(d.app().ui.clip_dialog.as_ref().unwrap().params["enabled"], false, "Hold On starts unticked for a clip without a hold");
     d.click("frameHold.enabled");
@@ -171,7 +171,7 @@ fn make_subclip_frame_hold_and_audio_channel_dialogs() {
     d.click("frameHold.holdFilters");
     d.click("frameHold.ok");
     let got = d.v1(1);
-    assert_eq!(got.frame_hold, Some(c.source_in + filmcraft_time::FrameRate::FPS_23_976.tick_of(5)));
+    assert_eq!(got.frame_hold, Some(c.source_in + mortiflix_time::FrameRate::FPS_23_976.tick_of(5)));
     assert!(got.hold_filters);
 
     // Modify ▸ Audio Channels (Shift+G) on a project item: Mono makes one clip per channel
@@ -181,7 +181,7 @@ fn make_subclip_frame_hold_and_audio_channel_dialogs() {
     d.click("audioChannels.format.mono");
     assert_eq!(d.app().ui.clip_dialog.as_ref().unwrap().params["clips"], json!([[0], [1]]));
     d.click("audioChannels.ok");
-    let m = d.app().session.project.item(filmcraft_engine::project::ItemId(ocean)).unwrap().as_media().unwrap().interpret.audio_channels.clone().unwrap();
+    let m = d.app().session.project.item(mortiflix_engine::project::ItemId(ocean)).unwrap().as_media().unwrap().interpret.audio_channels.clone().unwrap();
     assert_eq!(m.clips, vec![vec![0], vec![1]]);
 }
 
@@ -214,7 +214,7 @@ fn close_project_prompt_and_nested_menus() {
 #[test]
 fn subclip_in_the_source_monitor_and_project_menu() {
     let mut d = Driver::new();
-    let r24 = filmcraft_time::FrameRate::FPS_23_976;
+    let r24 = mortiflix_time::FrameRate::FPS_23_976;
     let ocean = d.item_named("Ocean_Sunset.mp4");
     d.exec("project.setMarks", json!({"item": ocean, "in": r24.tick_of(24).0, "out": r24.tick_of(71).0}));
     d.exec("project.select", json!({"items": [ocean]}));
@@ -237,7 +237,7 @@ fn subclip_in_the_source_monitor_and_project_menu() {
     d.exec("project.select", json!({"items": [sub]}));
     d.frames(4);
     // the subclip is made in its master clip's bin: expand it
-    let bin = d.app().session.project.root.parent_of(filmcraft_engine::project::ItemId(sub));
+    let bin = d.app().session.project.root.parent_of(mortiflix_engine::project::ItemId(sub));
     if let Some(b) = bin.filter(|b| *b != d.app().session.project.root.id) {
         d.click(&format!("project.bin.{}.toggle", b.0));
         d.frames(3);
@@ -253,7 +253,7 @@ fn subclip_in_the_source_monitor_and_project_menu() {
         d.ok("ui.click", json!({"id": row, "button": "right"}));
         d.frames(3);
         d.click("project.itemMenu.convertToMaster");
-        assert!(d.app().session.project.item(filmcraft_engine::project::ItemId(sub)).unwrap().as_media().is_some(), "converted");
+        assert!(d.app().session.project.item(mortiflix_engine::project::ItemId(sub)).unwrap().as_media().is_some(), "converted");
     } else {
         panic!("subclip row not shown: {:?}", d.ok("ui.elements", json!({"prefix": "project.item."})));
     }
@@ -286,7 +286,7 @@ fn speed_duration_from_the_clip_menu_opens_the_dialog() {
     d.click("speedDuration.ok");
     let got = d.v1(0);
     assert_eq!(got.speed, 2.0);
-    assert_eq!(got.time_interpolation, filmcraft_project::TimeInterpolation::FrameBlending);
+    assert_eq!(got.time_interpolation, mortiflix_project::TimeInterpolation::FrameBlending);
 }
 
 /// #786: the clip's right-click Label menu lists the labels by the user's names (with their
@@ -294,7 +294,7 @@ fn speed_duration_from_the_clip_menu_opens_the_dialog() {
 #[test]
 fn the_clip_menu_label_choices_use_the_user_names() {
     let mut d = Driver::new();
-    let key = filmcraft_engine::settings::label_id(Label::Iris);
+    let key = mortiflix_engine::settings::label_id(Label::Iris);
     d.app().session.prefs.labels.colors.get_mut(&key).unwrap().name = "Interviews".into();
     let c = d.v1(0);
     d.exec("timeline.select", json!({"clips": [c.id.0]}));

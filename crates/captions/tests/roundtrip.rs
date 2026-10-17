@@ -1,8 +1,8 @@
 //! Round-trip property tests: write(parse(write(doc))) is stable and parse(write(doc)) == doc for
 //! documents each format can represent exactly.
 
-use filmcraft_captions::{Cue, Document, Format, WriteOptions, parse, scc, write};
-use filmcraft_time::{FrameRate, TICKS_PER_SECOND, Tick};
+use mortiflix_captions::{Cue, Document, Format, WriteOptions, parse, scc, write};
+use mortiflix_time::{FrameRate, TICKS_PER_SECOND, Tick};
 use proptest::prelude::*;
 
 const MS: i64 = TICKS_PER_SECOND / 1000;
@@ -152,7 +152,7 @@ proptest! {
             })
             .collect();
         let doc = Document { cues, ..Default::default() };
-        let text = filmcraft_captions::mcc::write_with(&doc, true, false, true);
+        let text = mortiflix_captions::mcc::write_with(&doc, true, false, true);
         let back = parse(text.as_bytes(), Format::Mcc).unwrap();
         prop_assert_eq!(&back.cues, &doc.cues);
     }

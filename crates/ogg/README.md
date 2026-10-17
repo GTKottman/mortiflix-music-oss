@@ -1,4 +1,4 @@
-# filmcraft-ogg
+# mortiflix-ogg
 
 A clean-room Ogg demuxer. Layer L0: no dependencies beyond `std`, no `unsafe`, builds for
 `wasm32-unknown-unknown`. No libogg / libopusfile / FFmpeg code was consulted; FFmpeg is used only
@@ -17,11 +17,11 @@ as an external fixture generator and test oracle.
 
 ```rust
 let bytes = std::fs::read("voice.opus")?;
-let ogg = filmcraft_ogg::open(&bytes)?;
-let s = ogg.stream_of(filmcraft_ogg::Codec::Opus).unwrap();
+let ogg = mortiflix_ogg::open(&bytes)?;
+let s = ogg.stream_of(mortiflix_ogg::Codec::Opus).unwrap();
 let head = &ogg.streams[s].headers[0];                      // OpusHead
 let pre_skip = u16::from_le_bytes([head[10], head[11]]) as u32;
-let timing = filmcraft_ogg::OpusTiming::of(&ogg.streams[s], pre_skip);
+let timing = mortiflix_ogg::OpusTiming::of(&ogg.streams[s], pre_skip);
 let k = timing.starts.partition_point(|&x| x <= 48_000) - 1; // packet holding sample 48 000
 let packet = ogg.read_packet(&bytes, s, k)?;
 ```

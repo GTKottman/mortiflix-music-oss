@@ -1,4 +1,4 @@
-//! Scripted UI tests: the real `FilmcraftApp` runs headless under `egui_kittest` (no window, no
+//! Scripted UI tests: the real `StudioApp` runs headless under `egui_kittest` (no window, no
 //! GPU) and is driven through the same JSON control channel that agents use over TCP/MCP
 //! (`docs/control-protocol.md`). Each test opens the demo project, sends control requests
 //! (`engine.execute`, `ui.menu.invoke`, `ui.click`, `ui.inspect`, …) between frames and asserts on
@@ -11,13 +11,13 @@
 use std::sync::mpsc::{Sender, channel};
 
 use egui_kittest::Harness;
-use filmcraft_engine::Session;
-use filmcraft_ui_egui::FilmcraftApp;
-use filmcraft_ui_egui::control::ControlRequest;
+use mortiflix_engine::Session;
+use mortiflix_ui_egui::StudioApp;
+use mortiflix_ui_egui::control::ControlRequest;
 use serde_json::{Value, json};
 
 struct Driver {
-    harness: Harness<'static, FilmcraftApp>,
+    harness: Harness<'static, StudioApp>,
     tx: Sender<ControlRequest>,
 }
 
@@ -32,7 +32,7 @@ impl Driver {
         let mut session = Session::default();
         session.execute("file.openDemoProject", json!({})).expect("demo project");
         let (tx, rx) = channel();
-        let app = FilmcraftApp::new(session).with_control(rx);
+        let app = StudioApp::new(session).with_control(rx);
         let mut b = Harness::builder().with_size(egui::vec2(1600.0, 980.0)).with_max_steps(10_000);
         if render {
             b = b.wgpu();
@@ -212,7 +212,7 @@ fn effects_panel_lists_the_premiere_transition_folders() {
     d.ok("ui.panel.show", json!({"panel": "Effects"}));
     d.frames(3);
     let folders = d.element_ids("effects.folder.");
-    for f in filmcraft_project::vtransition::VIDEO_TRANSITION_FOLDERS {
+    for f in mortiflix_project::vtransition::VIDEO_TRANSITION_FOLDERS {
         assert!(folders.contains(&format!("effects.folder.Video Transitions/{f}")), "{f}: {folders:?}");
     }
     assert!(folders.iter().any(|f| f == "effects.folder.Legacy"), "{folders:?}");
@@ -390,7 +390,7 @@ impl Driver {
             self.frames(1);
         }
         let img = self.harness.render().expect("render");
-        let png = filmcraft_ui_egui::control::encode_png(img.as_raw(), img.width(), img.height()).expect("png");
+        let png = mortiflix_ui_egui::control::encode_png(img.as_raw(), img.width(), img.height()).expect("png");
         let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("ui-screenshots");
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join(format!("{name}.png"));
@@ -401,7 +401,7 @@ impl Driver {
 }
 
 /// Renders the Trim Monitor and the Keyboard Shortcuts dialog to PNGs for visual review (needs a
-/// GPU): `cargo test -p filmcraft-ui-egui --test scripted -- --ignored screenshots`.
+/// GPU): `cargo test -p mortiflix-ui-egui --test scripted -- --ignored screenshots`.
 #[test]
 #[ignore]
 fn screenshots() {

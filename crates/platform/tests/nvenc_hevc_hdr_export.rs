@@ -11,15 +11,15 @@ use std::path::Path;
 use std::process::Command;
 use std::sync::Arc;
 
-use filmcraft_color::{ColorPipeline, WorkingSpace};
-use filmcraft_export::{BitrateMode, ColorSignal, EncoderFrame, ExportSettings, Format, Progress, export, hw_encode_stats};
-use filmcraft_media::generators::GeneratorSource;
-use filmcraft_media::{DemoScene, FrameRequest, Generator, MediaSource};
-use filmcraft_platform::nvenc::export::factory;
-use filmcraft_platform::nvenc::{hevc_available, hevc_hdr_available};
-use filmcraft_project::{ItemKind, Label, MediaClip, MediaRef, Project, SequenceSettings, TrackKind};
-use filmcraft_render::SourceMap;
-use filmcraft_time::{FrameRate, Tick, TimeRange};
+use mortiflix_color::{ColorPipeline, WorkingSpace};
+use mortiflix_export::{BitrateMode, ColorSignal, EncoderFrame, ExportSettings, Format, Progress, export, hw_encode_stats};
+use mortiflix_media::generators::GeneratorSource;
+use mortiflix_media::{DemoScene, FrameRequest, Generator, MediaSource};
+use mortiflix_platform::nvenc::export::factory;
+use mortiflix_platform::nvenc::{hevc_available, hevc_hdr_available};
+use mortiflix_project::{ItemKind, Label, MediaClip, MediaRef, Project, SequenceSettings, TrackKind};
+use mortiflix_render::SourceMap;
+use mortiflix_time::{FrameRate, Tick, TimeRange};
 
 /// The encoder counters are process-wide: one test at a time.
 static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
@@ -28,7 +28,7 @@ const W: u32 = 1280;
 const H: u32 = 720;
 const FRAMES: i64 = 24;
 
-fn project(working: WorkingSpace) -> (Arc<Project>, filmcraft_project::ItemId, SourceMap) {
+fn project(working: WorkingSpace) -> (Arc<Project>, mortiflix_project::ItemId, SourceMap) {
     let rate = FrameRate::FPS_24;
     let mut p = Project::new("x");
     let g = GeneratorSource::new(Generator::Demo(DemoScene::OceanSunset), W, H, rate, rate.tick_of(FRAMES));
@@ -64,9 +64,9 @@ fn tmp(name: &str) -> String {
     d.join(name).to_string_lossy().to_string()
 }
 
-fn decode(path: &str) -> Vec<Arc<filmcraft_frame::VideoFrame>> {
+fn decode(path: &str) -> Vec<Arc<mortiflix_frame::VideoFrame>> {
     let bytes: Arc<[u8]> = std::fs::read(path).unwrap().into();
-    let src = filmcraft_codecs::open_bytes(path, bytes).unwrap();
+    let src = mortiflix_codecs::open_bytes(path, bytes).unwrap();
     let rate = src.info().frame_rate();
     let n = rate.frame_at(src.info().duration);
     (0..n).map(|i| src.video_frame(FrameRequest::full(rate.tick_of(i))).unwrap()).collect()
@@ -130,14 +130,14 @@ fn psnr10(a: &[u16], b: &[u16]) -> f64 {
     if mse == 0.0 { 99.0 } else { 10.0 * (1023.0f64 * 1023.0 / mse).log10() }
 }
 
-fn delta(before: filmcraft_export::HwEncodeStats) -> (u64, u64, u64) {
+fn delta(before: mortiflix_export::HwEncodeStats) -> (u64, u64, u64) {
     let after = hw_encode_stats();
     (after.frames - before.frames, after.sessions - before.sessions, after.declined - before.declined)
 }
 
-fn yuv16(f: &filmcraft_frame::VideoFrame) -> ([Arc<Vec<u16>>; 3], u32) {
+fn yuv16(f: &mortiflix_frame::VideoFrame) -> ([Arc<Vec<u16>>; 3], u32) {
     match &f.data {
-        filmcraft_frame::PixelData::Yuv16 { planes, bits, .. } => (planes.clone(), *bits),
+        mortiflix_frame::PixelData::Yuv16 { planes, bits, .. } => (planes.clone(), *bits),
         _ => panic!("16-bit planes expected, got {}", f.format_label()),
     }
 }
@@ -145,14 +145,14 @@ fn yuv16(f: &filmcraft_frame::VideoFrame) -> ([Arc<Vec<u16>>; 3], u32) {
 #[test]
 fn hdr_sequences_export_as_main_10() {
     let _one = SERIAL.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-    filmcraft_platform::register();
-    assert_eq!(filmcraft_export::hdr_available(Format::Hevc), hevc_hdr_available(), "HDR H.265 is available iff NVENC can encode Main 10");
+    mortiflix_platform::register();
+    assert_eq!(mortiflix_export::hdr_available(Format::Hevc), hevc_hdr_available(), "HDR H.265 is available iff NVENC can encode Main 10");
     if !hevc_hdr_available() {
         eprintln!("SKIPPED: no NVENC HEVC Main 10 here (hevc: {})", hevc_available());
         return;
     }
-    let ffprobe = filmcraft_testkit::ffprobe_or_skip("nvenc hdr export");
-    let ffmpeg = filmcraft_testkit::ffmpeg_or_skip("nvenc hdr export");
+    let ffprobe = mortiflix_testkit::ffprobe_or_skip("nvenc hdr export");
+    let ffmpeg = mortiflix_testkit::ffmpeg_or_skip("nvenc hdr export");
     for (ws, ext, ff_transfer, pq) in [
         (WorkingSpace::Rec2100Pq, "mp4", "smpte2084", true),
         (WorkingSpace::Rec2100Hlg, "mp4", "arib-std-b67", false),
@@ -184,12 +184,12 @@ fn hdr_sequences_export_as_main_10() {
 
         // our importer: PQ / HLG, BT.2020, 10-bit planes
         let bytes: Arc<[u8]> = std::fs::read(&path).unwrap().into();
-        let src = filmcraft_codecs::open_bytes(&path, bytes.clone()).unwrap();
+        let src = mortiflix_codecs::open_bytes(&path, bytes.clone()).unwrap();
         let v = src.info().video.clone().unwrap();
-        let (want_transfer, want_hdr) = if pq { (filmcraft_color::Transfer::Pq, true) } else { (filmcraft_color::Transfer::Hlg, false) };
+        let (want_transfer, want_hdr) = if pq { (mortiflix_color::Transfer::Pq, true) } else { (mortiflix_color::Transfer::Hlg, false) };
         assert_eq!(
             (v.color.transfer, v.color.primaries, v.color.matrix),
-            (want_transfer, filmcraft_color::Primaries::Bt2020, filmcraft_color::Matrix::Bt2020Ncl),
+            (want_transfer, mortiflix_color::Primaries::Bt2020, mortiflix_color::Matrix::Bt2020Ncl),
             "{name}"
         );
         if want_hdr {
@@ -197,10 +197,10 @@ fn hdr_sequences_export_as_main_10() {
             assert_eq!((hdr.mastering_max_nits, hdr.max_cll, hdr.peak_nits()), (Some(1000.0), None, Some(1000.0)), "{name}");
         }
         // and the sample entry boxes
-        let file = filmcraft_isobmff::open(&bytes[..]).unwrap();
-        let vt = file.track_of_kind(filmcraft_isobmff::TrackKind::Video).expect("a video track");
+        let file = mortiflix_isobmff::open(&bytes[..]).unwrap();
+        let vt = file.track_of_kind(mortiflix_isobmff::TrackKind::Video).expect("a video track");
         let ve = file.tracks[vt].entries[0].video.clone().expect("a video sample entry");
-        assert!(matches!(ve.color, Some(filmcraft_isobmff::ColorInfo::Nclx { primaries: 9, matrix: 9, full_range: false, .. })), "{name}: {:?}", ve.color);
+        assert!(matches!(ve.color, Some(mortiflix_isobmff::ColorInfo::Nclx { primaries: 9, matrix: 9, full_range: false, .. })), "{name}: {:?}", ve.color);
         assert_eq!(ve.mastering_display.is_some() && ve.content_light == Some((0, 0)), pq, "{name}: mdcv / clli");
 
         let pictures = decode(&path);
@@ -271,12 +271,12 @@ fn hdr_sequences_export_as_main_10() {
 #[test]
 fn sdr_stays_main_8_bit_and_the_sdr_setting_tone_maps_hdr_sequences() {
     let _one = SERIAL.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-    filmcraft_platform::register();
+    mortiflix_platform::register();
     if !hevc_hdr_available() {
         eprintln!("SKIPPED: no NVENC HEVC Main 10 here");
         return;
     }
-    let ffprobe = filmcraft_testkit::ffprobe_or_skip("nvenc hdr export");
+    let ffprobe = mortiflix_testkit::ffprobe_or_skip("nvenc hdr export");
     // an HDR sequence with SDR asked for, and a plain SDR sequence: Main, 8-bit, BT.709
     for (what, ws, sdr) in [
         ("HDR sequence, settings.sdr", WorkingSpace::Rec2100Pq, true),
@@ -290,11 +290,11 @@ fn sdr_stays_main_8_bit_and_the_sdr_setting_tone_maps_hdr_sequences() {
         export(&p, seq, &s, &m, &Progress::default()).unwrap_or_else(|e| panic!("{what}: {e}"));
         assert_eq!(delta(before), (FRAMES as u64, 1, 0), "{what}");
         let pictures = decode(&path);
-        assert!(matches!(&pictures[0].data, filmcraft_frame::PixelData::Yuv8 { .. }), "{what}: 8-bit planes");
-        assert_eq!(pictures[0].color.transfer, filmcraft_color::Transfer::Bt709, "{what}");
+        assert!(matches!(&pictures[0].data, mortiflix_frame::PixelData::Yuv8 { .. }), "{what}: 8-bit planes");
+        assert_eq!(pictures[0].color.transfer, mortiflix_color::Transfer::Bt709, "{what}");
         let bytes: Arc<[u8]> = std::fs::read(&path).unwrap().into();
-        let file = filmcraft_isobmff::open(&bytes[..]).unwrap();
-        let vt = file.track_of_kind(filmcraft_isobmff::TrackKind::Video).unwrap();
+        let file = mortiflix_isobmff::open(&bytes[..]).unwrap();
+        let vt = file.track_of_kind(mortiflix_isobmff::TrackKind::Video).unwrap();
         let ve = file.tracks[vt].entries[0].video.clone().unwrap();
         assert!(ve.mastering_display.is_none() && ve.content_light.is_none(), "{what}: no HDR boxes");
         if let Some(ffprobe) = &ffprobe {
@@ -313,7 +313,7 @@ fn sdr_stays_main_8_bit_and_the_sdr_setting_tone_maps_hdr_sequences() {
 #[test]
 fn the_factory_rejects_mismatched_pictures_and_clamps_hostile_floats() {
     let _one = SERIAL.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-    filmcraft_platform::register();
+    mortiflix_platform::register();
     if !hevc_hdr_available() {
         eprintln!("SKIPPED: no NVENC HEVC Main 10 here");
         return;

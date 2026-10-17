@@ -10,17 +10,17 @@ use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex};
 
 use egui_kittest::Harness;
-use filmcraft_engine::Session;
-use filmcraft_ui_egui::FilmcraftApp;
-use filmcraft_ui_egui::control::ControlRequest;
-use filmcraft_ui_egui::native_dialogs::FileDialog;
+use mortiflix_engine::Session;
+use mortiflix_ui_egui::StudioApp;
+use mortiflix_ui_egui::control::ControlRequest;
+use mortiflix_ui_egui::native_dialogs::FileDialog;
 use serde_json::{Value, json};
 
 /// Dialogs the app asked for, with the sender that answers each.
 type Asked = Arc<Mutex<Vec<(FileDialog, Sender<Vec<String>>)>>>;
 
 struct Driver {
-    harness: Harness<'static, FilmcraftApp>,
+    harness: Harness<'static, StudioApp>,
     tx: Sender<ControlRequest>,
     asked: Asked,
 }
@@ -31,7 +31,7 @@ impl Driver {
         let mut session = Session::default();
         session.execute("file.openDemoProject", json!({})).expect("demo project");
         let (tx, rx) = channel();
-        let mut app = FilmcraftApp::new(session).with_control(rx);
+        let mut app = StudioApp::new(session).with_control(rx);
         let asked: Asked = Arc::default();
         if runner {
             let a = asked.clone();
@@ -80,7 +80,7 @@ impl Driver {
         self.frames(3);
     }
 
-    fn app(&mut self) -> &mut FilmcraftApp {
+    fn app(&mut self) -> &mut StudioApp {
         self.harness.state_mut()
     }
 
@@ -182,10 +182,10 @@ fn a_panel_folder_arrives_in_its_open_dialog_and_nowhere_once_it_is_closed() {
     let (dialog, answer) = d.asked();
     assert!(matches!(dialog, FileDialog::Folder { .. }), "{dialog:?}");
     d.frames(10);
-    answer.send(vec!["/tmp/filmcraft-cache-test".into()]).unwrap();
+    answer.send(vec!["/tmp/mortiflix-cache-test".into()]).unwrap();
     d.frames(3);
     let loc = d.app().ui.settings.as_ref().map(|s| s.values.pointer("/mediaCache/location").cloned());
-    assert_eq!(loc, Some(Some(json!("/tmp/filmcraft-cache-test"))));
+    assert_eq!(loc, Some(Some(json!("/tmp/mortiflix-cache-test"))));
     // Browse… again, then Cancel the Settings dialog before the folder comes back: nothing to write into
     d.click("settings.mediaCache.location.browse");
     let (_, answer) = d.asked();

@@ -3,8 +3,8 @@
 
 use std::path::Path;
 
-use filmcraft_project::{ItemId, ItemKind, Label, ParamValue};
-use filmcraft_time::{FrameRate, Tick};
+use mortiflix_project::{ItemId, ItemKind, Label, ParamValue};
+use mortiflix_time::{FrameRate, Tick};
 use serde_json::{Value, json};
 
 use crate::Session;
@@ -300,14 +300,14 @@ fn still_image_default_duration_and_indeterminate_timebase() {
     set(&mut s, "timeline.stillImageDuration", json!(3));
     let end = s.active_sequence().unwrap().duration();
     let r = s.execute("timeline.place", json!({"item": still.0, "track": "V1", "time": end.0})).unwrap();
-    let clip = filmcraft_project::ClipId(r["clips"][0].as_u64().unwrap());
+    let clip = mortiflix_project::ClipId(r["clips"][0].as_u64().unwrap());
     let dur = s.active_sequence().unwrap().find_item(clip).unwrap().1.duration;
     assert_eq!(dur, rate.snap_nearest(Tick::from_seconds_f64(3.0)));
     // in frames
     s.execute("prefs.set", json!({"values": {"timeline.stillImageUnit": "frames", "timeline.stillImageDuration": 10}})).unwrap();
     let end = s.active_sequence().unwrap().duration();
     let r = s.execute("timeline.place", json!({"item": still.0, "track": "V1", "time": end.0})).unwrap();
-    let clip = filmcraft_project::ClipId(r["clips"][0].as_u64().unwrap());
+    let clip = mortiflix_project::ClipId(r["clips"][0].as_u64().unwrap());
     assert_eq!(s.active_sequence().unwrap().find_item(clip).unwrap().1.duration, rate.tick_of(10));
     // Source monitor insert of a still uses it too
     s.execute("source.open", json!({"item": still.0})).unwrap();
@@ -374,7 +374,7 @@ fn label_defaults_names_and_colours() {
     assert_eq!(s.project.item(seq).unwrap().label, Label::Teal);
     // movie / video-only / audio-only media
     let l = &s.prefs.labels;
-    use filmcraft_media::MediaKind as K;
+    use mortiflix_media::MediaKind as K;
     assert_eq!(l.for_media(K::Movie, true, true), Label::Iris);
     assert_eq!(l.for_media(K::Movie, true, false), Label::Violet);
     assert_eq!(l.for_media(K::AudioOnly, false, true), Label::Caribbean);
@@ -395,7 +395,7 @@ fn default_media_scaling() {
     let place = |s: &mut Session| {
         let end = s.active_sequence().unwrap().duration();
         let r = s.execute("timeline.place", json!({"item": big.0, "track": "V1", "time": end.0})).unwrap();
-        let c = filmcraft_project::ClipId(r["clips"][0].as_u64().unwrap());
+        let c = mortiflix_project::ClipId(r["clips"][0].as_u64().unwrap());
         s.active_sequence().unwrap().find_item(c).unwrap().1.clone()
     };
     let none = place(&mut s);
@@ -411,7 +411,7 @@ fn default_media_scaling() {
     let fit = import_png(&mut s, &dir, "fit.png", w, h);
     let end = s.active_sequence().unwrap().duration();
     let r = s.execute("timeline.place", json!({"item": fit.0, "track": "V1", "time": end.0})).unwrap();
-    let c = filmcraft_project::ClipId(r["clips"][0].as_u64().unwrap());
+    let c = mortiflix_project::ClipId(r["clips"][0].as_u64().unwrap());
     let it = s.active_sequence().unwrap().find_item(c).unwrap().1.clone();
     assert_eq!(it.effect("motion").unwrap().params["scale"].value, ParamValue::Float(100.0));
     let _ = std::fs::remove_dir_all(&dir);
@@ -516,14 +516,14 @@ fn graphics_text_uses_the_text_settings() {
 
 #[test]
 fn auto_transcribe_on_import_and_transcription_defaults() {
-    use filmcraft_project::{Transcript, Word};
+    use mortiflix_project::{Transcript, Word};
     let dir = tmp_dir("prefs-transcribe");
     let mov = dir.join("talk.mov");
-    crate::media_test_util::make_movie(&mov, filmcraft_media::DemoScene::OceanSunset, 64, 36, 24);
+    crate::media_test_util::make_movie(&mov, mortiflix_media::DemoScene::OceanSunset, 64, 36, 24);
     let mut s = Session::default();
     let mut t = Transcript { language: "en".into(), ..Default::default() };
     t.words.push(Word::new("hello", Tick::ZERO, Tick::from_seconds_f64(0.4)));
-    s.transcriber = Some(std::sync::Arc::new(filmcraft_speech::FixedTranscriber { transcript: t, id: "fixed".into() }));
+    s.transcriber = Some(std::sync::Arc::new(mortiflix_speech::FixedTranscriber { transcript: t, id: "fixed".into() }));
     // off by default
     let r = s.execute("file.import", json!({"paths": [mov.to_string_lossy()]})).unwrap();
     let a = ItemId(r["items"][0].as_u64().unwrap());
@@ -556,7 +556,7 @@ fn transcription_without_speech_to_text_says_so() {
     }
     let dir = tmp_dir("prefs-no-speech");
     let mov = dir.join("talk.mov");
-    crate::media_test_util::make_movie(&mov, filmcraft_media::DemoScene::OceanSunset, 64, 36, 24);
+    crate::media_test_util::make_movie(&mov, mortiflix_media::DemoScene::OceanSunset, 64, 36, 24);
     // off: an import reports nothing
     let r = s.execute("file.import", json!({"paths": [mov.to_string_lossy()]})).unwrap();
     assert_eq!(r["errors"], json!([]));
@@ -567,7 +567,7 @@ fn transcription_without_speech_to_text_says_so() {
     assert!(errors.iter().any(|e| e.as_str().is_some_and(|e| e.starts_with("transcription:") && e.contains("not available in this build"))), "{errors:?}");
     assert!(!s.project.transcripts.contains_key(&ItemId(r["items"][0].as_u64().unwrap())));
     // with a transcriber installed (a host's), the command is enabled again
-    s.transcriber = Some(std::sync::Arc::new(filmcraft_speech::FixedTranscriber { transcript: Default::default(), id: "fixed".into() }));
+    s.transcriber = Some(std::sync::Arc::new(mortiflix_speech::FixedTranscriber { transcript: Default::default(), id: "fixed".into() }));
     assert!(s.is_enabled("transcript.generate"));
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -577,10 +577,10 @@ fn hardware_decoding_setting_drives_the_decoder_switch() {
     let mut s = Session::default();
     assert_eq!(s.prefs.playback.hardware_decoding, "auto", "Auto by default");
     set(&mut s, "playback.hardwareDecoding", json!("off"));
-    assert!(!filmcraft_codecs::hw::hardware_decoding(), "Off reaches the decoder registry");
+    assert!(!mortiflix_codecs::hw::hardware_decoding(), "Off reaches the decoder registry");
     assert!(s.execute("prefs.set", json!({"key": "playback.hardwareDecoding", "value": "gpu"})).is_err());
     set(&mut s, "playback.hardwareDecoding", json!("auto"));
-    assert!(filmcraft_codecs::hw::hardware_decoding());
+    assert!(mortiflix_codecs::hw::hardware_decoding());
     assert!(settings::field("playback.hardwareDecoding").is_some_and(|f| f.wired && matches!(f.kind, Kind::Choice(_))));
 }
 

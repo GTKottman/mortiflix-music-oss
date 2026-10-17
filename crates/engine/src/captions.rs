@@ -7,11 +7,11 @@
 
 use serde_json::{Value, json};
 
-use filmcraft_captions::{Document, Format, WriteOptions};
-use filmcraft_edit as edit;
-use filmcraft_edit::Edge;
-use filmcraft_project::{CaptionAlign, CaptionAnchor, CaptionFormat, CaptionStyle, CaptionTrack, ClipId, SequenceSettings, TrackId};
-use filmcraft_time::{Tick, TimeDisplay, format_time};
+use mortiflix_captions::{Document, Format, WriteOptions};
+use mortiflix_edit as edit;
+use mortiflix_edit::Edge;
+use mortiflix_project::{CaptionAlign, CaptionAnchor, CaptionFormat, CaptionStyle, CaptionTrack, ClipId, SequenceSettings, TrackId};
+use mortiflix_time::{Tick, TimeDisplay, format_time};
 
 use crate::commands::{CommandSpec, always, bad, bool_p, f64_p, has_seq, str_p, time_p, u64_p};
 use crate::{EngineError, Result, Session};
@@ -102,13 +102,13 @@ pub fn detect(path: &str, bytes: &[u8]) -> Option<Format> {
     if !matches!(ext.as_deref(), Some("srt" | "vtt" | "scc" | "webvtt" | "mcc" | "stl" | "ttml" | "dfxp" | "xml")) {
         return None;
     }
-    filmcraft_captions::detect(bytes, ext.as_deref())
+    mortiflix_captions::detect(bytes, ext.as_deref())
 }
 
 /// Import a caption file as a new caption track in the active sequence (a new sequence is made
 /// when none is open), snapped to the sequence's frames. One undo step.
 pub fn import(s: &mut Session, path: &str, bytes: &[u8], format: Format, name: Option<&str>) -> Result<Value> {
-    let mut doc = filmcraft_captions::parse(bytes, format).map_err(|e| EngineError::Other(format!("{path}: {e}")))?;
+    let mut doc = mortiflix_captions::parse(bytes, format).map_err(|e| EngineError::Other(format!("{path}: {e}")))?;
     let stem = std::path::Path::new(path).file_stem().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "Captions".into());
     let track_name = name.map(str::to_string).unwrap_or_else(|| stem.clone());
     let seq_id = match s.state.active_sequence.filter(|id| s.project.sequence(*id).is_some()) {
@@ -132,7 +132,7 @@ pub fn import(s: &mut Session, path: &str, bytes: &[u8], format: Format, name: O
             next += 1;
             v
         };
-        let mut track = filmcraft_captions::track_from_document(&doc, tid, &track_name, format.track_format(), &mut alloc);
+        let mut track = mortiflix_captions::track_from_document(&doc, tid, &track_name, format.track_format(), &mut alloc);
         if format == Format::Scc {
             track.style.background_color = [0, 0, 0, 255];
         }
@@ -160,7 +160,7 @@ pub fn delete(s: &mut Session, ids: &[ClipId], ripple: bool) -> Result<Value> {
     Ok(json!({"deleted": n}))
 }
 
-fn caption_json(s: &Session, c: &filmcraft_project::Caption) -> Value {
+fn caption_json(s: &Session, c: &mortiflix_project::Caption) -> Value {
     let q = s.active_sequence();
     let (rate, df) = q.map(|q| (q.settings.frame_rate, q.settings.drop_frame)).unwrap_or_default();
     let tc = |t: Tick| format_time(t, rate, df, TimeDisplay::Timecode, 48_000);
@@ -204,9 +204,9 @@ fn export(s: &mut Session, p: &Value) -> Result<Value> {
     let tid = track_param(s, p).ok_or_else(|| bad("captions.export", "no caption track"))?;
     let seq = s.active_sequence().ok_or(EngineError::NoSequence)?;
     let track = seq.caption_track(tid).ok_or_else(|| bad("captions.export", "no such caption track"))?;
-    let doc: Document = filmcraft_captions::document_from_track(track, Tick::ZERO);
+    let doc: Document = mortiflix_captions::document_from_track(track, Tick::ZERO);
     let df = bool_p(p, "dropFrame").unwrap_or(true);
-    let bytes = filmcraft_captions::write(&doc, format, WriteOptions { drop_frame: df, rate: Some(seq.settings.frame_rate) });
+    let bytes = mortiflix_captions::write(&doc, format, WriteOptions { drop_frame: df, rate: Some(seq.settings.frame_rate) });
     let n = doc.cues.len();
     s.services.write_file(&path, &bytes).map_err(|e| EngineError::Other(e.to_string()))?;
     Ok(json!({"path": path, "format": format.name(), "captions": n, "bytes": bytes.len()}))
@@ -492,7 +492,7 @@ pub fn commands() -> Vec<CommandSpec> {
             let path = str_p(p, "path").ok_or_else(|| bad("captions.import", "need `path`"))?.to_string();
             let bytes = s.services.read_file(&path).map_err(|e| EngineError::Other(format!("{path}: {e}")))?;
             let ext = std::path::Path::new(&path).extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase);
-            let format = filmcraft_captions::detect(&bytes, ext.as_deref()).ok_or_else(|| EngineError::Other(format!("{path}: not a caption file")))?;
+            let format = mortiflix_captions::detect(&bytes, ext.as_deref()).ok_or_else(|| EngineError::Other(format!("{path}: not a caption file")))?;
             import(s, &path, &bytes, format, str_p(p, "name"))
         }),
         spec(

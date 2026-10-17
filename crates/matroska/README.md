@@ -1,4 +1,4 @@
-# filmcraft-matroska
+# mortiflix-matroska
 
 A clean-room Matroska (MKV) and WebM demuxer, plus a minimal muxer, written from the public
 specifications: RFC 8794 (EBML), RFC 9559 (Matroska), the Matroska codec mappings and the WebM
@@ -9,9 +9,9 @@ FFmpeg is used only as an external test oracle.
 ## Demuxing
 
 ```rust
-use filmcraft_matroska::{Demuxer, TrackKind, open};
+use mortiflix_matroska::{Demuxer, TrackKind, open};
 
-// Sample tables, same shape as filmcraft-isobmff (any ByteSource: &[u8], Vec<u8>, Arc<[u8]>, File…)
+// Sample tables, same shape as mortiflix-isobmff (any ByteSource: &[u8], Vec<u8>, Arc<[u8]>, File…)
 let file = std::fs::File::open("clip.mkv")?;
 let mkv = open(&file)?;
 let v = mkv.track_of_kind(TrackKind::Video).unwrap();

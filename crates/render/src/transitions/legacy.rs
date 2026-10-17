@@ -2,8 +2,8 @@
 //! folders and for the dissolves whose output the golden images pin (Cross Dissolve, Dip to
 //! Black/White, Film/Additive Dissolve, Wipe).
 
-use filmcraft_geom::Affine;
-use filmcraft_project::{EffectInstance, ParamValue};
+use mortiflix_geom::Affine;
+use mortiflix_project::{EffectInstance, ParamValue};
 use rayon::prelude::*;
 
 use crate::image::Image;
@@ -139,7 +139,7 @@ fn legacy(id: &str, e: &EffectInstance, a: &Image, b: &Image, p: f32) -> Image {
             1.0 - step((p * 2.0 - off).clamp(0.0, 1.0), (u * 8.0).fract())
         }),
         "gradient_wipe" => {
-            let soft = e.f64_at("softness", filmcraft_time::Tick::ZERO) as f32 / 100.0 + 0.02;
+            let soft = e.f64_at("softness", mortiflix_time::Tick::ZERO) as f32 / 100.0 + 0.02;
             masked(a, b, move |u, v| {
                 let g = (u * 0.7 + v * 0.3).clamp(0.0, 1.0);
                 ((p * (1.0 + soft) - g) / soft).clamp(0.0, 1.0)

@@ -105,7 +105,7 @@ fn coverage_report() {
     for f in common::FIXTURES {
         let Some((h264, _)) = common::ensure(f) else { return };
         let data = std::fs::read(h264).unwrap();
-        let mut dec = filmcraft_h264::Decoder::new();
+        let mut dec = mortiflix_h264::Decoder::new();
         for au in common::split_access_units(&data) {
             dec.decode(au, 0).unwrap();
         }
@@ -145,14 +145,14 @@ fn generate_fixtures() {
     let dir = common::fixtures_dir();
     for f in common::FIXTURES {
         let outs = [dir.join(format!("{}.h264", f.name)), dir.join(format!("{}.yuv", f.name))];
-        filmcraft_testkit::fixtures::generate_and_report(&format!("h264/{}", f.name), &outs, || common::ensure(f));
+        mortiflix_testkit::fixtures::generate_and_report(&format!("h264/{}", f.name), &outs, || common::ensure(f));
     }
 }
 
 /// Concurrent consumers must publish one complete fixture without replacing an open file.
 #[test]
 fn concurrent_fixture_publication_is_safe() {
-    if filmcraft_testkit::ffmpeg_or_skip("concurrent_fixture_publication").is_none() {
+    if mortiflix_testkit::ffmpeg_or_skip("concurrent_fixture_publication").is_none() {
         return;
     }
     let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();

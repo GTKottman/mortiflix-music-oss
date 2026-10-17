@@ -8,7 +8,7 @@ fn file(res: &str, body: &[u8]) -> Vec<u8> {
 
 fn px(f: &VideoFrame) -> Vec<f32> {
     match &f.data {
-        filmcraft_frame::PixelData::RgbaF32(p) => p.to_vec(),
+        mortiflix_frame::PixelData::RgbaF32(p) => p.to_vec(),
         _ => panic!("not float"),
     }
 }

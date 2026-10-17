@@ -1,4 +1,4 @@
-//! Into FilmCraft (doc 38), FilmCraft side: runs the hand-off the `into_filmcraft` part plans, in
+//! Into Edit (doc 38), Mortiflix Studio side: runs the hand-off the `into_edit` part plans, in
 //! this process, through `Session::execute`, as one undo step each ("Mortiflix: …" in History).
 //!
 //! - Entering stage 5 (Edit the video, Next from Voice & music, Ctrl+Alt+5) docks the Mortiflix
@@ -12,24 +12,24 @@
 //! from Mortiflix…, asks first), `mortiflix.useVersion {node, version}`,
 //! `mortiflix.timelineEdit {label, steps: [{id, params}]}` (several commands as one undo step).
 
-use filmcraft_engine::EngineError;
-use filmcraft_mortiflix_ui::{self as mfx, Nav, into_filmcraft as into};
+use mortiflix_engine::EngineError;
+use mortiflix_ui::{self as mfx, Nav, into_edit as into};
 use serde_json::{Value, json};
 
-use crate::FilmcraftApp;
+use crate::StudioApp;
 use crate::dock::PanelKind;
 
 /// Most steps one `mortiflix.timelineEdit` runs.
 const MAX_STEPS: usize = 64;
 
 /// `mortiflix.importEdit` / `restartEdit` / `useVersion` / `timelineEdit`.
-pub fn route(app: &mut FilmcraftApp, id: &str, params: &Value) -> Option<Result<Value, String>> {
+pub fn route(app: &mut StudioApp, id: &str, params: &Value) -> Option<Result<Value, String>> {
     let r = match id {
         "mortiflix.importEdit" => {
             let again = params.get("again").and_then(Value::as_bool).unwrap_or(false);
-            go_to_filmcraft(app);
+            go_to_edit(app);
             let core = &mut app.mfx.core;
-            let started = mfx::into_filmcraft::start(&mut core.state, &mut core.service, again);
+            let started = mfx::into_edit::start(&mut core.state, &mut core.service, again);
             Ok(json!({"started": started, "phase": core.state.handoff.phase}))
         }
         // Get the video (part 07): import without opening Edit, then Export renders the timeline.
@@ -37,19 +37,19 @@ pub fn route(app: &mut FilmcraftApp, id: &str, params: &Value) -> Option<Result<
             let open_edit = params.get("open_edit").and_then(Value::as_bool).unwrap_or(true);
             let again = params.get("again").and_then(Value::as_bool).unwrap_or(false);
             if open_edit {
-                go_to_filmcraft(app);
+                go_to_edit(app);
             } else {
                 app.mfx.core.activate();
             }
             let core = &mut app.mfx.core;
-            let started = mfx::into_filmcraft::start(&mut core.state, &mut core.service, again);
+            let started = mfx::into_edit::start(&mut core.state, &mut core.service, again);
             if started {
                 core.state.handoff.quiet = !open_edit;
             }
             Ok(json!({"started": started, "phase": core.state.handoff.phase}))
         }
         "mortiflix.restartEdit" => {
-            go_to_filmcraft(app);
+            go_to_edit(app);
             app.mfx.core.state.handoff.confirm_restart = true;
             app.show_panel(PanelKind::MfxStage);
             Ok(json!({"asked": true}))
@@ -69,7 +69,7 @@ pub fn route(app: &mut FilmcraftApp, id: &str, params: &Value) -> Option<Result<
 }
 
 /// Each frame: read the service for the hand-off, run what it asks for, hand over the selection.
-pub fn frame(app: &mut FilmcraftApp, ctx: &egui::Context) {
+pub fn frame(app: &mut StudioApp, ctx: &egui::Context) {
     if !app.mfx.core.state.active {
         return;
     }
@@ -82,15 +82,15 @@ pub fn frame(app: &mut FilmcraftApp, ctx: &egui::Context) {
             into::Job::Swap(piece) => swap(app, &piece),
         }
     }
-    if app.mfx.core.state.stage == mfx::STAGE_FILMCRAFT && app.mfx.core.state.handoff.phase == into::Phase::Done {
+    if app.mfx.core.state.stage == mfx::STAGE_EDIT && app.mfx.core.state.handoff.phase == into::Phase::Done {
         selection(app);
     }
 }
 
 /// After the stage changed (`mortiflix::apply_stage`): on stage 5 the Mortiflix panel sits beside
 /// the chat, and the first visit brings the video in.
-pub fn on_stage(app: &mut FilmcraftApp, stage: u8) {
-    if stage != mfx::STAGE_FILMCRAFT {
+pub fn on_stage(app: &mut StudioApp, stage: u8) {
+    if stage != mfx::STAGE_EDIT {
         return;
     }
     if !app.ui.dock.contains(PanelKind::MfxStage) && !app.ui.floating.iter().any(|g| g.panels.contains(&PanelKind::MfxStage)) {
@@ -104,10 +104,10 @@ pub fn on_stage(app: &mut FilmcraftApp, stage: u8) {
     }
 }
 
-fn go_to_filmcraft(app: &mut FilmcraftApp) {
+fn go_to_edit(app: &mut StudioApp) {
     app.mfx.core.activate();
-    if app.mfx.core.state.stage != mfx::STAGE_FILMCRAFT
-        && let Some(Nav::Moved { to, .. }) = app.mfx.core.navigate("filmcraft", true)
+    if app.mfx.core.state.stage != mfx::STAGE_EDIT
+        && let Some(Nav::Moved { to, .. }) = app.mfx.core.navigate("edit", true)
     {
         crate::mortiflix::apply_stage(app, to);
     }
@@ -119,13 +119,13 @@ fn engine_err(e: String) -> EngineError {
 
 /// Build the project from the plan: a fresh project when the open one has nothing unsaved (never
 /// lose work), everything in one undo step, the tracks named, saved as the project's `.fcproj`.
-fn build(app: &mut FilmcraftApp, plan: &into::Plan) {
+fn build(app: &mut StudioApp, plan: &into::Plan) {
     if !app.session.is_dirty()
         && let Err(e) = app.session.execute("file.newProject", json!({"name": plan.title}))
     {
-        app.ui.status = format!("Mortiflix: a new FilmCraft project couldn't be made ({e}); it goes into this one");
+        app.ui.status = format!("Mortiflix: a new Mortiflix Studio project couldn't be made ({e}); it goes into this one");
     }
-    let label = format!("Mortiflix: Bring {} into FilmCraft", plan.title);
+    let label = format!("Mortiflix: Bring {} into Edit", plan.title);
     let session = &mut app.session;
     let h = &mut app.mfx.core.state.handoff;
     let r = session.edit_group(&label, |s| {
@@ -170,7 +170,7 @@ fn build(app: &mut FilmcraftApp, plan: &into::Plan) {
     }
 }
 
-fn swap(app: &mut FilmcraftApp, piece: &into::Piece) {
+fn swap(app: &mut StudioApp, piece: &into::Piece) {
     let label = format!("Mortiflix: {} v{}", piece.label, piece.version);
     // the swap selects what it labels: the user's selection comes back after
     let (clips, items) = (app.session.state.selection.clone(), app.session.state.project_selection.clone());
@@ -198,7 +198,7 @@ fn swap(app: &mut FilmcraftApp, piece: &into::Piece) {
     }
 }
 
-fn use_version(app: &mut FilmcraftApp, node: &str, version: u32) -> Result<Value, String> {
+fn use_version(app: &mut StudioApp, node: &str, version: u32) -> Result<Value, String> {
     let session = &mut app.session;
     let h = &mut app.mfx.core.state.handoff;
     let label = format!("Mortiflix: Use {} v{version}", h.placed.iter().find(|p| p.node == node).map_or(node, |p| p.label.as_str()));
@@ -222,8 +222,8 @@ fn use_version(app: &mut FilmcraftApp, node: &str, version: u32) -> Result<Value
     Ok(json!({"clip": name}))
 }
 
-/// Several FilmCraft commands as one undo step named "Mortiflix: …" (a trim asked for in words).
-fn timeline_edit(app: &mut FilmcraftApp, params: &Value) -> Result<Value, String> {
+/// Several Mortiflix Studio commands as one undo step named "Mortiflix: …" (a trim asked for in words).
+fn timeline_edit(app: &mut StudioApp, params: &Value) -> Result<Value, String> {
     let label = params.get("label").and_then(Value::as_str).unwrap_or("Mortiflix: Edit");
     let label: String = label.chars().take(120).collect();
     let label = if label.starts_with("Mortiflix: ") { label } else { format!("Mortiflix: {label}") };
@@ -234,7 +234,7 @@ fn timeline_edit(app: &mut FilmcraftApp, params: &Value) -> Result<Value, String
     let mut list = Vec::new();
     for st in steps {
         let id = st.get("id").and_then(Value::as_str).filter(|i| !i.is_empty() && i.len() <= 100).ok_or("every step needs an `id`")?;
-        // only FilmCraft's own engine commands: no Mortiflix or UI commands inside a timeline edit
+        // only Mortiflix Studio's own engine commands: no Mortiflix or UI commands inside a timeline edit
         if id.starts_with("mortiflix.") || id.starts_with("stages.") {
             return Err(format!("`{id}` can't be a timeline edit step"));
         }
@@ -246,7 +246,7 @@ fn timeline_edit(app: &mut FilmcraftApp, params: &Value) -> Result<Value, String
 }
 
 /// Hand the timeline selection to the Mortiflix panel.
-fn selection(app: &mut FilmcraftApp) {
+fn selection(app: &mut StudioApp) {
     let mut out = Vec::new();
     if let Some(q) = app.session.active_sequence() {
         for c in app.session.state.selection.iter().take(50) {
@@ -277,7 +277,7 @@ mod tests {
 
     #[test]
     fn hostile_commands_are_refused_calmly() {
-        let mut app = FilmcraftApp::new(filmcraft_engine::Session::default());
+        let mut app = StudioApp::new(mortiflix_engine::Session::default());
         let ctx = egui::Context::default();
         for (id, p) in [
             ("mortiflix.useVersion", json!({})),
@@ -298,17 +298,17 @@ mod tests {
 
     #[test]
     fn import_edit_goes_to_stage_5_and_asks_the_service() {
-        let mut app = FilmcraftApp::new(filmcraft_engine::Session::default());
+        let mut app = StudioApp::new(mortiflix_engine::Session::default());
         let ctx = egui::Context::default();
         let r = crate::menus::invoke(&mut app, &ctx, "mortiflix.importEdit", json!({})).unwrap();
         assert_eq!(r["started"], true);
-        assert_eq!(app.mfx.core.state.stage, mfx::STAGE_FILMCRAFT);
+        assert_eq!(app.mfx.core.state.stage, mfx::STAGE_EDIT);
         assert!(app.ui.dock.contains(PanelKind::MfxStage));
         // the service isn't running: the hand-off fails calmly and can be tried again
         frame(&mut app, &ctx);
         assert_eq!(app.mfx.core.state.handoff.phase, into::Phase::Failed);
         // Get the video: the import without opening Edit (the stage stays)
-        let mut quiet = FilmcraftApp::new(filmcraft_engine::Session::default());
+        let mut quiet = StudioApp::new(mortiflix_engine::Session::default());
         let r = crate::menus::invoke(&mut quiet, &ctx, "mortiflix.import.run", json!({"open_edit": false})).unwrap();
         assert_eq!(r["started"], true);
         assert!(quiet.mfx.core.state.handoff.quiet);
@@ -320,7 +320,7 @@ mod tests {
 
     #[test]
     fn a_built_plan_lands_in_the_session_as_one_undo_step() {
-        let mut app = FilmcraftApp::new(filmcraft_engine::Session::default());
+        let mut app = StudioApp::new(mortiflix_engine::Session::default());
         let ctx = egui::Context::default();
         let dir = std::env::temp_dir().join(format!("mfx-into-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
@@ -364,8 +364,8 @@ mod tests {
         assert_eq!(h.placed.len(), 3, "the line and the music cut at its two cues");
         let q = app.session.active_sequence().unwrap();
         assert_eq!(q.audio_tracks.iter().map(|t| t.name.as_str()).collect::<Vec<_>>(), ["Voice", "Music"]);
-        let line_clip = q.find_item(filmcraft_project::ClipId(h.placed[0].clip)).unwrap().1;
-        assert_eq!(line_clip.label, filmcraft_project::Label::Violet);
+        let line_clip = q.find_item(mortiflix_project::ClipId(h.placed[0].clip)).unwrap().1;
+        assert_eq!(line_clip.label, mortiflix_project::Label::Violet);
         assert_eq!(line_clip.name, "B01-L1 · Hello there. · v1");
         assert!(q.markers.iter().any(|m| m.name == "1 Cold open"));
         assert!(dir.join("Sound Only.fcproj").exists(), "saved as the project's .fcproj");
@@ -379,7 +379,7 @@ mod tests {
         );
         assert!(r.is_ok(), "{r:?}");
         assert_eq!(app.session.undo().as_deref(), Some("Mortiflix: Trim it"));
-        // the whole hand-off is one undo step (the new project before it is FilmCraft's own)
+        // the whole hand-off is one undo step (the new project before it is Mortiflix Studio's own)
         assert!(app.session.undo().is_some_and(|l| l.starts_with("Mortiflix: Bring")));
         let _ = std::fs::remove_dir_all(&dir);
         let _ = ctx;
