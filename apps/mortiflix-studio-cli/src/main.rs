@@ -100,10 +100,10 @@ SUBCOMMANDS
   --version                     print the version
 
 OPTIONS
-  --project <p.fcproj>          open this project first (headless)
+  --project <p.mortiflix>       open this project first (headless)
   --demo                        open the built-in demo project (headless)
   --save                        save the project back to --project when done
-  --save-as <p.fcproj>          save the project to this path when done
+  --save-as <p.mortiflix>       save the project to this path when done
   --bridge <127.0.0.1:PORT>     send commands to the running app (`mortiflix-studio --control PORT`)
   --data-dir <dir>              Mortiflix Studio data directory for user export presets (headless;
                                 default: the app's data directory)

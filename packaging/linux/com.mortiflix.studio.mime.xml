@@ -7,6 +7,7 @@
     <comment>Mortiflix Studio project</comment>
     <sub-class-of type="application/json"/>
     <icon name="com.mortiflix.studio"/>
+    <glob pattern="*.mortiflix"/>
     <glob pattern="*.fcproj"/>
   </mime-type>
 </mime-info>

@@ -1,9 +1,9 @@
 //! Auto-save file naming and rotation (Premiere behaviour).
 //!
 //! Auto-saves go to an `Auto-Save` folder next to the project, named
-//! `<project name>-YYYY-MM-DD_HH-MM-SS.fcproj` (local wall-clock time). After each write the oldest
+//! `<project name>-YYYY-MM-DD_HH-MM-SS.mortiflix` (local wall-clock time). After each write the oldest
 //! files of that project beyond the "Maximum Project Versions" limit are deleted. Only files whose
-//! name is exactly `<name>-<timestamp>.fcproj` are ever touched.
+//! name is exactly `<name>-<timestamp>.mortiflix` (or an older `.fcproj`) are ever touched.
 
 use std::fs;
 use std::io;
@@ -55,9 +55,9 @@ pub fn display_time(unix: i64, offset_secs: i32) -> String {
     format!("{y:04}-{mo:02}-{d:02} {h:02}:{mi:02}:{s:02}")
 }
 
-/// `<stem>-YYYY-MM-DD_HH-MM-SS.fcproj`.
+/// `<stem>-YYYY-MM-DD_HH-MM-SS.mortiflix`.
 pub fn auto_save_name(name: &str, unix: i64, offset_secs: i32) -> String {
-    format!("{}-{}.fcproj", file_stem(name), timestamp(unix, offset_secs))
+    format!("{}-{}.{}", file_stem(name), timestamp(unix, offset_secs), crate::PROJECT_EXTENSION)
 }
 
 fn is_stamp(s: &str) -> bool {
@@ -78,7 +78,9 @@ pub fn list_auto_saves(dir: &Path, name: &str) -> Vec<PathBuf> {
         .filter_map(|e| e.ok())
         .filter_map(|e| {
             let f = e.file_name().to_string_lossy().into_owned();
-            let stamp = f.strip_prefix(&prefix)?.strip_suffix(".fcproj")?;
+            // older auto-saves end in `.fcproj`: they still count (and rotate out)
+            let rest = f.strip_prefix(&prefix)?;
+            let stamp = crate::PROJECT_EXTENSIONS.iter().find_map(|x| rest.strip_suffix(&format!(".{x}") as &str))?;
             is_stamp(stamp).then(|| (stamp.to_string(), e.path()))
         })
         .collect();
@@ -124,7 +126,7 @@ mod tests {
 
     #[test]
     fn names_and_stems() {
-        assert_eq!(auto_save_name("My Film", 0, 0), "My Film-1970-01-01_00-00-00.fcproj");
+        assert_eq!(auto_save_name("My Film", 0, 0), "My Film-1970-01-01_00-00-00.mortiflix");
         assert_eq!(file_stem("a/b:c"), "a_b_c");
         assert_eq!(file_stem("  "), "Untitled");
         assert_eq!(auto_save_dir(Path::new("/x/y/p.fcproj")), Path::new("/x/y/Auto-Save"));
@@ -142,10 +144,13 @@ mod tests {
         fs::write(d.join("notes.txt"), b"keep").unwrap();
         let left = list_auto_saves(&d, "Cut");
         assert_eq!(left.len(), 5);
-        assert!(left[0].to_string_lossy().ends_with(&format!("Cut-{}.fcproj", timestamp(1_790_000_120, 0))));
-        assert!(left[4].to_string_lossy().ends_with(&format!("Cut-{}.fcproj", timestamp(1_790_000_360, 0))));
+        assert!(left[0].to_string_lossy().ends_with(&format!("Cut-{}.mortiflix", timestamp(1_790_000_120, 0))));
+        assert!(left[4].to_string_lossy().ends_with(&format!("Cut-{}.mortiflix", timestamp(1_790_000_360, 0))));
         assert_eq!(list_auto_saves(&d, "Cut-Two").len(), 1);
         assert!(d.join("notes.txt").exists());
+        // an auto-save from before the rename (.fcproj) still counts, oldest first
+        fs::write(d.join("Cut-2020-01-01_00-00-00.fcproj"), b"{}").unwrap();
+        assert!(list_auto_saves(&d, "Cut")[0].to_string_lossy().ends_with("Cut-2020-01-01_00-00-00.fcproj"));
         rotate(&d, "Cut", 2).unwrap();
         assert_eq!(list_auto_saves(&d, "Cut").len(), 2);
         assert_eq!(list_auto_saves(&d, "Cut-Two").len(), 1);

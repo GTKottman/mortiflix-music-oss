@@ -1,6 +1,6 @@
 # Project files
 
-Mortiflix Studio projects are `.fcproj` files: UTF-8 JSON with an explicit schema version. Reading and
+Mortiflix Studio projects are `.mortiflix` files (projects saved before the rename end in `.fcproj`; they still open, and Save keeps their name): UTF-8 JSON with an explicit schema version. Reading and
 writing them is `crates/format` (`mortiflix-format`); the engine's `file.*` commands use it.
 
 ## Format
@@ -74,7 +74,7 @@ build would load the file but silently drop new fields on its next save.
 
 When you open an older file Mortiflix Studio says so ("Upgraded project from schema v1 to v2"). The file
 on disk is unchanged until you save. The **first save over it** keeps the original next to it as
-`<name> (schema v1 backup).fcproj`, so an older Mortiflix Studio can still open your work.
+`<name> (schema v1 backup).mortiflix` (an old `.fcproj` keeps its extension), so an older Mortiflix Studio can still open your work.
 
 ### Newer files
 
@@ -127,7 +127,7 @@ like Premiere's:
 At each interval, if the project changed since the last auto-save, a copy is written to the
 `Auto-Save` folder next to the project as `<name>-YYYY-MM-DD_HH-MM-SS.fcproj` (local time). An
 unsaved project uses `<data dir>/Auto-Save/`. After each write the oldest copies beyond the limit are
-deleted. Only files named exactly `<name>-<timestamp>.fcproj` are ever deleted. An auto-save is an
+deleted. Only files named exactly `<name>-<timestamp>.mortiflix` (or `.fcproj`) are ever deleted. An auto-save is an
 ordinary project file: open it with File ▸ Open Project. `file.listAutoSaves` lists them, newest
 first.
 

@@ -287,7 +287,7 @@ fn app_creator(launch: Launch, graphics: graphics::GraphicsStart, created: Arc<A
         }));
         app.hooks.pick_save = Some(Box::new(|name: &str| {
             rfd::FileDialog::new()
-                .add_filter(mortiflix_ui_egui::i18n::t("Mortiflix Studio Project"), &file_filters::extensions(&["fcproj"]))
+                .add_filter(mortiflix_ui_egui::i18n::t("Mortiflix Studio Project"), &file_filters::extensions(&[mortiflix_engine::PROJECT_EXTENSION]))
                 .set_file_name(name)
                 .save_file()
                 .map(|p| p.to_string_lossy().to_string())
@@ -336,7 +336,7 @@ fn app_creator(launch: Launch, graphics: graphics::GraphicsStart, created: Arc<A
         }));
         app.hooks.pick_open_project = Some(Box::new(|| {
             rfd::FileDialog::new()
-                .add_filter(mortiflix_ui_egui::i18n::t("Mortiflix Studio Project"), &file_filters::extensions(&["fcproj"]))
+                .add_filter(mortiflix_ui_egui::i18n::t("Mortiflix Studio Project"), &file_filters::extensions(&mortiflix_engine::PROJECT_EXTENSIONS))
                 .pick_file()
                 .map(|p| p.to_string_lossy().to_string())
         }));
@@ -457,6 +457,7 @@ fn run_dialog_off_thread(dialog: mortiflix_ui_egui::native_dialogs::FileDialog) 
     let media = t("Media");
     let project = t("Mortiflix Studio Project");
     let project_exts = project_patterns();
+    let save_exts = file_filters::extensions(&[mortiflix_engine::PROJECT_EXTENSION]);
     let dialog = prepare_dialog(dialog);
     let (tx, rx) = std::sync::mpsc::channel();
     let spawned = std::thread::Builder::new().name("file-dialog".into()).spawn(move || {
@@ -470,7 +471,7 @@ fn run_dialog_off_thread(dialog: mortiflix_ui_egui::native_dialogs::FileDialog) 
                 FileDialog::Relink { exts, .. } => rfd::FileDialog::new().add_filter(&media, &exts).pick_file().map(path).into_iter().collect(),
                 FileDialog::OpenProject => rfd::FileDialog::new().add_filter(&project, &project_exts).pick_file().map(path).into_iter().collect(),
                 FileDialog::SaveProject { name } => {
-                    rfd::FileDialog::new().add_filter(&project, &project_exts).set_file_name(name).save_file().map(path).into_iter().collect()
+                    rfd::FileDialog::new().add_filter(&project, &save_exts).set_file_name(name).save_file().map(path).into_iter().collect()
                 }
                 FileDialog::SaveAs { filter, exts, name } => {
                     rfd::FileDialog::new().add_filter(&filter, &exts).set_file_name(name).save_file().map(path).into_iter().collect()
@@ -515,10 +516,10 @@ fn prepare_dialog(dialog: mortiflix_ui_egui::native_dialogs::FileDialog) -> mort
     }
 }
 
-/// The project dialogs' filter patterns (`EDIT.FCPROJ` included).
+/// The Open dialog's project patterns: `.mortiflix` and older `.fcproj` (`EDIT.FCPROJ` included).
 #[cfg(target_os = "linux")]
 fn project_patterns() -> Vec<String> {
-    file_filters::extensions(&["fcproj"])
+    file_filters::extensions(&mortiflix_engine::PROJECT_EXTENSIONS)
 }
 
 #[cfg(test)]
@@ -558,7 +559,7 @@ mod tests {
             assert!(exts.iter().any(|e| e == "[mM][pP]4"), "{exts:?}");
         }
         let project = super::project_patterns();
-        assert_eq!(project.first().map(String::as_str), Some("fcproj"));
+        assert_eq!(project.first().map(String::as_str), Some("mortiflix"));
         assert!(project.iter().any(|e| e == "[fF][cC][pP][rR][oO][jJ]"), "{project:?}");
     }
 }

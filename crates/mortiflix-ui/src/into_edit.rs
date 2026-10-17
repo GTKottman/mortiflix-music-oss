@@ -55,7 +55,8 @@ pub struct Plan {
     pub height: u32,
     pub fps: f64,
     pub seconds: f64,
-    /// Where the project is saved (`<project>/out/edit/<title>.fcproj`).
+    /// Where the project is saved (`<studio>/state/<id>/edit/<title>.mortiflix`; one saved before
+    /// the rename keeps its `.fcproj`).
     pub fcproj: String,
     pub beats: Vec<PlanBeat>,
     pub pieces: Vec<Piece>,
@@ -366,14 +367,14 @@ impl Plan {
     }
 }
 
-/// Where the project is saved when the service names no `.fcproj`: beside the project's own
-/// record (`<studio>/state/<id>/edit/<title>.fcproj`, found from a piece's media path).
+/// Where the project is saved when the service names no project file: beside the project's own
+/// record (`<studio>/state/<id>/edit/<title>.mortiflix`, found from a piece's media path).
 fn default_fcproj(plan: &Plan) -> String {
     let title: String = plan.title.chars().filter(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '.')).collect();
     let title = if title.trim().is_empty() { "Mortiflix".to_string() } else { title.trim().to_string() };
     for p in &plan.pieces {
         if let Some((state, _)) = p.file.split_once("/canvas/media/") {
-            return format!("{state}/edit/{title}.fcproj");
+            return format!("{state}/edit/{title}.mortiflix");
         }
     }
     String::new()
@@ -2180,7 +2181,7 @@ mod tests {
         assert_eq!(p.fcproj, "", "no media under a project record: nowhere to save");
         let mut v2 = v.clone();
         v2["clips"][0]["media"]["path"] = json!("/studio/state/p1/canvas/media/video/abc.mp4");
-        assert_eq!(Plan::from_handoff(&v2).unwrap().fcproj, "/studio/state/p1/edit/The Rise of AI.fcproj");
+        assert_eq!(Plan::from_handoff(&v2).unwrap().fcproj, "/studio/state/p1/edit/The Rise of AI.mortiflix");
         // built: the animatic shots play their own range; the card is a colour matte; older ones in their bin
         let mut f = Fake { calls: Vec::new(), next: 0, fail: Vec::new() };
         let mut h = Handoff::default();

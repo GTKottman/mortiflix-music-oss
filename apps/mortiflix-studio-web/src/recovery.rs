@@ -93,7 +93,7 @@ pub async fn load_snapshot() -> Option<(String, Vec<u8>)> {
     }
     let bytes = opfs::read(SNAPSHOT).await?;
     let name = meta.get("name").and_then(Value::as_str).unwrap_or("Recovered").to_string();
-    Some((format!("{name}.fcproj"), bytes))
+    Some((mortiflix_format::project_file_name(&name), bytes))
 }
 
 /// Keep a copy of an imported file in OPFS (background).

@@ -409,7 +409,7 @@ fn body(app: &mut StudioApp, ui: &mut egui::Ui, rect: Rect, v: &View, actions: &
         let parent = parent_bin(&app.session.project.root, v.bin);
         navigate(app, v.inst, parent.map(|b| b.0));
     }
-    let mut crumb = format!("{}.fcproj", app.session.project.name);
+    let mut crumb = mortiflix_engine::project_file_name(&app.session.project.name);
     for b in bin_path(&app.session.project.root, v.bin) {
         crumb.push_str(" / ");
         crumb.push_str(&b);

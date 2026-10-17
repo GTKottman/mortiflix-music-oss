@@ -4298,8 +4298,8 @@ pub fn secs(s: f64) -> Tick {
 /// Serialize the project in the current schema and write it (atomically) to `path`. `adopt` =
 /// Save / Save As (the file becomes the project's path and the project is clean); otherwise Save a
 /// Copy. The first save over a file upgraded from an older schema keeps the original as
-/// `<name> (schema vN backup).fcproj`.
-/// A project is named after its file (as in Premiere): `/a/b/Trailer v2.fcproj` → `Trailer v2`.
+/// `<name> (schema vN backup).mortiflix`.
+/// A project is named after its file (as in Premiere): `/a/b/Trailer v2.mortiflix` → `Trailer v2`.
 fn project_name_for(path: &str) -> Option<String> {
     let stem = std::path::Path::new(path).file_stem()?.to_string_lossy().to_string();
     (!stem.is_empty()).then_some(stem)
@@ -4344,8 +4344,14 @@ fn write_project(s: &mut Session, path: &str, adopt: bool) -> Result<Value> {
 }
 
 fn schema_backup_path(path: &str, schema: u32) -> String {
-    let stem = path.strip_suffix(".fcproj").unwrap_or(path);
-    format!("{stem} (schema v{schema} backup).fcproj")
+    // the backup keeps the file's own extension (an old `.fcproj` stays one)
+    let stem = mortiflix_format::strip_project_extension(path);
+    let ext = std::path::Path::new(path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .filter(|e| mortiflix_format::PROJECT_EXTENSIONS.iter().any(|x| e.eq_ignore_ascii_case(x)))
+        .unwrap_or(mortiflix_format::PROJECT_EXTENSION);
+    format!("{stem} (schema v{schema} backup).{ext}")
 }
 
 /// Make `proj` the session's project (fresh history, media pool and editor state).

@@ -272,7 +272,7 @@ pub(crate) const EXPORT_SAVE_DIALOGS: [(&str, &str, &str); 7] = [
     ("file.exportFcpxml", "FCPXML", "fcpxml"),
     ("file.exportOtio", "OpenTimelineIO", "otio"),
     ("file.exportAle", "Avid Log Exchange", "ale"),
-    ("file.exportSelectionProject", "Mortiflix Studio Project", "fcproj"),
+    ("file.exportSelectionProject", "Mortiflix Studio Project", mortiflix_engine::PROJECT_EXTENSION),
 ];
 
 pub struct StudioApp {
@@ -1309,8 +1309,11 @@ impl StudioApp {
                 r
             }),
             "file.saveAs" | "file.save" | "file.saveCopy" => {
-                let suggested =
-                    if id == "file.saveCopy" { format!("{} copy.fcproj", self.session.project.name) } else { format!("{}.fcproj", self.session.project.name) };
+                let suggested = if id == "file.saveCopy" {
+                    mortiflix_engine::project_file_name(&format!("{} copy", self.session.project.name))
+                } else {
+                    mortiflix_engine::project_file_name(&self.session.project.name)
+                };
                 let cmd = if id == "file.saveCopy" { "file.saveCopy" } else { "file.saveAs" };
                 self.pick(FileDialog::SaveProject { name: suggested }, move |app, paths| {
                     let Some(path) = paths.into_iter().next() else { return Ok(Value::Null) };

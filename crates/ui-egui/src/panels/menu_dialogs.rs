@@ -220,7 +220,7 @@ pub fn route(app: &mut StudioApp, ctx: &egui::Context, id: &str, params: &Value)
             let (filter, ext, name) = if id == "file.exportAle" {
                 (tl!("Avid Log Exchange"), "ale", format!("{}.ale", app.session.project.name))
             } else {
-                (tl!("Mortiflix Studio Project"), "fcproj", tlf!("{name} Selection.fcproj", name = app.session.project.name))
+                (tl!("Mortiflix Studio Project"), mortiflix_engine::PROJECT_EXTENSION, tlf!("{name} Selection.mortiflix", name = app.session.project.name))
             };
             let mut p = params.clone();
             if !p.is_object() {

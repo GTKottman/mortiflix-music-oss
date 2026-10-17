@@ -21,7 +21,7 @@ Part 06. Code: `crates/mortiflix-ui/src/into_edit.rs` (the plan, the build, the 
    - the board's native transitions (Cross Dissolve, Dip to Black) as Mortiflix Studio transitions;
    - item and clip labels = the beat's colour (`edit.label`), a Chapter marker per beat, a Comment
      marker per music cue, a caption per voice line, the project notes;
-   - saved as the plan's `.fcproj`; then `handoff.done {map}` tells the service what came in.
+   - saved as the plan's project file (`.mortiflix`); then `handoff.done {map}` tells the service what came in.
    A piece that fails is listed on its row with **Make it again in Mortiflix** / **Leave it out**; the
    rest still comes in. Only a sequence that can't be made fails the hand-off (Try again).
 3. Done once. After that, `node.changed` (and a slow timer) asks `handoff.swaps`; each newer version is

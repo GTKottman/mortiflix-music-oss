@@ -49,7 +49,7 @@ modules:
       - install -Dm755 bin/mortiflix-studio /app/bin/mortiflix-studio
       - install -Dm755 bin/mortiflix-studio-cli /app/bin/mortiflix-studio-cli
       - install -Dm644 share/applications/com.mortiflix.studio.desktop /app/share/applications/com.mortiflix.studio.desktop
-      # The same MIME file the deb/rpm install: it defines the .fcproj project type (the
+      # The same MIME file the deb/rpm install: it defines the .mortiflix (and older .fcproj) project type (the
       # runtime's shared-mime-info already knows the video and audio formats).
       - install -Dm644 share/mime/packages/com.mortiflix.studio.xml /app/share/mime/packages/com.mortiflix.studio.xml
       # Already has the release's version and date substituted by package.sh.

@@ -106,7 +106,7 @@ pub fn run(s: &mut Session, p: &Value) -> Result<Value> {
         .or_else(|| s.path.as_deref().and_then(|x| Path::new(x).file_stem()).map(|n| n.to_string_lossy().into_owned()))
         .unwrap_or_else(|| s.project.name.clone());
     let dest_dir = PathBuf::from(&dest);
-    let project_path = dest_dir.join(format!("{name}.fcproj")).to_string_lossy().into_owned();
+    let project_path = dest_dir.join(mortiflix_format::project_file_name(&name)).to_string_lossy().into_owned();
 
     // ---- the new project
     let mut proj = (*s.project).clone();

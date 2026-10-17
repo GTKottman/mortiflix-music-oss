@@ -1,4 +1,4 @@
-//! `.fcproj` project files.
+//! `.mortiflix` project files (older ones end in `.fcproj` and still open).
 //!
 //! A project file is UTF-8 JSON with an explicit schema version:
 //!
@@ -13,7 +13,7 @@
 //! - **Atomic saves.** [`atomic_write`] writes a temp file in the destination directory, fsyncs it,
 //!   renames it over the target and fsyncs the directory: a crash or power cut during a save leaves
 //!   either the old file or the new one, never a torn mix.
-//! - **Auto-save naming/rotation** lives in [`autosave`] (`<name>-YYYY-MM-DD_HH-MM-SS.fcproj` in an
+//! - **Auto-save naming/rotation** lives in [`autosave`] (`<name>-YYYY-MM-DD_HH-MM-SS.mortiflix` in an
 //!   `Auto-Save` folder next to the project, oldest pruned beyond the version limit).
 //!
 //! Schema history:
@@ -53,6 +53,28 @@ pub use atomic::atomic_write;
 
 /// The `format` tag written in every envelope.
 pub const FORMAT_ID: &str = "mortiflix.project";
+
+/// The extension Mortiflix Studio saves projects with (`Film.mortiflix`).
+pub const PROJECT_EXTENSION: &str = "mortiflix";
+/// The extension projects had before (`.fcproj`): still opened, never written.
+pub const LEGACY_PROJECT_EXTENSION: &str = "fcproj";
+/// Every extension a project file can have, the current one first (open dialogs, drops, the CLI).
+pub const PROJECT_EXTENSIONS: [&str; 2] = [PROJECT_EXTENSION, LEGACY_PROJECT_EXTENSION];
+
+/// Is this path a project file (`.mortiflix`, or an older `.fcproj`), any case?
+pub fn is_project_file(path: &str) -> bool {
+    std::path::Path::new(path).extension().and_then(|e| e.to_str()).is_some_and(|e| PROJECT_EXTENSIONS.iter().any(|x| e.eq_ignore_ascii_case(x)))
+}
+
+/// `name` with the project extension (`Film` → `Film.mortiflix`).
+pub fn project_file_name(name: &str) -> String {
+    format!("{name}.{PROJECT_EXTENSION}")
+}
+
+/// The path without its project extension (either one), else unchanged.
+pub fn strip_project_extension(path: &str) -> &str {
+    PROJECT_EXTENSIONS.iter().find_map(|x| path.strip_suffix(&format!(".{x}") as &str)).unwrap_or(path)
+}
 
 /// A migration upgrades a whole document from schema `n` to `n + 1`.
 pub type Migration = fn(Value) -> Result<Value, String>;

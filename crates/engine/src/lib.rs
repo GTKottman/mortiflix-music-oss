@@ -67,6 +67,7 @@ use serde_json::Value;
 pub use commands::{CommandSpec, command_specs, find as find_command};
 pub use media_pool::MediaPool;
 pub use mortiflix_export as export;
+pub use mortiflix_format::{PROJECT_EXTENSION, PROJECT_EXTENSIONS, is_project_file, project_file_name, strip_project_extension};
 pub use mortiflix_project as project;
 pub use mortiflix_render as render;
 pub use mortiflix_time as time;

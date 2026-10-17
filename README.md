@@ -274,7 +274,7 @@ The control protocol is documented in [docs/control-protocol.md](docs/control-pr
 | [docs/testing.md](docs/testing.md) | Unit, property and ffmpeg-oracle tests, accuracy criteria, benchmarks |
 | [docs/agents.md](docs/agents.md) | Driving Mortiflix Studio over MCP and the control channel; how agents develop it |
 | [docs/control-protocol.md](docs/control-protocol.md) | Control-channel and MCP reference |
-| [docs/project-files.md](docs/project-files.md) | `.fcproj` format, schema migrations, auto-save and crash recovery |
+| [docs/project-files.md](docs/project-files.md) | `.mortiflix` project format (older `.fcproj` files still open), schema migrations, auto-save and crash recovery |
 | [docs/graphics.md](docs/graphics.md) · [docs/captions.md](docs/captions.md) | Text engine, graphic clips and tools; caption tracks and formats |
 | [ROADMAP.md](ROADMAP.md) | Stage, parity numbers, languages, what's next and the progress log |
 | [docs/target-app-parity.md](docs/target-app-parity.md) · [docs/gaps.md](docs/gaps.md) · [docs/roadmap.md](docs/roadmap.md) | Parity assessment against Premiere Pro, the ranked list of shortfalls, milestones and current focus |
