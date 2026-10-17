@@ -52,7 +52,8 @@ export function settle(project, pipeline) {
   const steps = stepView(project, pipeline);
   const before = project.state;
   // Edit requests from the canvas start a session at once, whatever else waits for the owner.
-  if (project.canvas_edits > 0) project.state = 'queued';
+  // So does a request for three music themes (doc 33: they arrive in the chat).
+  if (project.canvas_edits > 0 || project.mfx?.samples_wanted) project.state = 'queued';
   else if (steps.every((s) => DONE.includes(s.state))) project.state = 'delivered';
   else if (project.questions.some((q) => !q.answered_at)) project.state = 'waiting';
   else if (steps.some((s) => ['ready', 'working', 'changes'].includes(s.state))) project.state = 'queued';

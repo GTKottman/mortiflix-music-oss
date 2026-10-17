@@ -355,3 +355,19 @@ test('service core: voice.set picks the narration engine (Settings › Mortiflix
   assert.equal((await call('voice.set', { engine: 'none' })).engine, 'none');
   await assert.rejects(call('voice.set', { engine: 'loud' }), /engine must be/);
 });
+
+test('service core: three themes asked of a real backend start a session, and Done on the theme page keeps the request', async (t) => {
+  const root = tempStudio(t);
+  const { call } = harness(t, root);
+  const { project } = await call('project.new', { preset: 'explainer', title: 'Bees', idea: 'how bees make honey', start: false });
+  saveConfig(root, { backend: 'claude-code' });
+  const { update } = await import('../src/projects.mjs');
+  update(root, project.id, (p) => { p.backend = 'claude-code'; p.state = 'waiting'; return p; });
+  const r = await call('music.theme.samples', {});
+  assert.equal(r.made, false);
+  // run 2: the project waited for the owner, so no session came to make them
+  assert.equal(loadProject(root, project.id).state, 'queued');
+  // and Done on the theme page right after dropped the request
+  await call('music.theme.set', { theme: { mood: ['Warm'], genre: 'light acoustic pop' } });
+  assert.ok((await call('music.theme.get')).theme.samples_wanted, 'still asked for');
+});

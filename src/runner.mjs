@@ -175,6 +175,8 @@ export class Runner extends EventEmitter {
     let pausedFor = null;
     update(root, projectId, (p) => {
       p.session = null;
+      // the themes asked for were this session's to make (made or not, one session only: never a loop)
+      if (p.mfx?.samples_wanted) delete p.mfx.samples_wanted;
       p.usage.sessions += 1;
       p.usage.input_tokens += result?.usage?.input_tokens || 0;
       p.usage.output_tokens += result?.usage?.output_tokens || 0;

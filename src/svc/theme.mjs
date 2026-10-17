@@ -5,7 +5,8 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { projectPaths, loadProject, event } from '../projects.mjs';
+import { projectPaths, loadProject, event, update, projectPipeline } from '../projects.mjs';
+import { settle } from '../gates.mjs';
 import { paths, loadConfig, UserError } from '../studio.mjs';
 
 const str = (v, n = 200) => (v === undefined || v === null ? null : String(v).slice(0, n));
@@ -51,6 +52,10 @@ export function loadTheme(root, id) {
 
 export function saveTheme(root, id, theme, { by = 'you' } = {}) {
   const t = cleanTheme(theme);
+  // three themes asked for and not made yet: the request stays (run 2: Done on the theme page right after
+  // "Make 3 samples" dropped it, and they never came)
+  const wanted = loadTheme(root, id)?.samples_wanted;
+  if (wanted && !t.samples.length) t.samples_wanted = wanted;
   const f = themeFile(root, id);
   mkdirSync(join(f, '..'), { recursive: true });
   writeFileSync(f, JSON.stringify(t, null, 2));
@@ -99,6 +104,9 @@ export async function themeSamples(root, id, theme = {}) {
     mkdirSync(join(f, '..'), { recursive: true });
     writeFileSync(f, JSON.stringify(base, null, 2));
     event(root, id, { event: 'THEME_SAMPLES_WANTED', actor: 'you', details: 'three 15 s themes' });
+    // a session makes them now, even while the project waits for the owner (gates.settle); the runner drops the flag
+    // once that session ends
+    update(root, id, (p) => { p.mfx = { ...(p.mfx || {}), samples_wanted: base.samples_wanted }; settle(p, projectPipeline(root, id)); return p; });
     return { samples: [], made: false, note: 'The AI makes three themes next; they arrive in the chat.' };
   }
   const dir = id ? join(projectPaths(root, id).work, 'music', 'theme-samples') : join(paths(root).run, 'theme-samples', randomBytes(4).toString('hex'));
