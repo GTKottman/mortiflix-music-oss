@@ -104,6 +104,9 @@ pub struct MfxState {
     /// Mortiflix is on: the stage bar shows and stage commands switch FilmCraft's layout.
     pub active: bool,
     /// The Mortiflix project id (the service's `state/<id>`), None before New project / Open.
+    /// The service connections the state has seen (a restarted service opens the project again).
+    #[serde(skip)]
+    pub seen_connects: u64,
     pub project_id: Option<String>,
     pub project_title: String,
     /// The stage on screen, 0-5 (see [`crate::STAGES`]).
@@ -138,6 +141,7 @@ impl Default for MfxState {
     fn default() -> Self {
         Self {
             active: false,
+            seen_connects: 0,
             project_id: None,
             project_title: String::new(),
             stage: 0,

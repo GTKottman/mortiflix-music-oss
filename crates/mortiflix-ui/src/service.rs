@@ -206,6 +206,8 @@ pub struct Service {
     events: VecDeque<(u64, Value)>,
     event_seq: u64,
     waker: Arc<Mutex<Option<egui::Context>>>,
+    /// How many times a `hello` was answered (each start of the service).
+    connects: u64,
 }
 
 impl Drop for Service {
@@ -217,6 +219,11 @@ impl Drop for Service {
 impl Service {
     pub fn status(&self) -> &ServiceStatus {
         &self.status
+    }
+
+    /// How many times the service has connected (it is restarted after a crash).
+    pub fn connects(&self) -> u64 {
+        self.connects
     }
 
     /// Repaint this context whenever something arrives from the service.
@@ -325,6 +332,7 @@ impl Service {
                         if id == HELLO_ID {
                             self.status = if ok {
                                 let version = result.get("version").and_then(Value::as_str).unwrap_or("?").chars().take(40).collect();
+                                self.connects = self.connects.saturating_add(1);
                                 ServiceStatus::Connected { version }
                             } else {
                                 ServiceStatus::Stopped { reason: error_text(&error) }
@@ -625,6 +633,27 @@ mod tests {
         assert_eq!(s.take_reply(5).unwrap().result["x"], 1);
         assert_eq!(s.events_since(0).count(), 1);
         assert_eq!(s.events_since(1).count(), 0);
+    }
+
+    /// A service restarted after a crash has no project open: the app opens its project again.
+    #[test]
+    fn a_restarted_service_gets_the_project_opened_again() {
+        let (out, rx) = std::sync::mpsc::channel();
+        let (sent_tx, sent) = std::sync::mpsc::channel();
+        let mut m = crate::Mortiflix::default();
+        m.service.rx = Some(rx);
+        m.service.tx = Some(sent_tx);
+        out.send(Incoming::Line(json!({"id": HELLO_ID, "ok": true, "result": {"version": "0.1.0"}}))).unwrap();
+        m.poll();
+        assert_eq!(m.service.connects(), 1);
+        assert!(sent.try_recv().is_err(), "the first start opens nothing");
+        m.state.project_id = Some("p-one".into());
+        out.send(Incoming::Line(json!({"id": HELLO_ID, "ok": true, "result": {"version": "0.1.0"}}))).unwrap();
+        m.poll();
+        let open = sent.try_recv().unwrap();
+        assert_eq!((open["type"].as_str(), open["params"]["id"].as_str()), (Some("project.open"), Some("p-one")));
+        m.poll();
+        assert!(sent.try_recv().is_err(), "only once per restart");
     }
 
     #[test]
