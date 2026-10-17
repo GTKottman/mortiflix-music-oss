@@ -218,8 +218,8 @@ pub type ReaderOpener = fn(name: &str, head: &[u8], reader: &SharedReader) -> Op
 /// Bytes sniffed by [`open_reader`].
 pub const HEAD_LEN: usize = 64 * 1024;
 
-/// Open media from a reader: reader openers first, then WAV (read in place); otherwise read the
-/// whole file and use the byte openers (`extra`, then stills).
+/// Open media from a reader: WAV first (its RIFF/WAVE magic is certain; read in place), then the
+/// reader openers; otherwise read the whole file and use the byte openers (`extra`, then stills).
 pub fn open_reader(name: &str, reader: SharedReader, reader_openers: &[ReaderOpener], extra: &[Opener]) -> Result<SharedSource> {
     open_reader_within(name, reader, reader_openers, extra, u64::MAX)
 }
@@ -230,13 +230,15 @@ pub fn open_reader(name: &str, reader: SharedReader, reader_openers: &[ReaderOpe
 /// memory to show its duration, or to find out it isn't supported, thrashes the disk.
 pub fn open_reader_within(name: &str, reader: SharedReader, reader_openers: &[ReaderOpener], extra: &[Opener], max_whole: u64) -> Result<SharedSource> {
     let head = read_range(&*reader, 0, HEAD_LEN).map_err(|e| MediaError::Io(format!("{name}: {e}")))?;
+    // before the containers: the MPEG-TS sniff is a heuristic (0x47 every 188/192/204 bytes), and a
+    // steady tone in a WAV's samples can pass it, so a voice take opened as a transport stream
+    if crate::wav::sniff(&head) {
+        return Ok(Arc::new(crate::wav::WavSource::open(name, reader)?));
+    }
     for o in reader_openers {
         if let Some(r) = o(name, &head, &reader) {
             return r;
         }
-    }
-    if crate::wav::sniff(&head) {
-        return Ok(Arc::new(crate::wav::WavSource::open(name, reader)?));
     }
     if reader.len() > max_whole {
         return Err(MediaError::Unsupported(format!("{name}: no streaming reader for this format, and it is too large to read whole here")));
@@ -366,6 +368,25 @@ mod tests {
         let a = src.audio(rate as i64 * 30, 16, rate as u32).unwrap();
         assert!(a.channels[0].iter().all(|&s| s == 0.0));
         assert_eq!(read(), before);
+    }
+
+    /// Run 2: a voice take (a steady tone) passed the MPEG-TS sniff and opened as a transport
+    /// stream in Edit; a WAV is a WAV before any container opener is asked.
+    #[test]
+    fn a_wav_is_opened_as_wav_before_any_container_sniff() {
+        fn greedy(_: &str, _: &[u8], _: &SharedReader) -> Option<Result<SharedSource>> {
+            Some(Err(MediaError::Unsupported("read as MPEG-TS".into())))
+        }
+        fn greedy_bytes(_: &str, _: Arc<[u8]>) -> Option<Result<SharedSource>> {
+            Some(Err(MediaError::Unsupported("read as MPEG-TS".into())))
+        }
+        let samples: Vec<f32> = (0..4800).map(|i| (i % 7) as f32 / 10.0).collect();
+        let wav: Arc<[u8]> = Arc::from(crate::wav::write_wav16(&samples, 1, 48_000));
+        let r: SharedReader = Arc::new(MemReader(wav.clone()));
+        let src = open_reader("take.wav", r, &[greedy], &[greedy_bytes]).unwrap();
+        assert_eq!(src.info().audio().unwrap().channels, 1);
+        let src = crate::open_bytes("take.wav", wav, &[greedy_bytes]).unwrap();
+        assert_eq!(src.info().audio().unwrap().channels, 1);
     }
 
     #[test]

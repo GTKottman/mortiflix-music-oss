@@ -189,6 +189,10 @@ pub type Opener = fn(name: &str, bytes: Arc<[u8]>) -> Option<Result<SharedSource
 /// Open media from bytes, trying `extra` openers first, then the built-in ones (WAV, animated
 /// images, stills).
 pub fn open_bytes(name: &str, bytes: Arc<[u8]>, extra: &[Opener]) -> Result<SharedSource> {
+    // WAV's magic is certain; the MPEG-TS opener's sniff is a heuristic a WAV can pass
+    if wav::sniff(&bytes) {
+        return Ok(Arc::new(wav::WavSource::parse(name, bytes)?));
+    }
     for o in extra {
         if let Some(r) = o(name, bytes.clone()) {
             return r;
@@ -199,9 +203,6 @@ pub fn open_bytes(name: &str, bytes: Arc<[u8]>, extra: &[Opener]) -> Result<Shar
     }
     if still::hdr::sniff(&bytes) {
         return Ok(Arc::new(still::hdr::still(name, &bytes)?));
-    }
-    if wav::sniff(&bytes) {
-        return Ok(Arc::new(wav::WavSource::parse(name, bytes)?));
     }
     // APNG and animated GIF play as movies (#402); single-frame files fall through to the stills
     if let Some(r) = animated::open(name, &bytes) {

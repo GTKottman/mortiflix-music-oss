@@ -38,7 +38,8 @@ fn is_video_es(head: &[u8]) -> bool {
 }
 
 pub fn sniff(head: &[u8]) -> bool {
-    mortiflix_mpegts::sniff(head).is_some() || is_video_es(head)
+    // a RIFF file (WAV, AVI) is never a transport stream, whatever its samples look like
+    !head.starts_with(b"RIFF") && !head.starts_with(b"RF64") && (mortiflix_mpegts::sniff(head).is_some() || is_video_es(head))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -893,6 +894,25 @@ mod tests {
         }
         assert_eq!(stream_rate(Some(FrameRate::FPS_25), Some(25.0)), FrameRate::FPS_25);
         assert_eq!(stream_rate(None, Some(50.0)), FrameRate::from_f64(50.0));
+    }
+
+    /// Run 2: a demo voice line (a quiet sine) had 0x47 at 124 + 192·k, the 192-byte TS packet
+    /// pattern, and opened as MPEG-TS in Edit. A RIFF file is never a transport stream.
+    #[test]
+    fn a_riff_wav_is_never_sniffed_as_a_transport_stream() {
+        let mut head = b"RIFF\x24\x10\x00\x00WAVEfmt ".to_vec();
+        head.resize(2048, 0x10);
+        for k in 0..6 {
+            head[124 + 192 * k] = 0x47;
+        }
+        assert!(mortiflix_mpegts::sniff(&head).is_some(), "the heuristic alone matches it");
+        assert!(!sniff(&head));
+        // a real transport stream still is one
+        let mut ts = vec![0u8; 188 * 6];
+        for k in 0..6 {
+            ts[188 * k] = 0x47;
+        }
+        assert!(sniff(&ts));
     }
 
     /// MPEG-1 layer II frame, 48 kHz 192 kb/s (576 bytes).
