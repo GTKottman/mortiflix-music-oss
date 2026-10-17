@@ -146,8 +146,10 @@ pub fn show(ui: &mut egui::Ui, rect: Rect, ctx: &mut MfxCtx) {
     // Hint between the stages and Next, when there is room; the AI stopped: Resume (or Link Claude
     // Code) at its end
     let mut hint_rect = Rect::from_min_max(pos2(x + 12.0, rect.min.y), pos2(right.min.x - 8.0, rect.max.y));
-    if ctx.state.stop.is_some() && hint_rect.width() >= MIN_HINT_W + 120.0 {
-        let w = if ctx.state.stop.as_ref().is_some_and(|s| s.login) { 230.0 } else { 90.0 };
+    // Resume first: the hint gives way (on Voice & music, with two buttons on the right, a 1600 px window had no
+    // Resume in the bar at all; run 2)
+    let w = if ctx.state.stop.as_ref().is_some_and(|s| s.login) { 230.0 } else { 90.0 };
+    if ctx.state.stop.is_some() && hint_rect.width() >= w + 8.0 {
         let br = Rect::from_min_max(pos2(hint_rect.max.x - w, rect.min.y + 7.0), pos2(hint_rect.max.x, rect.max.y - 7.0));
         hint_rect.max.x = br.min.x - 8.0;
         let mut child = ui.new_child(egui::UiBuilder::new().max_rect(br).layout(egui::Layout::left_to_right(egui::Align::Center)));

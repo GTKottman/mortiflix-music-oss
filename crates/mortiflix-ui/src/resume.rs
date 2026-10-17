@@ -121,7 +121,13 @@ pub fn bar(ui: &mut egui::Ui, ctx: &mut MfxCtx, id: &str, compact: bool) -> bool
     let label = if stop.login { "Link Claude Code" } else { "Resume" };
     let draw = |ui: &mut egui::Ui, ctx: &mut MfxCtx| {
         if !compact {
-            ui.add(egui::Label::new(RichText::new(format!("! {}", words(&stop))).size(12.0).color(t.warn)).wrap());
+            // two lines at most (the whole story on hover and in the thread): a long stop ran over the chat's
+            // Moves row and hid Resume under it (run 2)
+            let mut job = egui::text::LayoutJob::simple(format!("! {}", words(&stop)), egui::FontId::proportional(12.0), t.warn, ui.available_width());
+            job.wrap.max_rows = 2;
+            job.wrap.overflow_character = Some('…');
+            ui.add(egui::Label::new(job)).on_hover_text(words(&stop));
+            ui.end_row();
         }
         let waiting = ctx.state.resume.after_login;
         let text = if waiting { "Waiting for Claude Code…".to_string() } else { label.to_string() };
