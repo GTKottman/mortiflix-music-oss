@@ -309,6 +309,9 @@ impl Plan {
                 ..Piece::default()
             });
         }
+        if plan.fcproj.is_empty() {
+            plan.fcproj = default_fcproj(&plan);
+        }
         let value = serde_json::to_value(&plan).map_err(|e| e.to_string())?;
         Plan::parse(&value)
     }
@@ -361,6 +364,19 @@ impl Plan {
         }
         Ok(p)
     }
+}
+
+/// Where the project is saved when the service names no `.fcproj`: beside the project's own
+/// record (`<studio>/state/<id>/filmcraft/<title>.fcproj`, found from a piece's media path).
+fn default_fcproj(plan: &Plan) -> String {
+    let title: String = plan.title.chars().filter(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '.')).collect();
+    let title = if title.trim().is_empty() { "Mortiflix".to_string() } else { title.trim().to_string() };
+    for p in &plan.pieces {
+        if let Some((state, _)) = p.file.split_once("/canvas/media/") {
+            return format!("{state}/filmcraft/{title}.fcproj");
+        }
+    }
+    String::new()
 }
 
 /// FilmCraft's label colours (`filmcraft_project::Label::rgb`), by name.
@@ -1433,7 +1449,8 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
             Phase::Done => {
                 let open = ctx.state.handoff.show_summary;
                 let title = format!("{} is in FilmCraft", ctx.state.handoff.title);
-                let r = ui.add(egui::Button::new(RichText::new(format!("{} {title}", if open { "▾" } else { "▸" })).strong()).frame(false));
+                let r =
+                    ui.add(egui::Button::new(RichText::new(format!("{title}  ·  {}", if open { "hide" } else { "show what came in" })).strong()).frame(false));
                 if r.clicked() {
                     ctx.state.handoff.show_summary = !open;
                 }
@@ -1718,7 +1735,7 @@ fn clicked_panel(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
         });
     }
     ui.colored_label(t.text_dim, format!("{}–{} · {}", clock(s.start_sec), clock(s.end_sec), s.track));
-    if !p.text.is_empty() {
+    if p.kind == "line" && !p.text.is_empty() {
         ui.colored_label(t.text_dim, format!("“{}”", short(&p.text, 200)));
     }
     // Versions, newest first
@@ -2138,6 +2155,10 @@ mod tests {
         assert!(p.pieces.iter().any(|x| x.node == "s06" && x.cut && x.source_in_sec == Some(13.5)));
         assert!(p.pieces.iter().any(|x| x.kind == "older" && !x.current));
         assert!(p.pieces.iter().any(|x| x.kind == "asset" && x.bin.as_deref() == Some("Your assets/image")));
+        assert_eq!(p.fcproj, "", "no media under a project record: nowhere to save");
+        let mut v2 = v.clone();
+        v2["clips"][0]["media"]["path"] = json!("/studio/state/p1/canvas/media/video/abc.mp4");
+        assert_eq!(Plan::from_handoff(&v2).unwrap().fcproj, "/studio/state/p1/filmcraft/The Rise of AI.fcproj");
         // built: the animatic shots play their own range; the card is a colour matte; older ones in their bin
         let mut f = Fake { calls: Vec::new(), next: 0, fail: Vec::new() };
         let mut h = Handoff::default();

@@ -201,6 +201,20 @@ fn use_version(app: &mut FilmcraftApp, node: &str, version: u32) -> Result<Value
     let name = session
         .edit_group(&label, |s| into::use_version(h, node, version, &mut |id, p| s.execute(id, p).map_err(|e| e.to_string())).map_err(engine_err))
         .map_err(|e| e.to_string())?;
+    // Mortiflix plays that version too (node area, preview, later swaps agree with the timeline)
+    let core = &mut app.mfx.core;
+    let h = &core.state.handoff;
+    let mut swapped = json!({"node": node, "version": version});
+    if let Some(p) = h.placed.iter().find(|p| p.node == node) {
+        swapped["clip"] = json!(p.clip);
+        swapped["item"] = json!(p.item);
+    }
+    let in_bin = h.items.iter().filter(|i| i.node == node).map(|i| i.version).max().unwrap_or(0);
+    let newest = h.nodes.get(node).map_or(0, |n| n.current).max(in_bin);
+    let pick = if newest > 0 && newest == version { Value::Null } else { json!(version) };
+    core.service.request("node.pick", json!({"node": node, "v": pick}));
+    core.service.request("handoff.swapped", swapped);
+    let _ = app.session.execute("file.save", json!({}));
     Ok(json!({"clip": name}))
 }
 
