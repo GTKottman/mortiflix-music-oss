@@ -718,7 +718,7 @@ fn thread(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, msgs: &[Msg], vi
                         st.scroll_to = None;
                     }
                 }
-                Row::Folded { node, count, said, last, .. } => folded(ui, ctx, node, *count, said, last),
+                Row::Folded { node, count, said, last, .. } => folded(ui, ctx, ri, node, *count, said, last),
                 Row::Presses { first, verb, names } => {
                     let refs: Vec<model::Ref> = names.iter().map(|n| model::Ref { id: n.to_lowercase(), text: n.clone() }).collect();
                     rich_text(ui, ctx, *first, &format!("You pressed {verb} on {}", names.join(", ")), &refs, 12.0, t.text_dim);
@@ -1021,7 +1021,7 @@ fn question(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, q: &model::Que
     ui.label(RichText::new(line).size(12.0).color(t.text_dim));
 }
 
-fn folded(ui: &mut egui::Ui, ctx: &mut MfxCtx, node: &str, count: usize, said: &str, last: &str) {
+fn folded(ui: &mut egui::Ui, ctx: &mut MfxCtx, row: usize, node: &str, count: usize, said: &str, last: &str) {
     let t = ctx.theme;
     let info = model::node(&ctx.state.graph, node);
     let w = ui.available_width();
@@ -1037,7 +1037,8 @@ fn folded(ui: &mut egui::Ui, ctx: &mut MfxCtx, node: &str, count: usize, said: &
             });
         })
         .response;
-    let resp = ui.interact(resp.rect, egui::Id::new(("mfx-chat-fold", node)), Sense::click());
+    // a node can fold twice (other messages between): the row number keeps the ids apart
+    let resp = ui.interact(resp.rect, egui::Id::new(("mfx-chat-fold", node, row)), Sense::click());
     if resp.hovered() {
         ui.painter().rect_stroke(resp.rect, 4.0, Stroke::new(1.0, t.separator.gamma_multiply(2.0)), egui::StrokeKind::Inside);
     }
