@@ -670,8 +670,12 @@ impl ScriptState {
 
     /// Events that change what the script shows: read it again.
     pub fn on_message(&mut self, msg: &Value) {
-        if matches!(msg.get("event").and_then(Value::as_str), Some("script.changed" | "node.changed")) {
-            self.fetch_soon = true;
+        match msg.get("event").and_then(Value::as_str) {
+            Some("script.changed" | "node.changed") => self.fetch_soon = true,
+            // while the AI writes, a status change can be the script step ending: read it again, or
+            // "the AI is still writing" stays up long after the script is done
+            Some("status" | "work.active") if self.script.writing => self.fetch_soon = true,
+            _ => {}
         }
     }
 }
@@ -1523,6 +1527,14 @@ mod tests {
         st.on_message(&json!({"event": "chat.message", "data": {}}));
         assert!(!st.fetch_soon);
         st.on_message(&json!({"event": "script.changed", "data": {}}));
+        assert!(st.fetch_soon);
+        // a status change while the AI writes can be the script step ending (run 2: "the AI is
+        // still writing" stayed up after the script was done); once it isn't writing, status is ignored
+        let mut st = ScriptState::default();
+        st.on_message(&json!({"event": "status", "data": {}}));
+        assert!(!st.fetch_soon);
+        st.script.writing = true;
+        st.on_message(&json!({"event": "status", "data": {}}));
         assert!(st.fetch_soon);
     }
 }
