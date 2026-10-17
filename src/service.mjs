@@ -8,9 +8,9 @@
 // One handler per message type; the work lives in src/svc/*.mjs over the studio's engine (projects, gates, canvas,
 // runner). The service runs the studio's runner itself, so the AI works ahead while the app is open.
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, isAbsolute } from 'node:path';
 import { REPO, studioRoot, ensureStudio, loadConfig, paths, UserError } from './studio.mjs';
-import { createProject, loadProject, listProjects, startProject, readEvents, projectPipeline, update as updateProject, event as projectEvent } from './projects.mjs';
+import { createProject, loadProject, projectPaths, listProjects, startProject, readEvents, projectPipeline, update as updateProject, event as projectEvent } from './projects.mjs';
 import { Runner } from './runner.mjs';
 import { findPipeline } from './pipelines.mjs';
 import { canvasView, nodeAction } from './canvas.mjs';
@@ -409,7 +409,14 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
     },
 
     // ---- music theme and cues (doc 33) ----
-    'music.theme.get': (p) => ({ theme: loadTheme(root, needProject(p)) }),
+    // paths in results are absolute: a session writes its theme samples' WAVs relative to its working folder
+    'music.theme.get': (p) => {
+      const id = needProject(p);
+      const t = loadTheme(root, id);
+      const work = projectPaths(root, id).work;
+      if (t?.samples) t.samples = t.samples.map((x) => (x?.wav && !isAbsolute(x.wav) ? { ...x, wav: join(work, x.wav) } : x));
+      return { theme: t };
+    },
     'music.theme.set': (p) => { const id = needProject(p); const t = saveTheme(root, id, { ...(p?.theme || bad('music.theme.set needs a theme')), picked_by: 'you' }); chatRow(id, { role: 'action', text: `Music theme: ${[t.genre, ...t.mood].filter(Boolean).join(', ') || 'changed'}` }); poke(); return { theme: t }; },
     // Before a project exists (New project › Music › Choose…) pass no project: the demo makes samples in the studio.
     'music.theme.samples': async (p) => themeSamples(root, p?.project || projectId() || null, p?.theme || {}),
