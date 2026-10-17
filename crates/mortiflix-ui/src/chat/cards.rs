@@ -23,6 +23,8 @@ pub struct CardOut {
     pub change_words: bool,
     /// Hear the music themes: ask the service for its samples (`music.theme.samples`).
     pub samples: bool,
+    /// Answer… on a question: (question id, its words); the composer answers it next.
+    pub custom: Option<(String, String)>,
 }
 
 fn text(v: &Value, key: &str) -> String {
@@ -539,7 +541,33 @@ fn defaults(ui: &mut egui::Ui, ctx: &mut MfxCtx, msg: usize, card: &Value, answe
                 }
                 ctx.auto(&format!("mfx.chat.card.{msg}.q.{}.{}", q.id, c.id), &r, &c.label);
             }
+            // A question with no choices (or room for own words) still needs a way in.
+            if q.custom || q.choices.is_empty() {
+                let label = if q.choices.is_empty() { "Answer…" } else { "Your own…" };
+                let r = ui.add(
+                    egui::Button::new(RichText::new(label).size(12.0).color(t.text))
+                        .min_size(vec2(0.0, 22.0))
+                        .fill(t.panel_bg)
+                        .stroke(Stroke::new(1.0, t.separator.gamma_multiply(2.0)))
+                        .corner_radius(11.0),
+                );
+                if r.clicked() {
+                    out.custom = Some((q.id.clone(), q.text.clone()));
+                }
+                ctx.auto(&format!("mfx.chat.card.{msg}.q.{}.custom", q.id), &r, label);
+            }
         });
+        // Say what is in use, so an open question never looks blank.
+        let line = match &using {
+            Some(u) if !q.choices.is_empty() && q.choices.iter().all(|c| &c.id != u) => format!("Your words: {u}"),
+            Some(u) if q.choices.is_empty() => format!("Going with: {u}"),
+            Some(_) => String::new(),
+            None if q.choices.is_empty() => "No answer yet: the AI picks one unless you say.".into(),
+            None => String::new(),
+        };
+        if !line.is_empty() {
+            ui.label(RichText::new(line).size(12.0).color(t.text_dim));
+        }
     }
 }
 

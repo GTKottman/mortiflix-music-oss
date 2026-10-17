@@ -94,6 +94,8 @@ struct ChatUi {
     decided: BTreeMap<String, String>,
     /// Custom… on this question: the next words answer it.
     custom_for: Option<String>,
+    /// That question's words, for the composer's hint when the question lives on a card.
+    custom_text: String,
     details_open: bool,
     history_open: bool,
     history_search: String,
@@ -943,6 +945,11 @@ fn message_body(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, i: usize, 
         if let Some((q, c)) = out.answer {
             answer(ctx, st, &q, &c, now);
         }
+        if let Some((q, words)) = out.custom {
+            st.custom_for = Some(q);
+            st.custom_text = words;
+            st.focus_composer = true;
+        }
         if let Some(b) = out.action {
             run_action(ctx, st, &b, now);
         }
@@ -1194,7 +1201,7 @@ fn composer(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, info: Option<&
     let r = ui.max_rect();
     let hint = match &st.custom_for {
         Some(q) => {
-            let text = msgs.iter().filter_map(|m| m.question.as_ref()).find(|x| &x.id == q).map(|x| x.text.clone()).unwrap_or_default();
+            let text = msgs.iter().filter_map(|m| m.question.as_ref()).find(|x| &x.id == q).map_or_else(|| st.custom_text.clone(), |x| x.text.clone());
             if text.is_empty() { "Your own answer…".to_string() } else { format!("Your own answer: {text}") }
         }
         None => model::placeholder(info),
