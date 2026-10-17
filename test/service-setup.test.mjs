@@ -88,6 +88,20 @@ test('setup.cancel stops a download and removes the part file', async (t) => {
   assert.equal((await call('setup.cancel', { job: 999 })).result.cancelled, false);
 });
 
+test('setup.install takes any setup.mjs component and nothing else', async (t) => {
+  process.env.MFX_FAKE_DOWNLOADS = '1';
+  t.after(() => { delete process.env.MFX_FAKE_DOWNLOADS; });
+  const root = tempStudio(t);
+  const { call, until } = svc(root);
+  for (const tool of ['chrome', 'blender', 'strudel']) {
+    const r = await call('setup.install', { tool });
+    assert.equal(r.ok, true, JSON.stringify(r));
+    assert.equal((await until(r.result.job)).state, 'done');
+  }
+  assert.equal((await call('setup.status')).result.tools.studio.chrome.ok, true);
+  for (const tool of ['', 'rm -rf', '__proto__', 'ffmpeg']) assert.equal((await call('setup.install', { tool })).error.code, 'bad_request');
+});
+
 test('downloadFiles skips files already there', async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'mfx-dl-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));

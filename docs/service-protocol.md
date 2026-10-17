@@ -156,7 +156,7 @@ Cards: `script {beats}`, `looks {frames, using}`, `shots`/`transitions {nodes}`,
 | `keys.set` / `keys.remove` | `{id, value}` / `{id}` | `anthropic`, `elevenlabs`, `uploadpost`, `postiz` (secrets.json) and `gemini` (session.env) |
 | `keys.check` | `{id}` | a free check of a saved key (network, only on request) |
 | `setup.download` | `{label?, files: [{url, dest, size, sha256}]}` | `{job}`: https only, `dest` absolute; each file streams to `<dest>.part`, size + SHA-256 checked, then renamed; files already there are skipped. Only after the user said yes (the app shows size, source, licence) |
-| `setup.install` | `{tool: chrome}` | `{job}`: Chrome for Remotion (`installTool`), after the user said yes |
+| `setup.install` | `{tool}` | `{job}`: one of setup.mjs's components (`TOOLS`: chrome, strudel, transitions, blender, blender-addons, browser-harness, comfyui, daw-engine, craft) with its own installer (`installTool`), after the user said yes |
 | `setup.cancel` | `{job}` | `{cancelled}` |
 
 `tools.engine` = `{ok, path}` (the sound engine). `MFX_FAKE_DOWNLOADS=1` (tests only): `fake:<bytes>` URLs and a pretend Chrome install.

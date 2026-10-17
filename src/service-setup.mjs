@@ -1,7 +1,7 @@
 // First-run setup, the part the app's Setup window adds to part 08's setup.* / keys.* (src/svc/setup.mjs): downloads
 // and installs the user said yes to, with progress. `setup.download` fetches model files (FilmCraft's Whisper and
-// Kokoro catalogues, which the app sends) with their size and SHA-256 checked; `setup.install` installs Chrome for
-// Remotion; `setup.cancel` stops either. Each runs as a job: the reply is {job}, then `setup.progress` events
+// Kokoro catalogues, which the app sends) with their size and SHA-256 checked; `setup.install` installs one of
+// setup.mjs's components (TOOLS: Chrome, Strudel, transitions, Blender + toolkits, uv tools, ComfyUI, sound engine); `setup.cancel` stops either. Each runs as a job: the reply is {job}, then `setup.progress` events
 // {job, kind, label, state: running|done|failed|cancelled, line, done?, total?}. Nothing downloads on its own.
 //
 // MFX_FAKE_DOWNLOADS=1 (tests): `fake:<bytes>` URLs make that many zero bytes, slowly, and the Chrome install only
@@ -12,9 +12,8 @@ import { dirname, isAbsolute, join, normalize, basename } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { loadConfig, saveConfig } from './studio.mjs';
-import { installTool, toolsDir } from './setup.mjs';
+import { installTool, toolsDir, TOOLS, TOOL_INFO } from './setup.mjs';
 
-const TOOL_INSTALLS = ['chrome'];
 const MAX_FILES = 200;
 const MAX_FILE_BYTES = 8 * 1024 ** 3;
 const fake = () => process.env.MFX_FAKE_DOWNLOADS === '1';
@@ -48,13 +47,16 @@ export function setupHandlers({ root, emit, ProtocolError }) {
       const label = String(p?.label || 'Download').slice(0, 120);
       return startJob('download', label, ({ progress, signal }) => downloadFiles(list, { progress, signal }));
     },
-    // Install a tool the user said yes to (Chrome for Remotion).
+    // Install a component the user said yes to (or skipped at install time), with setup.mjs's own installers: one
+    // install logic for the installers, `mortiflix setup` and this window.
     'setup.install': (p) => {
       const tool = String(p?.tool || '');
-      if (!TOOL_INSTALLS.includes(tool)) throw bad(`tool: ${TOOL_INSTALLS.join(', ')}`);
-      return startJob('install', tool === 'chrome' ? 'Chrome for Remotion' : tool, async ({ progress, signal }) => {
+      if (!TOOLS.includes(tool)) throw bad(`tool: ${TOOLS.join(', ')}`);
+      const label = TOOL_INFO[tool]?.name || tool;
+      return startJob('install', label, async ({ progress, signal }) => {
         if (fake()) return fakeInstall(root, tool, { progress, signal });
-        const st = await installTool(root, tool, { log: (line) => progress({ state: 'running', line: String(line).slice(0, 300) }) });
+        // the sound engine has no release downloads yet: it builds from the pinned source (asked first, it says so)
+        const st = await installTool(root, tool, { build: tool === 'daw-engine', log: (line) => progress({ state: 'running', line: String(line).slice(0, 300) }) });
         return st?.detail ? `Installed: ${st.detail}` : 'Installed';
       });
     },
@@ -74,6 +76,7 @@ async function fakeInstall(root, tool, { progress, signal }) {
     await new Promise((r) => setTimeout(r, 150));
     progress({ state: 'running', line: `fake ${tool}: step ${i} of 5`, done: i, total: 5 });
   }
+  if (tool !== 'chrome') return `Installed (fake): ${tool}`;
   const file = join(toolsDir(root), 'browsers', 'fake-chrome', process.platform === 'win32' ? 'chrome.exe' : 'chrome');
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, '');
