@@ -273,7 +273,7 @@ fn read_replies(ctx: &mut MfxCtx, st: &mut ChatUi, now: f64) {
             Pending::Send { .. } if !r.ok && not_running(&r) => st.queued.push(what),
             Pending::Send { text, context, .. } if !r.ok => {
                 st.awaiting = None;
-                let retry = json!([{"label": "Try again", "type": "chat.send", "params": {"text": text, "context": context.as_deref().unwrap_or("video")}}]);
+                let retry = json!([{"label": "Try again", "type": "chat.send", "params": {"text": text, "context": model::context_param(context.as_deref())}}]);
                 local_line(ctx, format!("Couldn't send that: {}", error_text(&r)), context.as_deref(), json!({"error": true, "actions": retry}));
             }
             Pending::Send { .. } => {
@@ -433,7 +433,7 @@ fn sync_context(ctx: &mut MfxCtx, st: &mut ChatUi, now: f64) {
         return;
     }
     st.context_sent = Some(ctx.state.selected_node.clone());
-    let id = ctx.service.request("chat.context", json!({"context": ctx.state.selected_node.as_deref().unwrap_or("video")}));
+    let id = ctx.service.request("chat.context", json!({"context": model::context_param(ctx.state.selected_node.as_deref())}));
     st.pending.push((id, Pending::Quiet("chat.context".into()), now));
 }
 
@@ -443,7 +443,7 @@ fn send_queued(ctx: &mut MfxCtx, st: &mut ChatUi, now: f64) {
     }
     for p in std::mem::take(&mut st.queued) {
         if let Pending::Send { text, context, confirm } = &p {
-            let id = ctx.service.request("chat.send", json!({"text": text, "context": context.as_deref().unwrap_or("video"), "confirm": confirm}));
+            let id = ctx.service.request("chat.send", json!({"text": text, "context": model::context_param(context.as_deref()), "confirm": confirm}));
             st.pending.push((id, p.clone(), now));
             st.awaiting = Some(now);
         }
@@ -574,7 +574,7 @@ fn send_chat(ctx: &mut MfxCtx, st: &mut ChatUi, text: String, context: Option<St
         st.queued.push(p);
         return;
     }
-    let id = ctx.service.request("chat.send", json!({"text": text, "context": context.as_deref().unwrap_or("video"), "confirm": confirm}));
+    let id = ctx.service.request("chat.send", json!({"text": text, "context": model::context_param(context.as_deref()), "confirm": confirm}));
     st.pending.push((id, p, now));
     st.awaiting = Some(now);
 }

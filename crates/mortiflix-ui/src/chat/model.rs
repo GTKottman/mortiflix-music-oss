@@ -261,6 +261,12 @@ pub fn id_number(id: &str) -> Option<u32> {
 /// The kind an id names by its letter (doc 12 ids): s shot, t transition, l line, m cue, b beat,
 /// a asset, f frame.
 pub fn kind_of_id(id: &str) -> &'static str {
+    if id.starts_with("cut:") {
+        return "cut";
+    }
+    if id.starts_with("stage:") {
+        return "stage";
+    }
     if id.starts_with("sf") && id.get(2..).is_some_and(|r| r.chars().next().is_some_and(|c| c.is_ascii_digit())) {
         return "frame";
     }
@@ -335,6 +341,14 @@ fn display_name(kind: &str, id: &str, label: &str, title: &str) -> String {
         ("line", Some(n)) if !id.contains('-') => format!("Line {n}"),
         ("line", _) if !title.is_empty() => format!("Line \u{201c}{}\u{201d}", title.chars().take(24).collect::<String>()),
         ("transition", Some(n)) => format!("Transition {n}"),
+        ("cut", _) => {
+            let mut parts = id.split(':').skip(1).map(|p| id_number(p).map_or_else(|| p.to_uppercase(), |n| n.to_string()));
+            match (parts.next(), parts.next()) {
+                (Some(a), Some(b)) => format!("The cut {a} › {b}"),
+                _ => "A cut".to_string(),
+            }
+        }
+        ("stage", _) => format!("The {} stage", id.trim_start_matches("stage:")),
         ("cue", _) if !label.is_empty() && !title.is_empty() => format!("{label} {title}"),
         ("beat", _) if !title.is_empty() => title.to_string(),
         ("beat", Some(n)) => format!("Beat {n}"),
@@ -342,6 +356,25 @@ fn display_name(kind: &str, id: &str, label: &str, title: &str) -> String {
         _ if !label.is_empty() => label.to_string(),
         _ => id.to_uppercase(),
     }
+}
+
+/// The `context` sent with `chat.context` / `chat.send` for a selection: the whole video, a piece id,
+/// a cut without a transition (`cut:s02:s03`) or a stage (`stage:look`), lower case. Anything else
+/// (a stale or odd selection) is the whole video, so a send never fails on what is being talked about.
+pub fn context_param(sel: Option<&str>) -> String {
+    let Some(c) = sel.map(|c| c.trim().to_ascii_lowercase()) else { return "video".into() };
+    let piece = |p: &str| {
+        let mut ch = p.chars();
+        (2..=24).contains(&p.len()) && ch.next().is_some_and(|c| c.is_ascii_lowercase()) && ch.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+    };
+    let ok = if let Some(rest) = c.strip_prefix("cut:") {
+        rest.split_once(':').is_some_and(|(a, b)| piece(a) && piece(b))
+    } else if let Some(st) = c.strip_prefix("stage:") {
+        (3..=20).contains(&st.len()) && st.chars().all(|c| c.is_ascii_lowercase())
+    } else {
+        piece(&c)
+    };
+    if ok { c } else { "video".into() }
 }
 
 /// Everything known about `id`: from the graph when it is there, else from the id alone (the chat
@@ -896,5 +929,20 @@ mod tests {
         assert_eq!(lower_name("M03 Winter"), "M03 Winter");
         assert_eq!(id_number("s007x"), Some(7));
         assert_eq!(beat_colour(9), beat_colour(1));
+    }
+
+    #[test]
+    fn every_talking_about_target_is_a_context_the_service_takes() {
+        // the node area's cut pills (no transition yet) were sent as-is and refused (owner's first run)
+        assert_eq!(context_param(Some("cut:s02:s03")), "cut:s02:s03");
+        assert_eq!(context_param(Some("S03")), "s03");
+        assert_eq!(context_param(Some("b01-2")), "b01-2");
+        assert_eq!(context_param(Some("stage:Look")), "stage:look");
+        assert_eq!(context_param(None), "video");
+        for bad in ["../../x", "cut:s02", "", "a", "stage:x", "s01 s02", "\u{0}weird"] {
+            assert_eq!(context_param(Some(bad)), "video", "{bad}");
+        }
+        assert_eq!(node(&Value::Null, "cut:s02:s03").name, "The cut 2 › 3");
+        assert_eq!(crumbs(&Value::Null, Some("cut:s02:s03")).len(), 2);
     }
 }
