@@ -9,7 +9,7 @@
 // What a line feeds is the graph's own `says` edges (svc/graph.mjs): its voice line and the shots of its beat. An
 // edit to a line's words remakes only those pieces that already exist (a Fix on each, so versions are kept and the AI
 // runs ahead as usual); pieces not made yet will be made from the new words anyway.
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, renameSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { canvasView, canvasPaths, readBeats, loadOwner, CanvasError } from '../canvas.mjs';
 import { projectPaths, loadProject, projectPipeline, event } from '../projects.mjs';
@@ -116,7 +116,35 @@ export function scriptView(root, id) {
   // While the AI writes, the newest line is the one being written: read-only until it is done.
   const last = busy ? beats.at(-1)?.lines.at(-1) : null;
   for (const b of beats) for (const l of b.lines) l.read_only = l === last;
-  return { project: id, rev: g.rev, writing: busy, version: s.version ?? null, beats };
+  const d = readDraft(root, id);
+  return { project: id, rev: g.rev, writing: busy, version: s.version ?? null, beats, draft: d?.draft ?? null, draft_at: d?.at ?? null };
+}
+
+// ---- the owner's unsaved script changes (the app's draft), kept per project so nothing typed is lost ----
+// The app sends its draft whenever it changes (`script.draft {draft}`, null = none); it lives beside the canvas in
+// state/<id>/canvas/script-draft.json, so it survives a service restart, a project switch and a crash. The service
+// never reads into it: it is the app's own shape, handed back as is by script.get. Saving the script clears it.
+const MAX_DRAFT = 256 * 1024;
+const draftFile = (root, id) => join(canvasPaths(root, id).dir, 'script-draft.json');
+
+export function readDraft(root, id) {
+  const d = readOr(draftFile(root, id), null);
+  return d && typeof d === 'object' && d.draft && typeof d.draft === 'object' && !Array.isArray(d.draft) ? d : null;
+}
+
+export function saveDraft(root, id, draft) {
+  const f = draftFile(root, id);
+  if (draft === null || draft === undefined) {
+    rmSync(f, { force: true });
+    return { project: id, saved: false, cleared: true };
+  }
+  if (typeof draft !== 'object' || Array.isArray(draft)) throw new CanvasError('the draft is an object (or null)');
+  const text = JSON.stringify({ draft, at: new Date().toISOString() });
+  if (text.length > MAX_DRAFT) throw new CanvasError(`the draft is at most ${MAX_DRAFT / 1024} KB`);
+  mkdirSync(canvasPaths(root, id).dir, { recursive: true });
+  writeFileSync(`${f}.tmp`, text);
+  renameSync(`${f}.tmp`, f);
+  return { project: id, saved: true, cleared: false };
 }
 
 // script.edit: one edit, or {edits: [...]} (the app's Save sends every draft change at once). Each edit:
@@ -222,6 +250,8 @@ export function applyScriptEdits(root, id, params) {
     mkdirSync(join(work, 'script'), { recursive: true });
     writeFileSync(join(work, 'script', 'beats.json'), JSON.stringify(s, null, 2));
     if (voiceDirty) writeVoice(work, voiceRaw, voice);
+    // saved: the draft those changes came from is done (the app sends what is still unsaved again)
+    rmSync(draftFile(root, id), { force: true });
     out.beats = [...touched];
     return out;
   });

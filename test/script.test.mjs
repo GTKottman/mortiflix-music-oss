@@ -155,3 +155,34 @@ test('script: get, edit a line (its shot and voice line remade, v2), add, delete
   await assert.rejects(call('script.edit', { beat: 'b01', line: 'b01-1', words: '  ' }), /empty/);
 });
 
+test('script: the app\'s unsaved changes are kept per project (a service restart, a switch) until saved', { skip: !hasFfmpeg && 'needs ffmpeg' }, async (t) => {
+  const root = tempStudio(t);
+  const { call, tick } = harness(t, root);
+  const runner = new Runner(root);
+  runner.acquire();
+  t.after(() => runner.release());
+  const made = await call('project.new', { preset: 'explainer', title: 'Draft', idea: 'Keep what I typed', backend: 'demo' });
+  const id = made.project.id;
+  await until(() => loadProject(root, id).state === 'queued');
+  for (let i = 0; i < 3; i++) { await runner.loop(); await tick(); }
+  assert.ok((await call('script.get')).beats.length);
+  assert.equal((await call('script.get')).draft, null);
+  const draft = { words: { 'b01-1': 'Not saved yet.' }, deleted: ['b02-1'], added: [], names: {}, nextKey: 0 };
+  assert.equal((await call('script.draft', { draft })).saved, true);
+  await assert.rejects(call('script.draft', { draft: [1] }), /object/);
+  await assert.rejects(call('script.draft', { draft: { big: 'x'.repeat(300 * 1024) } }), /at most/);
+  // a fresh service (a restart) hands it back
+  const again = harness(t, root);
+  await again.call('project.open', { id });
+  const s = await again.call('script.get');
+  assert.deepEqual(s.draft, draft);
+  assert.ok(s.draft_at);
+  // by project id too (the app flushes a draft for the project it is leaving)
+  assert.deepEqual((await again.call('script.get', { project: id })).draft, draft);
+  // saving clears it; null clears it too
+  await again.call('script.edit', { beat: 'b01', line: 'b01-1', words: 'Not saved yet.' });
+  assert.equal((await again.call('script.get')).draft, null);
+  await again.call('script.draft', { draft });
+  assert.equal((await again.call('script.draft', { draft: null })).cleared, true);
+  assert.equal((await again.call('script.get')).draft, null);
+});

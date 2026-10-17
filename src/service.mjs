@@ -23,7 +23,7 @@ import { listPresets, getPreset, savePresetFull, deletePreset } from './svc/pres
 import { addAsset, updateAsset, replaceAsset, removeAsset, useAsset, listAssets } from './svc/assets.mjs';
 import { loadTheme, saveTheme, themeSamples, setCuePlan, cleanTheme } from './svc/theme.mjs';
 import * as graph from './svc/graph.mjs';
-import { scriptView, applyScriptEdits, remakesFor, scriptActionText, scriptLogged } from './svc/script.mjs';
+import { scriptView, applyScriptEdits, remakesFor, scriptActionText, scriptLogged, saveDraft } from './svc/script.mjs';
 import { appendChat, chatHistory, translateEvents, typedMove, quickReply, applyMove, initChat, actionText } from './svc/chat.mjs';
 import { exportTarget, deliverFromApp, postPlan, postSend } from './svc/export.mjs';
 import * as setup from './svc/setup.mjs';
@@ -395,6 +395,8 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
     },
     // ---- the script, line by line (Script panel + the chat's script card) ----
     'script.get': (p) => scriptView(root, needProject(p)),
+    // The app's unsaved script changes, kept per project (null clears them); script.get hands them back.
+    'script.draft': (p) => saveDraft(root, needProject(p), p?.draft),
     // Saves the owner's edits into the script (and the voice lines), then remakes only the pieces that used the
     // changed words: a Fix on each (the canvas's own path; versions kept). One grey chat line, one script.changed.
     'script.edit': (p) => {
