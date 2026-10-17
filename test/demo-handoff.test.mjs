@@ -21,4 +21,5 @@ test('demo-handoff: shots (one remade, one cut), lines, music, cues and transiti
   assert.equal(plan.cut_on_board.length, 1);
   assert.ok(plan.older_versions.some((o) => o.node === 's04' && o.version === 1));
   assert.equal(plan.markers.filter((m) => m.kind === 'chapter').length, 5);
+  assert.deepEqual(plan.clips.filter((c) => c.kind === 'transition').map((c) => c.transition), ['Cross Dissolve', 'Dip to Black', 'Cut']);
 });

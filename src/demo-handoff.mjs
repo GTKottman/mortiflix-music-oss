@@ -62,8 +62,8 @@ export function makeHandoffDemo(root, { title = 'The Rise of AI' } = {}) {
     { id: 'm03', name: 'Low', beat: 'b03', start_bar: 6, end_bar: 9 }, { id: 'm04', name: 'Lift', beat: 'b04', start_bar: 10, end_bar: 13 }] });
 
   // The board's transitions: a dissolve into the bet, a dip to black into winter, a plain cut into spring.
-  write(work, 'transitions/board.json', { cuts: [{ id: 't01', from_scene: 'S02', to_scene: 'S03', transition: 'Cross Dissolve' },
-    { id: 't02', from_scene: 'S04', to_scene: 'S05', transition: 'Dip to Black' }, { id: 't03', from_scene: 'S07', to_scene: 'S08', transition: 'Cut' }] });
+  write(work, 'transitions/board.json', { cuts: [{ id: 't01', from_scene: 's02', to_scene: 's03', transition: 'Cross Dissolve' },
+    { id: 't02', from_scene: 's04', to_scene: 's05', transition: 'Dip to Black' }, { id: 't03', from_scene: 's07', to_scene: 's08', transition: 'Cut' }] });
 
   // An attached asset (the logo), as New project would have copied it in.
   mkdirSync(join(work, 'input', 'logo'), { recursive: true });
