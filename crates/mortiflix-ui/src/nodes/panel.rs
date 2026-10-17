@@ -679,8 +679,14 @@ fn transition(ui: &mut egui::Ui, area: &mut NodeArea, cut: &super::model::Cut, t
     ui.label(RichText::new(format!("The cut from {from} to {to}")).strong().color(t.text));
     let (kind, sec, pick) = area.cut_label(cut);
     ui.label(
-        RichText::new(if pick { "! Pick one: no transition yet (the AI picks a crossfade if you don't)".to_string() } else { format!("Now: {kind}") })
-            .color(if pick { t.error } else { t.text_dim }),
+        RichText::new(if pick {
+            "! Pick one: a new cut with no transition yet (the AI picks a crossfade if you don't)".to_string()
+        } else if cut.transition.is_some() {
+            format!("Now: {kind} (made by the AI)")
+        } else {
+            "Now: a straight cut".to_string()
+        })
+        .color(if pick { t.error } else { t.text_dim }),
     );
     if button(ui, out, "inspector.playCut", "▶ Play across the cut", false, t).clicked() {
         super::canvas::play(out, area, &cut.id, "cut");

@@ -527,6 +527,11 @@ impl Graph {
     pub fn set_film(&mut self, film: Vec<String>) {
         self.film = film;
         let live: Vec<&String> = self.film.iter().filter(|id| self.get(id).is_some_and(|n| n.state != NodeState::Cut)).collect();
+        // The AI's own order of the shots: a cut it made the board for (its two shots side by side
+        // there) and left without a transition is its straight cut, not a choice left to you.
+        let mut ai: Vec<(&String, i64)> = live.iter().filter_map(|id| self.get(id).map(|n| (*id, n.order))).collect();
+        ai.sort_by_key(|(_, o)| *o);
+        let ai_next: HashMap<&str, &str> = ai.windows(2).filter_map(|w| Some((w.first()?.0.as_str(), w.get(1)?.0.as_str()))).collect();
         let mut cuts = Vec::new();
         for w in live.windows(2) {
             let (Some(a), Some(b)) = (w.first(), w.get(1)) else { continue };
@@ -539,7 +544,7 @@ impl Graph {
                 from: (*a).clone(),
                 to: (*b).clone(),
                 transition: t.map(|t| t.id.clone()),
-                pick: t.is_none() && self.has_board,
+                pick: t.is_none() && self.has_board && ai_next.get(a.as_str()) != Some(&b.as_str()),
             });
         }
         self.cuts = cuts;
@@ -704,10 +709,15 @@ pub(crate) mod tests {
         assert!(g.has_board);
         assert_eq!(g.cuts.len(), 4);
         assert_eq!(g.cuts.first().and_then(|c| c.transition.as_deref()), Some("t01"));
-        assert!(g.cuts.get(1).is_some_and(|c| c.pick && c.id == "cut:s02:s03"));
+        // the AI made the board with s02 next to s03 and no transition there: its straight cut, not "Pick one"
+        assert!(g.cuts.get(1).is_some_and(|c| !c.pick && c.id == "cut:s02:s03"));
         assert_eq!(g.beat_title("b02"), (2, "The bet".to_string()));
         assert_eq!(g.beat_title("b01").1, "Cold open on a…");
-        assert_eq!(g.counts().line(), "5 shots · 1 OK · 1 needs you · 3 transitions to pick");
+        assert_eq!(g.counts().line(), "5 shots · 1 OK · 1 needs you");
+        // a cut that only exists because the order changed is a choice left to you
+        let mut moved = g.clone();
+        moved.set_film(vec!["s01".into(), "s03".into(), "s02".into(), "s04".into(), "x".into()]);
+        assert!(moved.cuts.iter().find(|c| c.id == "cut:s01:s03").is_some_and(|c| c.pick));
         let line = g.get("b02-1").cloned().unwrap();
         assert_eq!(g.line_shot(&line).as_deref(), Some("s03"));
     }

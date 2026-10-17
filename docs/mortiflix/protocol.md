@@ -218,6 +218,14 @@ stage 1 with the first line's field open.
 | `node.insert` | `{after, text}` | `{edit, node}`: a new shot after `after` |
 | `node.find` | `{query}` | matching nodes |
 
+Board transitions on their cuts (`src/canvas.mjs` `cutEnds`): a transition node's `from`/`to` (the shots either
+side of its cut) come from the board's shot ids (`from_scene`/`to_scene`, or `s03` in `from`/`to`), else the beat it
+lands on (`lands_on: "… in B03"`, `to_beat`: the cut into that beat's first shot), else the style frames either side
+(`from: "SF01 · …"`, `to: "SF02 · …"`: the cut into the first shot of the next frame's beats); `title` is its name
+(`transition` as a string or `{new}`); its version's media is the board's file (`file`/`video`/`clip`/`preview`, else
+`out/board/cut-NN.mp4|webm|png|jpg`). The app shows "! Pick one" only on a cut the AI never saw (the order changed or a
+shot was added after the board); a cut the board left without a transition is a straight cut.
+
 Beat names (`src/svc/beatnames.mjs`): every beat has a short title for the nodes, the ribbon, the Script panel, the
 preview's beats lane and FilmCraft's bins and chapter markers: the script's own `name` (sessions write it in
 `script/beats.json`, the owner renames with `script.edit {beat_name}`), else one the user's own AI gave (one short call
