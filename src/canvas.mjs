@@ -273,7 +273,8 @@ export function canvasView(root, id) {
     const decision = owner.decisions[nid]?.verdict || null;
     const pending = openOf(edits).filter((e) => e.node === nid).at(-1) || null;
     const failed = !pending && edits.filter((e) => e.node === nid).at(-1)?.state === 'failed' ? edits.filter((e) => e.node === nid).at(-1) : null;
-    const state = decision === 'cut' ? 'cut' : pending ? 'generating' : failed ? 'needs you' : decision === 'ok' ? 'approved' : n.planned ? 'generating' : 'ready';
+    const made = Boolean(n.versions?.length);
+    const state = decision === 'cut' ? 'cut' : pending ? 'generating' : failed ? 'needs you' : decision === 'ok' && made ? 'approved' : n.planned ? 'generating' : 'ready';
     nodes[nid] = { ...n, owner: decision, pending, failed, state, edits: edits.filter((e) => e.node === nid).map(({ id: eid, text, state: st, version, at }) => ({ id: eid, text, state: st, version, at })) };
   }
   return { ...g, nodes, open_edits: openOf(edits).length };
@@ -287,6 +288,8 @@ export function nodeAction(root, id, nid, { action, text, bars = null, part = nu
   const node = g.nodes[nid];
   if (!node) throw new CanvasError(`no piece ${nid} on this canvas`);
   const cp = canvasPaths(root, id);
+  // An OK is on a made piece: a shot that isn't made yet has nothing to OK (owner's first run: "4 OK" on plans)
+  if (action === 'ok' && !node.versions?.length) throw new CanvasError(`${node.label} isn't made yet: OK it once it exists`);
   return withLock(cp.lock, () => {
     const owner = loadOwner(root, id);
     if (['ok', 'cut'].includes(action)) owner.decisions[nid] = { verdict: action, version: node.current, at: new Date().toISOString() };

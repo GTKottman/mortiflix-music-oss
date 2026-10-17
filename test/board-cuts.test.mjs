@@ -41,3 +41,16 @@ test('board transitions sit on their cuts: shot ids, the beat they land on, or t
   const next = g.edges.filter((e) => e.kind === 'next').map((e) => `${e.from}>${e.to}`);
   for (const e of ['s02>t01', 't01>s03', 's04>t02', 't02>s05', 's01>t03', 't03>s02']) assert.ok(next.includes(e), e);
 });
+
+test('an OK is only on a made piece: a planned shot refuses it and never counts as OK', async (t) => {
+  const root = tempStudio(t);
+  const p = createProject(root, { pipeline: 'explainer', title: 'Plans', answers: { topic: 'x' } });
+  const work = join(root, 'projects', p.id);
+  mkdirSync(join(work, 'script'), { recursive: true });
+  writeFileSync(join(work, 'script', 'beats.json'), JSON.stringify({ beats: [{ id: 'b01', words: 'One.' }] }));
+  const { nodeAction, canvasView } = await import('../src/canvas.mjs');
+  syncCanvas(root, p.id);
+  assert.throws(() => nodeAction(root, p.id, 's01', { action: 'ok' }), /S01 isn't made yet/);
+  assert.equal(canvasView(root, p.id).nodes.s01.state, 'generating');
+  assert.ok(nodeAction(root, p.id, 's01', { action: 'fix', text: 'make it bluer' }).edit, 'a Fix on the plan still works');
+});

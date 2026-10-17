@@ -101,7 +101,7 @@ export function stageDone(root, id, from, { reason = 'Next' } = {}) {
       if (s.canvas) {
         const g = canvasView(root, id);
         const owner = loadOwner(root, id);
-        for (const n of Object.values(g.nodes).filter((x) => x.kind === s.canvas && !x.missing && !x.planned && !owner.decisions[x.id])) {
+        for (const n of Object.values(g.nodes).filter((x) => x.kind === s.canvas && !x.missing && !x.planned && x.versions?.length && !owner.decisions[x.id])) {
           nodeAction(root, id, n.id, { action: 'ok' });
         }
       }
