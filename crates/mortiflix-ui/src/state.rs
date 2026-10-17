@@ -153,6 +153,9 @@ pub struct MfxState {
     pub resume: crate::resume::ResumeState,
     /// The Setup page to open on (`mortiflix.setup {step}`), taken by the Setup window.
     pub setup_page: Option<String>,
+    /// Another project just opened: the stage it was last looked at, for the stage bar to go to.
+    #[serde(skip)]
+    pub open_stage: Option<u8>,
 }
 
 impl Default for MfxState {
@@ -184,6 +187,7 @@ impl Default for MfxState {
             stop: None,
             resume: crate::resume::ResumeState::default(),
             setup_page: None,
+            open_stage: None,
         }
     }
 }
@@ -259,7 +263,15 @@ impl MfxState {
                     }
                 }
                 if let Some(p) = data.get("project").and_then(Value::as_str) {
-                    self.project_id = Some(p.chars().take(200).collect());
+                    let p: String = p.chars().take(200).collect();
+                    // another project opened (Open from the chat's list): back where it was left
+                    // (run 2: a reopened project always showed 1 Script)
+                    if self.project_id.as_deref() != Some(p.as_str())
+                        && let Some(stage) = data.get("stage").and_then(Value::as_u64).and_then(|s| u8::try_from(s).ok()).filter(|s| *s <= 5)
+                    {
+                        self.open_stage = Some(stage);
+                    }
+                    self.project_id = Some(p);
                 }
                 // stopped by the AI (Resume), only for a status that says the project's state
                 if data.get("state").is_some() {
@@ -294,6 +306,21 @@ mod tests {
         s.go_to(0, false);
         assert!(s.looking_back());
         assert_eq!(s.go_to(42, false), None);
+    }
+
+    /// Run 2: a project opened from the chat's list always showed 1 Script; it goes back to the
+    /// stage its status names, once, and only when the project changes.
+    #[test]
+    fn an_opened_project_goes_back_to_its_stage() {
+        let mut s = MfxState::default();
+        s.apply_service_message(&json!({"event": "status", "data": {"project": "p1", "stage": 3}}));
+        assert_eq!(s.open_stage, Some(3));
+        s.open_stage = None;
+        s.apply_service_message(&json!({"event": "status", "data": {"project": "p1", "stage": 2}}));
+        assert_eq!(s.open_stage, None, "the same project: no jump");
+        s.apply_service_message(&json!({"event": "status", "data": {"project": "p2", "stage": 99}}));
+        assert_eq!(s.open_stage, None, "a stage out of range is ignored");
+        assert_eq!(s.project_id.as_deref(), Some("p2"));
     }
 
     #[test]

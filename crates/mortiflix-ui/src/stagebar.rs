@@ -33,6 +33,12 @@ pub fn hint(ctx: &MfxCtx) -> String {
 
 /// Draw the bar in `rect` (the host reserves [`crate::STAGE_BAR_HEIGHT`] under its header).
 pub fn show(ui: &mut egui::Ui, rect: Rect, ctx: &mut MfxCtx) {
+    // a project just opened: go to the stage it was last looked at
+    if let Some(stage) = ctx.state.open_stage.take()
+        && stage != ctx.state.stage
+    {
+        ctx.command("stages.set", serde_json::json!({"stage": stage, "force": true}));
+    }
     let t = ctx.theme;
     let p = ui.painter_at(rect);
     p.rect_filled(rect, 0.0, t.header_bg);
