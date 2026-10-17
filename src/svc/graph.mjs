@@ -324,8 +324,13 @@ export function soundTimeline(root, id, gv, shots) {
   const barSec = (60 / bpm) * beats;
   const cues = gv.nodes.filter((n) => n.kind === 'cue' && !n.missing).sort((a, b) => a.order - b.order).map((n) => {
     const m = mix.cues[n.id] || {};
-    return { node: n.id, label: n.label, title: n.title, beat: n.beat, beat_no: n.beat_no, colour: n.colour, state: n.state, bars: n.bars || null,
-      start_sec: n.bars ? round3((n.bars[0] - 1) * barSec) : null, end_sec: n.bars ? round3(n.bars[1] * barSec) : null, gain_db: m.gain_db ?? 0, duck_db: m.duck_db ?? null, len_bars: m.len_bars ?? null };
+    const start = n.bars ? round3((n.bars[0] - 1) * barSec) : null;
+    // a cue the score doesn't tie to a beat takes the beat it starts in, so its clip has that beat's colour in Edit
+    // (run 2: every cue was the same green, hard to tell which music goes with which scene)
+    const at = !n.beat && start !== null ? (shots || []).find((sh) => start >= sh.start_sec - 0.05 && start < sh.start_sec + sh.dur_sec) : null;
+    const beat = n.beat || at?.beat || null;
+    return { node: n.id, label: n.label, title: n.title, beat, beat_no: n.beat_no ?? at?.beat_no ?? null, colour: n.colour || at?.colour || null, state: n.state, bars: n.bars || null,
+      start_sec: start, end_sec: n.bars ? round3(n.bars[1] * barSec) : null, gain_db: m.gain_db ?? 0, duck_db: m.duck_db ?? null, len_bars: m.len_bars ?? null };
   });
   return { voice, music: mv?.path ? { node: 'music', path: mv.path, version: music.plays, start_sec: 0 } : null, cues, bpm, beats_per_bar: beats };
 }
