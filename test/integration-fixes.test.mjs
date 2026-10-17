@@ -97,3 +97,16 @@ test('chat.answer changes a question that went on with its default (the defaults
   const bad = await call('chat.answer', { project: p.id, question: 'nope', value: 'x' });
   assert.equal(bad.ok, false);
 });
+
+test('captions never overlap when a voice line is moved over the next one', async (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'mfx-cap-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const p = makeHandoffDemo(root);
+  const before = handoffPlan(root, p.id).captions;
+  assert.ok(before.length >= 2);
+  const { setMix } = await import('../src/svc/graph.mjs');
+  setMix(root, p.id, before[0].node, { start_sec: before[1].start_sec - 0.3 });
+  const caps = handoffPlan(root, p.id).captions;
+  for (let i = 0; i + 1 < caps.length; i++) assert.ok(caps[i].end_sec <= caps[i + 1].start_sec, JSON.stringify(caps.slice(i, i + 2)));
+  assert.ok(caps.every((c) => c.end_sec > c.start_sec));
+});

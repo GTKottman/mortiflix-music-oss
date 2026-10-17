@@ -385,7 +385,12 @@ export function handoffPlan(root, id) {
   const markers = [];
   for (const b of gv.beats) { const s = shots.find((x) => x.beat === b.id); if (s) markers.push({ kind: 'chapter', node: b.id, time_sec: s.start_sec, name: `${b.no} ${String(b.title).slice(0, 60)}`, label: b.colour?.label || null, comment: b.title }); }
   for (const c of sound.cues) if (c.start_sec !== null) markers.push({ kind: 'comment', node: c.node, time_sec: c.start_sec, name: `${c.label} · ${c.title || ''}`.trim(), label: label(c) });
-  const captions = sound.voice.filter((l) => l.dur_sec).map((l) => ({ node: l.node, text: l.words, start_sec: l.start_sec, end_sec: round3(l.start_sec + l.dur_sec) }));
+  // One caption per voice line; a line moved over the next one ends its caption where the next begins (a caption
+  // track holds one caption at a time).
+  const captions = sound.voice.filter((l) => l.dur_sec).map((l) => ({ node: l.node, text: l.words, start_sec: l.start_sec, end_sec: round3(l.start_sec + l.dur_sec) }))
+    .sort((a, b) => a.start_sec - b.start_sec);
+  for (let i = 0; i + 1 < captions.length; i++) if (captions[i].end_sec > captions[i + 1].start_sec) captions[i].end_sec = captions[i + 1].start_sec;
+  for (let i = captions.length - 1; i >= 0; i--) if (!(captions[i].end_sec > captions[i].start_sec)) captions.splice(i, 1);
   const tracks = ['V2 Your assets', 'V1 Shots', 'A1 Voice', 'A2 Music', 'A3 Sounds', 'C1 Captions'].filter((t) => (t.startsWith('V1')) || (t.startsWith('A1') && sound.voice.some((l) => l.path)) || (t.startsWith('A2') && sound.music) || (t.startsWith('C1') && captions.length) || (t.startsWith('V2') && false));
   return {
     format: 'mortiflix.handoff', version: 1, project: id, title: project.title, rev: gv.rev, fcproj: handoffFcproj(root, id, project.title),
