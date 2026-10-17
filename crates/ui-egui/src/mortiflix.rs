@@ -344,9 +344,9 @@ pub fn dialogs(app: &mut StudioApp, ctx: &egui::Context) {
         mfx::setup::set_model_packs(ctx, model_packs());
     }
     for which in [0, 1] {
-        let (open, title, id) = match which {
-            0 => (app.mfx.core.state.show_new_project, "New project", "mfx-new-project"),
-            _ => (app.mfx.core.state.show_setup, "Mortiflix Setup", "mfx-setup"),
+        let (open, id) = match which {
+            0 => (app.mfx.core.state.show_new_project, "mfx-new-project"),
+            _ => (app.mfx.core.state.show_setup, "mfx-setup"),
         };
         if !open {
             continue;
@@ -355,7 +355,7 @@ pub fn dialogs(app: &mut StudioApp, ctx: &egui::Context) {
         let mut cmds = Vec::new();
         let mut autos = Vec::new();
         // New project: the title is a breadcrumb of its page and it sizes to the page (doc 31)
-        let title = if which == 0 { mfx::new_project::window_title(ctx) } else { title.to_string() };
+        let title = if which == 0 { mfx::new_project::window_title(ctx) } else { mfx::setup::window_title(ctx).to_string() };
         let mut window = egui::Window::new(title).id(egui::Id::new(id)).open(&mut still_open).collapsible(false).default_size([840.0, 560.0]);
         if which == 0 {
             window = window
@@ -447,10 +447,10 @@ pub fn route(app: &mut StudioApp, ctx: &egui::Context, id: &str, params: &Value)
         }
         "mortiflix.setup" => {
             core.state.show_setup = true;
-            // {step: 1 | "claude" | "keys" | "tools"}: open on that step (Link Claude Code is step 1)
+            // {step: 1 | "claude" | "keys" | "tools" | "narration"}: open on that step (Link Claude Code is step 1)
             core.state.setup_page = match params.get("step") {
                 Some(Value::Number(n)) => {
-                    n.as_u64().and_then(|n| ["claude", "keys", "tools"].get(usize::try_from(n.saturating_sub(1)).ok()?)).map(|s| (*s).to_string())
+                    n.as_u64().and_then(|n| ["claude", "keys", "tools", "narration"].get(usize::try_from(n.saturating_sub(1)).ok()?)).map(|s| (*s).to_string())
                 }
                 Some(Value::String(s)) => Some(s.chars().take(20).collect()),
                 _ => None,

@@ -566,9 +566,20 @@ pub enum Page {
     Claude,
     Keys,
     Tools,
+    /// Settings only: which voice narrates (not one of the three first-run steps).
+    Narration,
 }
 
-const PAGES: [(Page, &str, &str); 3] = [(Page::Claude, "claude", "Claude Code"), (Page::Keys, "keys", "Keys"), (Page::Tools, "tools", "Tools")];
+const PAGES: [(Page, &str, &str); 4] =
+    [(Page::Claude, "claude", "Claude Code"), (Page::Keys, "keys", "Keys"), (Page::Tools, "tools", "Tools"), (Page::Narration, "narration", "Narration")];
+
+/// The narration engines Settings › Narration offers (`voice.set`), with what each means.
+const ENGINES: [(&str, &str, &str); 4] = [
+    ("qwen", "This computer", "Qwen3-TTS on your own GPU (ComfyUI). Free, nothing leaves this computer."),
+    ("elevenlabs", "ElevenLabs", "Online voices; every line is a paid call on your ElevenLabs plan (needs its key under Keys)."),
+    ("own", "Your own voice", "You record each line in the booth (stage 4)."),
+    ("none", "No narration", "On-screen text and music only."),
+];
 
 /// A service job (download, install, test message) as its `setup.progress` events tell it.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -638,6 +649,9 @@ pub struct Model {
     packs_set: bool,
     installed: HashMap<String, bool>,
     installed_at: Option<Instant>,
+    /// The last `voice.list` / `voice.set` result (Settings › Narration).
+    pub voice: Value,
+    voice_req: Option<u64>,
 }
 
 fn model(egui_ctx: &egui::Context) -> Arc<Mutex<Model>> {
@@ -790,6 +804,16 @@ impl Model {
                 self.status = r.result;
             }
         }
+        if let Some(id) = self.voice_req
+            && let Some(r) = ctx.service.take_reply(id)
+        {
+            self.voice_req = None;
+            if r.ok {
+                self.voice = r.result;
+            } else {
+                self.note = format!("Couldn't change the voice: {}", error_text(&r.error));
+            }
+        }
         if let Some(id) = self.backend_req
             && let Some(r) = ctx.service.take_reply(id)
         {
@@ -902,6 +926,13 @@ impl Model {
                 let n = self.keys().iter().filter(|k| k.get("source").is_some_and(|s| !s.is_null())).count();
                 (n > 0, if n == 0 { "Optional".into() } else { format!("{n} added") })
             }
+            Page::Narration => {
+                let engine = self.voice.get("engine").and_then(Value::as_str).unwrap_or("");
+                match ENGINES.iter().find(|e| e.0 == engine) {
+                    Some((_, name, _)) => (true, (*name).to_string()),
+                    None => (false, "Checking…".into()),
+                }
+            }
             Page::Tools => {
                 let Some(t) = self.status.get("tools") else { return (false, "Optional".into()) };
                 let found = [t.get("ffmpeg"), t.get("studio").and_then(|s| s.get("chrome")), t.get("engine")];
@@ -998,6 +1029,7 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
         m.page = match page.as_str() {
             "keys" => Page::Keys,
             "tools" => Page::Tools,
+            "narration" => Page::Narration,
             _ => Page::Claude,
         };
     }
@@ -1024,7 +1056,9 @@ fn draw(m: &mut Model, ui: &mut egui::Ui, ctx: &mut MfxCtx) {
         ui.allocate_ui_with_layout(egui::vec2(RAIL_W, body_h), egui::Layout::top_down(egui::Align::Min), |ui| {
             ui.set_width(RAIL_W);
             ui.set_min_height(body_h);
-            for (i, (page, key, name)) in PAGES.iter().enumerate() {
+            // the first launch is three steps; Settings (the menu, later) also has Narration
+            let pages = if m.first_run { &PAGES[..3] } else { &PAGES[..] };
+            for (i, (page, key, name)) in pages.iter().enumerate() {
                 let (done, state) = m.page_state(*page);
                 let selected = m.page == *page;
                 // one row: number + name, the step's state under it; selected = a lighter surface and a left rule
@@ -1072,6 +1106,7 @@ fn draw(m: &mut Model, ui: &mut egui::Ui, ctx: &mut MfxCtx) {
                     Page::Claude => claude_page(m, ui, ctx),
                     Page::Keys => keys_page(m, ui, ctx),
                     Page::Tools => tools_page(m, ui, ctx),
+                    Page::Narration => narration_page(m, ui, ctx),
                 }
             });
         });
@@ -1079,11 +1114,25 @@ fn draw(m: &mut Model, ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     ui.separator();
     ui.horizontal(|ui| {
         ui.label(
-            RichText::new(if m.note.is_empty() { "Change any of this later: Edit › Preferences › Mortiflix…" } else { m.note.as_str() })
-                .small()
-                .color(theme.text_faint),
+            RichText::new(match (m.note.is_empty(), m.first_run) {
+                (false, _) => m.note.as_str(),
+                (true, true) => "Change any of this later: Edit › Preferences › Mortiflix…",
+                (true, false) => "Changes are saved as you make them.",
+            })
+            .small()
+            .color(theme.text_faint),
         );
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            // Settings (opened from the menu or a link, not the first launch): change any page, then Done.
+            // It used to be the first-run wizard again: Welcome steps, Next and "Skip setup for now".
+            if !m.first_run {
+                let done = primary(ui, &theme, "Done");
+                if done.clicked() {
+                    finish(m, ctx);
+                }
+                ctx.auto("mfx.setup.done", &done, "Done");
+                return;
+            }
             let last = m.page == Page::Tools;
             let next = if last { primary(ui, &theme, "Finish") } else { secondary(ui, "Next ›") };
             if next.clicked() {
@@ -1412,6 +1461,47 @@ fn keys_page(m: &mut Model, ui: &mut egui::Ui, ctx: &mut MfxCtx) {
         }
         key_row(m, ui, ctx, k);
     }
+}
+
+/// Settings › Narration: which engine reads the script (`voice.list`, `voice.set`).
+fn narration_page(m: &mut Model, ui: &mut egui::Ui, ctx: &mut MfxCtx) {
+    let theme = ctx.theme;
+    heading(ui, &theme, "Narration", "Which voice reads the script. New lines and remakes use it; lines already made keep theirs.");
+    if needs_service(m, ui, ctx, "Choosing a voice") {
+        return;
+    }
+    if m.voice.is_null() {
+        ui.horizontal(|ui| {
+            ui.spinner();
+            ui.label(RichText::new("Asking the service…").color(theme.text_dim));
+        });
+        if m.voice_req.is_none() {
+            m.voice_req = Some(ctx.service.request("voice.list", json!({})));
+        }
+        return;
+    }
+    let current = m.voice.get("engine").and_then(Value::as_str).unwrap_or("").to_string();
+    for (id, name, what) in ENGINES {
+        let r = ui.radio(current == id, RichText::new(name).color(theme.text));
+        ui.indent(("mfx-setup-engine", id), |ui| {
+            ui.label(RichText::new(what).small().color(theme.text_dim));
+        });
+        ui.add_space(6.0);
+        if r.clicked() && current != id && m.voice_req.is_none() {
+            m.voice_req = Some(ctx.service.request("voice.set", json!({"engine": id})));
+        }
+        ctx.auto(&format!("mfx.setup.voice.{id}"), &r, name);
+    }
+    if current == "elevenlabs" && m.voice.get("elevenlabs_key").is_none_or(Value::is_null) {
+        state_label(ui, &theme, Some(false), "No ElevenLabs key yet: add it under Keys.");
+    }
+}
+
+/// The window's title: Setup on the first launch, Settings after that (Edit › Preferences › Mortiflix…).
+pub fn window_title(egui_ctx: &egui::Context) -> &'static str {
+    let shared = model(egui_ctx);
+    let m = shared.lock().unwrap_or_else(PoisonError::into_inner);
+    if m.first_run { "Mortiflix Setup" } else { "Mortiflix Settings" }
 }
 
 fn tools_page(m: &mut Model, ui: &mut egui::Ui, ctx: &mut MfxCtx) {
@@ -1901,5 +1991,34 @@ esac"#,
         ] {
             assert!(ids.iter().any(|i| i == id), "{id} in {ids:?}");
         }
+        assert!(!ids.iter().any(|i| i == "mfx.setup.page.narration"), "the first launch is three steps");
+        assert_eq!(window_title(&ctx), "Mortiflix Setup");
+    }
+
+    #[test]
+    fn settings_later_is_not_the_wizard_again() {
+        // Edit › Preferences › Mortiflix… after the first launch: Settings, every page plus Narration,
+        // one Done; no Welcome steps, Next or "Skip setup for now" (run 2: it reopened Setup)
+        let ctx = egui::Context::default();
+        let mut mfx = Mortiflix::default();
+        init(&ctx, &mut mfx, None, false);
+        assert_eq!(window_title(&ctx), "Mortiflix Settings");
+        let mut ids = Vec::new();
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let mut x = mfx.ctx(MfxTheme::default());
+            show(ui, &mut x);
+            ids.extend(x.auto.iter().map(|a| a.0.clone()));
+        });
+        out.textures_delta.clear();
+        for id in ["mfx.setup.page.narration", "mfx.setup.done"] {
+            assert!(ids.iter().any(|i| i == id), "{id} in {ids:?}");
+        }
+        for id in ["mfx.setup.next", "mfx.setup.skip", "mfx.setup.finish"] {
+            assert!(!ids.iter().any(|i| i == id), "{id} in {ids:?}");
+        }
+        // the Narration page lists the engines once the service answers
+        model(&ctx).lock().unwrap().page = Page::Narration;
+        model(&ctx).lock().unwrap().voice = serde_json::json!({"engine": "qwen", "elevenlabs_key": null});
+        assert_eq!(model(&ctx).lock().unwrap().page_state(Page::Narration), (true, "This computer".to_string()));
     }
 }

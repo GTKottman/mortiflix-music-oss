@@ -118,6 +118,7 @@ questions and failed remakes.
 | `presets.save` | `{from, name, description?, defaults?, steps?: {key: {on, waits}}, skills?: [names kept], skill_folders?: [paths], look?: {words, frames: 3-5, pictures: [paths]}, voice?: {name, delivery}, music_theme?, replace?}` | `{slug, name, preset}`. A built-in is never changed (saving makes your copy). Brief, Script and the final always run |
 | `presets.delete` | `{slug}` | your own presets only |
 | `voice.list` | `{}` | `{engine, engines, presets, elevenlabs_key, local}` (Settings › Narration) |
+| `voice.set` | `{engine: none\|elevenlabs\|qwen\|own}` | the `voice.list` result: the engine new lines and remakes use (Settings › Mortiflix › Narration) |
 
 #### Assets (doc 32)
 
@@ -261,7 +262,7 @@ blue." → "The sky is bright blue"), never the first words cut off.
 
 | Type | Params | Result |
 |---|---|---|
-| `handoff.plan` | `{}` | `{fcproj, sequence: {name, width, height, fps, length_sec}, tracks, bins, clips: [{node, kind, track, bin, name, label, version, start_sec, dur_sec, media}], markers: [{kind: chapter\|comment, time_sec, name, label, comment}], captions, your_assets, older_versions, cut_on_board, notes, previews}`; `fcproj` = where the app saves the Mortiflix Studio project (`<studio>/state/<id>/edit/<title>.fcproj`, or the one saved before); transitions carry `native` + the Mortiflix Studio transition name |
+| `handoff.plan` | `{}` | `{fcproj, sequence: {name, width, height, fps, length_sec}, tracks, bins, clips: [{node, kind, track, bin, name, label, version, start_sec, dur_sec, media}], markers: [{kind: chapter\|comment, time_sec, name, label, comment}], captions, your_assets, older_versions, cut_on_board, notes, previews}`; `fcproj` = where the app saves the Mortiflix Studio project (`<studio>/state/<id>/edit/<title>.mortiflix`, or the one saved before, which may be an older `.fcproj`; the field keeps its name); transitions carry `native` + the Mortiflix Studio transition name |
 | `handoff.done` | `{map: {clips: [{node, version, clip, item}], fcproj?, rev?}}` | saves what the app imported (done once) |
 | `handoff.get` | `{}` | `{map}` |
 | `handoff.swaps` | `{}` | `{imported, swaps: [{node, version, clip, item, path, from_sec, to_sec}]}`: newer versions to swap in (`clip.replaceFromBin`) |
