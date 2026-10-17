@@ -92,6 +92,9 @@ fn key() -> egui::Id {
 /// Stage 4's main panel (PanelKind::MfxStage on stage 4).
 pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     let mut vm: Vm = ui.ctx().data_mut(|d| d.get_temp::<Vm>(key())).unwrap_or_default();
+    // everything here fits the panel's width (nothing below may widen it)
+    let width = ui.available_width();
+    ui.set_max_width(width);
     sync(ui, ctx, &mut vm);
     if crate::service_notice(ui, ctx) {
         ui.add_space(4.0);
@@ -252,14 +255,21 @@ fn header(ui: &mut egui::Ui, ctx: &mut MfxCtx, vm: &mut Vm) {
     let t = ctx.theme;
     ui.horizontal(|ui| {
         let busy = vm.tl.busy();
+        // the tally first, then the AI's line truncated to what is left: a long line ("Needs you: …")
+        // used to widen the whole stage past its panel, lanes and all (run 2)
+        let tally = vm.tl.tally_text();
         if !ctx.state.ai_line.is_empty() {
             ui.colored_label(t.ok, "●");
-            ui.colored_label(t.text_dim, ctx.state.ai_line.chars().take(120).collect::<String>());
+            let room = (ui.available_width() - if tally.is_empty() { 0.0 } else { 8.0 * tally.chars().count() as f32 + 12.0 }).max(40.0);
+            ui.add_sized(
+                [room, 18.0],
+                egui::Label::new(egui::RichText::new(ctx.state.ai_line.chars().take(400).collect::<String>()).color(t.text_dim)).truncate(),
+            )
+            .on_hover_text(ctx.state.ai_line.chars().take(1000).collect::<String>());
         } else if busy > 0 {
             ui.colored_label(t.ok, "●");
             ui.colored_label(t.text_dim, format!("Making {busy} {}", if busy == 1 { "piece" } else { "pieces" }));
         }
-        let tally = vm.tl.tally_text();
         if !tally.is_empty() {
             ui.colored_label(t.text, tally);
         }
