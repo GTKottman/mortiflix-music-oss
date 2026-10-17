@@ -229,7 +229,9 @@ impl Extras {
         for b in g.get("beats").and_then(Value::as_array).into_iter().flatten().take(MAX_ITEMS) {
             let Some(id) = b.get("id").and_then(Value::as_str) else { continue };
             let (hex, chip) = colours(b.get("colour"));
-            x.beats.insert(id.chars().take(200).collect(), (text(b, "title"), hex, chip));
+            // the beat's short name (graph.get `name`), else its words
+            let name = Some(text(b, "name")).filter(|n| !n.is_empty()).unwrap_or_else(|| text(b, "title"));
+            x.beats.insert(id.chars().take(200).collect(), (name, hex, chip));
         }
         let nodes: Vec<&Value> = g.get("nodes").and_then(Value::as_array).map(|a| a.iter().take(MAX_ITEMS * 4).collect()).unwrap_or_default();
         let by_id: HashMap<&str, &Value> = nodes.iter().filter_map(|n| Some((n.get("id")?.as_str()?, *n))).collect();
