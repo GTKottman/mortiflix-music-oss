@@ -273,9 +273,20 @@ export function shotTimeline(root, id, gv = graphView(root, id)) {
       const still = look?.versions.find((x) => x.v === look.plays);
       media = still?.path ? { kind: 'still', path: still.path, look: look.id } : { kind: 'card', text: n.title || beat?.title || n.label, colour: n.colour?.hex || null };
     }
-    shots.push({ node: sid, label: n.label, title: n.title || '', beat: n.beat || null, beat_no: n.beat_no, colour: n.colour || null, state: n.state, version: n.plays, start_sec: round3(t), dur_sec: dur, media });
-    t += dur;
+    shots.push({ node: sid, label: n.label, title: n.title || '', beat: n.beat || null, beat_no: n.beat_no, colour: n.colour || null, state: n.state, version: n.plays, start_sec: 0, dur_sec: dur, media });
   }
+  // Shots cut from one animatic whose ranges overlap (the AI's cuts carry a transition): each plays until the next one
+  // starts, so the film keeps the animatic's timing and the voice stays on its pictures (run 2: placed back to back
+  // whole, the overlaps added 8 s and the last lines played over the wrong shots)
+  for (let i = 0; i + 1 < shots.length; i++) {
+    const a = shots[i].media;
+    const b = shots[i + 1].media;
+    if (a.kind === 'video' && b.kind === 'video' && a.path === b.path && b.from_sec > a.from_sec && a.to_sec != null && b.from_sec < a.to_sec) {
+      a.to_sec = b.from_sec;
+      shots[i].dur_sec = round3(b.from_sec - a.from_sec);
+    }
+  }
+  for (const sh of shots) { sh.start_sec = round3(t); t += sh.dur_sec; }
   return { shots, length_sec: round3(t) };
 }
 

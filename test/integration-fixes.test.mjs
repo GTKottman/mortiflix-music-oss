@@ -10,7 +10,7 @@ import { spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { cleanTheme } from '../src/svc/theme.mjs';
 import { makeHandoffDemo } from '../src/demo-handoff.mjs';
-import { handoffPlan, graphView, moveNodes, stillsSettled, spoken } from '../src/svc/graph.mjs';
+import { handoffPlan, graphView, moveNodes, stillsSettled, spoken, shotTimeline } from '../src/svc/graph.mjs';
 import { setupStatus } from '../src/setup.mjs';
 import { saveConfig } from '../src/studio.mjs';
 import { update } from '../src/projects.mjs';
@@ -71,6 +71,15 @@ test('run 2: captions and voice clip names leave out the voice directions; Edit 
   for (const o of plan.older_versions) per[o.node] = (per[o.node] || 0) + 1;
   assert.ok(Object.values(per).every((n) => n <= 3), JSON.stringify(per));
   assert.ok(plan.captions.every((c) => !/\[/.test(c.text)));
+});
+
+test('run 2: shots cut from one animatic with overlapping ranges keep its timing (each plays until the next starts)', () => {
+  const shot = (id, from, to, path = '/x/animatic.mp4') => ({ id, kind: 'shot', label: id.toUpperCase(), plays: 1, state: 'ready', versions: [{ v: 1, path, from_sec: from, to_sec: to }] });
+  const gv = { order: { film: ['s01', 's02', 's03', 's04'] }, nodes: [shot('s01', 0, 4.4), shot('s02', 3, 9.03), shot('s03', 0, 4.4, '/x/s03.mp4'), shot('s04', 12.2, 16.2)] };
+  const { shots, length_sec } = shotTimeline(null, null, gv);
+  assert.deepEqual(shots.map((x) => [x.node, x.start_sec, x.dur_sec]), [['s01', 0, 3], ['s02', 3, 6.03], ['s03', 9.03, 4.4], ['s04', 13.43, 4]]);
+  assert.equal(shots[0].media.to_sec, 3);
+  assert.equal(length_sec, 17.43);
 });
 
 test('every shot version gets a PNG still (its first frame)', { skip: !hasFfmpeg && 'needs ffmpeg' }, async (t) => {
