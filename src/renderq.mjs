@@ -2,7 +2,7 @@
 // memory: two at once is how a long render gets killed. Sessions queue with `mfx render` and poll with
 // `mfx render-wait`, so no tool call ever blocks longer than its timeout.
 import { spawn } from 'node:child_process';
-import { createWriteStream, mkdirSync, readFileSync, existsSync } from 'node:fs';
+import { createWriteStream, mkdirSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
 export class RenderQueue {
@@ -141,7 +141,12 @@ export class RenderQueue {
     if (job.external) { this.onChange(job); return; }
     const out = createWriteStream(job.log);
     out.write(`$ ${job.argv.join(' ')}\n`);
-    const p = spawn(job.argv[0], job.argv.slice(1), { cwd: job.cwd, env: job.env, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
+    // Temp files on disk, next to the logs: /tmp is often RAM (tmpfs), and a long render's frames and pre-encode there
+    // eat the memory the render itself needs (a 26 min animatic wrote its pre-encode into a 16 GB tmpfs /tmp).
+    const tmp = join(this.logDir, 'tmp', String(job.id));
+    try { mkdirSync(tmp, { recursive: true }); } catch { /* falls back to the system temp below */ }
+    const env = existsSync(tmp) ? { ...(job.env || process.env), TMPDIR: tmp, TMP: tmp, TEMP: tmp } : job.env;
+    const p = spawn(job.argv[0], job.argv.slice(1), { cwd: job.cwd, env, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
     job.proc = p;
     p.stdout.pipe(out, { end: false });
     p.stderr.pipe(out, { end: false });
@@ -164,6 +169,7 @@ export class RenderQueue {
       job.state = code === 0 ? 'done' : 'failed';
       job.endedAt = new Date().toISOString();
       job.proc = null;
+      try { rmSync(tmp, { recursive: true, force: true }); } catch { /* left for the next clean */ }
       if (err) out.write(`\n${err.message}\n`);
       out.end(() => {
         for (const w of job.waiters.splice(0)) w();
