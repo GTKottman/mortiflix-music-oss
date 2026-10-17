@@ -130,6 +130,12 @@ writing is refused.
 | `node.insert` | `{after, text}` | `{edit, node}`: a new shot after `after` |
 | `node.find` | `{query}` | matching nodes |
 
+The AI stopped (`status` `state: paused` with `needs_you`, not `by_you`): the app shows what happened in the chat and at
+the end of the stage bar's hint, with **Resume** (`project.resume`). `needs_you.cause: "login"` (the runner sets it
+when the session failed on Claude Code's login: "OAuth session expired", 401, "/login"; the app also reads those words in
+the text) says so plainly and offers **Link Claude Code** instead (`mortiflix.setup {step: 1}`: Setup on its Claude Code
+step); the app then checks `setup.status` every 4 s and sends `project.resume` itself once `claude.logged_in`.
+
 What the AI works on (`work.active`, `src/svc/work.mjs`): only real state. Nothing is animated unless a session runs
 for the project (`running`). Then the owner's open Fixes come first (the runner does edit requests first): each such
 piece is `remaking` (`v` = the version being made) or `making` (not made yet). Otherwise `step` is the step the runner

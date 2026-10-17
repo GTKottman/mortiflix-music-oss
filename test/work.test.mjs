@@ -84,3 +84,23 @@ test('stage statuses: shots count only shots (never the transition board), and a
   assert.equal(st[3].kind, 'ready');
   assert.equal(st[3].text, '2/2 voice lines and cues ready');
 });
+
+test('a stop says when Claude Code\'s login is the cause, and project.resume carries on', async (t) => {
+  const { loginTrouble } = await import('../src/runner.mjs');
+  assert.ok(loginTrouble('Claude Code stopped (1): OAuth session expired. Please run /login'));
+  assert.ok(!loginTrouble('the render timed out'));
+  const { root, id } = project(t);
+  const out = [];
+  const svc = createService({ root, send: (m) => out.push(m), runner: false, tickMs: 0 });
+  t.after(() => svc.close());
+  await svc.handle({ id: 1, type: 'project.open', params: { id } });
+  update(root, id, (p) => { p.state = 'paused'; p.needs_you = { text: 'The last two sessions stopped without moving the project forward (OAuth session expired). Check the activity log, then resume.', at: 'x', cause: 'login' }; });
+  svc.status(true);
+  const st = out.filter((m) => m.event === 'status').at(-1).data;
+  assert.equal(st.state, 'paused');
+  assert.equal(st.needs_you.cause, 'login');
+  await svc.handle({ id: 2, type: 'project.resume', params: {} });
+  assert.equal(out.find((m) => m.id === 2).ok, true);
+  svc.status(true);
+  assert.equal(out.filter((m) => m.event === 'status').at(-1).data.needs_you, null);
+});

@@ -21,6 +21,9 @@ const PROGRESS = ['SUBMITTED', 'STEP_DONE', 'ASKED', 'NEEDS_YOU', 'HANDOFF'];
 const GATE_PROGRESS = ['SUBMITTED', 'STEP_DONE', 'ASKED', 'NEEDS_YOU'];
 const MAX_SESSIONS_WITHOUT_GATE = 8;
 
+// A session that ended because Claude Code isn't signed in ("OAuth session expired", "401", "Please run /login").
+export const loginTrouble = (error) => /oauth|authenticat|\b401\b|\/login|not logged in|logged out|signed out|unauthori[sz]ed|invalid api key|credentials? (?:expired|invalid)|session expired|token expired/i.test(String(error || ''));
+
 export class Runner extends EventEmitter {
   constructor(root, { log = () => {} } = {}) {
     super();
@@ -187,7 +190,8 @@ export class Runner extends EventEmitter {
       if (p.state === 'queued' && !abort.signal.aborted) {
         if (p.no_progress >= 2) pausedFor = `The last two sessions stopped without moving the project forward${result?.error ? ` (${result.error})` : ''}. Check the activity log, then resume.`;
         else if (p.without_gate >= MAX_SESSIONS_WITHOUT_GATE) pausedFor = `${MAX_SESSIONS_WITHOUT_GATE} sessions in a row ended without submitting or finishing a step. Check the journal, then resume.`;
-        if (pausedFor) { p.state = 'paused'; p.needs_you = { text: pausedFor, at: now() }; }
+        // `cause: login`: Claude Code's login expired or failed (the app offers Link Claude Code, then resumes)
+        if (pausedFor) { p.state = 'paused'; p.needs_you = { text: pausedFor, at: now(), ...(loginTrouble(result?.error) ? { cause: 'login' } : {}) }; }
       }
     });
     event(root, projectId, { event: 'SESSION_ENDED', details: `${result?.ok ? 'ok' : `error: ${result?.error}`} · ${minutes} min` });
