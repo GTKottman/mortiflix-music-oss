@@ -46,6 +46,8 @@ pub const FILMCRAFT_PANEL: &[Entry] = &[
     ("nodes.frameBeat7", "7", "Mortiflix Nodes"),
     ("nodes.frameBeat8", "8", "Mortiflix Nodes"),
     ("nodes.frameBeat9", "9", "Mortiflix Nodes"),
+    // Mortiflix FilmCraft: Undo in the Script panel brings back the newest deleted line
+    ("script.undo", "Cmd+Z", "Mortiflix Stage"),
     // Mortiflix FilmCraft: Loop in the loose preview (app-wide Cmd+L is Link)
     ("mortiflix.preview.loop", "Cmd+L", "Mortiflix Preview"),
 ];

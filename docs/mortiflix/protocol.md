@@ -146,7 +146,7 @@ questions and failed remakes.
 
 | Type | Params | Result |
 |---|---|---|
-| `script.get` | `{}` | `{project, rev, writing, version, beats: [{id, no, name, name_auto, colour, visual, target_sec, state, lines: [{id, words, changed, changed_at, read_only, remaking: {shots, lines}, feeds: [{node, kind: line\|shot, label, state, current, made, remaking}]}]}]}`. Line ids = voice line ids (`b01-1`), forever; `feeds` = the line's voice line and its beat's shots (the graph's `says` edges); while `writing`, the newest line is `read_only` |
+| `script.get` | `{}` | `{project, rev, writing, version, beats: [{id, no, name, name_auto, colour, visual, target_sec, state, lines: [{id, words, changed, changed_at, read_only, remaking: {shots, lines}, feeds: [{node, kind: line\|shot, label, state, current, made, remaking}]}], deleted: [{id, words, after, changed_at}]}]}`. Line ids = voice line ids (`b01-1`), forever; `feeds` = the line's voice line and its beat's shots (the graph's `says` edges); while `writing`, the newest line is `read_only` |
 | `script.edit` | one edit or `{edits: [edit…]}`; edit = `{beat, beat_name}` \| `{beat, line, words}` \| `{beat, add_after: line id \| key \| null, words, key?}` \| `{beat, line, delete: true \| false}` | `{project, beats, changed[], added[], keys: {key: id}, deleted[], restored[], renamed[], remaking: [{node, kind, edit}]}` (also the `script.changed` event) |
 
 The app (`crates/mortiflix-ui/src/script.rs`): the Script panel and the chat's script card share one editor and one
@@ -155,7 +155,9 @@ Kept changes are marked until **Save** (or Ctrl/Cmd+S) sends them all in one `sc
 them; a stage command that would leave with a draft asks first (Save and go on / Discard / Keep editing). The service
 writes them into `script/beats.json` and `voice/lines.json` and remakes only what used the changed words that already
 exists (a Fix each: the line's voice line and its beat's shots; versions kept); a deleted line's voice line is cut,
-`delete: false` brings it back. The panel reads the script again on `script.changed` / `node.changed` and shows
+`delete: false` brings it back. A delete stays undoable after Save: the line shows struck through in its place
+("deleted · Undo", from the beat's `deleted` list) and Undo or Ctrl/Cmd+Z in the Script panel (`script.undo`,
+panel-scoped) sends `delete: false`: the same line, words, links and voice line (its OK too), nothing remade. The panel reads the script again on `script.changed` / `node.changed` and shows
 "changed · remaking 1 shot and 1 voice line" until the remakes are in. The chat card's **Change the words** opens
 stage 1 with the first line's field open.
 

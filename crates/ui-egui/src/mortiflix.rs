@@ -60,6 +60,9 @@ pub const COMMANDS: &[UiCommand] = &[
     cmd("mortiflix.chooseFiles", "Choose Files for Mortiflix", &[], None),
     cmd("mortiflix.chooseFileAndSend", "Choose a File and Send It to Mortiflix", &[], None),
     cmd("mortiflix.reveal", "Show in Folder", &[], None),
+    // The Script panel (stage 1): Ctrl/Cmd+Z there brings back the newest deleted line, saved or not
+    // (panel-scoped "Mortiflix Stage" in the engine's FILMCRAFT_PANEL table; a text field keeps its own).
+    cmd("script.undo", "Undo in the Script", &[], None),
     // The node area (part 35): its keys are panel-scoped ("Mortiflix Nodes") in the engine's
     // FILMCRAFT_PANEL table, so ←/→ walk the film there and step frames everywhere else.
     cmd("nodes.prev", "Previous Node", &[], None),
@@ -342,6 +345,11 @@ pub fn route(app: &mut FilmcraftApp, ctx: &egui::Context, id: &str, params: &Val
     }
     if let Some(what) = id.strip_prefix("nodes.") {
         return Some(mfx::nodes::command(&mut app.mfx.core, what, params));
+    }
+    if id == "script.undo" {
+        let core = &mut app.mfx.core;
+        let undone = core.state.stage == 0 && core.state.script.undo_last(&mut core.service);
+        return Some(Ok(json!({"undone": undone})));
     }
     if let Some(r) = crate::mortiflix_into::route(app, id, params) {
         return Some(r);

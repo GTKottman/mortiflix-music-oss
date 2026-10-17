@@ -84,6 +84,18 @@ pub struct Beat {
     pub name_auto: bool,
     pub colour: Option<[u8; 3]>,
     pub lines: Vec<Line>,
+    /// Lines deleted and saved: the service keeps them (ids are forever), so Undo can bring them back.
+    pub deleted: Vec<GoneLine>,
+}
+
+/// A saved delete, as `script.get` lists it in its beat.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct GoneLine {
+    pub id: String,
+    pub words: String,
+    /// The line shown before it (None = first in the beat).
+    pub after: Option<String>,
 }
 
 impl Beat {
@@ -149,6 +161,18 @@ impl Script {
                         })
                     })
                     .collect();
+                let deleted = list(b, "deleted")
+                    .iter()
+                    .take(MAX_LINES)
+                    .filter_map(|l| {
+                        let id = text(l, "id", 24);
+                        (!id.is_empty()).then(|| GoneLine {
+                            id,
+                            words: text(l, "words", MAX_WORDS),
+                            after: Some(text(l, "after", 24)).filter(|a| !a.is_empty()),
+                        })
+                    })
+                    .collect();
                 Some(Beat {
                     id,
                     no: count(b, "no"),
@@ -156,6 +180,7 @@ impl Script {
                     name_auto: b.get("name_auto").and_then(Value::as_bool).unwrap_or(false),
                     colour,
                     lines,
+                    deleted,
                 })
             })
             .collect();
@@ -168,6 +193,11 @@ impl Script {
 
     pub fn beat(&self, id: &str) -> Option<&Beat> {
         self.beats.iter().find(|b| b.id == id)
+    }
+
+    /// The beat a line is in.
+    pub fn beat_of(&self, line: &str) -> Option<&Beat> {
+        self.beats.iter().find(|b| b.lines.iter().any(|l| l.id == line) || b.deleted.iter().any(|l| l.id == line))
     }
 
     /// The first line the owner can edit (the AI is not writing it).
@@ -297,6 +327,24 @@ impl Draft {
     }
 }
 
+/// A delete Undo (or Ctrl/Cmd+Z in the Script panel) can take back, newest last. Unsaved, it only
+/// leaves the draft; saved, Undo asks the service to bring the line back (`delete: false`): the same
+/// line, words and links, its voice line and shots as they were, nothing remade.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Deleted {
+    pub line: String,
+    pub beat: String,
+    pub words: String,
+    /// The line shown before it when it was deleted (None = first in the beat).
+    pub after: Option<String>,
+    /// The delete was saved.
+    pub saved: bool,
+}
+
+/// Most deletes kept for Undo.
+const MAX_UNDO: usize = 100;
+
 /// What the open text field edits.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", content = "id", rename_all = "camelCase")]
@@ -336,6 +384,10 @@ pub struct ScriptState {
     pub saving: bool,
     /// The last save's outcome or a read error, in plain words.
     pub note: String,
+    /// Deletes Undo can take back, newest last (this session, this project).
+    pub deletes: Vec<Deleted>,
+    #[serde(skip)]
+    restoring: Option<(u64, String)>,
     #[serde(skip)]
     loaded_for: Option<String>,
     #[serde(skip)]
@@ -437,7 +489,85 @@ impl ScriptState {
     pub fn discard(&mut self) {
         self.editing = None;
         self.draft = Draft { next_key: self.draft.next_key, ..Draft::default() };
+        self.deletes.retain(|d| d.saved);
         self.note = "Changes dropped.".into();
+    }
+
+    /// Delete a line in the draft (Delete): a saved line is kept for Undo, a new one just goes.
+    pub fn delete_line(&mut self, id: &str) {
+        if self.editing.as_ref().is_some_and(|e| e.target == Target::Line(id.to_string()) || e.target == Target::New(id.to_string())) {
+            self.editing = None;
+        }
+        if let Some(beat) = self.script.beat_of(id) {
+            let at = beat.lines.iter().position(|l| l.id == id);
+            let after = at.and_then(|i| i.checked_sub(1)).and_then(|i| beat.lines.get(i)).map(|l| l.id.clone());
+            let words = self.draft.words.get(id).cloned().or_else(|| self.script.line(id).map(|l| l.words.clone())).unwrap_or_default();
+            self.deletes.retain(|d| d.line != id);
+            self.deletes.push(Deleted { line: id.to_string(), beat: beat.id.clone(), words, after, saved: false });
+            if self.deletes.len() > MAX_UNDO {
+                self.deletes.remove(0);
+            }
+        }
+        self.draft.delete(id);
+    }
+
+    /// A saved delete Undo can still take back (shown in its place with "deleted · Undo").
+    pub fn saved_delete(&self, id: &str) -> Option<&Deleted> {
+        self.deletes.iter().find(|d| d.saved && d.line == id)
+    }
+
+    /// Saved deletes shown in `beat` right after `after` (None = at the top), oldest first: the
+    /// service's own record of each (words, place), else what was known when it was deleted.
+    pub fn gone_after(&self, beat: &Beat, after: Option<&str>) -> Vec<GoneLine> {
+        let mut out: Vec<GoneLine> = Vec::new();
+        for d in self.deletes.iter().filter(|d| d.saved && d.beat == beat.id) {
+            let g = beat.deleted.iter().find(|g| g.id == d.line).cloned().unwrap_or_else(|| GoneLine {
+                id: d.line.clone(),
+                words: d.words.clone(),
+                after: d.after.clone(),
+            });
+            // a place that is gone too (its line deleted since) falls back to the top
+            let known = g.after.as_deref().is_none_or(|a| beat.lines.iter().any(|l| l.id == a));
+            let place = if known { g.after.as_deref() } else { None };
+            if place == after && beat.lines.iter().all(|l| l.id != g.id) {
+                out.push(g);
+            }
+        }
+        out
+    }
+
+    /// A restore is on its way.
+    pub fn restoring(&self) -> Option<&str> {
+        self.restoring.as_ref().map(|(_, l)| l.as_str())
+    }
+
+    /// Undo one delete (the Undo link): an unsaved one leaves the draft; a saved one is brought back
+    /// by the service (`script.edit {beat, line, delete: false}`).
+    pub fn undo(&mut self, id: &str, service: &mut Service) {
+        let Some(i) = self.deletes.iter().position(|d| d.line == id) else {
+            self.draft.undo_delete(id);
+            return;
+        };
+        if self.deletes.get(i).is_some_and(|d| !d.saved) {
+            self.deletes.remove(i);
+            self.draft.undo_delete(id);
+            return;
+        }
+        if self.restoring.is_some() {
+            return;
+        }
+        let Some(d) = self.deletes.get(i) else { return };
+        let rid = service.request("script.edit", json!({"beat": d.beat, "line": d.line, "delete": false}));
+        self.restoring = Some((rid, d.line.clone()));
+        self.note = "Bringing the line back…".into();
+    }
+
+    /// Ctrl/Cmd+Z in the Script panel: undo the newest delete (unsaved or saved). False when there
+    /// is none.
+    pub fn undo_last(&mut self, service: &mut Service) -> bool {
+        let Some(last) = self.deletes.last().map(|d| d.line.clone()) else { return false };
+        self.undo(&last, service);
+        true
     }
 
     /// Ask for the script again soon (an event said it changed).
@@ -515,6 +645,14 @@ pub fn tick(state: &mut MfxState, service: &mut Service) {
         let draft = st.saving_req.take().map(|(_, d)| d).unwrap_or_default();
         st.saving = false;
         if r.ok {
+            let gone: BTreeSet<String> =
+                r.result.get("deleted").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect()).unwrap_or_default();
+            st.deletes.retain(|d| d.saved || draft.deleted.contains(&d.line) || st.draft.deleted.contains(&d.line));
+            for d in &mut st.deletes {
+                if gone.contains(&d.line) || draft.deleted.contains(&d.line) {
+                    d.saved = true;
+                }
+            }
             let shots = r
                 .result
                 .get("remaking")
@@ -532,6 +670,18 @@ pub fn tick(state: &mut MfxState, service: &mut Service) {
         } else {
             st.draft.merge_back(draft);
             st.note = format!("Couldn't save: {}", text(&r.error, "message", 200));
+        }
+        st.fetch_soon = true;
+    }
+    if let Some((id, line)) = st.restoring.clone()
+        && let Some(r) = service.take_reply(id)
+    {
+        st.restoring = None;
+        if r.ok {
+            st.deletes.retain(|d| d.line != line);
+            st.note = "Line back: its voice line and shots are as they were, nothing remade.".into();
+        } else {
+            st.note = format!("Couldn't bring the line back: {}", text(&r.error, "message", 200));
         }
         st.fetch_soon = true;
     }
@@ -730,10 +880,12 @@ fn beat_block(ui: &mut egui::Ui, ctx: &mut MfxCtx, scope: &str, beat: &Beat, com
                 let lines: Vec<&Line> = if compact && !open { beat.lines.iter().take(1).collect() } else { beat.lines.iter().collect() };
                 let hidden = beat.lines.len().saturating_sub(lines.len());
                 let mut prev: Option<String> = None;
-                // new lines at the very top of the beat
+                // new lines and saved deletes (with Undo) at the very top of the beat
+                gone_rows(ui, ctx, scope, beat, None, compact);
                 new_lines(ui, ctx, scope, beat, None, compact);
                 for line in lines {
                     line_row(ui, ctx, scope, line, compact);
+                    gone_rows(ui, ctx, scope, beat, Some(&line.id), compact);
                     new_lines(ui, ctx, scope, beat, Some(line.id.clone()), compact);
                     prev = Some(line.id.clone());
                 }
@@ -758,6 +910,39 @@ fn beat_block(ui: &mut egui::Ui, ctx: &mut MfxCtx, scope: &str, beat: &Beat, com
     // the beat's colour bar down its left edge (the number beside it: never colour alone)
     let bar = Rect::from_min_max(pos2(top.x, top.y + 2.0), pos2(top.x + 3.0, inner.rect.max.y - 2.0));
     ui.painter().rect_filled(bar, 1.0, colour);
+}
+
+/// Saved deletes right after `after` (None = top of the beat): the words struck through, "deleted ·
+/// Undo". Undo brings the same line back with its voice line and shots, nothing remade.
+fn gone_rows(ui: &mut egui::Ui, ctx: &mut MfxCtx, scope: &str, beat: &Beat, after: Option<&str>, compact: bool) {
+    let t = ctx.theme;
+    let size = if compact { 12.0 } else { 13.0 };
+    for g in ctx.state.script.gone_after(beat, after) {
+        let busy = ctx.state.script.restoring() == Some(g.id.as_str());
+        ui.horizontal_top(|ui| {
+            let (gutter, _) = ui.allocate_exact_size(vec2(10.0, size + 4.0), Sense::hover());
+            ui.painter().circle_stroke(pos2(gutter.center().x, gutter.center().y + 1.0), 3.0, Stroke::new(1.0, t.text_faint));
+            ui.vertical(|ui| {
+                let words = if g.words.is_empty() { "(empty)".to_string() } else { g.words.clone() };
+                let r = ui.add(egui::Label::new(RichText::new(words).size(size).color(t.text_faint).strikethrough()).wrap());
+                ctx.auto(&format!("mfx.script.{scope}.gone.{}", g.id), &r, "Deleted line");
+                ui.horizontal_wrapped(|ui| {
+                    ui.spacing_mut().item_spacing.x = 6.0;
+                    ui.label(RichText::new(if busy { "deleted · bringing it back…" } else { "deleted" }).size(11.0).color(t.text_faint));
+                    if !busy {
+                        let undo = ui
+                            .add(egui::Label::new(RichText::new("Undo").size(11.0).color(crate::chat::LINK).underline()).sense(Sense::click()))
+                            .on_hover_text("Bring this line back (Ctrl+Z): its words, its voice line and its shots, nothing remade");
+                        if undo.clicked() {
+                            let MfxCtx { state, service, .. } = ctx;
+                            state.script.undo(&g.id, service);
+                        }
+                        ctx.auto(&format!("mfx.script.{scope}.undo.{}", g.id), &undo, "Undo delete");
+                    }
+                });
+            });
+        });
+    }
 }
 
 /// Lines added in the draft right after `after` (None = at the top of the beat), in order.
@@ -844,7 +1029,8 @@ fn meta(ui: &mut egui::Ui, ctx: &mut MfxCtx, scope: &str, line: &Line, compact: 
         if deleted {
             let undo = ui.add(egui::Label::new(RichText::new("Undo").size(11.0).color(crate::chat::LINK).underline()).sense(Sense::click()));
             if undo.clicked() {
-                ctx.state.script.draft.undo_delete(&line.id);
+                let MfxCtx { state, service, .. } = ctx;
+                state.script.undo(&line.id, service);
             }
             ctx.auto(&format!("mfx.script.{scope}.undo.{}", line.id), &undo, "Undo delete");
         }
@@ -868,13 +1054,9 @@ fn meta(ui: &mut egui::Ui, ctx: &mut MfxCtx, scope: &str, line: &Line, compact: 
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 let del = ui
                     .add(egui::Label::new(RichText::new("Delete").size(11.0).color(t.text_faint)).sense(Sense::click()))
-                    .on_hover_text("Delete this line (Undo until you save)");
+                    .on_hover_text("Delete this line (Undo or Ctrl+Z brings it back, even after Save)");
                 if del.clicked() {
-                    if ctx.state.script.editing.as_ref().is_some_and(|e| e.target == Target::Line(line.id.clone()) || e.target == Target::New(line.id.clone()))
-                    {
-                        ctx.state.script.editing = None;
-                    }
-                    ctx.state.script.draft.delete(&line.id);
+                    ctx.state.script.delete_line(&line.id);
                 }
                 ctx.auto(&format!("mfx.script.{scope}.delete.{}", line.id), &del, "Delete line");
             });
@@ -1038,6 +1220,59 @@ mod tests {
         assert!(state.script.note.starts_with("Couldn't save"), "{}", state.script.note);
         assert_eq!(state.script.draft.words.get("b01-1").map(String::as_str), Some("New words."));
         assert!(state.script.draft.deleted.contains("b01-2"));
+    }
+
+    /// Owner, 2026-10-16: a deleted line must still come back after Save (Undo / Ctrl+Z), with its
+    /// words and links; the service keeps it and brings it back as it was.
+    #[test]
+    fn a_saved_delete_can_be_undone() {
+        let (mut service, sent) = Service::fake();
+        let mut state = MfxState { script: ScriptState { script: sample(), ..ScriptState::default() }, ..MfxState::default() };
+        state.script.loaded_for = state.project_id.clone();
+        state.script.delete_line("b01-2");
+        assert_eq!(state.script.deletes.len(), 1);
+        assert!(!state.script.deletes[0].saved);
+        assert_eq!(state.script.deletes[0].after.as_deref(), Some("b01-1"));
+        save(&mut state.script, &mut service);
+        let edit = sent.try_iter().find(|m| m["type"] == "script.edit").unwrap();
+        assert_eq!(edit["params"]["edits"][0], json!({"beat": "b01", "line": "b01-2", "delete": true}));
+        service.answer(edit["id"].as_u64().unwrap(), true, json!({"deleted": ["b01-2"], "remaking": []}));
+        tick(&mut state, &mut service);
+        assert!(state.script.deletes[0].saved, "saved: Undo now asks the service");
+        // the fresh script lists it as deleted, in its place
+        let mut fresh = sample();
+        fresh.beats[0].lines.retain(|l| l.id != "b01-2");
+        fresh.beats[0].deleted.push(GoneLine { id: "b01-2".into(), words: "It grows.".into(), after: Some("b01-1".into()) });
+        state.script.script = fresh;
+        let beat = state.script.script.beats[0].clone();
+        assert_eq!(state.script.gone_after(&beat, Some("b01-1")).len(), 1);
+        assert!(state.script.gone_after(&beat, None).is_empty());
+        // Ctrl+Z: brought back by the service, nothing in the draft
+        assert!(state.script.undo_last(&mut service));
+        let back = sent.try_iter().find(|m| m["type"] == "script.edit").unwrap();
+        assert_eq!(back["params"], json!({"beat": "b01", "line": "b01-2", "delete": false}));
+        assert_eq!(state.script.restoring(), Some("b01-2"));
+        assert!(state.script.draft.is_empty());
+        service.answer(back["id"].as_u64().unwrap(), true, json!({"restored": ["b01-2"]}));
+        tick(&mut state, &mut service);
+        assert!(state.script.deletes.is_empty());
+        assert!(state.script.note.starts_with("Line back"), "{}", state.script.note);
+        assert!(!state.script.undo_last(&mut service), "nothing left to undo");
+    }
+
+    #[test]
+    fn ctrl_z_takes_back_an_unsaved_delete_first_and_discard_forgets_it() {
+        let mut service = Service::default();
+        let mut st = ScriptState { script: sample(), ..ScriptState::default() };
+        st.delete_line("b01-1");
+        st.delete_line("b01-2");
+        assert!(st.undo_last(&mut service));
+        assert_eq!(st.draft.deleted.iter().collect::<Vec<_>>(), ["b01-1"]);
+        st.undo("b01-1", &mut service);
+        assert!(st.draft.is_empty() && st.deletes.is_empty());
+        st.delete_line("b01-1");
+        st.discard();
+        assert!(st.deletes.is_empty());
     }
 
     #[test]

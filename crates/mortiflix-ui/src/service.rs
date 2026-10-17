@@ -355,6 +355,22 @@ impl Service {
     }
 }
 
+/// A connected service for other modules' tests: what the app sends comes out of the receiver,
+/// [`Service::answer`] puts a reply in.
+#[cfg(test)]
+impl Service {
+    pub(crate) fn fake() -> (Service, Receiver<Value>) {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut s = Service::default();
+        s.tx = Some(tx);
+        s.status = ServiceStatus::Connected { version: "test".into() };
+        (s, rx)
+    }
+    pub(crate) fn answer(&mut self, id: u64, ok: bool, result: Value) {
+        self.push_reply(Reply { id, ok, result, error: if ok { Value::Null } else { json!({"code": "failed", "message": "no"}) } });
+    }
+}
+
 fn error_text(error: &Value) -> String {
     let s = error.get("message").and_then(Value::as_str).or_else(|| error.as_str()).unwrap_or("error");
     s.chars().take(200).collect()
