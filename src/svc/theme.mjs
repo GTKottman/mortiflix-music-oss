@@ -10,7 +10,9 @@ import { paths, loadConfig, UserError } from '../studio.mjs';
 
 const str = (v, n = 200) => (v === undefined || v === null ? null : String(v).slice(0, n));
 const list = (v, n = 12) => (Array.isArray(v) ? v.slice(0, n).map((x) => String(x).slice(0, 80)).filter(Boolean) : []);
-const clampInt = (v, lo, hi) => (Number.isFinite(Number(v)) ? Math.min(hi, Math.max(lo, Math.round(Number(v)))) : null);
+// A missing value stays missing: Number(null), Number('') and Number(false) are 0, which would clamp to `lo`.
+const clampInt = (v, lo, hi) => (v === null || v === undefined || typeof v === 'boolean' || (typeof v === 'string' && !v.trim()) || !Number.isFinite(Number(v))
+  ? null : Math.min(hi, Math.max(lo, Math.round(Number(v)))));
 
 // Only the fields doc 33 names, each bounded: the theme is shown to sessions.
 export function cleanTheme(t = {}, { forPreset = false } = {}) {

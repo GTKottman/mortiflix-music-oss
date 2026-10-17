@@ -25,7 +25,7 @@ export async function componentsStatus(root) {
     const info = TOOL_INFO[c.id] || {};
     const s = st[c.id] || {};
     return { id: c.id, name: info.name || c.id, for: c.for, what: info.what || '', where: info.where || '', size: info.size || '', default: c.on, needs: c.needs || null,
-      installed: s.ok === true, detail: s.detail || (st.error ? `status unavailable: ${st.error}` : ''), path: s.path || null };
+      installed: typeof s.installed === 'boolean' ? s.installed : s.ok === true, detail: s.detail || (st.error ? `status unavailable: ${st.error}` : ''), path: s.path || null };
   });
 }
 

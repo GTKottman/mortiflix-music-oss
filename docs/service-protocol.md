@@ -89,7 +89,7 @@ questions and failed remakes.
 
 | Type | Params | Result |
 |---|---|---|
-| `graph.get` | `{}` | `{rev, fps, order: {beats, shots, frames, lines, cues, transitions, film}, beats: [{id, no, title, colour}], nodes: [...], edges: [{from, to, kind: next\|says\|look\|uses\|under}], assets, open_edits, problems}`; each node: `id, kind, label, title, beat, beat_no, colour, state, owner, current, plays, versions[{v, path, from_sec, to_sec}], pending, failed, edits, pos, default_pos, mix, uses` |
+| `graph.get` | `{}` | `{rev, fps, order: {beats, shots, frames, lines, cues, transitions, film}, beats: [{id, no, title, colour}], nodes: [...], edges: [{from, to, kind: next\|says\|look\|uses\|under}], assets, open_edits, problems}`; each node: `id, kind, label, title, beat, beat_no, colour, state, owner, current, plays, versions[{v, path, from_sec, to_sec, still}], pending, failed, edits, pos, default_pos, mix, uses`. `still` = a PNG of a shot version's first frame (made once with ffmpeg in the background; null until it exists; a picture version is its own still). `assets[]` carry `pos` (free placement; `node.move` takes asset ids) |
 | `node.list` | `{}` | the foundation's flat list (kept) |
 | `node.edit` | `{node, action: ok\|fix\|cut\|clear, text?, bars?, part?}` | OK / Fix / Cut it; every press is a grey line in the chat |
 | `node.move` | `{positions: {id: [x, y] \| null}}` | `{moved}`: free placement, saved per project |
@@ -109,7 +109,7 @@ questions and failed remakes.
 
 | Type | Params | Result |
 |---|---|---|
-| `handoff.plan` | `{}` | `{sequence: {name, width, height, fps, length_sec}, tracks, bins, clips: [{node, kind, track, bin, name, label, version, start_sec, dur_sec, media}], markers: [{kind: chapter\|comment, time_sec, name, label, comment}], captions, your_assets, older_versions, cut_on_board, notes, previews}`; transitions carry `native` + the FilmCraft transition name |
+| `handoff.plan` | `{}` | `{fcproj, sequence: {name, width, height, fps, length_sec}, tracks, bins, clips: [{node, kind, track, bin, name, label, version, start_sec, dur_sec, media}], markers: [{kind: chapter\|comment, time_sec, name, label, comment}], captions, your_assets, older_versions, cut_on_board, notes, previews}`; `fcproj` = where the app saves the FilmCraft project (the one it saved before, else `<studio>/state/<id>/filmcraft/<title>.fcproj`); transitions carry `native` + the FilmCraft transition name |
 | `handoff.done` | `{map: {clips: [{node, version, clip, item}], fcproj?, rev?}}` | saves what the app imported (done once) |
 | `handoff.get` | `{}` | `{map}` |
 | `handoff.swaps` | `{}` | `{imported, swaps: [{node, version, clip, item, path, from_sec, to_sec}]}`: newer versions to swap in (`clip.replaceFromBin`) |
@@ -155,7 +155,7 @@ Cards: `script {beats}`, `looks {frames, using}`, `shots`/`transitions {nodes}`,
 | `keys.list` | `{}` | `[{id, name, for, get, set, source}]`, never the values |
 | `keys.set` / `keys.remove` | `{id, value}` / `{id}` | `anthropic`, `elevenlabs`, `uploadpost`, `postiz` (secrets.json) and `gemini` (session.env) |
 | `keys.check` | `{id}` | a free check of a saved key (network, only on request) |
-| `components.status` | `{}` | `{components: [{id, name, for, what, where, size, default, needs, installed, detail, path}], installing: [id]\|null}`: the installer's components (blender, blender-addons, chrome, strudel, transitions, uv, comfyui) |
+| `components.status` | `{}` | `{components: [{id, name, for, what, where, size, default, needs, installed, detail, path}], installing: [id]\|null}`: the installer's components (blender, blender-addons, chrome, strudel, transitions, uv, comfyui). ComfyUI is `installed` only when it is the studio's own (`tools/ComfyUI`): another server on its port is not counted |
 | `components.install` | `{ids?: [id] \| "default" \| "all"}` | `{started: [id]}` at once; then `components.progress` events and one `components.done`. `busy` while one runs. A failed component never stops the others |
 | `setup.download` | `{label?, files: [{url, dest, size, sha256}]}` | `{job}`: https only, `dest` absolute; each file streams to `<dest>.part`, size + SHA-256 checked, then renamed; files already there are skipped. Only after the user said yes (the app shows size, source, licence) |
 | `setup.install` | `{tool}` | `{job}`: one of setup.mjs's components (`TOOLS`: chrome, strudel, transitions, blender, blender-addons, browser-harness, comfyui, daw-engine, craft) with its own installer (`installTool`), after the user said yes |

@@ -253,12 +253,17 @@ function blenderStatus(root) {
 async function comfyStatus(root) {
   const url = voiceConfig(root).qwen.url;
   const ws = join(toolsDir(root), 'ComfyUI');
+  // Installed means the studio's own ComfyUI (tools/ComfyUI): any other server on the port is not counted.
+  const own = existsSync(join(ws, 'main.py'));
   let live = null;
   try { live = await new qwen.ComfyUI({ url }).status(); } catch { /* not reachable */ }
-  if (live?.ok) return { ok: true, detail: `ComfyUI at ${url} with the TTS Audio Suite`, url };
-  if (live && !live.ok && live.comfyui) return { ok: false, detail: `ComfyUI is running at ${url} but the TTS Audio Suite isn't installed`, url, running: true };
-  if (existsSync(join(ws, 'main.py'))) return { ok: false, installed: true, path: ws, detail: `installed in ${ws}, not running` };
-  return { ok: false, detail: 'not installed' };
+  if (!own) {
+    if (live?.ok || live?.comfyui) return { ok: false, installed: false, running: true, url, detail: `not installed (a ComfyUI that isn't the studio's own is running at ${url})` };
+    return { ok: false, installed: false, detail: 'not installed' };
+  }
+  if (live?.ok) return { ok: true, installed: true, path: ws, detail: `ComfyUI at ${url} with the TTS Audio Suite`, url };
+  if (live && !live.ok && live.comfyui) return { ok: false, installed: true, path: ws, detail: `ComfyUI is running at ${url} but the TTS Audio Suite isn't installed`, url, running: true };
+  return { ok: false, installed: true, path: ws, detail: `installed in ${ws}, not running` };
 }
 
 // The sound engine: installed, its --version, and its self-test (1 s of a tone rendered into memory, no sound device).

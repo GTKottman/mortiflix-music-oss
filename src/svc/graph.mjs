@@ -6,7 +6,8 @@
 //   picks.json   which version plays, when it isn't the newest
 //   mix.json     per line / cue: level, ducking, hand-set timing, voice, length in bars
 //   filmcraft-app.json  what the app imported (node → clip), so a new version is swapped in, never rebuilt
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync, rmSync } from 'node:fs';
+import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { canvasView, canvasPaths, loadGraph, nodeAction, requestNewPiece, CanvasError } from '../canvas.mjs';
 import { projectPaths, loadProject, event } from '../projects.mjs';
@@ -52,6 +53,52 @@ function defaultPos(g, film) {
   return pos;
 }
 
+// A PNG still per shot version (its first frame, made once with ffmpeg in the background, two at a time): graph.get
+// names it (`still`) as soon as the file exists, and the node area and the chat show it. A picture version is its own
+// still. A frame that can't be made is not tried again while the service runs.
+const VIDEO = /\.(mp4|mov|mkv|webm|m4v|avi)$/i;
+const PICTURE = /\.(png|jpe?g|webp)$/i;
+const stills = { queue: [], running: 0, failed: new Set(), queued: new Set() };
+export function stillFor(state, node, v) {
+  if (node.kind !== 'shot' || !v?.path) return null;
+  if (PICTURE.test(v.path)) return v.path;
+  if (!VIDEO.test(v.path)) return null;
+  const file = join(state, 'stills', `${String(node.id).replace(/[^a-z0-9_-]/gi, '')}-v${Number(v.v) || 0}.png`);
+  if (existsSync(file)) return file;
+  if (!stills.failed.has(file) && !stills.queued.has(file) && existsSync(v.path)) {
+    stills.queued.add(file);
+    stills.queue.push({ src: v.path, at: Math.max(0, Number(v.from_sec) || 0), file });
+    nextStill();
+  }
+  return null;
+}
+function nextStill() {
+  while (stills.running < 2 && stills.queue.length) {
+    const job = stills.queue.shift();
+    stills.running++;
+    const part = `${job.file}.part.png`;
+    try { mkdirSync(join(job.file, '..'), { recursive: true }); } catch { /* the spawn reports it */ }
+    let p;
+    try {
+      p = spawn('ffmpeg', ['-y', '-loglevel', 'error', '-ss', String(job.at), '-i', job.src, '-frames:v', '1', '-vf', 'scale=480:-2', part], { stdio: 'ignore' });
+    } catch { p = null; }
+    const done = (ok) => {
+      stills.running--;
+      stills.queued.delete(job.file);
+      try { if (ok && existsSync(part)) renameSync(part, job.file); else { stills.failed.add(job.file); rmSync(part, { force: true }); } } catch { stills.failed.add(job.file); }
+      nextStill();
+    };
+    if (!p) { done(false); continue; }
+    p.on('error', () => done(false));
+    p.on('close', (code) => done(code === 0));
+  }
+}
+// Waits until every queued still is made (tests).
+export async function stillsSettled(timeoutMs = 20_000) {
+  const t0 = Date.now();
+  while ((stills.running || stills.queue.length) && Date.now() - t0 < timeoutMs) await new Promise((r) => setTimeout(r, 50));
+}
+
 // The graph for the node area: every node with its beat number and colour, state, versions (absolute paths), which
 // version plays, position, the owner's mix settings, the assets it uses; the edges; the film order.
 export function graphView(root, id) {
@@ -69,7 +116,7 @@ export function graphView(root, id) {
     return {
       ...n,
       beat_no: n.beat ? beatNo[n.beat] ?? null : null,
-      versions: (n.versions || []).map((v) => ({ ...v, path: v.file ? join(state, v.file) : null })),
+      versions: (n.versions || []).map((v) => { const path = v.file ? join(state, v.file) : null; return { ...v, path, still: stillFor(state, n, { ...v, path }) }; }),
       plays: p?.v ?? null,
       pos: layout.positions[n.id] || null,
       default_pos: dpos[n.id] || null,
@@ -93,7 +140,9 @@ export function graphView(root, id) {
     project: id, rev: g.rev, fps: g.fps, colours: g.colours, problems: g.problems, open_edits: g.open_edits,
     order: { ...g.order, film },
     beats: g.order.beats.map((b, i) => ({ id: b, no: i + 1, title: g.nodes[b]?.title || '', colour: g.nodes[b]?.colour || null })),
-    nodes, edges, assets,
+    nodes, edges,
+    // your own files are input nodes too: where you dropped them (node.move takes asset ids)
+    assets: assets.map((a) => ({ ...a, pos: layout.positions[a.id] || null })),
   };
 }
 
@@ -339,7 +388,7 @@ export function handoffPlan(root, id) {
   const captions = sound.voice.filter((l) => l.dur_sec).map((l) => ({ node: l.node, text: l.words, start_sec: l.start_sec, end_sec: round3(l.start_sec + l.dur_sec) }));
   const tracks = ['V2 Your assets', 'V1 Shots', 'A1 Voice', 'A2 Music', 'A3 Sounds', 'C1 Captions'].filter((t) => (t.startsWith('V1')) || (t.startsWith('A1') && sound.voice.some((l) => l.path)) || (t.startsWith('A2') && sound.music) || (t.startsWith('C1') && captions.length) || (t.startsWith('V2') && false));
   return {
-    format: 'mortiflix.handoff', version: 1, project: id, title: project.title, rev: gv.rev,
+    format: 'mortiflix.handoff', version: 1, project: id, title: project.title, rev: gv.rev, fcproj: handoffFcproj(root, id, project.title),
     sequence: { name: project.title, width, height, fps: gv.fps || 30, length_sec },
     tracks, bins: ['Shots', ...new Set(clips.filter((c) => c.bin?.startsWith('Shots/')).map((c) => c.bin)), 'Transitions', 'Voice', 'Music', 'Music stems', 'Sounds', 'Your assets', 'Older versions', 'Cut on the board'],
     clips, markers, captions,
@@ -348,6 +397,15 @@ export function handoffPlan(root, id) {
     notes: `Mortiflix project ${id}, graph rev ${gv.rev}. Click a clip, then ask in the Mortiflix panel.`,
     previews: shots.filter((s) => s.media.kind !== 'video').length,
   };
+}
+
+// Where the app saves the FilmCraft project: the one it saved before, else beside the project's record
+// (`<studio>/state/<id>/filmcraft/<title>.fcproj`, the title kept to letters, digits, space, `-`, `_` and `.`).
+export function handoffFcproj(root, id, title) {
+  const saved = loadHandoff(root, id)?.fcproj;
+  if (saved) return saved;
+  const name = Array.from(String(title || '')).filter((c) => /[\p{L}\p{N} ._-]/u.test(c)).join('').trim().slice(0, 120) || 'Mortiflix';
+  return join(projectPaths(root, id).state, 'filmcraft', `${name}.fcproj`);
 }
 
 // What the app imported (doc 38 "done once"): saved so later versions are swapped in, never rebuilt.
