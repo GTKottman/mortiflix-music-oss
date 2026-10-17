@@ -3,7 +3,7 @@
 //! The Linux shell (Wayland *and* X11) resolves the window to a `.desktop` file by app id (set in
 //! `main.rs` via `eframe`'s `with_app_id`) and takes the taskbar / window-list icon from its
 //! `Icon=` entry in the hicolor theme. Packaging installs both
-//! (`packaging/linux/ai.storyteller.filmcraft.desktop` and the hicolor PNGs) — but a source-tree
+//! (`packaging/linux/com.mortiflix.filmcraft.desktop` and the hicolor PNGs) — but a source-tree
 //! run has neither, so KDE/GNOME fall back to the generic Wayland icon. The fix is to ensure a
 //! user-level entry for those runs: when no entry for the app id exists in any XDG data dir,
 //! install one (plus the hicolor icon PNGs, read from this checkout's `assets/app-icon`, so
@@ -73,13 +73,13 @@ fn ensure() -> Result<(), DevIconError> {
         break; // a dev entry from another checkout: fall through and rewrite it
     }
     for size in ICON_SIZES {
-        let rel = std::path::Path::new("hicolor").join(format!("{size}x{size}")).join("apps").join(format!("{}.png", crate::APP_ID));
-        let dest = user_dir.join("icons").join(&rel);
+        let dir = std::path::Path::new("hicolor").join(format!("{size}x{size}")).join("apps");
+        let dest = user_dir.join("icons").join(dir.join(format!("{}.png", crate::APP_ID)));
         if !dest.is_file()
             && let Some(parent) = dest.parent()
         {
             // The checkout this binary was built from; a missing icon only costs the icon.
-            let src = std::path::Path::new(ICON_DIR).join(&rel);
+            let src = std::path::Path::new(ICON_DIR).join(dir.join(ICON_SOURCE));
             if !src.is_file() {
                 log::warn!("dev desktop entry: icon {} not found; skipping it", src.display());
                 continue;
@@ -90,10 +90,15 @@ fn ensure() -> Result<(), DevIconError> {
     }
     let applications = user_dir.join("applications");
     std::fs::create_dir_all(&applications).map_err(DevIconError::Io)?;
-    let body = desktop_file_content(crate::APP_ID, "FilmCraft", exe);
+    let body = desktop_file_content(crate::APP_ID, APP_NAME, exe);
     std::fs::write(applications.join(&file_name), body).map_err(DevIconError::Io)?;
     Ok(())
 }
+
+/// The app's name in the menu (as in the packaged `.desktop`).
+const APP_NAME: &str = "Mortiflix FilmCraft";
+/// The icon files keep FilmCraft's names in the checkout; installed under this app's id.
+const ICON_SOURCE: &str = "ai.storyteller.filmcraft.png";
 
 /// The hicolor icon sizes installed for the taskbar (a subset large enough for panel and topbar;
 /// the shell picks the nearest size, so 256 and 512 cover both).
@@ -199,7 +204,7 @@ fn unescape_string_value(value: &str) -> String {
     out
 }
 
-/// The `.desktop` body: same fields as `packaging/linux/ai.storyteller.filmcraft.desktop`, with
+/// The `.desktop` body: same fields as `packaging/linux/com.mortiflix.filmcraft.desktop`, with
 /// `Exec` pointing at this exact binary (a dev build isn't on `$PATH`, so `TryExec` is left out)
 /// and the icon by theme name.
 fn desktop_file_content(app_id: &str, name: &str, exe: &str) -> String {
@@ -208,7 +213,7 @@ fn desktop_file_content(app_id: &str, name: &str, exe: &str) -> String {
     out.push_str("Type=Application\n");
     out.push_str(&format!("Name={name}\n"));
     out.push_str("GenericName=Video Editor\n");
-    out.push_str("Comment=Edit video, color and sound\n");
+    out.push_str("Comment=Make a video with AI, step by step, then edit and render it (based on FilmCraft)\n");
     out.push_str(&format!("Exec=\"{}\" %F\n", escape_exec_argument(exe)));
     out.push_str(&format!("Icon={app_id}\n"));
     out.push_str("Terminal=false\n");
@@ -263,14 +268,14 @@ mod tests {
     #[test]
     fn icon_sources_exist_in_the_checkout() {
         for size in ICON_SIZES {
-            let p = std::path::Path::new(ICON_DIR).join(format!("hicolor/{size}x{size}/apps/ai.storyteller.filmcraft.png"));
+            let p = std::path::Path::new(ICON_DIR).join(format!("hicolor/{size}x{size}/apps/{ICON_SOURCE}"));
             assert!(p.is_file(), "{}", p.display());
         }
     }
 
     #[test]
     fn desktop_file_matches_the_packaged_fields() {
-        let packaged = include_str!("../../../packaging/linux/ai.storyteller.filmcraft.desktop");
+        let packaged = include_str!("../../../packaging/linux/com.mortiflix.filmcraft.desktop");
         let expected = packaged
             .lines()
             .filter(|l| !l.starts_with("TryExec="))
@@ -278,7 +283,7 @@ mod tests {
             .collect::<Vec<_>>()
             .join("\n")
             + "\n";
-        let body = desktop_file_content("ai.storyteller.filmcraft", "FilmCraft", "/target/debug/filmcraft");
+        let body = desktop_file_content("com.mortiflix.filmcraft", APP_NAME, "/target/debug/filmcraft");
         assert_eq!(body, expected);
     }
 
@@ -298,7 +303,7 @@ mod tests {
     #[test]
     fn exec_round_trips_through_both_layers() {
         for exe in ["/home/dev/Projects/filmcraft/target/debug/filmcraft", "/opt/film craft/filmcraft", "/a$b\"c`d\\e"] {
-            let body = desktop_file_content("ai.storyteller.filmcraft", "FilmCraft", exe);
+            let body = desktop_file_content("com.mortiflix.filmcraft", APP_NAME, exe);
             assert_eq!(exec_line(&body).as_deref(), Some(exe));
             assert!(desktop_file_exec_is_ours(&body, exe));
         }
@@ -308,7 +313,7 @@ mod tests {
     /// prefix, and a packaged `Exec=filmcraft` are all someone else's entry.
     #[test]
     fn desktop_file_exec_is_ours_matches_only_our_binary() {
-        let body = desktop_file_content("ai.storyteller.filmcraft", "FilmCraft", "/a/filmcraft");
+        let body = desktop_file_content("com.mortiflix.filmcraft", APP_NAME, "/a/filmcraft");
         assert!(!desktop_file_exec_is_ours(&body, "/a/filmcraft-old"));
         assert!(!desktop_file_exec_is_ours(&body, "/b/filmcraft"));
         assert!(!desktop_file_exec_is_ours("Exec=filmcraft %F\n", "/a/filmcraft"));

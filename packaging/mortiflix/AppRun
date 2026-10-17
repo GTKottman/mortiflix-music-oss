@@ -15,4 +15,4 @@ if [ -x "$mfx" ] && [ ! -e "$asked" ]; then
     "$mfx" choose || true
   fi
 fi
-exec "$here/usr/bin/filmcraft" "$@"
+exec "$here/usr/bin/mortiflix-filmcraft" "$@"

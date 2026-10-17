@@ -54,5 +54,5 @@ jobs:
             rustc --version
             export CARGO_TARGET_DIR=/var/tmp/filmcraft-target CARGO_BUILD_JOBS=4
             bash packaging/freebsd/package.sh
-            tar -tzf dist/release/filmcraft-*-freebsd-x86_64.tar.gz \
-              | grep -E '/bin/filmcraft$|/bin/filmcraft-cli$|/share/applications/ai\.storyteller\.filmcraft\.desktop$|/share/doc/filmcraft/LICENSE-MIT$'
+            tar -tzf dist/release/mortiflix-filmcraft-*-freebsd-x86_64.tar.gz \
+              | grep -E '/bin/mortiflix-filmcraft$|/bin/mortiflix-filmcraft-cli$|/share/applications/com\.mortiflix\.filmcraft\.desktop$|/share/doc/mortiflix-filmcraft/LICENSE-MIT$'

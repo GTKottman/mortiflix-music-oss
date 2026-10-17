@@ -18,7 +18,7 @@ on:
       service-ref:
         description: "Its branch, tag or commit"
         type: string
-        default: filmcraft-studio
+        default: mfx-service/integration
       build-engine:
         description: "Build the sound engine (mortiflix-engine: JUCE + Tracktion, ~20-40 min per OS)"
         type: boolean
@@ -34,6 +34,8 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   MFX_SERVICE_SRC: ${{ github.workspace }}/mortiflix-service
+  # the checkout above is already the chosen service-ref
+  MFX_SERVICE_REF: HEAD
 
 jobs:
   linux:
@@ -75,7 +77,7 @@ jobs:
       - name: Fresh install with the default tools launches to first-run setup
         run: >-
           xvfb-run -a -s "-screen 0 1920x1080x24" python3 packaging/mortiflix/test_install.py
-          dist/release/filmcraft-*-linux-x86_64.tar.gz --hide-host-tools --components default
+          dist/release/mortiflix-filmcraft-*-linux-x86_64.tar.gz --hide-host-tools --components default
           --expect-installed blender,blender-addons,chrome,strudel,transitions,uv
       - uses: actions/upload-artifact@v4
         with:
@@ -130,7 +132,7 @@ jobs:
           $msi = Get-ChildItem dist/release/*.msi | Select-Object -First 1
           $p = Start-Process msiexec.exe -Wait -PassThru -ArgumentList '/i', $msi.FullName, '/qn', '/l*v', 'msi.log'
           if ($p.ExitCode -ne 0) { Get-Content msi.log -Tail 50; exit $p.ExitCode }
-          $dir = Join-Path ${env:ProgramFiles} 'FilmCraft'
+          $dir = Join-Path ${env:ProgramFiles} 'Mortiflix FilmCraft'
           & (Join-Path $dir 'filmcraft-cli.exe') --version
           $node = Join-Path $dir 'mortiflix\node\node.exe'
           $hello = '{"id":1,"type":"hello","params":{"client":"ci","protocol":1}}' | & $node (Join-Path $dir 'mortiflix\service\bin\mortiflix-service.mjs') | Select-Object -First 1
@@ -186,7 +188,7 @@ jobs:
         run: |
           app="$(mktemp -d)"
           hdiutil attach -nobrowse -mountpoint "$app" dist/release/*.dmg
-          mfx="$app/FilmCraft.app/Contents/Resources/mortiflix"
+          mfx="$app/Mortiflix FilmCraft.app/Contents/Resources/mortiflix"
           lipo -info "$mfx/node/bin/node" "$mfx/bin/ffmpeg"
           printf '%s\n' '{"id":1,"type":"hello","params":{"client":"ci","protocol":1}}' \
             | "$mfx/node/bin/node" "$mfx/service/bin/mortiflix-service.mjs" | head -n1 | tee hello.json

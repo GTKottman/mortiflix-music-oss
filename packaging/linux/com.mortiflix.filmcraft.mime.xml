@@ -6,7 +6,7 @@
   <mime-type type="application/x-filmcraft">
     <comment>FilmCraft project</comment>
     <sub-class-of type="application/json"/>
-    <icon name="ai.storyteller.filmcraft"/>
+    <icon name="com.mortiflix.filmcraft"/>
     <glob pattern="*.fcproj"/>
   </mime-type>
 </mime-info>

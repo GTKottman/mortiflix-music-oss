@@ -7,13 +7,13 @@
   <key>CFBundleDevelopmentRegion</key>
   <string>en</string>
   <key>CFBundleDisplayName</key>
-  <string>FilmCraft</string>
+  <string>Mortiflix FilmCraft</string>
   <key>CFBundleName</key>
-  <string>FilmCraft</string>
+  <string>Mortiflix FilmCraft</string>
   <key>CFBundleExecutable</key>
   <string>FilmCraft</string>
   <key>CFBundleIdentifier</key>
-  <string>ai.storyteller.filmcraft</string>
+  <string>com.mortiflix.filmcraft</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundlePackageType</key>
@@ -62,7 +62,7 @@
       <string>Owner</string>
       <key>LSItemContentTypes</key>
       <array>
-        <string>ai.storyteller.filmcraft.project</string>
+        <string>com.mortiflix.filmcraft.project</string>
       </array>
     </dict>
   </array>
@@ -72,7 +72,7 @@
   <array>
     <dict>
       <key>UTTypeIdentifier</key>
-      <string>ai.storyteller.filmcraft.project</string>
+      <string>com.mortiflix.filmcraft.project</string>
       <key>UTTypeDescription</key>
       <string>FilmCraft Project</string>
       <key>UTTypeConformsTo</key>

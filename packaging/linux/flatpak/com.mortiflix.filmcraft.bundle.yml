@@ -1,7 +1,7 @@
 # Flatpak manifest for the single-file bundle attached to every GitHub release
-# (filmcraft-<version>-linux-<arch>.flatpak). Build it with packaging/linux/flatpak-bundle.sh.
+# (mortiflix-filmcraft-<version>-linux-<arch>.flatpak). Build it with packaging/linux/flatpak-bundle.sh.
 #
-# It repackages the release's own Linux tarball (filmcraft-<version>-linux-<arch>.tar.gz,
+# It repackages the release's own Linux tarball (mortiflix-filmcraft-<version>-linux-<arch>.tar.gz,
 # built on Ubuntu 22.04 by package.sh) instead of compiling Rust inside flatpak-builder: no
 # network and no vendored crate sources during the build, a few seconds instead of 20+ minutes,
 # and byte-for-byte the same binaries as the AppImage/deb/rpm. The script unpacks the tarball
@@ -10,13 +10,13 @@
 # ALSA routes through PulseAudio/PipeWire), and the GPU driver comes from its
 # org.freedesktop.Platform.GL extension.
 #
-# ai.storyteller.filmcraft.yml (same directory) is the from-source manifest for Flathub. Keep
+# com.mortiflix.filmcraft.yml (same directory) is the from-source manifest for Flathub. Keep
 # runtime-version and finish-args identical in both (packaging-lint checks this).
-id: ai.storyteller.filmcraft
+id: com.mortiflix.filmcraft
 runtime: org.freedesktop.Platform
 runtime-version: '25.08'
 sdk: org.freedesktop.Sdk
-command: filmcraft
+command: mortiflix-filmcraft
 finish-args:
   # X11 shared memory (MIT-SHM). Without it the X11 fallback is slow or fails.
   - --share=ipc
@@ -46,15 +46,15 @@ modules:
   - name: filmcraft
     buildsystem: simple
     build-commands:
-      - install -Dm755 bin/filmcraft /app/bin/filmcraft
-      - install -Dm755 bin/filmcraft-cli /app/bin/filmcraft-cli
-      - install -Dm644 share/applications/ai.storyteller.filmcraft.desktop /app/share/applications/ai.storyteller.filmcraft.desktop
+      - install -Dm755 bin/mortiflix-filmcraft /app/bin/mortiflix-filmcraft
+      - install -Dm755 bin/mortiflix-filmcraft-cli /app/bin/mortiflix-filmcraft-cli
+      - install -Dm644 share/applications/com.mortiflix.filmcraft.desktop /app/share/applications/com.mortiflix.filmcraft.desktop
       # The same MIME file the deb/rpm install: it defines the .fcproj project type (the
       # runtime's shared-mime-info already knows the video and audio formats).
-      - install -Dm644 share/mime/packages/ai.storyteller.filmcraft.xml /app/share/mime/packages/ai.storyteller.filmcraft.xml
+      - install -Dm644 share/mime/packages/com.mortiflix.filmcraft.xml /app/share/mime/packages/com.mortiflix.filmcraft.xml
       # Already has the release's version and date substituted by package.sh.
-      - install -Dm644 share/metainfo/ai.storyteller.filmcraft.metainfo.xml /app/share/metainfo/ai.storyteller.filmcraft.metainfo.xml
-      - mkdir -p /app/share/icons /app/share/doc && cp -R share/icons/hicolor /app/share/icons/ && cp -R share/doc/filmcraft /app/share/doc/
+      - install -Dm644 share/metainfo/com.mortiflix.filmcraft.metainfo.xml /app/share/metainfo/com.mortiflix.filmcraft.metainfo.xml
+      - mkdir -p /app/share/icons /app/share/doc && cp -R share/icons/hicolor /app/share/icons/ && cp -R share/doc/mortiflix-filmcraft /app/share/doc/
       # Mortiflix FilmCraft: the service, its Node, ffmpeg and the sound engine; the app finds it at
       # /app/lib/mortiflix-filmcraft (../lib from /app/bin). Tarballs made with --no-mortiflix lack it.
       - if [ -d lib/mortiflix-filmcraft/service ]; then mkdir -p /app/lib && cp -R lib/mortiflix-filmcraft /app/lib/; fi

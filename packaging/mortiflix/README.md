@@ -22,6 +22,18 @@ Env: `MFX_SERVICE_SRC` (the mortiflix-oss checkout; default `../mortiflix-oss-fi
 `mortiflix setup daw-engine --build`), `FFMPEG_URL` / `FFMPEG_SHA256`, `MFX_CACHE` (downloads).
 When the bundle is for this machine, it ends by sending the service `hello` with the bundled Node.
 
+## Names (never clashes with upstream FilmCraft)
+
+Mortiflix FilmCraft installs under its own names, so it sits beside an upstream FilmCraft without
+replacing it: app id `com.mortiflix.filmcraft` (Linux `.desktop`, icons, AppStream, Flatpak, Wayland
+app id; macOS bundle id), package `mortiflix-filmcraft` (deb/rpm), commands `mortiflix-filmcraft` and
+`mortiflix-filmcraft-cli` (Linux), `Mortiflix FilmCraft.app` (macOS), the MSI's own UpgradeCode, install
+folder `Mortiflix FilmCraft` and App Paths `mortiflix-filmcraft.exe` (Windows), and artefacts named
+`mortiflix-filmcraft-<version>-…`. Cargo's binaries are still `filmcraft` / `filmcraft-cli`; the icon
+files keep FilmCraft's names in `assets/` and are installed under the new id. FilmCraft's notices,
+licences and credits ship unchanged. The bundle takes the service from `mfx-service/integration`
+(`MFX_SERVICE_REF`).
+
 ## Where the app finds it
 
 `crates/mortiflix-ui/src/service.rs` (`bundled_dir`), after `MFX_SERVICE` and the `servicePath` in
@@ -29,9 +41,9 @@ When the bundle is for this machine, it ends by sending the service `hello` with
 
 | OS | Binary | Bundle |
 |---|---|---|
-| Linux (tarball, deb, rpm, AppImage, Flatpak) | `<prefix>/bin/filmcraft` | `<prefix>/lib/mortiflix-filmcraft` |
+| Linux (tarball, deb, rpm, AppImage, Flatpak) | `<prefix>/bin/mortiflix-filmcraft` | `<prefix>/lib/mortiflix-filmcraft` |
 | Windows (MSI, portable zip) | `<install dir>\filmcraft.exe` | `<install dir>\mortiflix` |
-| macOS | `FilmCraft.app/Contents/MacOS/FilmCraft` | `FilmCraft.app/Contents/Resources/mortiflix` |
+| macOS | `Mortiflix FilmCraft.app/Contents/MacOS/FilmCraft` | `Mortiflix FilmCraft.app/Contents/Resources/mortiflix` |
 
 `MFX_BUNDLE` points at a bundle anywhere. The bundled Node is used unless `MFX_NODE` or `nodePath` says
 otherwise. The service starts with the bundle's `bin/` and Node first on its `PATH` (so `ffmpeg`,
@@ -43,7 +55,7 @@ bundled engine unless the user set one.
 - **Linux:** `packaging/linux/package.sh [--formats "tar deb rpm appimage"] [--no-mortiflix]`
   stages the bundle at `usr/lib/mortiflix-filmcraft` for every format; `install.sh` copies
   `lib/mortiflix-filmcraft` fresh on each install. Flatpak: `flatpak-bundle.sh` repackages the
-  tarball (`ai.storyteller.filmcraft.bundle.yml` installs the bundle to `/app/lib`; both manifests
+  tarball (`com.mortiflix.filmcraft.bundle.yml` installs the bundle to `/app/lib`; both manifests
   now grant `--share=network`, which the AI needs).
 - **Windows:** `pwsh packaging/windows/package.ps1 -Arch x64|arm64 [-NoMortiflix]` runs `bundle.sh`
   under Git Bash into `mortiflix\`, signs its `.exe` files with `sign.ps1`, and the MSI harvests the
@@ -99,7 +111,7 @@ Chrome for Testing come over HTTPS from their GitHub/Google sources without a pu
 
 ## Proving a fresh install
 
-`xvfb-run -a -s "-screen 0 1920x1080x24" python3 packaging/mortiflix/test_install.py dist/release/filmcraft-<v>-linux-x86_64.tar.gz --shots DIR`
+`xvfb-run -a -s "-screen 0 1920x1080x24" python3 packaging/mortiflix/test_install.py dist/release/mortiflix-filmcraft-<v>-linux-x86_64.tar.gz --shots DIR`
 extracts the tarball, installs it into a temporary prefix with `install.sh`, starts the installed app
 as a new user (temporary `HOME`/XDG folders, no `MFX_*`) on the control channel, waits for the
 bundled service to connect, checks the first-run setup window is on screen and takes screenshots.

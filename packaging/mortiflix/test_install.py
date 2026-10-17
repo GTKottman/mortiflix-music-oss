@@ -154,18 +154,18 @@ def main():
             elif comps[cid].get("path") and not str(comps[cid]["path"]).startswith(str(home)):
                 failures.append(f"component {cid} found outside the new user's home: {comps[cid].get('path')}")
         bundle = prefix / "lib/mortiflix-filmcraft"
-        for path in ("bin/filmcraft", "bin/filmcraft-cli", "lib/mortiflix-filmcraft/service/bin/mortiflix-service.mjs",
+        for path in ("bin/mortiflix-filmcraft", "bin/mortiflix-filmcraft-cli", "lib/mortiflix-filmcraft/service/bin/mortiflix-service.mjs",
                      "lib/mortiflix-filmcraft/node/bin/node", "lib/mortiflix-filmcraft/bin/ffmpeg",
-                     "share/applications/ai.storyteller.filmcraft.desktop"):
+                     "share/applications/com.mortiflix.filmcraft.desktop"):
             if not (prefix / path).exists():
                 failures.append(f"missing after install: {path}")
         print("installed:", ", ".join(sorted(p.name for p in bundle.iterdir())) if bundle.exists() else "no bundle")
-        print(subprocess.run([str(prefix / "bin/filmcraft-cli"), "--version"], env=env, capture_output=True,
+        print(subprocess.run([str(prefix / "bin/mortiflix-filmcraft-cli"), "--version"], env=env, capture_output=True,
                              text=True).stdout.strip())
 
         # ---- first launch -------------------------------------------------------------------------
         log = open(tmp / "app.log", "w")
-        proc = subprocess.Popen([str(prefix / "bin/filmcraft"), "--control", str(args.port), "--no-recover"],
+        proc = subprocess.Popen([str(prefix / "bin/mortiflix-filmcraft"), "--control", str(args.port), "--no-recover"],
                                 env=env, stdout=log, stderr=subprocess.STDOUT, cwd=home)
         print(f"started the installed app, pid {proc.pid}")
         app = App(args.port)

@@ -18,7 +18,7 @@
 #
 # Env:
 #   MFX_SERVICE_SRC  the mortiflix-oss checkout (default: ../mortiflix-oss-filmcraft beside this repo)
-#   MFX_SERVICE_REF  git ref packaged from it (default HEAD; "worktree" copies the files as they are)
+#   MFX_SERVICE_REF  git ref packaged from it (default mfx-service/integration, the merged Mortiflix FilmCraft service; "worktree" copies the files as they are)
 #   NODE_VERSION     Node runtime (default below; checked against nodejs.org's SHASUMS256.txt)
 #   MFX_ENGINE_BIN   a built mortiflix-engine for this OS/arch. Without it, --build-engine builds one
 #                    with the service's own recipe (`mortiflix setup daw-engine --build`: CMake, Ninja,
@@ -51,7 +51,7 @@ case "$ARCH" in x64 | arm64) ;; x86_64 | amd64) ARCH=x64 ;; aarch64) ARCH=arm64 
 [ -n "$OUT" ] || { echo "error: --out DIR" >&2; exit 2; }
 
 SRC="${MFX_SERVICE_SRC:-$(cd "$ROOT/.." && pwd)/mortiflix-oss-filmcraft}"
-REF="${MFX_SERVICE_REF:-HEAD}"
+REF="${MFX_SERVICE_REF:-mfx-service/integration}"
 [ -f "$SRC/bin/mortiflix-service.mjs" ] || { echo "error: no Mortiflix service at $SRC (set MFX_SERVICE_SRC)" >&2; exit 1; }
 CACHE="${MFX_CACHE:-$CARGO_TARGET_DIR/mortiflix-downloads}"
 mkdir -p "$CACHE"

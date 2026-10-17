@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build, sign and (optionally) notarize the macOS release artifacts:
 #
-#   $DIST/filmcraft-<version>-macos-<arch>.dmg          FilmCraft.app on a drag-to-Applications DMG
+#   $DIST/mortiflix-filmcraft-<version>-macos-<arch>.dmg  Mortiflix FilmCraft.app on a drag-to-Applications DMG
 #   $DIST/filmcraft-cli-<version>-macos-<arch>.zip      the headless CLI
 #   $DIST/filmcraft-<version>-macos-<arch>.pkg          Mortiflix FilmCraft: the app + "Mortiflix tools" choices
 #                                                       (Blender, 3D toolkits, Chrome, Strudel, transitions, uv
@@ -53,10 +53,10 @@ export MACOSX_DEPLOYMENT_TARGET=11.0
 IDENTITY="${MACOS_SIGN_IDENTITY:--}"
 SHORT_VERSION="${VERSION%%-*}"
 WORK="$CARGO_TARGET_DIR/macos-package"
-APP="$WORK/FilmCraft.app"
-DMG="$DIST/filmcraft-$VERSION-macos-$ARCH.dmg"
+APP="$WORK/Mortiflix FilmCraft.app"
+DMG="$DIST/mortiflix-filmcraft-$VERSION-macos-$ARCH.dmg"
 CLI_ZIP="$DIST/filmcraft-cli-$VERSION-macos-$ARCH.zip"
-PKG="$DIST/filmcraft-$VERSION-macos-$ARCH.pkg"
+PKG="$DIST/mortiflix-filmcraft-$VERSION-macos-$ARCH.pkg"
 
 NOTARIZE=0
 if [ "$IDENTITY" = "-" ]; then
@@ -179,7 +179,7 @@ fi
 echo "==> building $DMG"
 STAGE="$WORK/dmg"
 mkdir -p "$STAGE"
-ditto "$APP" "$STAGE/FilmCraft.app"
+ditto "$APP" "$STAGE/Mortiflix FilmCraft.app"
 ln -s /Applications "$STAGE/Applications"
 # Finder window layout: background, icon size and positions (packaging/macos/dmg/README.md).
 mkdir -p "$STAGE/.background"
@@ -189,7 +189,7 @@ rm -f "$DMG" "$WORK/raw.dmg"
 # makehybrid + convert builds the image without attaching a device, unlike `create -srcfolder`,
 # which is flaky on CI runners ("Resource busy") and hangs in sandboxed sessions.
 # The volume name has no version: .DS_Store finds the background through an alias that includes it.
-hdiutil makehybrid -hfs -hfs-volume-name "FilmCraft" -hfs-openfolder "$STAGE" -o "$WORK/raw.dmg" "$STAGE"
+hdiutil makehybrid -hfs -hfs-volume-name "Mortiflix FilmCraft" -hfs-openfolder "$STAGE" -o "$WORK/raw.dmg" "$STAGE"
 hdiutil convert "$WORK/raw.dmg" -format UDZO -imagekey zlib-level=9 -o "$DMG"
 rm -f "$WORK/raw.dmg"
 sign "$DMG"
@@ -208,7 +208,7 @@ if [ -d "$MFX" ]; then
   echo "==> building $PKG"
   PW="$WORK/pkg"
   rm -rf "$PW" && mkdir -p "$PW/parts"
-  pkgbuild --component "$APP" --install-location /Applications --identifier ai.storyteller.filmcraft --version "$SHORT_VERSION" "$PW/parts/app.pkg"
+  pkgbuild --component "$APP" --install-location /Applications --identifier com.mortiflix.filmcraft --version "$SHORT_VERSION" "$PW/parts/app.pkg"
   # id|title|ticked|description
   TOOLS=(
     "blender|Blender (~350 MB)|true|3D shots: the newest official Blender, checked against its sha256 list (yours is reused if you have one)."
@@ -225,10 +225,10 @@ if [ -d "$MFX" ]; then
     mkdir -p "$PW/scripts-$id"
     sed "s/@TOOL_ID@/$id/" "$ROOT/packaging/mortiflix/macos-tool-postinstall.sh" >"$PW/scripts-$id/postinstall"
     chmod 755 "$PW/scripts-$id/postinstall"
-    pkgbuild --nopayload --scripts "$PW/scripts-$id" --identifier "ai.storyteller.filmcraft.tools.$id" --version "$SHORT_VERSION" "$PW/parts/tool-$id.pkg"
+    pkgbuild --nopayload --scripts "$PW/scripts-$id" --identifier "com.mortiflix.filmcraft.tools.$id" --version "$SHORT_VERSION" "$PW/parts/tool-$id.pkg"
     lines="$lines<line choice=\"$id\"/>"
-    choices="$choices<choice id=\"$id\" title=\"$title\" description=\"$desc\" start_selected=\"$on\"><pkg-ref id=\"ai.storyteller.filmcraft.tools.$id\"/></choice>"
-    refs="$refs<pkg-ref id=\"ai.storyteller.filmcraft.tools.$id\" version=\"$SHORT_VERSION\">tool-$id.pkg</pkg-ref>"
+    choices="$choices<choice id=\"$id\" title=\"$title\" description=\"$desc\" start_selected=\"$on\"><pkg-ref id=\"com.mortiflix.filmcraft.tools.$id\"/></choice>"
+    refs="$refs<pkg-ref id=\"com.mortiflix.filmcraft.tools.$id\" version=\"$SHORT_VERSION\">tool-$id.pkg</pkg-ref>"
   done
   cat >"$PW/distribution.xml" <<XML
 <?xml version="1.0" encoding="utf-8"?>
@@ -236,10 +236,10 @@ if [ -d "$MFX" ]; then
   <title>Mortiflix FilmCraft</title>
   <options customize="always" require-scripts="false" hostArchitectures="arm64,x86_64"/>
   <choices-outline><line choice="app"/><line choice="tools">$lines</line></choices-outline>
-  <choice id="app" title="FilmCraft" enabled="false" selected="true"><pkg-ref id="ai.storyteller.filmcraft"/></choice>
+  <choice id="app" title="Mortiflix FilmCraft" enabled="false" selected="true"><pkg-ref id="com.mortiflix.filmcraft"/></choice>
   <choice id="tools" title="Mortiflix tools (downloaded now)" description="The tools Mortiflix uses, downloaded into your own Mortiflix studio. Skip any: Mortiflix setup can install them later. Log: ~/Library/Logs/Mortiflix tools.log"/>
   $choices
-  <pkg-ref id="ai.storyteller.filmcraft" version="$SHORT_VERSION">app.pkg</pkg-ref>
+  <pkg-ref id="com.mortiflix.filmcraft" version="$SHORT_VERSION">app.pkg</pkg-ref>
   $refs
 </installer-gui-script>
 XML

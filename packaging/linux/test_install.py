@@ -12,7 +12,7 @@ import unittest
 
 
 HERE = Path(__file__).resolve().parent
-APP_ID = "ai.storyteller.filmcraft"
+APP_ID = "com.mortiflix.filmcraft"
 
 
 class InstallTests(unittest.TestCase):
@@ -28,7 +28,7 @@ class InstallTests(unittest.TestCase):
         shutil.copyfile(
             HERE / f"{APP_ID}.desktop", self.share / "applications" / f"{APP_ID}.desktop"
         )
-        for name in ("filmcraft", "filmcraft-cli"):
+        for name in ("mortiflix-filmcraft", "mortiflix-filmcraft-cli"):
             (self.bundle / "bin" / name).write_text(
                 '#!/bin/sh\nprintf \'%s\\n\' "$0" "$@" > "$(dirname "$0")/launched"\n'
             )
@@ -53,7 +53,7 @@ class InstallTests(unittest.TestCase):
             (self.bundle / "share/doc/filmcraft/LICENSE-MIT").write_text(version)
             result = self.install("--prefix", prefix)
             self.assertEqual(result.returncode, 0, result.stderr)
-            for name in ("filmcraft", "filmcraft-cli"):
+            for name in ("mortiflix-filmcraft", "mortiflix-filmcraft-cli"):
                 self.assertTrue(os.access(prefix / "bin" / name, os.X_OK))
                 self.assertEqual(
                     (prefix / "bin" / name).read_bytes(), (self.bundle / "bin" / name).read_bytes()
@@ -63,7 +63,7 @@ class InstallTests(unittest.TestCase):
             self.assertTrue((prefix / "share/mime/packages/test.xml").is_file())
             self.assertEqual(other.read_text(), "unrelated\n")
         desktop = prefix / "share/applications" / f"{APP_ID}.desktop"
-        self.assertIn(f'Exec="{prefix}/bin/filmcraft" %F\n', desktop.read_text())
+        self.assertIn(f'Exec="{prefix}/bin/mortiflix-filmcraft" %F\n', desktop.read_text())
         if shutil.which("desktop-file-validate"):
             subprocess.run(["desktop-file-validate", str(desktop)], check=True)
 
@@ -79,11 +79,11 @@ class InstallTests(unittest.TestCase):
         launched = prefix / "bin/launched"
         for _ in range(100):
             if launched.exists() and launched.read_text().splitlines() == [
-                str(prefix / "bin/filmcraft"), str(document)
+                str(prefix / "bin/mortiflix-filmcraft"), str(document)
             ]:
                 break
             time.sleep(0.01)
-        self.assertEqual(launched.read_text().splitlines(), [str(prefix / "bin/filmcraft"), str(document)])
+        self.assertEqual(launched.read_text().splitlines(), [str(prefix / "bin/mortiflix-filmcraft"), str(document)])
 
     def test_invalid_arguments_fail_before_writing(self):
         for args in (("--prefix",), ("--prefix", "relative"), ("--prefix", "/"), ("--unknown",),
@@ -96,7 +96,7 @@ class InstallTests(unittest.TestCase):
                 self.assertNotEqual(self.install(*args).returncode, 0)
 
     def test_incomplete_bundle_does_not_install(self):
-        (self.bundle / "bin/filmcraft-cli").unlink()
+        (self.bundle / "bin/mortiflix-filmcraft-cli").unlink()
         prefix = self.root / "destination"
         result = self.install("--prefix", prefix)
         self.assertNotEqual(result.returncode, 0)
@@ -128,6 +128,7 @@ class InstallTests(unittest.TestCase):
         target = self.root / "target"
         binaries = target / "release"
         binaries.mkdir(parents=True)
+        # cargo's binaries keep their names; package.sh installs them as mortiflix-filmcraft[-cli]
         for name in ("filmcraft", "filmcraft-cli"):
             binary = binaries / name
             binary.write_text("#!/bin/sh\necho 'FilmCraft fixture'\n")
