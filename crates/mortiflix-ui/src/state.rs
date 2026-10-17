@@ -111,6 +111,8 @@ pub struct MfxState {
     pub show_setup: bool,
     /// Next asked first: something still needs you.
     pub confirm_next: Option<NextConfirm>,
+    /// The loose preview (doc 36): its plan, scope, loop and the player as the host saw it.
+    pub preview: crate::preview::PreviewState,
 }
 
 impl Default for MfxState {
@@ -130,6 +132,7 @@ impl Default for MfxState {
             show_new_project: false,
             show_setup: false,
             confirm_next: None,
+            preview: Default::default(),
         }
     }
 }

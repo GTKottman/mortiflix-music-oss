@@ -18,6 +18,8 @@ pub const FILMCRAFT_PANEL: &[Entry] = &[
     ("edit.undo", "Left", "History"),
     ("edit.redo", "Right", "History"),
     ("sequence.close", "Cmd+W", "Timeline"),
+    // Mortiflix FilmCraft: Loop in the loose preview (app-wide Cmd+L is Link)
+    ("mortiflix.preview.loop", "Cmd+L", "Mortiflix Preview"),
 ];
 
 /// Premiere Pro's default keyboard (macOS) mapped onto FilmCraft commands. FilmCraft Default takes

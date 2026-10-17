@@ -23,6 +23,8 @@ pub const WORKSPACE: &str = "Mortiflix";
 #[derive(Default)]
 pub struct Host {
     pub core: Mortiflix,
+    /// The loose preview's sequence and playback (doc 36, `mortiflix_preview.rs`).
+    pub preview: crate::mortiflix_preview::HostPreview,
     /// The FilmCraft workspace to return to on stages 5-6.
     pub edit_workspace: String,
 }
@@ -93,6 +95,7 @@ pub fn hides_mode_tabs(app: &FilmcraftApp) -> bool {
 pub fn frame_begin(app: &mut FilmcraftApp, ctx: &egui::Context) {
     app.mfx.core.service.set_waker(ctx);
     app.mfx.core.poll();
+    crate::mortiflix_preview::frame(app, ctx);
     let s = &app.mfx.core.state;
     if !s.active {
         return;
@@ -121,6 +124,9 @@ pub fn stage_bar(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: egui::Rect) {
 /// Draw a Mortiflix dock panel.
 pub fn panel(app: &mut FilmcraftApp, ui: &mut egui::Ui, p: PanelKind, rect: egui::Rect) {
     let theme = theme(&app.tokens);
+    if p == PanelKind::MfxPreview {
+        crate::mortiflix_preview::picture(app, ui, rect);
+    }
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(rect.shrink(8.0)).layout(egui::Layout::top_down(egui::Align::Min)));
     child.set_clip_rect(rect);
     let mut c = app.mfx.core.ctx(theme);
@@ -193,6 +199,9 @@ pub fn menu(app: &FilmcraftApp, items: &mut [MenuItem]) {
 
 /// `stages.*` and `mortiflix.*` commands.
 pub fn route(app: &mut FilmcraftApp, id: &str, params: &Value) -> Option<Result<Value, String>> {
+    if let Some(what) = id.strip_prefix("mortiflix.preview.") {
+        return Some(crate::mortiflix_preview::command(app, what, params));
+    }
     if let Some(what) = id.strip_prefix("stages.") {
         return Some(stage_command(app, what, params));
     }
