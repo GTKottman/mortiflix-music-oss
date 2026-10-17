@@ -6,8 +6,11 @@
 //! - every sentence (a line of narration) is clickable: it becomes a text field right where it was.
 //!   Enter or clicking away keeps the change, Esc drops it;
 //! - kept changes are a **draft** (marked, counted) until **Save** (or Ctrl/Cmd+S) sends them all
-//!   at once (`script.edit {edits}`); **Discard** drops them. Leaving the stage with a draft asks
-//!   first ([`leave_popup`], from [`crate::Mortiflix::navigate`]);
+//!   at once (`script.edit {edits}`); **Discard** drops them. Leaving with a draft asks first
+//!   ([`leave_popup`]: Save / Discard / Keep editing): another stage ([`crate::Mortiflix::navigate`]),
+//!   another or a new project, closing the project, quitting the app ([`Leave`]);
+//! - the draft is never lost: it is kept by the service per project (`script.draft`, handed back by
+//!   `script.get`), so it survives a service restart, a project switch and a crash;
 //! - add a line, delete a line (Undo until saved), rename a beat; each line shows the shots and
 //!   voice line it feeds (links that select the node) and, after Save, "changed · remaking 1 shot"
 //!   until the AI has remade them;
@@ -311,6 +314,29 @@ impl Draft {
         out
     }
 
+    /// A kept draft (`script.get`'s `draft`, the service's copy of the app's own) checked against
+    /// the script as it is now: changes to lines or beats that are gone are dropped, everything is
+    /// bounded and cleaned (hostile input).
+    pub fn clean_for(self, script: &Script) -> Draft {
+        let line_ok = |id: &str| script.line(id).is_some();
+        let words =
+            self.words.into_iter().take(MAX_LINES).filter(|(id, _)| line_ok(id)).map(|(id, w)| (id, clean(&w))).filter(|(_, w)| !w.is_empty()).collect();
+        let names =
+            self.names.into_iter().take(MAX_BEATS).filter(|(b, _)| script.beat(b).is_some()).map(|(b, n)| (b, clean(&n).chars().take(80).collect())).collect();
+        let deleted = self.deleted.into_iter().take(MAX_LINES).filter(|id| line_ok(id)).collect();
+        let mut added: Vec<NewLine> = Vec::new();
+        for n in self.added.into_iter().take(MAX_LINES) {
+            let place_ok = n.after.as_deref().is_none_or(|a| line_ok(a) || added.iter().any(|x| x.key == a));
+            let key_ok = n.key.starts_with("new") && n.key.len() <= 12 && !added.iter().any(|x| x.key == n.key);
+            if script.beat(&n.beat).is_some() && place_ok && key_ok {
+                added.push(NewLine { words: clean(&n.words), ..n });
+            }
+        }
+        let next_key =
+            added.iter().filter_map(|n| n.key.strip_prefix("new").and_then(|k| k.parse::<u32>().ok())).max().unwrap_or(0).max(self.next_key.min(1_000_000));
+        Draft { words, names, deleted, added, next_key }
+    }
+
     /// Put a draft that failed to save back under what was changed since (newer wins).
     fn merge_back(&mut self, old: Draft) {
         for (k, v) in old.words {
@@ -369,6 +395,40 @@ pub struct Editing {
     pub focus: bool,
 }
 
+/// Something that would leave the script with unsaved changes; [`leave_popup`] asks first, then it
+/// goes on (after the save is in, for everything but a stage change).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum Leave {
+    /// A stage command (`stages.<what>`).
+    Stage { what: String },
+    /// A FilmCraft command that opens or closes a project (File ▸ Open, Open Recent, Close Project),
+    /// run again by the host.
+    Command { id: String, params: Value },
+    /// A service request that opens, makes or closes a project (`project.open {id}` …).
+    Request { ty: String, params: Value },
+    /// The New project window's Create.
+    NewProject,
+    /// Quitting the app (the window's close request).
+    Quit,
+}
+
+impl Leave {
+    /// What it is, in the pop-up's words.
+    fn words(&self) -> &'static str {
+        match self {
+            Leave::Stage { .. } => "",
+            Leave::Command { id, .. } if id == "file.closeProject" => "You're closing the project.",
+            Leave::Command { .. } => "You're opening another project.",
+            Leave::Request { ty, .. } if ty == "project.close" => "You're closing the project.",
+            Leave::Request { ty, .. } if ty == "project.new" => "You're making a new project.",
+            Leave::Request { .. } => "You're opening another project.",
+            Leave::NewProject => "You're making a new project.",
+            Leave::Quit => "You're quitting Mortiflix FilmCraft.",
+        }
+    }
+}
+
 /// The script, the draft and the open field: shared by the Script panel and the chat's card.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -378,8 +438,11 @@ pub struct ScriptState {
     pub editing: Option<Editing>,
     /// Open the first line for editing as soon as the Script panel shows (Change the words).
     pub focus_first: bool,
-    /// A stage command waiting on "Save your script changes?" (`stages.<what>`).
-    pub leave: Option<String>,
+    /// What waits on "Save your script changes?".
+    pub leave: Option<Leave>,
+    /// Asked and answered (saved or discarded): it goes on now. The host runs it
+    /// ([`ScriptState::take_go`]); the New project window takes its own.
+    pub go: Option<Leave>,
     /// A save is on its way.
     pub saving: bool,
     /// The last save's outcome or a read error, in plain words.
@@ -388,6 +451,15 @@ pub struct ScriptState {
     pub deletes: Vec<Deleted>,
     #[serde(skip)]
     restoring: Option<(u64, String)>,
+    /// Saved and going on once the save is in.
+    #[serde(skip)]
+    after_save: Option<Leave>,
+    /// The draft the service keeps for this project (what was last sent with `script.draft`).
+    #[serde(skip)]
+    persisted: Draft,
+    /// The service's kept draft was looked at for this project.
+    #[serde(skip)]
+    draft_checked: bool,
     #[serde(skip)]
     loaded_for: Option<String>,
     #[serde(skip)]
@@ -536,6 +608,27 @@ impl ScriptState {
         out
     }
 
+    /// Ask before `what` leaves unsaved changes. True when it asked (nothing unsaved: false, go on).
+    pub fn ask(&mut self, what: Leave) -> bool {
+        if !self.unsaved() {
+            return false;
+        }
+        if self.leave.is_none() {
+            self.leave = Some(what);
+        }
+        true
+    }
+
+    /// The answered leave that goes on now, if it is `want` (None = any kind).
+    pub fn take_go(&mut self, want: Option<&Leave>) -> Option<Leave> {
+        let matches = match (want, self.go.as_ref()) {
+            (_, None) => false,
+            (None, Some(_)) => true,
+            (Some(w), Some(g)) => std::mem::discriminant(w) == std::mem::discriminant(g),
+        };
+        if matches { self.go.take() } else { None }
+    }
+
     /// A restore is on its way.
     pub fn restoring(&self) -> Option<&str> {
         self.restoring.as_ref().map(|(_, l)| l.as_str())
@@ -607,7 +700,15 @@ pub fn save(st: &mut ScriptState, service: &mut Service) {
 pub fn tick(state: &mut MfxState, service: &mut Service) {
     let st = &mut state.script;
     if st.loaded_for != state.project_id {
-        *st = ScriptState { loaded_for: state.project_id.clone(), fetch_soon: state.project_id.is_some(), ..ScriptState::default() };
+        // another project: what wasn't saved here stays with this project (the service keeps it)
+        if let Some(old) = st.loaded_for.clone() {
+            st.commit();
+            if st.draft != st.persisted && service.status().is_connected() {
+                service.request("script.draft", json!({"project": old, "draft": draft_value(&st.draft)}));
+            }
+        }
+        let go = st.go.take();
+        *st = ScriptState { loaded_for: state.project_id.clone(), fetch_soon: state.project_id.is_some(), go, ..ScriptState::default() };
     }
     if st.fetch_soon && st.fetching.is_none() && st.loaded_for.is_some() && service.status().is_connected() {
         st.fetch_soon = false;
@@ -630,6 +731,19 @@ pub fn tick(state: &mut MfxState, service: &mut Service) {
                 st.editing = None;
             }
             st.script = script;
+            // what wasn't saved last time (a restart, a crash, another project in between) comes back
+            if !st.draft_checked {
+                st.draft_checked = true;
+                let kept = r.result.get("draft").filter(|d| d.is_object()).and_then(|d| serde_json::from_value::<Draft>(d.clone()).ok());
+                if let Some(d) = kept {
+                    let d = d.clean_for(&st.script);
+                    st.persisted = d.clone();
+                    if st.draft.is_empty() && !d.is_empty() {
+                        st.draft = d;
+                        st.note = "Your unsaved script changes are back (not saved yet).".into();
+                    }
+                }
+            }
             // the last save's remakes are all in: say so
             let busy = st.script.beats.iter().flat_map(|b| &b.lines).any(|l| l.remaking_shots + l.remaking_lines > 0);
             if !busy && st.saving_req.is_none() && st.note.starts_with("Saved · remaking") {
@@ -667,8 +781,12 @@ pub fn tick(state: &mut MfxState, service: &mut Service) {
                 Some(w) => format!("Saved · remaking {w}"),
                 None => "Saved.".into(),
             };
+            // the service dropped its kept draft with the save
+            st.persisted = Draft::default();
+            st.go = st.after_save.take().or(st.go.take());
         } else {
             st.draft.merge_back(draft);
+            st.after_save = None;
             st.note = format!("Couldn't save: {}", text(&r.error, "message", 200));
         }
         st.fetch_soon = true;
@@ -685,6 +803,21 @@ pub fn tick(state: &mut MfxState, service: &mut Service) {
         }
         st.fetch_soon = true;
     }
+    // keep the draft with the service as it changes (discrete changes: a kept field, a delete, an add)
+    if st.draft != st.persisted
+        && st.saving_req.is_none()
+        && st.draft_checked
+        && service.status().is_connected()
+        && let Some(project) = st.loaded_for.clone()
+    {
+        service.request("script.draft", json!({"project": project, "draft": draft_value(&st.draft)}));
+        st.persisted = st.draft.clone();
+    }
+}
+
+/// The draft as `script.draft` takes it (null = nothing unsaved).
+fn draft_value(d: &Draft) -> Value {
+    if d.is_empty() { Value::Null } else { serde_json::to_value(d).unwrap_or(Value::Null) }
 }
 
 /// "2 shots and 1 voice line", or None when nothing is being remade.
@@ -752,6 +885,9 @@ pub fn save_bar(ui: &mut egui::Ui, ctx: &mut MfxCtx, scope: &str) {
         let what = if n == 1 { "1 unsaved change".to_string() } else { format!("{n} unsaved changes") };
         dot(ui, t.warn);
         ui.label(RichText::new(what).size(12.0).color(t.warn));
+        if st.note.starts_with("Your unsaved") {
+            ui.label(RichText::new("· kept from last time").size(12.0).color(t.text_dim));
+        }
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             let save_b =
                 ui.add(egui::Button::new(RichText::new("Save").size(12.0).color(Color32::WHITE)).fill(t.accent).min_size(vec2(64.0, 24.0)).corner_radius(4.0));
@@ -1064,14 +1200,19 @@ fn meta(ui: &mut egui::Ui, ctx: &mut MfxCtx, scope: &str, line: &Line, compact: 
     });
 }
 
-/// "Save your script changes?" when a stage command would leave with a draft (doc 30's pop-ups).
+/// "Save your script changes?" when something would leave with a draft (doc 30's pop-ups): another
+/// stage (Save and go on / Discard / Keep editing), another or a new project, closing the project or
+/// quitting (Save / Discard / Keep editing). Saving waits for the save to be in before it goes on,
+/// except for a stage change (the draft shows as saved meanwhile).
 pub fn leave_popup(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     let Some(what) = ctx.state.script.leave.clone() else { return };
     let n = ctx.state.script.unsaved_count().max(1);
+    let stage = matches!(what, Leave::Stage { .. });
     let modal = egui::Modal::new(egui::Id::new("mfx-script-leave")).show(ui.ctx(), |ui| {
         ui.set_width(400.0);
         ui.heading("Save your script changes?");
-        ui.label(if n == 1 { "1 change to the script isn't saved yet.".to_string() } else { format!("{n} changes to the script aren't saved yet.") });
+        let count = if n == 1 { "1 change to the script isn't saved yet.".to_string() } else { format!("{n} changes to the script aren't saved yet.") };
+        ui.label(if stage { count } else { format!("{} {count}", what.words()) });
         ui.add_space(8.0);
         ui.horizontal(|ui| {
             let stay = ui.button("Keep editing");
@@ -1084,15 +1225,21 @@ pub fn leave_popup(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
             if discard.clicked() {
                 ctx.state.script.leave = None;
                 ctx.state.script.discard();
-                ctx.command(&format!("stages.{what}"), json!({}));
+                go_on(ctx, what.clone());
             }
-            let save_b = ui.add(egui::Button::new(RichText::new("Save and go on").color(Color32::WHITE)).fill(ctx.theme.accent));
-            ctx.auto("mfx.script.leave.save", &save_b, "Save and go on");
+            let label = if stage { "Save and go on" } else { "Save" };
+            let save_b = ui.add(egui::Button::new(RichText::new(label).color(Color32::WHITE)).fill(ctx.theme.accent));
+            ctx.auto("mfx.script.leave.save", &save_b, label);
             if save_b.clicked() {
                 ctx.state.script.leave = None;
                 let MfxCtx { state, service, .. } = ctx;
                 save(&mut state.script, service);
-                ctx.command(&format!("stages.{what}"), json!({}));
+                if stage || state.script.saving_req.is_none() {
+                    // nothing was left to send (or a stage: the draft shows as saved meanwhile)
+                    go_on(ctx, what.clone());
+                } else {
+                    state.script.after_save = Some(what.clone());
+                }
             }
         });
     });
@@ -1101,18 +1248,31 @@ pub fn leave_popup(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     }
 }
 
+/// Carry on with what was asked about: a stage command runs now; the rest goes to whoever does it
+/// ([`ScriptState::go`]: the host, or the New project window).
+fn go_on(ctx: &mut MfxCtx, what: Leave) {
+    match what {
+        Leave::Stage { what } => ctx.command(&format!("stages.{what}"), json!({})),
+        other => ctx.state.script.go = Some(other),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn sample() -> Script {
-        Script::parse(&json!({"writing": false, "beats": [
+        Script::parse(&sample_json())
+    }
+
+    fn sample_json() -> Value {
+        json!({"writing": false, "beats": [
             {"id": "b01", "no": 1, "name": "Open on a", "name_auto": true, "colour": {"hex": "#380ea7"}, "lines": [
                 {"id": "b01-1", "words": "Open on a dot.", "feeds": [{"node": "b01-1", "kind": "line", "label": "b01-1", "made": true}, {"node": "s01", "kind": "shot", "label": "S01", "made": true}]},
                 {"id": "b01-2", "words": "It grows.", "remaking": {"shots": 1, "lines": 0}, "changed": true}]},
             {"id": "b02", "no": 2, "name": "Ideas", "lines": [{"id": "b02-1", "words": "Three ideas.", "read_only": true}]},
             {"no": 3}, "junk"
-        ]}))
+        ]})
     }
 
     #[test]
@@ -1273,6 +1433,80 @@ mod tests {
         st.delete_line("b01-1");
         st.discard();
         assert!(st.deletes.is_empty());
+    }
+
+    /// Owner, 2026-10-16: unsaved script edits never vanish: switching or closing a project or quitting
+    /// asks first, Save goes on only once the save is in, and the draft is kept by the service.
+    #[test]
+    fn leaving_asks_and_save_goes_on_once_the_save_is_in() {
+        let (mut service, sent) = Service::fake();
+        let mut state = MfxState { project_id: Some("p1".into()), ..MfxState::default() };
+        tick(&mut state, &mut service);
+        assert!(!state.script.ask(Leave::Quit), "nothing unsaved: nothing to ask");
+        state.script.script = sample();
+        state.script.draft.words.insert("b01-1".into(), "New words.".into());
+        assert!(state.script.ask(Leave::Quit));
+        assert!(state.script.ask(Leave::NewProject), "already asking");
+        assert_eq!(state.script.leave, Some(Leave::Quit));
+        // Save: the quit waits for the save
+        state.script.leave = None;
+        save(&mut state.script, &mut service);
+        state.script.after_save = Some(Leave::Quit);
+        let edit = sent.try_iter().find(|m| m["type"] == "script.edit").unwrap();
+        tick(&mut state, &mut service);
+        assert_eq!(state.script.take_go(None), None, "not before the save is in");
+        service.answer(edit["id"].as_u64().unwrap(), true, json!({"remaking": []}));
+        tick(&mut state, &mut service);
+        assert_eq!(state.script.take_go(Some(&Leave::NewProject)), None, "only the kind asked for");
+        assert_eq!(state.script.take_go(None), Some(Leave::Quit));
+    }
+
+    #[test]
+    fn the_draft_is_kept_by_the_service_and_comes_back() {
+        let (mut service, sent) = Service::fake();
+        let mut state = MfxState { project_id: Some("p1".into()), ..MfxState::default() };
+        tick(&mut state, &mut service);
+        let get = sent.try_iter().find(|m| m["type"] == "script.get").unwrap();
+        // the service kept a draft from last time: one change still fits, one is for a line that's gone
+        let v = json!({"beats": sample_json()["beats"], "draft": {"words": {"b01-1": "  Kept   words. ", "b09-1": "gone"}, "deleted": ["b01-2", "zz"], "added": [{"key": "new3", "beat": "b01", "after": "b01-1", "words": "Added."}, {"key": "x", "beat": "b01"}], "nextKey": 3}});
+        service.answer(get["id"].as_u64().unwrap(), true, v);
+        tick(&mut state, &mut service);
+        let d = &state.script.draft;
+        assert_eq!(d.words.iter().collect::<Vec<_>>(), [(&"b01-1".to_string(), &"Kept words.".to_string())]);
+        assert_eq!(d.deleted.iter().collect::<Vec<_>>(), ["b01-2"]);
+        assert_eq!(d.added.len(), 1);
+        assert_eq!(d.next_key, 3);
+        assert!(state.script.note.contains("back"), "{}", state.script.note);
+        assert!(sent.try_iter().all(|m| m["type"] != "script.draft"), "what came back isn't sent again");
+        // a change is sent once
+        state.script.draft.words.insert("b02-1".into(), "More.".into());
+        tick(&mut state, &mut service);
+        tick(&mut state, &mut service);
+        let kept: Vec<Value> = sent.try_iter().filter(|m| m["type"] == "script.draft").collect();
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0]["params"]["project"], "p1");
+        assert_eq!(kept[0]["params"]["draft"]["words"]["b02-1"], "More.");
+        // another project (switched from elsewhere): the open field is kept into this project's draft first
+        state.script.open("panel", Target::Line("b01-1".into()));
+        if let Some(e) = state.script.editing.as_mut() {
+            e.text = "Typed, not kept yet.".into();
+        }
+        state.project_id = Some("p2".into());
+        tick(&mut state, &mut service);
+        let flushed: Vec<Value> = sent.try_iter().filter(|m| m["type"] == "script.draft").collect();
+        assert_eq!(flushed.len(), 1);
+        assert_eq!(flushed[0]["params"]["project"], "p1");
+        assert_eq!(flushed[0]["params"]["draft"]["words"]["b01-1"], "Typed, not kept yet.");
+        assert!(state.script.draft.is_empty(), "p2 starts from its own");
+        // discarding sends null (the service drops it)
+        let mut st = ScriptState { script: sample(), draft_checked: true, loaded_for: Some("p3".into()), ..ScriptState::default() };
+        st.draft.words.insert("b01-1".into(), "x".into());
+        st.persisted = st.draft.clone();
+        st.discard();
+        let mut state = MfxState { project_id: Some("p3".into()), script: st, ..MfxState::default() };
+        tick(&mut state, &mut service);
+        let cleared = sent.try_iter().find(|m| m["type"] == "script.draft").unwrap();
+        assert_eq!(cleared["params"]["draft"], Value::Null);
     }
 
     #[test]

@@ -170,6 +170,7 @@ pub fn frame_begin(app: &mut FilmcraftApp, ctx: &egui::Context) {
         let core = &mut app.mfx.core;
         mfx::script::save(&mut core.state.script, &mut core.service);
     }
+    script_go_on(app, ctx);
     crate::mortiflix_preview::frame(app, ctx);
     crate::mortiflix_into::frame(app, ctx);
     crate::mortiflix_export::frame(app, ctx);
@@ -194,6 +195,58 @@ pub fn frame_begin(app: &mut FilmcraftApp, ctx: &egui::Context) {
     {
         apply_stage(app, to);
     }
+}
+
+/// "Save your script changes?" was answered (saved and in, or discarded): carry on with what asked.
+fn script_go_on(app: &mut FilmcraftApp, ctx: &egui::Context) {
+    use mfx::script::Leave;
+    let core = &mut app.mfx.core;
+    // the New project window makes its project itself (dropped if the window was closed meanwhile)
+    if matches!(core.state.script.go, Some(Leave::NewProject)) {
+        if !core.state.show_new_project {
+            core.state.script.go = None;
+        }
+        return;
+    }
+    let Some(go) = core.state.script.take_go(None) else { return };
+    let r = match go {
+        Leave::Stage { what } => crate::menus::invoke(app, ctx, &format!("stages.{what}"), json!({})).map(|_| ()),
+        Leave::Command { id, params } => crate::menus::invoke(app, ctx, &id, params).map(|_| ()),
+        Leave::Request { ty, params } => {
+            app.mfx.core.service.request(&ty, params);
+            Ok(())
+        }
+        Leave::Quit => {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            Ok(())
+        }
+        Leave::NewProject => Ok(()),
+    };
+    if let Err(e) = r {
+        app.ui.status = e;
+    }
+}
+
+/// Quitting (the window's close request) with unsaved script changes asks first: Save / Discard /
+/// Keep editing. Returns whether the close must be cancelled. FilmCraft's own "Save changes to …?"
+/// comes after it, on the next close request.
+pub fn intercept_quit(app: &mut FilmcraftApp) -> bool {
+    let s = &mut app.mfx.core.state;
+    !app.quit_confirmed && s.active && s.script.ask(mfx::script::Leave::Quit)
+}
+
+/// Commands that open or close a project. With unsaved script changes they ask first and run again
+/// once answered (doc 30: nothing typed is lost).
+fn leaves_project(id: &str, params: &Value) -> Option<mfx::script::Leave> {
+    use mfx::script::Leave;
+    if matches!(id, "file.closeProject" | "file.open") || id.starts_with("file.openRecent.") {
+        return Some(Leave::Command { id: id.to_string(), params: params.clone() });
+    }
+    if id == "mortiflix.request" {
+        let ty = params.get("type").and_then(Value::as_str).filter(|t| matches!(*t, "project.open" | "project.new" | "project.close"))?;
+        return Some(Leave::Request { ty: ty.to_string(), params: params.get("params").cloned().unwrap_or(json!({})) });
+    }
+    None
 }
 
 /// Draw the stage bar in `rect`.
@@ -330,6 +383,12 @@ pub fn menu(app: &FilmcraftApp, items: &mut [MenuItem]) {
 
 /// `stages.*` and `mortiflix.*` commands.
 pub fn route(app: &mut FilmcraftApp, ctx: &egui::Context, id: &str, params: &Value) -> Option<Result<Value, String>> {
+    if app.mfx.core.state.active
+        && let Some(leave) = leaves_project(id, params)
+        && app.mfx.core.state.script.ask(leave)
+    {
+        return Some(Ok(json!({"asked": "script"})));
+    }
     if let Some(what) = id.strip_prefix("mortiflix.preview.") {
         return Some(crate::mortiflix_preview::command(app, what, params));
     }

@@ -146,8 +146,9 @@ questions and failed remakes.
 
 | Type | Params | Result |
 |---|---|---|
-| `script.get` | `{}` | `{project, rev, writing, version, beats: [{id, no, name, name_auto, colour, visual, target_sec, state, lines: [{id, words, changed, changed_at, read_only, remaking: {shots, lines}, feeds: [{node, kind: line\|shot, label, state, current, made, remaking}]}], deleted: [{id, words, after, changed_at}]}]}`. Line ids = voice line ids (`b01-1`), forever; `feeds` = the line's voice line and its beat's shots (the graph's `says` edges); while `writing`, the newest line is `read_only` |
+| `script.get` | `{}` | `{project, rev, writing, version, beats: [{id, no, name, name_auto, colour, visual, target_sec, state, lines: [{id, words, changed, changed_at, read_only, remaking: {shots, lines}, feeds: [{node, kind: line\|shot, label, state, current, made, remaking}]}], deleted: [{id, words, after, changed_at}]}], draft, draft_at}`. Line ids = voice line ids (`b01-1`), forever; `feeds` = the line's voice line and its beat's shots (the graph's `says` edges); while `writing`, the newest line is `read_only` |
 | `script.edit` | one edit or `{edits: [edit…]}`; edit = `{beat, beat_name}` \| `{beat, line, words}` \| `{beat, add_after: line id \| key \| null, words, key?}` \| `{beat, line, delete: true \| false}` | `{project, beats, changed[], added[], keys: {key: id}, deleted[], restored[], renamed[], remaking: [{node, kind, edit}]}` (also the `script.changed` event) |
+| `script.draft` | `{draft: {…} \| null, project?}` | `{project, saved, cleared}`: the app's unsaved script changes (its own shape, at most 256 KB), kept per project in `state/<id>/canvas/script-draft.json` and handed back as `script.get`'s `draft`, so they survive a service restart, a project switch and a crash; null (or a saved `script.edit`) clears them |
 
 The app (`crates/mortiflix-ui/src/script.rs`): the Script panel and the chat's script card share one editor and one
 draft. Click a line: it becomes a text field in place; Enter or clicking away keeps it in the draft, Esc drops it.
@@ -157,7 +158,13 @@ writes them into `script/beats.json` and `voice/lines.json` and remakes only wha
 exists (a Fix each: the line's voice line and its beat's shots; versions kept); a deleted line's voice line is cut,
 `delete: false` brings it back. A delete stays undoable after Save: the line shows struck through in its place
 ("deleted · Undo", from the beat's `deleted` list) and Undo or Ctrl/Cmd+Z in the Script panel (`script.undo`,
-panel-scoped) sends `delete: false`: the same line, words, links and voice line (its OK too), nothing remade. The panel reads the script again on `script.changed` / `node.changed` and shows
+panel-scoped) sends `delete: false`: the same line, words, links and voice line (its OK too), nothing remade.
+Unsaved changes never vanish: switching or opening another project (`project.open` / `project.new` / `project.close`
+through `mortiflix.request`, New project's Create, File ▸ Open / Open Recent), closing the project (File ▸ Close
+Project) and quitting (the window's close request, before FilmCraft's own "Save changes…?") ask first: Save / Discard /
+Keep editing; after Save it goes on once the save is in. The draft is sent with `script.draft` whenever it changes (for
+the project it belongs to, also when another project is opened from elsewhere) and comes back from `script.get` after a
+service restart or a crash ("kept from last time"). The panel reads the script again on `script.changed` / `node.changed` and shows
 "changed · remaking 1 shot and 1 voice line" until the remakes are in. The chat card's **Change the words** opens
 stage 1 with the first line's field open.
 

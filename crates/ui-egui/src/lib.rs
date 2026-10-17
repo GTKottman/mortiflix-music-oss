@@ -2094,7 +2094,8 @@ impl eframe::App for FilmcraftApp {
         }
         self.timeline_still = if self.ui.timeline.animating() { 0 } else { self.timeline_still.saturating_add(1) };
         // Quitting with unsaved changes asks to save them first.
-        if ctx.input(|i| i.viewport().close_requested()) && panels::clip_dialogs::intercept_quit(self) {
+        // Unsaved Mortiflix script changes are asked about first (Save / Discard / Keep editing).
+        if ctx.input(|i| i.viewport().close_requested()) && (crate::mortiflix::intercept_quit(self) || panels::clip_dialogs::intercept_quit(self)) {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
         }
         let had_synthetic = !self.synthetic.is_empty();

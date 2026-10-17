@@ -595,6 +595,10 @@ fn main_page(ui: &mut egui::Ui, ctx: &mut MfxCtx, w: &mut Win, now: f64) {
     if escape(ui) {
         ctx.state.show_new_project = false;
     }
+    // "Save your script changes?" was answered: make it now
+    if ctx.state.script.take_go(Some(&crate::script::Leave::NewProject)).is_some() && !busy {
+        create = true;
+    }
     if create && !busy {
         try_create(ctx, w, preset.as_ref());
     }
@@ -607,6 +611,10 @@ fn try_create(ctx: &mut MfxCtx, w: &mut Win, preset: Option<&Preset>) {
         return;
     }
     let Some(p) = preset else { return };
+    // unsaved script changes in the project on screen: ask first (Save / Discard / Keep editing)
+    if ctx.state.script.ask(crate::script::Leave::NewProject) {
+        return;
+    }
     w.create_req = Some(ctx.service.request("project.new", w.draft.project_new_params(p)));
 }
 

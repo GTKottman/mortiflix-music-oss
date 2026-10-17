@@ -184,8 +184,7 @@ impl Mortiflix {
         // Script stage itself, where the draft is.
         let known = matches!(what, "back" | "next" | "getVideo" | "editVideo") || stage_by_key(what).is_some();
         let to_script = stage_by_key(what) == Some(0) || (what == "back" && stage == 1);
-        if known && !force && !to_script && self.state.script.unsaved() {
-            self.state.script.leave = Some(what.to_string());
+        if known && !force && !to_script && self.state.script.ask(script::Leave::Stage { what: what.to_string() }) {
             return Some(Nav::Asked);
         }
         let ask = |s: &mut MfxState, to_render: bool| -> bool {
