@@ -273,7 +273,18 @@ export function shotTimeline(root, id, gv = graphView(root, id)) {
       const still = look?.versions.find((x) => x.v === look.plays);
       media = still?.path ? { kind: 'still', path: still.path, look: look.id } : { kind: 'card', text: n.title || beat?.title || n.label, colour: n.colour?.hex || null };
     }
-    shots.push({ node: sid, label: n.label, title: n.title || '', beat: n.beat || null, beat_no: n.beat_no, colour: n.colour || null, state: n.state, version: n.plays, start_sec: 0, dur_sec: dur, media });
+    shots.push({ node: sid, label: n.label, title: n.title || '', beat: n.beat || null, beat_no: n.beat_no, colour: n.colour || null, state: n.state, version: n.plays, start_sec: 0, dur_sec: dur, media, at: Number.isFinite(n.at_sec) ? n.at_sec : null });
+  }
+  // Shots with their place in the animatic (the film as the AI timed it, voice included): each plays until the next
+  // one's place, also a shot remade alone into its own longer file (run 2: S03 and S05 remade kept their whole
+  // length and pushed every later shot, 7 s by the end)
+  for (let i = 0; i + 1 < shots.length; i++) {
+    const a = shots[i];
+    const gap = a.at !== null && shots[i + 1].at !== null ? round3(shots[i + 1].at - a.at) : null;
+    if (gap !== null && gap > 0.2 && gap < a.dur_sec && a.media.to_sec != null) {
+      a.dur_sec = gap;
+      a.media.to_sec = round3((a.media.from_sec ?? 0) + gap);
+    }
   }
   // Shots cut from one animatic whose ranges overlap (the AI's cuts carry a transition): each plays until the next one
   // starts, so the film keeps the animatic's timing and the voice stays on its pictures (run 2: placed back to back
@@ -286,7 +297,7 @@ export function shotTimeline(root, id, gv = graphView(root, id)) {
       shots[i].dur_sec = round3(b.from_sec - a.from_sec);
     }
   }
-  for (const sh of shots) { sh.start_sec = round3(t); t += sh.dur_sec; }
+  for (const sh of shots) { sh.start_sec = round3(t); t += sh.dur_sec; delete sh.at; }
   return { shots, length_sec: round3(t) };
 }
 

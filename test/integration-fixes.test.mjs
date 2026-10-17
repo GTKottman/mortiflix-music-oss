@@ -80,6 +80,11 @@ test('run 2: shots cut from one animatic with overlapping ranges keep its timing
   assert.deepEqual(shots.map((x) => [x.node, x.start_sec, x.dur_sec]), [['s01', 0, 3], ['s02', 3, 6.03], ['s03', 9.03, 4.4], ['s04', 13.43, 4]]);
   assert.equal(shots[0].media.to_sec, 3);
   assert.equal(length_sec, 17.43);
+  // with their places in the animatic, a shot remade alone into a longer file plays only until the next one's place
+  const at = (n, a) => ({ ...n, at_sec: a });
+  const gv2 = { order: { film: ['s01', 's02', 's03'] }, nodes: [at(shot('s01', 0, 4.4), 0), at(shot('s02', 0, 5.7, '/x/s02.mp4'), 3), at(shot('s03', 8.5, 12.9), 8.5)] };
+  const t2 = shotTimeline(null, null, gv2);
+  assert.deepEqual(t2.shots.map((x) => [x.node, x.start_sec, x.dur_sec]), [['s01', 0, 3], ['s02', 3, 5.5], ['s03', 8.5, 4.4]]);
 });
 
 test('every shot version gets a PNG still (its first frame)', { skip: !hasFfmpeg && 'needs ffmpeg' }, async (t) => {

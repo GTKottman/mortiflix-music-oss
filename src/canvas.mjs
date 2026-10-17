@@ -171,7 +171,11 @@ export function syncCanvas(root, id) {
         scenes.scenes.forEach((sc, i) => {
           if (!/^s\d{2,3}$/.test(sc.key)) return problems.push({ file: 'out/scenes.json', text: `scene key "${sc.key}" should look like s01` });
           if (sc.beat && !beatIds.has(sc.beat)) problems.push({ file: 'out/scenes.json', text: `${sc.key}: beat ${sc.beat} isn't in the script` });
-          const fields = { label: sc.key.toUpperCase(), title: sc.name || sc.key, beat: sc.beat || null, order: i, look: frames.find((f) => (f.beats || []).includes(sc.beat))?.id || null };
+          // at_sec: where the shot starts in the animatic (the film as the AI timed it), also once it is remade alone
+          // (a shot remade alone keeps its scene's place when the scenes are still cut from the animatic)
+          const inAnimatic = !sc.file || sc.file !== scenes.made_from;
+          const at = Number.isFinite(Number(sc.from_frame)) && inAnimatic ? +(Number(sc.from_frame) / fps).toFixed(3) : (nodes[sc.key]?.at_sec ?? null);
+          const fields = { label: sc.key.toUpperCase(), title: sc.name || sc.key, beat: sc.beat || null, order: i, at_sec: at, look: frames.find((f) => (f.beats || []).includes(sc.beat))?.id || null };
           // A shot remade on its own (an edit request) arrives as its own file; the others are cut from the video.
           const own = sc.file ? snapshot(sc.file, sc.key) : null;
           if (own === BUSY || (src === BUSY && !own)) return put(sc.key, 'shot', fields, BUSY);
