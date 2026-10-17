@@ -685,8 +685,11 @@ fn context_bar(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, msgs: &[Msg
         {
             let ui = &mut path;
             ui.spacing_mut().item_spacing.x = 4.0;
-            ui.label(RichText::new("Talking about").size(12.0).color(t.text_faint));
-            ui.add_space(4.0);
+            // a deep path needs the room for the piece's own name
+            if crumbs.len() <= 2 {
+                ui.label(RichText::new("Talking about").size(12.0).color(t.text_faint));
+                ui.add_space(4.0);
+            }
             let last = crumbs.len().saturating_sub(1);
             for (i, (to, label, info)) in crumbs.iter().enumerate() {
                 if i > 0 {

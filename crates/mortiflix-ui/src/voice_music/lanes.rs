@@ -77,7 +77,12 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx, tl: &Timeline, st: &mut LaneUi,
             if whole.clicked() {
                 st.zoom = 0;
             }
-            ui.colored_label(t.text_faint, "✓ OK · ↻ remaking · ● your take");
+            // the legend only where it fits: on a narrow stage it was drawn over the counts (run 2)
+            let legend = "✓ OK · ↻ remaking · ● your take";
+            let w = ui.painter().layout_no_wrap(legend.to_string(), egui::TextStyle::Body.resolve(ui.style()), t.text_faint).size().x;
+            if ui.available_width() > w + 12.0 {
+                ui.colored_label(t.text_faint, legend);
+            }
         });
     });
 
