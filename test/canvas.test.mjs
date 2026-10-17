@@ -57,11 +57,30 @@ test('canvas: one shot made alone before the animatic keeps the other planned sh
   assert.equal(g.nodes.s01.planned, true);
   assert.equal(g.nodes.s03.versions.length, 1);
   assert.equal(g.nodes.s01.missing, undefined);
-  // the animatic then cuts the film; a beat it folded into another shot has no shot of its own
+  // run 2: an animatic that folds a beat into another shot leaves it without a shot: never the film as cut; the
+  // beat keeps its planned shot (8 beats, 8 shots) and the canvas names the problem
   write(work, 'out/animatic.mp4', Buffer.from([0, 0, 0, 8, 0x6d, 0x6f, 0x6f, 0x76]));
   write(work, 'out/scenes.json', { made_from: 'out/animatic.mp4', fps: 30, scenes: [{ key: 's01', from_frame: 0, frames: 60, beat: 'b01' }, { key: 's03', from_frame: 60, frames: 60, beat: 'b03' }] });
   g = syncCanvas(root, p.id);
-  assert.deepEqual(g.order.shots, ['s01', 's03']);
+  assert.deepEqual(g.order.shots, ['s01', 's02', 's03']);
+  assert.equal(g.nodes.s02.planned, true);
+  assert.match(g.problems.map((x) => x.text).join(' '), /one shot per beat: B02/);
+});
+
+test('one shot per beat: an animatic that leaves a beat without a scene is refused (submit and edit done)', async (t) => {
+  const { beatsWithoutShot } = await import('../src/scenes.mjs');
+  const beats = Array.from({ length: 8 }, (_, i) => ({ id: `b0${i + 1}` }));
+  const scenes = beats.map((b, i) => ({ key: `s0${i + 1}`, beat: b.id }));
+  assert.deepEqual(beatsWithoutShot(beats, scenes), [], 'N beats, N shots');
+  assert.deepEqual(beatsWithoutShot(beats, scenes.filter((s) => s.key !== 's07')).map((b) => b.id), ['b07']);
+  const { submit } = await import('../src/gates.mjs');
+  const root = tempStudio(t);
+  const p = createProject(root, { pipeline: 'explainer', title: 'Bees', answers: { topic: 'x' } });
+  const work = projectPaths(root, p.id).work;
+  write(work, 'script/beats.json', { beats: beats.map((b) => ({ ...b, words: 'x' })) });
+  write(work, 'out/a.mp4', 'x');
+  write(work, 'out/scenes.json', { made_from: 'out/a.mp4', fps: 30, scenes: scenes.filter((s) => s.key !== 's07').map((s, i) => ({ ...s, from_frame: i * 30, frames: 30 })) });
+  assert.throws(() => submit(root, p.id, 'animatic', { note: 'v1', items: [{ path: 'out/a.mp4' }] }), /one shot per beat: B07/);
 });
 
 test('canvas: a video still being written is not a version; it is once it is whole', (t) => {

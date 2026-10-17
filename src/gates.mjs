@@ -9,6 +9,7 @@ import { existsSync, mkdirSync, copyFileSync, realpathSync, statSync, readFileSy
 import { join, extname } from 'node:path';
 import { paths, readJson, writeJson, withLock, isInside, UserError } from './studio.mjs';
 import { checksForStep, WORK_KINDS } from './pipelines.mjs';
+import { sceneGaps, gapsText } from './scenes.mjs';
 import { projectPaths, projectPipeline, loadProject, update, event, safeName, now } from './projects.mjs';
 
 const DONE = ['approved', 'done', 'skipped'];
@@ -100,6 +101,11 @@ export function submit(root, id, stepKey, sub) {
   const step = findStep(pipeline, stepKey);
   if (step.review === 'internal') refuse(`${stepKey} is internal: finish it with mfx step done ${stepKey} --checks <file>`);
   if (!sub || typeof sub !== 'object') refuse('submission must be a JSON object');
+  // the shots: one per beat, always
+  if (step.canvas === 'shot') {
+    const gaps = sceneGaps(pp.work);
+    if (gaps.length) refuse(gapsText(gaps));
+  }
   // The step's state first (checked again under the lock below): the most useful refusal comes first.
   const early = stepView(loadProject(root, id), pipeline).find((s) => s.key === stepKey);
   if (early.state === 'blocked') refuse(`${stepKey} can't start yet: it runs after ${step.after.join(', ')}`);

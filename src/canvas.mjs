@@ -9,6 +9,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync, mkdirSync, copyFileSync, realpathSync, statSync, openSync, readSync, fstatSync, closeSync } from 'node:fs';
 import { join, extname, dirname } from 'node:path';
+import { sceneGaps, gapsText } from './scenes.mjs';
 import { projectPaths, update, event, projectPipeline, loadProject } from './projects.mjs';
 import { settle, GateError, stepView, respond } from './gates.mjs';
 import { withLock, isInside } from './studio.mjs';
@@ -192,7 +193,10 @@ export function syncCanvas(root, id) {
       const keys = new Set(scenes.scenes.map((sc) => sc.key));
       const covered = new Set(scenes.scenes.map((sc) => sc.beat).filter(Boolean));
       const alone = scenes.scenes.every((sc) => sc.file);
-      const gaps = alone ? beats.filter((b) => !covered.has(b.id) && !keys.has(`s${b.id.slice(1)}`)) : [];
+      const gaps = beats.filter((b) => !covered.has(b.id) && !keys.has(`s${b.id.slice(1)}`));
+      // an animatic that left a beat without a shot is a problem to fix, never the film as cut (run 2: beat 7 was
+      // folded into shot 6; the film had 7 shots for 8 beats): the beat keeps its planned shot and the stage says so
+      if (!alone && gaps.length) problems.push({ file: 'out/scenes.json', text: gapsText(gaps), beats: gaps.map((b) => b.id) });
       if (gaps.length) {
         for (const b of gaps) {
           const look = frames.find((f) => (f.beats || []).includes(b.id));
@@ -410,6 +414,10 @@ export function finishEdit(root, id, eid, { ok, note = '', via = null } = {}) {
     if (ok) {
       const n = g.nodes[e.node];
       if (!n || !(n.current > e.from_version)) throw new CanvasError(`${e.label} has no new version yet (still v${e.from_version}): write it where the canvas reads it (GATES.md, "The canvas"), then say edit done`);
+      if (e.kind === 'shot') {
+        const gaps = sceneGaps(projectPaths(root, id).work);
+        if (gaps.length) throw new CanvasError(gapsText(gaps));
+      }
       e.version = n.current;
     }
     e.state = ok ? 'done' : 'failed';
