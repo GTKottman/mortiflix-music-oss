@@ -29,10 +29,17 @@ export function projectPaths(root, id) {
   };
 }
 
+// Letters with accents become their plain letters (ö→o, é→e, ß→ss), so a name keeps its words: NFKD alone split "ö" into
+// "o" plus a mark that the slug then turned into a hyphen ("Gödel" → "go-del").
+const SPELLED = { ß: 'ss', ẞ: 'SS', æ: 'ae', Æ: 'AE', œ: 'oe', Œ: 'OE', ø: 'o', Ø: 'O', ł: 'l', Ł: 'L', đ: 'd', Đ: 'D', ð: 'd', Ð: 'D', þ: 'th', Þ: 'Th', ı: 'i' };
+export function plainLetters(text) {
+  return String(text).normalize('NFKD').replace(/\p{M}+/gu, '').replace(/[ßẞæÆœŒøØłŁđĐðÐþÞı]/g, (c) => SPELLED[c] || c);
+}
+
 export function newId(title) {
   const d = new Date();
   const ymd = `${String(d.getFullYear()).slice(2)}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
-  const slug = String(title || 'video').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32) || 'video';
+  const slug = plainLetters(title || 'video').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32) || 'video';
   return `${ymd}-${slug}-${randomBytes(2).toString('hex')}`;
 }
 
@@ -178,7 +185,7 @@ export function readJournal(root, id, { tailChars = 6000 } = {}) {
 }
 
 export function safeName(name) {
-  const base = basename(String(name || 'file')).normalize('NFKD').replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^[.-]+/, '').slice(0, 100);
+  const base = plainLetters(basename(String(name || 'file'))).replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^[.-]+/, '').slice(0, 100);
   return base || 'file';
 }
 

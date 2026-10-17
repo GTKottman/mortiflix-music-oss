@@ -41,3 +41,10 @@ test('presets: save your own copy with its own name and defaults; built-ins neve
   assert.equal(p.pipeline.slug, 'short-explainer');
   assert.ok(listPipelines(root).some((x) => x.slug === 'short-explainer' && !x.error));
 });
+
+test('project ids and file names keep accented words whole (ö→o, ß→ss), no hyphen inside a word', async () => {
+  const { newId, safeName } = await import('../src/projects.mjs');
+  assert.match(newId('Gödel, Escher, Bach: An Eternal Golden Braid'), /^\d{6}-godel-escher-bach-an-eternal-gol-\w{4}$/);
+  assert.match(newId('Straße Café Ærø'), /^\d{6}-strasse-cafe-aero-\w{4}$/);
+  assert.equal(safeName('Gödel Pörträt.png'), 'Godel-Portrat.png');
+});
