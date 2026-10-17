@@ -342,3 +342,13 @@ test('service core: the chat can talk about a cut without a transition, a stage,
   assert.ok((await call('chat.history')).some((x) => x.role === 'user' && x.context === 'cut:s02:s03'));
   await assert.rejects(call('chat.context', { context: 'cut:s02' }), (e) => e.code === 'bad_request');
 });
+
+test('service core: voice.set picks the narration engine (Settings › Mortiflix › Narration)', async (t) => {
+  const root = tempStudio(t);
+  const { call } = harness(t, root);
+  const v = await call('voice.set', { engine: 'qwen' });
+  assert.equal(v.engine, 'qwen');
+  assert.equal((await call('voice.list')).engine, 'qwen');
+  assert.equal((await call('voice.set', { engine: 'none' })).engine, 'none');
+  await assert.rejects(call('voice.set', { engine: 'loud' }), /engine must be/);
+});

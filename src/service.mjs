@@ -16,7 +16,7 @@ import { findPipeline } from './pipelines.mjs';
 import { canvasView, nodeAction } from './canvas.mjs';
 import * as gates from './gates.mjs';
 import { RenderQueue } from './renderq.mjs';
-import { voiceOverview } from './voice/index.mjs';
+import { voiceOverview, saveVoice } from './voice/index.mjs';
 import { boothStatus, addTake, keepTake } from './booth.mjs';
 import { STAGES, STAGE_NAMES, stageIndex, stageStatuses, stageDone, handOverToApp, remakesIf, reopenStage, saveLastStage, stageOf } from './svc/stages.mjs';
 import { listPresets, getPreset, savePresetFull, deletePreset } from './svc/presets.mjs';
@@ -370,6 +370,13 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
     'presets.save': (p) => savePresetFull(root, p || {}),
     'presets.delete': (p) => deletePreset(root, String(p?.slug || bad('presets.delete needs a slug'))),
     'voice.list': () => { const v = voiceOverview(root); return { engine: v.engine, voice: v.voice ?? null, engines: ['none', 'elevenlabs', 'qwen', 'own'], presets: v.presets, elevenlabs_key: v.elevenlabs_key, local: v.local }; },
+    // Settings › Mortiflix › Narration: which engine narrates new lines (ElevenLabs is paid; This computer is local)
+    'voice.set': (p) => {
+      const engine = String(p?.engine || '');
+      if (!['none', 'elevenlabs', 'qwen', 'own'].includes(engine)) bad('engine must be none, elevenlabs, qwen or own');
+      saveVoice(root, { engine });
+      return handlers['voice.list']();
+    },
 
     // ---- assets (doc 32) ----
     'assets.list': (p) => listAssets(root, needProject(p)),
