@@ -1405,7 +1405,7 @@ impl FilmcraftApp {
                 paths.push(p.to_string_lossy().to_string());
             }
         }
-        if !paths.is_empty() {
+        if !paths.is_empty() && !mortiflix::take_drop(self, &paths) {
             let pointer = self.drop_pointer(ctx);
             let imported = self.session.execute("file.import", json!({"paths": paths, "bin": self.import_bin().0}));
             if let Ok(v) = imported

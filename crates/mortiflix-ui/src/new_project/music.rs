@@ -74,8 +74,8 @@ pub fn page(
     ui.set_width(W);
     ui.spacing_mut().item_spacing = vec2(8.0, 8.0);
     // a song dropped anywhere on the window, or chosen with Browse…, becomes the reference
-    let (dropped, _) = drops(ui);
-    let picked = ctx.state.take_picked(pick_key);
+    let (dropped, _) = drops(ui, ctx);
+    let picked = ctx.state.take_paths(pick_key);
     if let Some(path) = dropped.into_iter().chain(picked).next() {
         let a = model::inspect(&path);
         if a.error.is_empty() && a.kind.is_audio() {

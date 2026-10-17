@@ -73,6 +73,19 @@ pub struct ChatMessage {
     pub text: String,
     /// ISO time from the service, if it sent one.
     pub at: String,
+    /// Everything else the service sent with it (`stage`, `context`, `card`, `question`, `refs`,
+    /// `actions`, …): the chat part reads these (doc 37, protocol.md `chat.message`).
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, Value>,
+}
+
+/// Files the person chose in an OS dialog (`mortiflix.pickFiles`) or dropped on the window during
+/// stages 1-4 (`purpose: "drop"`): the part that asked takes them by its purpose.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct FilesIn {
+    pub purpose: String,
+    pub paths: Vec<String>,
 }
 
 /// The pop-up Next shows when something on the stage still needs you (doc 30).
@@ -111,10 +124,8 @@ pub struct MfxState {
     pub show_setup: bool,
     /// Next asked first: something still needs you.
     pub confirm_next: Option<NextConfirm>,
-    /// Files chosen in an OS dialog a part asked for (`mortiflix.pickFiles {key}`), by key, until
-    /// the part takes them ([`MfxState::take_picked`]).
-    #[serde(skip)]
-    pub picked: Vec<(String, Vec<String>)>,
+    /// Chosen or dropped files waiting for the part that asked (see [`FilesIn`]), oldest first.
+    pub files_in: Vec<FilesIn>,
 }
 
 impl Default for MfxState {
@@ -134,7 +145,7 @@ impl Default for MfxState {
             show_new_project: false,
             show_setup: false,
             confirm_next: None,
-            picked: Vec::new(),
+            files_in: Vec::new(),
         }
     }
 }
@@ -160,24 +171,27 @@ impl MfxState {
         self.confirm_next = None;
         Some(from)
     }
-    /// Files a dialog (or an agent, `mortiflix.pickFiles {key, paths}`) chose for `key`.
-    pub fn push_picked(&mut self, key: &str, paths: Vec<String>) {
-        if self.picked.len() < 64 {
-            self.picked.push((key.chars().take(100).collect(), paths.into_iter().take(1000).collect()));
+    /// Hand chosen or dropped files to the part that asked (bounded: 16 waiting, 500 paths each).
+    pub fn push_files(&mut self, purpose: &str, paths: Vec<String>) {
+        if paths.is_empty() {
+            return;
+        }
+        self.files_in.push(FilesIn { purpose: purpose.chars().take(200).collect(), paths: paths.into_iter().take(500).collect() });
+        if self.files_in.len() > 16 {
+            self.files_in.remove(0);
         }
     }
-    /// Take the files chosen for `key` (each pick once).
-    pub fn take_picked(&mut self, key: &str) -> Vec<String> {
-        let mut out = Vec::new();
-        self.picked.retain_mut(|(k, paths)| {
-            if k == key {
-                out.append(paths);
-                false
-            } else {
-                true
-            }
-        });
-        out
+    /// Take the waiting files whose purpose is `purpose` or starts with `purpose` + `:`.
+    pub fn take_files(&mut self, purpose: &str) -> Vec<FilesIn> {
+        let (mine, rest): (Vec<_>, Vec<_>) = std::mem::take(&mut self.files_in)
+            .into_iter()
+            .partition(|f| f.purpose == purpose || f.purpose.strip_prefix(purpose).is_some_and(|r| r.starts_with(':')));
+        self.files_in = rest;
+        mine
+    }
+    /// The paths of every waiting file for `purpose` (see [`MfxState::take_files`]), in order.
+    pub fn take_paths(&mut self, purpose: &str) -> Vec<String> {
+        self.take_files(purpose).into_iter().flat_map(|f| f.paths).collect()
     }
     pub fn push_chat(&mut self, msg: ChatMessage) {
         self.chat.push(msg);
@@ -253,10 +267,35 @@ mod tests {
     }
 
     #[test]
+    fn files_in_go_to_their_purpose_and_stay_bounded() {
+        let mut s = MfxState::default();
+        s.push_files("drop", vec!["/a".into()]);
+        s.push_files("assets.replace:a01", vec!["/b".into()]);
+        s.push_files("assets.add", vec![]);
+        assert!(s.take_files("assets").is_empty());
+        assert_eq!(s.take_files("assets.replace").len(), 1);
+        assert_eq!(s.take_files("drop")[0].paths, ["/a"]);
+        assert!(s.files_in.is_empty());
+        for i in 0..20 {
+            s.push_files("x", vec![i.to_string()]);
+        }
+        assert_eq!(s.files_in.len(), 16);
+    }
+
+    #[test]
+    fn chat_extras_round_trip() {
+        let mut s = MfxState::default();
+        s.apply_service_message(&json!({"event": "chat.message", "data": {"role": "ai", "text": "Pick", "question": {"id": "q1"}, "stage": 1}}));
+        assert_eq!(s.chat[0].extra.get("question"), Some(&json!({"id": "q1"})));
+        let back: MfxState = serde_json::from_value(serde_json::to_value(&s).unwrap()).unwrap();
+        assert_eq!(back, s);
+    }
+
+    #[test]
     fn chat_is_bounded() {
         let mut s = MfxState::default();
         for i in 0..MAX_CHAT + 5 {
-            s.push_chat(ChatMessage { role: "user".into(), text: i.to_string(), at: String::new() });
+            s.push_chat(ChatMessage { role: "user".into(), text: i.to_string(), ..ChatMessage::default() });
         }
         assert_eq!(s.chat.len(), MAX_CHAT);
         assert_eq!(s.chat.first().map(|m| m.text.as_str()), Some("5"));

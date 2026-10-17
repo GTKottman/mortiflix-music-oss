@@ -53,7 +53,14 @@ pub const COMMANDS: &[UiCommand] = &[
     cmd("mortiflix.reply", "Mortiflix Service Reply", &[], None),
     cmd("mortiflix.renderVideo", "Render the Video", &[], None),
     cmd("mortiflix.showNeedsYou", "Show What Needs You", &[], None),
-    cmd("mortiflix.pickFiles", "Mortiflix Pick Files", &[], None),
+    cmd("mortiflix.pickFiles", "Choose Files for Mortiflix", &[], None),
+    cmd("mortiflix.reveal", "Show in Folder", &[], None),
+];
+
+/// What `mortiflix.pickFiles` offers: the kinds of files a project's assets can be (doc 32a).
+const ASSET_EXTS: &[&str] = &[
+    "png", "jpg", "jpeg", "webp", "gif", "svg", "heic", "tif", "tiff", "bmp", "mp4", "mov", "mkv", "webm", "avi", "m4v", "wav", "mp3", "m4a", "aac", "flac",
+    "ogg", "opus", "aif", "aiff", "ttf", "otf", "woff", "woff2", "pdf", "docx", "txt", "md", "ase", "aco", "json",
 ];
 
 /// The Mortiflix panels.
@@ -98,6 +105,13 @@ pub fn frame_begin(app: &mut FilmcraftApp, ctx: &egui::Context) {
     if !s.active {
         return;
     }
+    if s.stage < mfx::STAGE_FILMCRAFT && app.ui.mode == Mode::Edit {
+        if app.ui.workspace != WORKSPACE {
+            apply_stage(app, app.mfx.core.state.stage);
+        }
+        keep_mortiflix_only(app);
+    }
+    let s = &app.mfx.core.state;
     let follow = match app.ui.mode {
         Mode::Export if s.stage != mfx::STAGE_RENDER => Some("render"),
         Mode::Edit if s.stage == mfx::STAGE_RENDER => Some("filmcraft"),
@@ -203,9 +217,16 @@ pub fn menu(app: &FilmcraftApp, items: &mut [MenuItem]) {
 }
 
 /// `stages.*` and `mortiflix.*` commands.
-pub fn route(app: &mut FilmcraftApp, id: &str, params: &Value) -> Option<Result<Value, String>> {
+pub fn route(app: &mut FilmcraftApp, ctx: &egui::Context, id: &str, params: &Value) -> Option<Result<Value, String>> {
     if let Some(what) = id.strip_prefix("stages.") {
         return Some(stage_command(app, what, params));
+    }
+    match id {
+        // An OS file dialog for a Mortiflix part; the chosen files wait in `state.files_in` under
+        // `purpose` until that part takes them. `paths` skips the dialog (agents, tests).
+        "mortiflix.pickFiles" => return Some(pick_files(app, params)),
+        "mortiflix.reveal" => return Some(reveal(app, ctx, params)),
+        _ => {}
     }
     let core = &mut app.mfx.core;
     let r = match id {
@@ -236,39 +257,60 @@ pub fn route(app: &mut FilmcraftApp, id: &str, params: &Value) -> Option<Result<
             Ok(Value::Null)
         }
         "mortiflix.showNeedsYou" => Ok(Value::Null),
-        "mortiflix.pickFiles" => return Some(pick_files(app, params)),
         _ => return None,
     };
     Some(r)
 }
 
-/// `mortiflix.pickFiles {key, exts?, folder?, paths?}`: an OS file (or folder) dialog for a
-/// Mortiflix part; the chosen paths land in `state.picked` under `key` for the part to take. With
-/// `paths` (agents, tests) no dialog opens and those paths are delivered as if chosen.
+/// `mortiflix.pickFiles {purpose, exts?, folder?, multiple?, paths?}`: an OS file (or folder)
+/// dialog for a Mortiflix part; the chosen paths wait in `state.files_in` under `purpose` until that
+/// part takes them. `exts` defaults to every kind of asset (doc 32a). With `paths` (agents, tests) no
+/// dialog opens and those paths are delivered as if chosen.
 fn pick_files(app: &mut FilmcraftApp, params: &Value) -> Result<Value, String> {
-    let key = params.get("key").and_then(Value::as_str).filter(|k| !k.is_empty() && k.len() <= 100).ok_or("mortiflix.pickFiles needs a `key`")?.to_string();
-    if let Some(paths) = params.get("paths").and_then(Value::as_array) {
-        let paths: Vec<String> = paths.iter().filter_map(Value::as_str).filter(|p| !p.is_empty() && p.len() <= 4096).take(1000).map(str::to_string).collect();
+    let purpose =
+        params.get("purpose").and_then(Value::as_str).filter(|p| !p.is_empty() && p.len() <= 200).ok_or("mortiflix.pickFiles needs a `purpose`")?.to_string();
+    if let Some(list) = params.get("paths").and_then(Value::as_array) {
+        let paths: Vec<String> = list.iter().take(500).filter_map(Value::as_str).filter(|p| !p.is_empty() && p.len() <= 4096).map(str::to_string).collect();
         let n = paths.len();
-        app.mfx.core.state.push_picked(&key, paths);
-        return Ok(json!({"picked": n}));
+        app.mfx.core.state.push_files(&purpose, paths);
+        return Ok(json!({"purpose": purpose, "paths": n}));
     }
     let dialog = if params.get("folder").and_then(Value::as_bool).unwrap_or(false) {
         crate::native_dialogs::FileDialog::Folder { at: None }
     } else {
-        let exts: Vec<String> = params
+        let asked: Vec<String> = params
             .get("exts")
             .and_then(Value::as_array)
-            .map(|a| a.iter().filter_map(Value::as_str).filter(|e| e.len() <= 10).take(64).map(str::to_string).collect())
+            .map(|a| a.iter().filter_map(Value::as_str).filter(|e| !e.is_empty() && e.len() <= 10).take(64).map(str::to_string).collect())
             .unwrap_or_default();
-        crate::native_dialogs::FileDialog::OpenFiles { exts }
-    };
-    app.pick_ui(dialog, move |app, paths| {
-        if !paths.is_empty() {
-            app.mfx.core.state.push_picked(&key, paths);
+        let exts = if asked.is_empty() { ASSET_EXTS.iter().map(|e| (*e).to_string()).collect() } else { asked };
+        if params.get("multiple").and_then(Value::as_bool).unwrap_or(true) {
+            crate::native_dialogs::FileDialog::OpenFiles { exts }
+        } else {
+            crate::native_dialogs::FileDialog::OpenFile { filter: "Files".into(), exts }
         }
-    });
+    };
+    app.pick_ui(dialog, move |app, paths| app.mfx.core.state.push_files(&purpose, paths));
     Ok(json!({"dialog": "open"}))
+}
+
+/// Show a file in the OS file manager (`open: true` opens it in its own app instead).
+fn reveal(app: &mut FilmcraftApp, ctx: &egui::Context, params: &Value) -> Result<Value, String> {
+    let path = params.get("path").and_then(Value::as_str).filter(|p| !p.is_empty() && p.len() <= 4096).ok_or("mortiflix.reveal needs a `path`")?;
+    let open = params.get("open").and_then(Value::as_bool).unwrap_or(false);
+    crate::panels::menu_dialogs::open_path(app, ctx, path, !open)?;
+    Ok(json!({"path": path}))
+}
+
+/// Files dropped on the window during stages 1-4 (or with the New project window open) go to the
+/// Mortiflix parts (chat, Assets, New project) instead of FilmCraft's Project panel.
+pub fn take_drop(app: &mut FilmcraftApp, paths: &[String]) -> bool {
+    let s = &app.mfx.core.state;
+    if !(s.show_new_project || (s.active && s.stage < mfx::STAGE_FILMCRAFT)) {
+        return false;
+    }
+    app.mfx.core.state.push_files("drop", paths.to_vec());
+    true
 }
 
 fn stage_command(app: &mut FilmcraftApp, what: &str, params: &Value) -> Result<Value, String> {
@@ -291,6 +333,28 @@ fn stage_command(app: &mut FilmcraftApp, what: &str, params: &Value) -> Result<V
     Ok(json!({"stage": s.stage, "key": mfx::stage_key(s.stage), "asked": nav == Nav::Asked}))
 }
 
+/// Stages 1-4 show only the Mortiflix panels (owner, 2026-10-16). A FilmCraft panel that lands in
+/// the Mortiflix workspace (Window ▸ Timeline, Shift+3, a sequence opened, a saved layout) is closed
+/// again: FilmCraft's own panels are on stage 5 FilmCraft. Returns what it closed.
+pub fn keep_mortiflix_only(app: &mut FilmcraftApp) -> Vec<PanelKind> {
+    if app.ui.workspace != WORKSPACE {
+        return Vec::new();
+    }
+    let mut panels = Vec::new();
+    app.ui.dock.panels(&mut panels);
+    panels.extend(app.ui.floating.iter().flat_map(|g| g.panels.iter().copied()));
+    let extra: Vec<PanelKind> = panels.into_iter().filter(|p| !is_panel(*p)).collect();
+    for p in &extra {
+        if let Err(e) = app.apply_dock(craft_ui::docking::Action::Close { panel: *p }) {
+            log::warn!("closing {} on a Mortiflix stage: {e}", p.title());
+        }
+    }
+    if !extra.is_empty() {
+        app.ui.status = "FilmCraft's own panels open on stage 5 FilmCraft.".into();
+    }
+    extra
+}
+
 /// Switch FilmCraft's layout and mode for a stage.
 pub fn apply_stage(app: &mut FilmcraftApp, stage: u8) {
     if stage < mfx::STAGE_FILMCRAFT {
@@ -299,6 +363,7 @@ pub fn apply_stage(app: &mut FilmcraftApp, stage: u8) {
             app.set_workspace(WORKSPACE);
         }
         app.ui.mode = Mode::Edit;
+        keep_mortiflix_only(app);
         return;
     }
     if app.ui.workspace == WORKSPACE {
@@ -325,16 +390,16 @@ mod tests {
     fn pick_files_delivers_paths_to_the_part_and_refuses_bad_params() {
         let mut app = FilmcraftApp::new(filmcraft_engine::Session::default());
         let ctx = egui::Context::default();
-        let r = crate::menus::invoke(&mut app, &ctx, "mortiflix.pickFiles", json!({"key": "newProject.assets", "paths": ["/a.png", 5, ""]})).unwrap();
-        assert_eq!(r["picked"], 1);
-        assert_eq!(app.mfx.core.state.take_picked("newProject.assets"), vec!["/a.png".to_string()]);
-        assert!(app.mfx.core.state.take_picked("newProject.assets").is_empty());
+        let r = crate::menus::invoke(&mut app, &ctx, "mortiflix.pickFiles", json!({"purpose": "newProject.assets", "paths": ["/a.png", 5, ""]})).unwrap();
+        assert_eq!(r["paths"], 1);
+        assert_eq!(app.mfx.core.state.take_paths("newProject.assets"), vec!["/a.png".to_string()]);
+        assert!(app.mfx.core.state.take_paths("newProject.assets").is_empty());
         assert!(crate::menus::invoke(&mut app, &ctx, "mortiflix.pickFiles", json!({})).is_err());
-        assert!(crate::menus::invoke(&mut app, &ctx, "mortiflix.pickFiles", json!({"key": 7})).is_err());
-        assert!(crate::menus::invoke(&mut app, &ctx, "mortiflix.pickFiles", json!({"key": "x".repeat(101)})).is_err());
+        assert!(crate::menus::invoke(&mut app, &ctx, "mortiflix.pickFiles", json!({"purpose": 7})).is_err());
+        assert!(crate::menus::invoke(&mut app, &ctx, "mortiflix.pickFiles", json!({"purpose": "x".repeat(201)})).is_err());
         // no host dialog here: nothing is picked, nothing breaks
-        assert!(crate::menus::invoke(&mut app, &ctx, "mortiflix.pickFiles", json!({"key": "k", "exts": [1, "png"], "folder": "yes"})).is_ok());
-        assert!(app.mfx.core.state.take_picked("k").is_empty());
+        assert!(crate::menus::invoke(&mut app, &ctx, "mortiflix.pickFiles", json!({"purpose": "k", "exts": [1, "png"], "folder": "yes"})).is_ok());
+        assert!(app.mfx.core.state.take_paths("k").is_empty());
     }
 
     #[test]
@@ -349,6 +414,12 @@ mod tests {
         assert_eq!(app.ui.workspace, WORKSPACE);
         assert!(app.ui.dock.contains(PanelKind::MfxNodes) && app.ui.dock.contains(PanelKind::MfxChat));
         assert!(hides_mode_tabs(&app));
+        // stages 1-4 show only the Mortiflix panels: Window ▸ Timeline (Shift+3) doesn't stay there
+        assert!(!app.ui.dock.contains(PanelKind::Timeline));
+        crate::menus::invoke(&mut app, &ctx, "window.panel.Timeline", json!({})).unwrap();
+        frame_begin(&mut app, &ctx);
+        assert!(!app.ui.dock.contains(PanelKind::Timeline));
+        assert!(app.ui.dock.contains(PanelKind::MfxChat) && app.ui.dock.contains(PanelKind::MfxAssets));
         crate::menus::invoke(&mut app, &ctx, "stages.editVideo", json!({})).unwrap();
         assert_eq!((app.mfx.core.state.stage, app.ui.mode), (mfx::STAGE_FILMCRAFT, Mode::Edit));
         assert_ne!(app.ui.workspace, WORKSPACE);
@@ -365,6 +436,15 @@ mod tests {
         assert!(crate::menus::invoke(&mut app, &ctx, "stages.set", json!({"stage": 99})).is_err());
         assert!(crate::menus::invoke(&mut app, &ctx, "stages.set", json!({"stage": -1})).is_err());
         assert!(crate::menus::invoke(&mut app, &ctx, "mortiflix.request", json!({"type": 5})).is_err());
+        // files for a part: chosen paths wait under their purpose; hostile params are refused
+        crate::menus::invoke(&mut app, &ctx, "mortiflix.pickFiles", json!({"purpose": "chat.attach", "paths": ["/a/b.png", 7]})).unwrap();
+        assert_eq!(app.mfx.core.state.take_files("chat.attach")[0].paths, ["/a/b.png"]);
+        assert!(crate::menus::invoke(&mut app, &ctx, "mortiflix.pickFiles", json!({})).is_err());
+        assert!(crate::menus::invoke(&mut app, &ctx, "mortiflix.reveal", json!({"path": ""})).is_err());
+        // drops go to Mortiflix on stages 1-4 only
+        assert!(take_drop(&mut app, &["/x.png".into()]));
+        crate::menus::invoke(&mut app, &ctx, "stages.filmcraft", json!({})).unwrap();
+        assert!(!take_drop(&mut app, &["/y.png".into()]), "stage 5: FilmCraft imports it");
         let r = crate::menus::invoke(&mut app, &ctx, "mortiflix.request", json!({"type": "state.get"})).unwrap();
         let reply = crate::menus::invoke(&mut app, &ctx, "mortiflix.reply", json!({"id": r["id"]})).unwrap();
         assert_eq!(reply["error"]["code"], "not_running");

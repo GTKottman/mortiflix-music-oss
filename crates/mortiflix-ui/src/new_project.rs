@@ -35,7 +35,7 @@ const ROW_H: f32 = 44.0;
 /// How long the "Saved your preset" note stays (doc 31: 4 s).
 const TOAST_SECS: f64 = 4.0;
 
-/// The dialog keys this window asks `mortiflix.pickFiles` for.
+/// The purposes this window asks `mortiflix.pickFiles` for.
 pub const PICK_ASSETS: &str = "newProject.assets";
 pub const PICK_REFERENCE: &str = "newProject.reference";
 pub const PICK_CREATOR_REFERENCE: &str = "newProject.creator.reference";
@@ -338,17 +338,15 @@ fn outline_red(ui: &egui::Ui, t: &MfxTheme, r: &egui::Response) {
     ui.painter().rect_stroke(r.rect.expand(2.0), 4.0, Stroke::new(1.5, t.error), StrokeKind::Outside);
 }
 
-/// Files dropped on the app this frame (paths only), and how many are hovering.
-pub(crate) fn drops(ui: &egui::Ui) -> (Vec<String>, usize) {
-    ui.input(|i| {
-        let dropped = i.raw.dropped_files.iter().map(|f| f.path().to_string_lossy().to_string()).filter(|p| !p.is_empty()).collect();
-        (dropped, i.raw.hovered_files.len())
-    })
+/// Files dropped on the app (the host routes them to `state.files_in` under `drop` while this
+/// window is open), and how many are hovering now.
+pub(crate) fn drops(ui: &egui::Ui, ctx: &mut MfxCtx) -> (Vec<String>, usize) {
+    (ctx.state.take_paths("drop"), ui.input(|i| i.raw.hovered_files.len()))
 }
 
-/// Ask the host for an OS file dialog; the paths come back in `state.picked` under `key`.
-pub(crate) fn pick(ctx: &mut MfxCtx, key: &str, exts: &[&str], folder: bool) {
-    ctx.command("mortiflix.pickFiles", json!({"key": key, "exts": exts, "folder": folder}));
+/// Ask the host for an OS file dialog; the paths come back in `state.files_in` under `purpose`.
+pub(crate) fn pick(ctx: &mut MfxCtx, purpose: &str, exts: &[&str], folder: bool) {
+    ctx.command("mortiflix.pickFiles", json!({"purpose": purpose, "exts": exts, "folder": folder}));
 }
 
 /// A kind glyph in a fixed 16:9 frame (doc 32a: nothing is drawn over a thumbnail).
@@ -418,8 +416,8 @@ fn main_page(ui: &mut egui::Ui, ctx: &mut MfxCtx, w: &mut Win, now: f64) {
     crate::service_notice(ui, ctx);
 
     // files picked in the dialog or dropped anywhere on the window (doc 32a)
-    let picked = ctx.state.take_picked(PICK_ASSETS);
-    let (dropped, hovering) = drops(ui);
+    let picked = ctx.state.take_paths(PICK_ASSETS);
+    let (dropped, hovering) = drops(ui, ctx);
     for list in [picked, dropped] {
         if !list.is_empty()
             && let Some(i) = model::add_assets(&mut w.draft.assets, &list)
@@ -1007,7 +1005,7 @@ mod tests {
         std::fs::write(&f, b"<svg/>").unwrap();
         let mut state = MfxState::default();
         let mut service = Service::default();
-        state.push_picked(PICK_ASSETS, vec![f.to_string_lossy().to_string()]);
+        state.push_files(PICK_ASSETS, vec![f.to_string_lossy().to_string()]);
         let ectx = egui::Context::default();
         ectx.run_ui(egui::RawInput::default(), |ui| {
             let mut c = MfxCtx::new(&mut state, &mut service, MfxTheme::default());
@@ -1018,7 +1016,7 @@ mod tests {
         let w = ectx.data_mut(|d| d.get_temp::<Win>(state_id())).unwrap();
         assert_eq!(w.draft.assets.len(), 1);
         assert_eq!(w.draft.assets[0].kind, Kind::Logo);
-        assert!(state.picked.is_empty());
+        assert!(state.files_in.is_empty());
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

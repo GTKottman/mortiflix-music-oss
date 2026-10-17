@@ -360,8 +360,8 @@ impl Creator {
     fn page_look(&mut self, ui: &mut egui::Ui, ctx: &mut MfxCtx) {
         let t = ctx.theme;
         Self::heading(ui, &t, "Look", "How it should look, in your words and pictures. The AI makes style frames from it for you to pick.");
-        let (dropped, hovering) = drops(ui);
-        let picked = ctx.state.take_picked(PICK_PICTURES);
+        let (dropped, hovering) = drops(ui, ctx);
+        let picked = ctx.state.take_paths(PICK_PICTURES);
         let mut wrong = Vec::new();
         for p in dropped.into_iter().chain(picked) {
             let ext = std::path::Path::new(&p).extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).unwrap_or_default();
@@ -572,8 +572,8 @@ impl Creator {
     fn page_skills(&mut self, ui: &mut egui::Ui, ctx: &mut MfxCtx) {
         let t = ctx.theme;
         Self::heading(ui, &t, "Skills", "What the AI knows how to do in this preset. A skill a running stage needs stays on.");
-        let (dropped, _) = drops(ui);
-        let picked = ctx.state.take_picked(PICK_SKILL_DIR);
+        let (dropped, _) = drops(ui, ctx);
+        let picked = ctx.state.take_paths(PICK_SKILL_DIR);
         for d in dropped.into_iter().chain(picked) {
             if !model::is_skill_dir(&d) {
                 self.skills_error = "That folder has no SKILL.md".into();

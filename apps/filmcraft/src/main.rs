@@ -254,6 +254,7 @@ fn app_creator(launch: Launch, graphics: graphics::GraphicsStart, created: Arc<A
         app.integrated_titlebar = cfg!(target_os = "macos");
         // Mortiflix FilmCraft: the stage bar and the Mortiflix service (MFX_SERVICE or first-run setup)
         app.mfx.core.activate();
+        filmcraft_mortiflix_ui::chat::model::set_local_offset(local_offset);
         app.mfx.core.start_service(filmcraft_mortiflix_ui::ServiceConfig::resolve(data_dir.clone().or_else(default_data_dir).as_deref()));
         let stage = app.mfx.core.state.stage;
         filmcraft_ui_egui::mortiflix::apply_stage(&mut app, stage);
