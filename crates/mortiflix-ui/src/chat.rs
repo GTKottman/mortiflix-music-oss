@@ -1340,15 +1340,24 @@ fn composer(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, info: Option<&
         let has_text = !st.draft.trim().is_empty() || !st.attachments.is_empty();
         let send_w = 58.0;
         let edit_w = (ui.available_width() - send_w - 6.0).max(60.0);
-        let edit = ui.add_sized(
-            [edit_w, (r.height() - 10.0).max(24.0)],
-            egui::TextEdit::multiline(&mut st.draft)
-                .id(composer_id())
-                .hint_text(hint.as_str())
-                .desired_rows(2)
-                .font(FontId::proportional(13.0))
-                .background_color(t.field_bg),
-        );
+        // A long message scrolls inside the box: a growing box pushed Send below the panel, out of reach.
+        let edit_h = (r.height() - 10.0).max(24.0);
+        let edit = egui::ScrollArea::vertical()
+            .id_salt("mfx-chat-composer-scroll")
+            .max_width(edit_w)
+            .max_height(edit_h)
+            .show(ui, |ui| {
+                ui.add_sized(
+                    [edit_w, edit_h],
+                    egui::TextEdit::multiline(&mut st.draft)
+                        .id(composer_id())
+                        .hint_text(hint.as_str())
+                        .desired_rows(2)
+                        .font(FontId::proportional(13.0))
+                        .background_color(t.field_bg),
+                )
+            })
+            .inner;
         if let Some(a) = edit.dnd_release_payload::<AssetDrag>() {
             st.attachments.push(Attachment::Asset { id: a.id.clone(), name: a.name.clone() });
         }
