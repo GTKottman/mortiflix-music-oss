@@ -157,6 +157,12 @@ export function graphView(root, id) {
   for (const s of film) { const n = g.nodes[s]; if (n?.look) edges.push({ from: n.look, to: s, kind: 'look' }); }
   for (const a of assets) for (const u of a.used_in) edges.push({ from: a.id, to: u.node, kind: 'uses' });
   for (const c of g.order.cues) { const n = g.nodes[c]; for (const s of film.filter((x) => g.nodes[x]?.beat === n.beat)) edges.push({ from: c, to: s, kind: 'under' }); }
+  // each shot's place and length in the film as the preview, Voice & music and Edit play it (the node area showed a
+  // version's whole file length: "0:43" for a 0:36 film)
+  try {
+    const tl = shotTimeline(root, id, { order: { ...g.order, film }, nodes });
+    for (const sh of tl.shots) { const n = nodes.find((x) => x.id === sh.node); if (n) Object.assign(n, { film_start: sh.start_sec, film_sec: sh.dur_sec }); }
+  } catch { /* the nodes keep their own lengths */ }
   return {
     project: id, rev: g.rev, fps: g.fps, colours: g.colours, problems: g.problems, open_edits: g.open_edits,
     order: { ...g.order, film },
