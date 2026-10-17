@@ -84,7 +84,8 @@ it's rewritten, moved or cut, and a new beat takes the next free number):
 
 ```json
 // script/beats.json (with the script)
-{ "beats": [ { "id": "b01", "words": "Every city has a heartbeat.", "visual": "A city map pulses.", "target_sec": 6 } ] }
+{ "beats": [ { "id": "b01", "name": "The heartbeat", "words": "Every city has a heartbeat.", "visual": "A city map pulses.", "target_sec": 6 } ] }
+// `name`: a short title for the beat, 2-4 words (shown on the nodes, the script and the editor's bins)
 // design/frames.json (with the style frames)
 { "frames": [ { "id": "sf01", "file": "out/frames/sf01-open.png", "label": "SF01 · Opening", "beats": ["b01"] } ] }
 // out/scenes.json (with the animatic, and again with the final)

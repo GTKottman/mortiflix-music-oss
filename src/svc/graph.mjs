@@ -9,7 +9,8 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync, rmSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
-import { canvasView, canvasPaths, loadGraph, nodeAction, requestNewPiece, CanvasError } from '../canvas.mjs';
+import { canvasView, canvasPaths, loadGraph, nodeAction, requestNewPiece, CanvasError, readBeats } from '../canvas.mjs';
+import { beatNames } from './beatnames.mjs';
 import { projectPaths, loadProject, event } from '../projects.mjs';
 import { withLock } from '../studio.mjs';
 import { listAssets } from './assets.mjs';
@@ -111,10 +112,14 @@ export function graphView(root, id) {
   const film = filmOrder(g, layout);
   const beatNo = Object.fromEntries(g.order.beats.map((b, i) => [b, i + 1]));
   const dpos = defaultPos(g, film);
+  // the beats' short names (the script's, the AI's, else a title from the words): nodes, ribbon, bins, markers
+  let names = {};
+  try { names = beatNames(root, id, readBeats(projectPaths(root, id).work, [])); } catch { /* no script yet */ }
   const nodes = Object.values(g.nodes).map((n) => {
     const p = plays(n, picks);
     return {
       ...n,
+      ...(n.kind === 'beat' && names[n.id] ? { name: names[n.id].name, name_from: names[n.id].from } : {}),
       beat_no: n.beat ? beatNo[n.beat] ?? null : null,
       versions: (n.versions || []).map((v) => { const path = v.file ? join(state, v.file) : null; return { ...v, path, still: stillFor(state, n, { ...v, path }) }; }),
       plays: p?.v ?? null,
@@ -139,7 +144,7 @@ export function graphView(root, id) {
   return {
     project: id, rev: g.rev, fps: g.fps, colours: g.colours, problems: g.problems, open_edits: g.open_edits,
     order: { ...g.order, film },
-    beats: g.order.beats.map((b, i) => ({ id: b, no: i + 1, title: g.nodes[b]?.title || '', colour: g.nodes[b]?.colour || null })),
+    beats: g.order.beats.map((b, i) => ({ id: b, no: i + 1, title: g.nodes[b]?.title || '', name: names[b]?.name || '', colour: g.nodes[b]?.colour || null })),
     nodes, edges,
     // your own files are input nodes too: where you dropped them (node.move takes asset ids)
     assets: assets.map((a) => ({ ...a, pos: layout.positions[a.id] || null })),
@@ -363,7 +368,7 @@ export function handoffPlan(root, id) {
   const sound = soundTimeline(root, id, gv, shots);
   const byId = Object.fromEntries(gv.nodes.map((n) => [n.id, n]));
   const [width, height] = SIZES[String(project.intake?.answers?.aspect || '16:9').trim()] || SIZES['16:9'];
-  const beatBin = (beat) => (beat ? `Shots/${byId[beat] ? `${byId[beat].beat_no ?? ''} ${String(byId[beat].title || '').slice(0, 40)}`.trim() : beat}` : 'Shots');
+  const beatBin = (beat) => (beat ? `Shots/${byId[beat] ? `${byId[beat].beat_no ?? ''} ${String(byId[beat].name || byId[beat].title || '').slice(0, 40)}`.trim() : beat}` : 'Shots');
   const label = (n) => n?.colour?.label || null;
   const clips = [];
   for (const s of shots) clips.push({ node: s.node, kind: 'shot', track: 'V1', bin: beatBin(s.beat), name: `${s.label} · ${s.title}`.slice(0, 80), label: label(s), version: s.version, start_sec: s.start_sec, dur_sec: s.dur_sec, media: s.media, preview: s.media.kind !== 'video' });
@@ -383,7 +388,7 @@ export function handoffPlan(root, id) {
   const older = gv.nodes.flatMap((n) => n.versions.filter((v) => v.path && v.v !== n.plays).map((v) => ({ node: n.id, version: v.v, name: `${n.label} v${v.v}`, label: label(n), path: v.path, from_sec: v.from_sec ?? null, to_sec: v.to_sec ?? null })));
   const cut = gv.nodes.filter((n) => n.kind === 'shot' && n.state === 'cut').map((n) => { const v = n.versions.find((x) => x.v === n.plays); return v?.path ? { node: n.id, version: v.v, name: `${n.label} · ${n.title || ''}`.slice(0, 80), label: label(n), path: v.path, from_sec: v.from_sec ?? null, to_sec: v.to_sec ?? null } : null; }).filter(Boolean);
   const markers = [];
-  for (const b of gv.beats) { const s = shots.find((x) => x.beat === b.id); if (s) markers.push({ kind: 'chapter', node: b.id, time_sec: s.start_sec, name: `${b.no} ${String(b.title).slice(0, 60)}`, label: b.colour?.label || null, comment: b.title }); }
+  for (const b of gv.beats) { const s = shots.find((x) => x.beat === b.id); if (s) markers.push({ kind: 'chapter', node: b.id, time_sec: s.start_sec, name: `${b.no} ${String(b.name || b.title).slice(0, 60)}`, label: b.colour?.label || null, comment: b.title }); }
   for (const c of sound.cues) if (c.start_sec !== null) markers.push({ kind: 'comment', node: c.node, time_sec: c.start_sec, name: `${c.label} · ${c.title || ''}`.trim(), label: label(c) });
   // One caption per voice line; a line moved over the next one ends its caption where the next begins (a caption
   // track holds one caption at a time).

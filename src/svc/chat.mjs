@@ -9,7 +9,8 @@ import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { projectPaths, projectPipeline, loadProject, readEvents } from '../projects.mjs';
 import { loadConfig } from '../studio.mjs';
-import { canvasView, nodeAction } from '../canvas.mjs';
+import { canvasView, nodeAction, readBeats } from '../canvas.mjs';
+import { beatNames } from './beatnames.mjs';
 import { submissions, answerQuestion } from '../gates.mjs';
 import { PARENT_SESSION_VARS } from '../backends/claude-code.mjs';
 import { credentials, DEFAULT_MODEL } from '../backends/anthropic-api.mjs';
@@ -71,7 +72,9 @@ function cardFor(root, id, step, version) {
   const abs = (v) => (v?.file ? join(state, v.file) : null);
   const cur = (n) => n.versions?.find((v) => v.v === n.current);
   const kind = step.canvas;
-  if (kind === 'beat' || step.key === 'script') return { kind: 'script', step: step.key, version, beats: g.order.beats.map((b, i) => ({ id: b, no: i + 1, colour: g.nodes[b].colour, words: g.nodes[b].title, target_sec: g.nodes[b].target_sec ?? null })) };
+  let names = {};
+  try { names = beatNames(root, id, readBeats(projectPaths(root, id).work, [])); } catch { /* the words alone */ }
+  if (kind === 'beat' || step.key === 'script') return { kind: 'script', step: step.key, version, beats: g.order.beats.map((b, i) => ({ id: b, no: i + 1, colour: g.nodes[b].colour, words: g.nodes[b].title, name: names[b]?.name || null, target_sec: g.nodes[b].target_sec ?? null })) };
   // a look's name: what the session called it in design/frames.json, else its label
   const lookName = (f) => { const d = readFrames(root, id).find((x) => x?.id === f); return String(d?.name || g.nodes[f].label).slice(0, 80); };
   if (kind === 'frame') return { kind: 'looks', step: step.key, version, frames: g.order.frames.map((f) => ({ id: f, label: g.nodes[f].label, name: lookName(f), path: abs(cur(g.nodes[f])), beat: g.nodes[f].beat })), using: (g.order.frames.includes(readLook(root, id).using) ? readLook(root, id).using : g.order.frames[0]) || null };
@@ -221,6 +224,25 @@ export async function quickReply(root, id, { text, context }) {
   try { j = JSON.parse(out); } catch { throw new Error('Claude Code answered something that is not JSON'); }
   if (j.is_error) throw new Error(String(j.result || j.error || 'Claude Code failed').slice(0, 300));
   return parseReply(j.result);
+}
+
+// One short question to the user's own AI with no tools (beat names): the answer's text. claude-code or anthropic-api.
+export async function askAI(root, id, prompt, { maxTokens = 400 } = {}) {
+  const config = loadConfig(root);
+  const backend = config.chatBackend || loadProject(root, id).backend || config.backend;
+  if (backend === 'demo') return '';
+  if (backend === 'anthropic-api') {
+    const { key } = credentials(root);
+    if (!key) throw new Error('no Anthropic API key');
+    const { default: Anthropic } = await import('@anthropic-ai/sdk');
+    const client = new Anthropic({ apiKey: key, maxRetries: 1 });
+    const r = await client.messages.create({ model: config.chatModel || config.model || DEFAULT_MODEL, max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] });
+    return r.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
+  }
+  const out = await runClaude(config, ['-p', prompt, '--output-format', 'json', '--tools', '', '--no-session-persistence', ...(config.chatModel || config.model ? ['--model', config.chatModel || config.model] : [])], projectPaths(root, id).work, { timeoutMs: 120_000 });
+  const j = JSON.parse(out);
+  if (j.is_error) throw new Error(String(j.result || 'Claude Code failed').slice(0, 300));
+  return String(j.result || '');
 }
 
 export function runClaude(config, args, cwd, { timeoutMs = 180_000 } = {}) {

@@ -16,6 +16,7 @@ import { projectPaths, loadProject, projectPipeline, event } from '../projects.m
 import { stepView } from '../gates.mjs';
 import { withLock } from '../studio.mjs';
 import { filmOrder, loadLayout } from './graph.mjs';
+import { beatNames } from './beatnames.mjs';
 
 const BEAT = /^b\d{2,3}$/;
 const LINE = /^b\d{2,3}-\d{1,3}$/;
@@ -97,6 +98,8 @@ export function scriptView(root, id) {
   const { list: voice } = readVoice(work);
   const s = readScript(work);
   const busy = writing(root, id);
+  let names = {};
+  try { names = beatNames(root, id, readBeats(work, [])); } catch { /* the words alone */ }
   const beats = s.beats.map((b, i) => {
     const node = g.nodes[b.id];
     const all = linesOf(b, voice);
@@ -110,7 +113,7 @@ export function scriptView(root, id) {
       return { id: l.id, words: l.words, feeds: f, changed: Boolean(l.changed_at), changed_at: l.changed_at || null,
         remaking: { shots: remaking.filter((x) => x.kind === 'shot').length, lines: remaking.filter((x) => x.kind === 'line').length } };
     });
-    return { id: b.id, no: i + 1, name: b.name || autoName(b.words), name_auto: !b.name, colour: node?.colour || null,
+    return { id: b.id, no: i + 1, name: b.name || names[b.id]?.name || autoName(b.words), name_auto: !b.name, name_from: b.name ? 'script' : names[b.id]?.from || 'words', colour: node?.colour || null,
       visual: b.visual || null, target_sec: b.target_sec ?? null, state: node?.state || null, lines, deleted };
   });
   // While the AI writes, the newest line is the one being written: read-only until it is done.

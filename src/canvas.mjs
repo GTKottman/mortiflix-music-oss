@@ -54,7 +54,8 @@ function readJson(work, rel, problems) {
 // The beats: script/beats.json, or the script's own "B01 · words" paragraphs.
 export function readBeats(work, problems) {
   const j = readJson(work, 'script/beats.json', problems);
-  if (j?.beats?.length) return j.beats.filter((b) => /^b\d{2,3}$/.test(b.id)).map((b) => ({ id: b.id, words: String(b.words || ''), visual: b.visual ? String(b.visual) : null, target_sec: b.target_sec ?? null }));
+  // `name`: the beat's short title when the session (or the owner) gave it one (svc/beatnames.mjs names the rest)
+  if (j?.beats?.length) return j.beats.filter((b) => /^b\d{2,3}$/.test(b.id)).map((b) => ({ id: b.id, words: String(b.words || ''), visual: b.visual ? String(b.visual) : null, target_sec: b.target_sec ?? null, ...(typeof (b.name ?? b.title) === 'string' && String(b.name ?? b.title).trim() ? { name: String(b.name ?? b.title).trim().slice(0, 80) } : {}) }));
   const f = workFile(work, 'script.md');
   if (!f) return [];
   const out = [];

@@ -67,7 +67,7 @@ test('script: get, edit a line (its shot and voice line remade, v2), add, delete
   assert.equal(s.beats.length, 4);
   assert.equal(s.writing, false);
   const b1 = s.beats[0];
-  assert.deepEqual([b1.id, b1.no, b1.name, b1.name_auto], ['b01', 1, 'Open on a single', true]);
+  assert.deepEqual([b1.id, b1.no, b1.name, b1.name_auto], ['b01', 1, 'Open on a single shape', true]);
   assert.ok(b1.colour?.hex);
   assert.equal(b1.lines.length, 1);
   const l1 = b1.lines[0];

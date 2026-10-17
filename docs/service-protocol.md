@@ -89,7 +89,7 @@ chat in that frame's context (`chat.context` + `chat.send`: a Fix on it). The ch
 
 | Type | Params | Result |
 |---|---|---|
-| `script.get` | `{}` | `{project, rev, writing, version, beats: [{id, no, name, name_auto, colour, visual, target_sec, state, lines: [{id, words, changed, changed_at, read_only, remaking: {shots, lines}, feeds: [{node, kind: line\|shot, label, state, current, made, remaking}]}], deleted: [{id, words, after, changed_at}]}], draft, draft_at}`. Line ids are the voice line ids (`b01-1`), forever. `feeds` = the graph's `says` edges: the line's voice line and its beat's shots. `writing` = the AI is still writing the script; its newest line is `read_only` |
+| `script.get` | `{}` | `{project, rev, writing, version, beats: [{id, no, name, name_auto, name_from, colour, visual, target_sec, state, lines: [{id, words, changed, changed_at, read_only, remaking: {shots, lines}, feeds: [{node, kind: line\|shot, label, state, current, made, remaking}]}], deleted: [{id, words, after, changed_at}]}], draft, draft_at}`. Line ids are the voice line ids (`b01-1`), forever. `feeds` = the graph's `says` edges: the line's voice line and its beat's shots. `writing` = the AI is still writing the script; its newest line is `read_only` |
 | `script.edit` | one edit, or `{edits: [edit…]}` (the app's Save sends every draft change at once). Edit = `{beat, beat_name}` \| `{beat, line, words}` \| `{beat, add_after: line id \| key \| null, words, key?}` \| `{beat, line, delete: true \| false}` | `{project, beats, changed[], added[], keys: {key: new id}, deleted[], restored[], renamed[], remaking: [{node, kind, edit}]}`, also sent as a `script.changed` event, plus one grey chat line ("Script: 1 line changed · remaking 1 shot and 1 voice line") |
 | `script.draft` | `{draft: {…} \| null, project?}` | `{project, saved, cleared}`: the app's unsaved script changes (its own shape, at most 256 KB), kept per project in `state/<id>/canvas/script-draft.json` and handed back as `script.get`'s `draft`, so they survive a service restart, a project switch and a crash; null (or a saved `script.edit`) clears them |
 
@@ -120,7 +120,7 @@ writing is refused.
 
 | Type | Params | Result |
 |---|---|---|
-| `graph.get` | `{}` | `{rev, fps, order: {beats, shots, frames, lines, cues, transitions, film}, beats: [{id, no, title, colour}], nodes: [...], edges: [{from, to, kind: next\|says\|look\|uses\|under}], assets, open_edits, problems}`; each node: `id, kind, label, title, beat, beat_no, colour, state, owner, current, plays, versions[{v, path, from_sec, to_sec, still}], pending, failed, edits, pos, default_pos, mix, uses`. `still` = a PNG of a shot version's first frame (made once with ffmpeg in the background; null until it exists; a picture version is its own still). `assets[]` carry `pos` (free placement; `node.move` takes asset ids) |
+| `graph.get` | `{}` | `{rev, fps, order: {beats, shots, frames, lines, cues, transitions, film}, beats: [{id, no, title, name, colour}], nodes: [...], edges: [{from, to, kind: next\|says\|look\|uses\|under}], assets, open_edits, problems}`; each node: `id, kind, label, title, beat, beat_no, colour, state, owner, current, plays, versions[{v, path, from_sec, to_sec, still}], pending, failed, edits, pos, default_pos, mix, uses`. a beat node also has `name` + `name_from: script|ai|words` (its short title, see Beat names). `still` = a PNG of a shot version's first frame (made once with ffmpeg in the background; null until it exists; a picture version is its own still). `assets[]` carry `pos` (free placement; `node.move` takes asset ids) |
 | `node.list` | `{}` | the foundation's flat list (kept) |
 | `node.edit` | `{node, action: ok\|fix\|cut\|clear, text?, bars?, part?}` | OK / Fix / Cut it; every press is a grey line in the chat |
 | `node.move` | `{positions: {id: [x, y] \| null}}` | `{moved}`: free placement, saved per project |
@@ -129,6 +129,13 @@ writing is refused.
 | `node.duplicate` | `{node, text?}` | `{edit, node}`: a new shot like it, right after it |
 | `node.insert` | `{after, text}` | `{edit, node}`: a new shot after `after` |
 | `node.find` | `{query}` | matching nodes |
+
+Beat names (`src/svc/beatnames.mjs`): every beat has a short title for the nodes, the ribbon, the Script panel, the
+preview's beats lane and FilmCraft's bins and chapter markers: the script's own `name` (sessions write it in
+`script/beats.json`, the owner renames with `script.edit {beat_name}`), else one the user's own AI gave (one short call
+for all unnamed beats, once per words, kept in `state/<id>/canvas/beat-names.json`; a `node.changed` with
+`{kind: beat, named: true}` rows follows), else a title from the words ("Look up! On a sunny day, the sky is bright
+blue." → "The sky is bright blue"), never the first words cut off.
 
 ### Loose preview (doc 36)
 

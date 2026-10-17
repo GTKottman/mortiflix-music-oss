@@ -25,7 +25,8 @@ import { loadTheme, saveTheme, themeSamples, setCuePlan, cleanTheme } from './sv
 import * as graph from './svc/graph.mjs';
 import { scriptView, applyScriptEdits, remakesFor, scriptActionText, scriptLogged, saveDraft } from './svc/script.mjs';
 import { lookView, useLook, moreLooks } from './svc/look.mjs';
-import { appendChat, chatHistory, translateEvents, typedMove, quickReply, applyMove, initChat, actionText } from './svc/chat.mjs';
+import { appendChat, chatHistory, translateEvents, typedMove, quickReply, applyMove, initChat, actionText, askAI } from './svc/chat.mjs';
+import { nameBeats, unnamed } from './svc/beatnames.mjs';
 import { exportTarget, deliverFromApp, postPlan, postSend } from './svc/export.mjs';
 import * as setup from './svc/setup.mjs';
 import { componentsStatus, installComponents, parseComponents } from './components.mjs';
@@ -168,6 +169,21 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
     }
   }
 
+  // Beats without a name get one from the user's own AI (once per words; the demo titles them from the words). A
+  // failed call is not tried again for 10 minutes; the words' own title shows meanwhile.
+  const naming = { busy: false, failedAt: new Map() };
+  function nameBeatsSoon(id) {
+    if (naming.busy || Date.now() - (naming.failedAt.get(id) || 0) < 600_000) return;
+    let todo;
+    try { todo = unnamed(root, id); } catch { return; }
+    if (!todo.length) return;
+    naming.busy = true;
+    nameBeats(root, id, { ask: (prompt) => askAI(root, id, prompt) })
+      .then((r) => { if (r.named.length && id === projectId()) emit('node.changed', { project: id, rev: null, nodes: r.named.map((b) => ({ id: b, kind: 'beat', named: true })) }); })
+      .catch((e) => { naming.failedAt.set(id, Date.now()); console.error(`beat names: ${e.message}`); })
+      .finally(() => { naming.busy = false; });
+  }
+
   function tick() {
     timer = null;
     if (closed) return;
@@ -176,6 +192,7 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
       try {
         for (const row of translateEvents(root, id)) emit('chat.message', row);
         policies(id);
+        nameBeatsSoon(id);
         const g = canvasView(root, id);
         const changed = [];
         const seen = new Map();
