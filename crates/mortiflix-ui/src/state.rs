@@ -111,6 +111,8 @@ pub struct MfxState {
     pub show_setup: bool,
     /// Next asked first: something still needs you.
     pub confirm_next: Option<NextConfirm>,
+    /// The node area (part 35): view, selection, where nodes sit, the typed graph.
+    pub nodes: crate::nodes::NodeArea,
 }
 
 impl Default for MfxState {
@@ -130,6 +132,7 @@ impl Default for MfxState {
             show_new_project: false,
             show_setup: false,
             confirm_next: None,
+            nodes: crate::nodes::NodeArea::default(),
         }
     }
 }

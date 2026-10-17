@@ -3633,3 +3633,51 @@
 	New Mortiflix Project	新規 Mortiflix プロジェクト
 	Render the Video	動画をレンダリング
 	Show What Needs You	確認が必要な項目を表示
+# Mortiflix FilmCraft: node area commands (part 03)
+	Previous Node	前のノード
+	Next Node	次のノード
+	Node Above	上のノード
+	Node Below	下のノード
+	OK and On to the Next Shot	OKして次のショットへ
+	Fix the Selected Node	選択したノードを修正
+	Cut It	カットする
+	Frame Selected Nodes	選択したノードを表示
+	Frame All Nodes	すべてのノードを表示
+	Zoom In on the Nodes	ノードを拡大
+	Zoom Out of the Nodes	ノードを縮小
+	Duplicate Shot	ショットを複製
+	Find a Shot	ショットを検索
+	Select All Shots	すべてのショットを選択
+	Clear Search or Deselect	検索をクリアまたは選択解除
+	Undo in the Node Area	ノード領域で取り消し
+	Redo in the Node Area	ノード領域でやり直し
+	Add a Shot	ショットを追加
+	Select a Node	ノードを選択
+	Fix	修正
+	Bring It Back	元に戻す
+	Move Nodes	ノードを移動
+	Move a Shot in the Film	映像内でショットを移動
+	Move a Shot Earlier or Later	ショットを前後に移動
+	Pick a Transition	トランジションを選択
+	New Shot	新しいショット
+	Use This Version	このバージョンを使用
+	Add a Note	メモを追加
+	Use in Shot	ショットで使用
+	Play the Node	ノードを再生
+	Show in the Node Area	ノード領域に表示
+	Highlight Nodes	ノードを強調
+	Mouse Wheel in the Node Area	ノード領域のマウスホイール
+	Zoom the Nodes To	ノードのズーム
+	Put Nodes Back in Film Order	ノードを映像の順に戻す
+	Reload the Nodes	ノードを再読み込み
+	Node Area State	ノード領域の状態
+	Frame Beat 1	ビート1を表示
+	Frame Beat 2	ビート2を表示
+	Frame Beat 3	ビート3を表示
+	Frame Beat 4	ビート4を表示
+	Frame Beat 5	ビート5を表示
+	Frame Beat 6	ビート6を表示
+	Frame Beat 7	ビート7を表示
+	Frame Beat 8	ビート8を表示
+	Frame Beat 9	ビート9を表示
+	Nodes	ノード

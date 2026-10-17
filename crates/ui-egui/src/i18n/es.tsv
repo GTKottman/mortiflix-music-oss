@@ -3634,3 +3634,51 @@
 	New Mortiflix Project	Nuevo proyecto de Mortiflix
 	Render the Video	Renderizar el vídeo
 	Show What Needs You	Mostrar lo que te necesita
+# Mortiflix FilmCraft: node area commands (part 03)
+	Previous Node	Nodo anterior
+	Next Node	Nodo siguiente
+	Node Above	Nodo de arriba
+	Node Below	Nodo de abajo
+	OK and On to the Next Shot	OK y al siguiente plano
+	Fix the Selected Node	Corregir el nodo seleccionado
+	Cut It	Quitarlo
+	Frame Selected Nodes	Encuadrar los nodos seleccionados
+	Frame All Nodes	Encuadrar todos los nodos
+	Zoom In on the Nodes	Acercar los nodos
+	Zoom Out of the Nodes	Alejar los nodos
+	Duplicate Shot	Duplicar plano
+	Find a Shot	Buscar un plano
+	Select All Shots	Seleccionar todos los planos
+	Clear Search or Deselect	Borrar la búsqueda o deseleccionar
+	Undo in the Node Area	Deshacer en el área de nodos
+	Redo in the Node Area	Rehacer en el área de nodos
+	Add a Shot	Añadir un plano
+	Select a Node	Seleccionar un nodo
+	Fix	Corregir
+	Bring It Back	Recuperarlo
+	Move Nodes	Mover nodos
+	Move a Shot in the Film	Mover un plano en la película
+	Move a Shot Earlier or Later	Mover un plano antes o después
+	Pick a Transition	Elegir una transición
+	New Shot	Nuevo plano
+	Use This Version	Usar esta versión
+	Add a Note	Añadir una nota
+	Use in Shot	Usar en el plano
+	Play the Node	Reproducir el nodo
+	Show in the Node Area	Mostrar en el área de nodos
+	Highlight Nodes	Resaltar nodos
+	Mouse Wheel in the Node Area	Rueda del ratón en el área de nodos
+	Zoom the Nodes To	Ampliar los nodos a
+	Put Nodes Back in Film Order	Volver a poner los nodos en el orden de la película
+	Reload the Nodes	Volver a cargar los nodos
+	Node Area State	Estado del área de nodos
+	Frame Beat 1	Encuadrar la parte 1
+	Frame Beat 2	Encuadrar la parte 2
+	Frame Beat 3	Encuadrar la parte 3
+	Frame Beat 4	Encuadrar la parte 4
+	Frame Beat 5	Encuadrar la parte 5
+	Frame Beat 6	Encuadrar la parte 6
+	Frame Beat 7	Encuadrar la parte 7
+	Frame Beat 8	Encuadrar la parte 8
+	Frame Beat 9	Encuadrar la parte 9
+	Nodes	Nodos
