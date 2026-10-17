@@ -315,37 +315,43 @@ fn versions(ui: &mut egui::Ui, ctx: &mut MfxCtx, msg: usize, card: &Value, out: 
         ui.label(RichText::new(format!("A new version of {} is in.", model::node(&ctx.state.graph, &node).name)).size(12.0).color(t.text_dim));
     }
     let w = 84.0;
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing.x = 10.0;
-        for v in vs.iter().take(12) {
-            let n = v.get("v").and_then(Value::as_u64).unwrap_or(0);
-            let in_use = v.get("inUse").and_then(Value::as_bool).unwrap_or(false);
-            let making = v.get("making").and_then(Value::as_bool).unwrap_or(false);
-            ui.vertical(|ui| {
-                ui.set_width(w);
-                let still = Some(text(v, "still")).filter(|x| !x.is_empty() && !making);
-                let r = frame(ui, w, if making { t.panel_bg } else { t.hover }, in_use.then_some(t.text), still.as_deref());
-                if making {
-                    // striped slot: the new version is on its way
-                    let p = ui.painter().with_clip_rect(r.rect);
-                    let mut x = r.rect.min.x - r.rect.height();
-                    while x < r.rect.max.x {
-                        p.line_segment([pos2(x, r.rect.max.y), pos2(x + r.rect.height(), r.rect.min.y)], Stroke::new(3.0, t.hover));
-                        x += 10.0;
+    // rows of as many as fit: a wrapped row of vertical groups overflowed the panel (run 2: the
+    // fifth version went past the edge and widened the thread, so long messages below were cut off)
+    let per_row = (((ui.available_width() + 10.0) / (w + 10.0)).floor() as usize).max(1);
+    let shown: Vec<&Value> = vs.iter().take(12).collect();
+    for row in shown.chunks(per_row) {
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 10.0;
+            for v in row.iter().copied() {
+                let n = v.get("v").and_then(Value::as_u64).unwrap_or(0);
+                let in_use = v.get("inUse").and_then(Value::as_bool).unwrap_or(false);
+                let making = v.get("making").and_then(Value::as_bool).unwrap_or(false);
+                ui.vertical(|ui| {
+                    ui.set_width(w);
+                    let still = Some(text(v, "still")).filter(|x| !x.is_empty() && !making);
+                    let r = frame(ui, w, if making { t.panel_bg } else { t.hover }, in_use.then_some(t.text), still.as_deref());
+                    if making {
+                        // striped slot: the new version is on its way
+                        let p = ui.painter().with_clip_rect(r.rect);
+                        let mut x = r.rect.min.x - r.rect.height();
+                        while x < r.rect.max.x {
+                            p.line_segment([pos2(x, r.rect.max.y), pos2(x + r.rect.height(), r.rect.min.y)], Stroke::new(3.0, t.hover));
+                            x += 10.0;
+                        }
                     }
-                }
-                let label = match (in_use, making) {
-                    (_, true) => format!("v{n} · making {}", text(v, "eta")).trim().to_string(),
-                    (true, _) => format!("v{n} ✓ in use"),
-                    _ => {
-                        let l = text(v, "label");
-                        if l.is_empty() { format!("v{n}") } else { format!("v{n} · {l}") }
-                    }
-                };
-                ui.add(egui::Label::new(RichText::new(label).size(11.0).color(if in_use { t.text } else { t.text_dim })).truncate());
-            });
-        }
-    });
+                    let label = match (in_use, making) {
+                        (_, true) => format!("v{n} · making {}", text(v, "eta")).trim().to_string(),
+                        (true, _) => format!("v{n} ✓ in use"),
+                        _ => {
+                            let l = text(v, "label");
+                            if l.is_empty() { format!("v{n}") } else { format!("v{n} · {l}") }
+                        }
+                    };
+                    ui.add(egui::Label::new(RichText::new(label).size(11.0).color(if in_use { t.text } else { t.text_dim })).truncate());
+                });
+            }
+        });
+    }
     ui.horizontal_wrapped(|ui| {
         if !node.is_empty() && button(ui, ctx, &format!("mfx.chat.card.{msg}.play"), "▶ Play it").clicked() {
             let info = model::node(&ctx.state.graph, &node);
