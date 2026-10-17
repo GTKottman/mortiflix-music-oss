@@ -150,13 +150,18 @@ writing is refused.
 
 | Type | Params | Result |
 |---|---|---|
-| `chat.send` | `{text, context?: node id \| "video", confirm?}` | `{queued, move?}`. In a node context the text is a Fix there (an OK'd piece asks first; send again with `confirm: true` for "Remake it"). In the whole video the user's Claude Code answers (`chat.typing`, then `chat.message`) and may make one move (a Fix or an answer) |
+| `chat.send` | `{text, context?: Context, confirm?}` | `{queued, move?}`. In a node context the text is a Fix there (an OK'd piece asks first; send again with `confirm: true` for "Remake it"). In the whole video the user's Claude Code answers (`chat.typing`, then `chat.message`) and may make one move (a Fix or an answer) |
 | `chat.history` | `{limit?, before?}` | rows `{id, at, role: user\|ai\|system\|action\|stage, text, context?, card?, refs?, edit?, question?, stage?}` |
 | `chat.action` | `{text, context?, refs?}` | a grey action line |
 | `chat.context` | `{context}` | the "talking about" target, echoed as a `chat.context` event |
 | `chat.answer` | `{question, value}` | answers an open question |
 | `questions.list` | `{}` | the project's questions |
 | `activity.list` | `{limit?}` | the session's recent activity (Details) |
+
+`Context` = `"video"` (the whole video), a piece id (`s01`, `b02`, `sf01`, `b01-2`, `m01`, `music`, `a01`), a cut with no
+transition yet (`cut:s02:s03`: the node area's cut pills; a typed message about it goes to the AI, or is a Fix on the
+transition once the board has one) or a stage (`stage:look`). Case-insensitive; anything else is `bad_request`. The app
+sends only these (`chat::model::context_param`; an odd selection is sent as `video`).
 
 Cards: `script {beats}`, `looks {frames, using}`, `shots`/`transitions {nodes}`, `submission {items, questions}`,
 `question {id, choices, default}`, `defaults {questions}`, `versions {edit, refs}`, `themes`, `confirm {node, text}`.

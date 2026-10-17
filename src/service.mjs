@@ -44,6 +44,15 @@ class ProtocolError extends Error {
 const bad = (message) => { throw new ProtocolError('bad_request', message); };
 const NODE_ID = /^[a-z][a-z0-9-]{1,23}$/;
 const nodeId = (v, what = 'node') => (NODE_ID.test(String(v || '')) ? String(v) : bad(`${what} must be a piece id like s01`));
+// What the chat can be "talking about" (protocol.md `chat.context`): the whole video, one piece (s01, b02, sf01,
+// b01-2, m01, music, a01), the cut between two shots that has no transition yet (`cut:s02:s03`, the node area's cut
+// pills) or a stage (`stage:look`). Ids are matched case-insensitively ("S03" is s03).
+const CONTEXT = /^(?:video|[a-z][a-z0-9-]{1,23}|cut:[a-z][a-z0-9-]{1,23}:[a-z][a-z0-9-]{1,23}|stage:[a-z]{3,20})$/;
+const contextOf = (v) => {
+  if (v === undefined || v === null || v === '' || v === 'video') return 'video';
+  const c = String(v).trim().toLowerCase();
+  return CONTEXT.test(c) ? c : bad('context must be "video", a piece id like s01, a cut like cut:s02:s03 or a stage like stage:look');
+};
 const assetId = (v) => (/^a\d{2,3}$/.test(String(v || '')) ? String(v) : bad('asset must be an id like a01'));
 const opt = (v, n = 4000) => (v === undefined || v === null ? undefined : String(v).slice(0, n));
 
@@ -506,7 +515,7 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
 
     // ---- chat (doc 37) ----
     'chat.history': (p) => chatHistory(root, needProject(p), { limit: p?.limit, before: p?.before || null }),
-    'chat.context': (p) => { state.context = p?.context && p.context !== 'video' ? nodeId(p.context, 'context') : 'video'; emit('chat.context', { context: state.context }); return { context: state.context }; },
+    'chat.context': (p) => { state.context = contextOf(p?.context); emit('chat.context', { context: state.context }); return { context: state.context }; },
     // A button press the app wants in the history as a grey line.
     'chat.action': (p) => chatRow(needProject(p), { role: 'action', text: String(p?.text || bad('chat.action needs text')).slice(0, 2000), context: p?.context, refs: Array.isArray(p?.refs) ? p.refs.map(String).filter((x) => NODE_ID.test(x)) : [] }),
     'chat.answer': (p) => {
@@ -546,7 +555,7 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
         emit('chat.message', { role: 'system', text: 'Open or make a project first: the chat talks about one video.', at: new Date().toISOString() });
         return { queued: true };
       }
-      const context = p?.context === undefined ? state.context : p.context && p.context !== 'video' ? nodeId(p.context, 'context') : 'video';
+      const context = p?.context === undefined ? state.context : contextOf(p.context);
       chatRow(id, { role: 'user', text, context: context !== 'video' ? context : undefined });
       const typed = typedMove(root, id, { text, context, confirm: p?.confirm === true });
       if (typed) {
@@ -558,7 +567,7 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
       quickReply(root, id, { text, context })
         .then((r) => {
           const done = applyMove(root, id, r.move);
-          chatRow(id, { role: 'ai', text: r.reply, refs: r.move?.node ? [String(r.move.node)] : [] });
+          chatRow(id, { role: 'ai', text: r.reply, refs: r.move?.node ? [String(r.move.node)] : [], ...(context !== 'video' ? { context } : {}) });
           if (done?.row) chatRow(id, done.row);
           if (done?.edit) runner?.wake();
         })

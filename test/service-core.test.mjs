@@ -326,3 +326,19 @@ test('service core: bad input is refused with a code, never a crash', async (t) 
   assert.ok(videosDir({ platform: 'win32', env: { USERPROFILE: 'C:\\Users\\a' } }).endsWith('Videos'));
   assert.ok(videosDir({ platform: 'darwin', home: '/Users/a' }).endsWith('Movies'));
 });
+
+test('service core: the chat can talk about a cut without a transition, a stage, or a piece in any case', async (t) => {
+  const root = tempStudio(t);
+  const { call } = harness(t, root);
+  await call('project.new', { preset: 'explainer', title: 'Contexts', idea: 'x', start: false, backend: 'demo' });
+  // The node area's cut pills (no transition picked yet) are selections too: owner's first run refused them.
+  assert.equal((await call('chat.context', { context: 'cut:s02:s03' })).context, 'cut:s02:s03');
+  assert.equal((await call('chat.context', { context: 'stage:look' })).context, 'stage:look');
+  assert.equal((await call('chat.context', { context: 'S03' })).context, 's03');
+  assert.equal((await call('chat.context', { context: 'video' })).context, 'video');
+  const r = await call('chat.send', { text: 'make this cut softer', context: 'cut:s02:s03' });
+  assert.equal(r.queued, true);
+  await until(async () => (await call('chat.history')).some((x) => x.role === 'ai' && /Demo/.test(x.text)));
+  assert.ok((await call('chat.history')).some((x) => x.role === 'user' && x.context === 'cut:s02:s03'));
+  await assert.rejects(call('chat.context', { context: 'cut:s02' }), (e) => e.code === 'bad_request');
+});

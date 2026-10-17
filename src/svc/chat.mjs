@@ -146,8 +146,15 @@ const ACTIONS = { ok: 'OK', fix: 'Fix', cut: 'Cut it', clear: 'Undo' };
 // What a typed message becomes. In a node context it is a Fix on that node (doc 37 "Typing becomes a move, and says
 // so"), unless the node is OK'd: then it asks first. In the whole video it goes to the AI for a quick reply.
 export function typedMove(root, id, { text, context, confirm = false }) {
-  if (!context || context === 'video') return null;
+  if (!context || context === 'video' || String(context).startsWith('stage:')) return null;
   const g = canvasView(root, id);
+  // A cut between two shots: a Fix on its transition when the board has one, else the AI answers (it may pick a move).
+  if (String(context).startsWith('cut:')) {
+    const [, from, to] = String(context).split(':');
+    const t = g.order.transitions.find((x) => g.nodes[x]?.from === from && g.nodes[x]?.to === to);
+    if (!t) return null;
+    context = t;
+  }
   const n = g.nodes[context];
   if (!n) return { reply: { role: 'system', text: `There's no ${context} any more: talking about the whole video.` } };
   if (n.owner === 'ok' && !confirm) {
@@ -159,6 +166,15 @@ export function typedMove(root, id, { text, context, confirm = false }) {
 
 export const actionText = (action, label, text) => `${ACTIONS[action] || action} on ${label}${text ? `: ${String(text).slice(0, 200)}` : ''}`;
 
+// The "talking about" target in words for the quick reply's brief.
+export function contextWords(context) {
+  const c = String(context || 'video');
+  if (c === 'video') return 'the whole video';
+  if (c.startsWith('cut:')) { const [, a, b] = c.split(':'); return `the cut between ${a.toUpperCase()} and ${b.toUpperCase()} (no transition picked yet)`; }
+  if (c.startsWith('stage:')) return `the ${c.slice(6)} stage`;
+  return c;
+}
+
 // The context the quick reply gets: short, from the graph and the project, never file contents.
 function briefFor(root, id, context) {
   const project = loadProject(root, id);
@@ -168,7 +184,7 @@ function briefFor(root, id, context) {
   const shots = g.order.shots.map((s) => `${s} (${g.nodes[s].state}${g.nodes[s].owner ? `, ${g.nodes[s].owner}` : ''})`).join(', ');
   const open = project.questions.filter((q) => !q.answered_at).map((q) => `${q.id}: ${q.text}${q.default ? ` (default ${q.default})` : ''}`).join('\n');
   const recent = chatHistory(root, id, { limit: 12 }).map((r) => `${r.role}: ${r.text.slice(0, 300)}`).join('\n');
-  return `Project "${project.title}" (${project.pipeline.name}), state ${project.state}.\nBeats:\n${beats || '(none yet)'}\nShots: ${shots || '(none yet)'}\nOpen questions:\n${open || '(none)'}\nTalking about: ${context || 'the whole video'}\nRecent chat:\n${recent}`;
+  return `Project "${project.title}" (${project.pipeline.name}), state ${project.state}.\nBeats:\n${beats || '(none yet)'}\nShots: ${shots || '(none yet)'}\nOpen questions:\n${open || '(none)'}\nTalking about: ${contextWords(context)}\nRecent chat:\n${recent}`;
 }
 
 const SYSTEM = `You are the Mortiflix assistant inside a video app. The owner typed a message about their video. Reply in one or two short plain sentences. If the message asks for a change to one piece, also pick a move. Never post or publish anything. Answer ONLY with JSON: {"reply": "...", "move": null | {"kind": "fix", "node": "<id>", "text": "<what to change>"} | {"kind": "answer", "question": "<q id>", "value": "<answer>"}}. Use node ids exactly as listed (b01, s03, t02, m01, sf01, line ids).`;
