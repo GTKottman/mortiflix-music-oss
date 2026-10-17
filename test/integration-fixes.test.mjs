@@ -1,5 +1,5 @@
 // Fixes found while merging the Mortiflix Studio parts: a missing BPM stays missing, ComfyUI counts as installed
-// only when it is the studio's own, handoff.plan names the .fcproj, asset nodes keep their place, shot versions get a
+// only when it is the studio's own, handoff.plan names the .mortiflix, asset nodes keep their place, shot versions get a
 // PNG still.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -44,12 +44,12 @@ test('ComfyUI is installed only when it is the studio\'s own: another server on 
   assert.equal(after.installed, true, JSON.stringify(after));
 });
 
-test('handoff.plan names the .fcproj beside the project record; asset nodes keep their place', (t) => {
+test('handoff.plan names the .mortiflix beside the project record; asset nodes keep their place', (t) => {
   const root = mkdtempSync(join(tmpdir(), 'mfx-fix-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const p = makeHandoffDemo(root);
   const plan = handoffPlan(root, p.id);
-  assert.match(plan.fcproj, /[/\\]state[/\\][a-z0-9-]+[/\\]edit[/\\][^/\\]+\.fcproj$/);
+  assert.match(plan.fcproj, /[/\\]state[/\\][a-z0-9-]+[/\\]edit[/\\][^/\\]+\.mortiflix$/);
   // an asset id is known to node.move; graph.get sends its pos back
   update(root, p.id, (project) => { project.assets = [...(project.assets || []), { id: 'a01', name: 'logo.png', kind: 'logo', file: 'assets/logo.png', use: 'fits', where: null, note: '', versions: [], used_in: [] }]; });
   const r = moveNodes(root, p.id, { a01: [120, -40] });

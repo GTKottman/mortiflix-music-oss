@@ -105,7 +105,7 @@ export function makeEditProject(root, id, { log = () => {} } = {}) {
   }
 
   // 2. The project, through Mortiflix Studio's own engine.
-  const fcproj = join(fp.dir, `${project.title.replace(/[^\w .-]+/g, '').trim() || 'Mortiflix'}.fcproj`);
+  const fcproj = join(fp.dir, `${project.title.replace(/[^\w .-]+/g, '').trim() || 'Mortiflix'}.mortiflix`);
   const cli = (args, what) => JSON.parse(run(fc.cli, ['--compact', ...args], what).trim() || 'null');
   const exec = (cmd, params) => cli(['--project', fcproj, '--save', 'exec', cmd, JSON.stringify(params)], cmd);
   cli(['--save-as', fcproj, 'exec', 'file.newProject', JSON.stringify({ name: project.title })], 'file.newProject');

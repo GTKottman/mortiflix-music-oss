@@ -410,12 +410,12 @@ export function handoffPlan(root, id) {
 }
 
 // Where the app saves the Mortiflix Studio project: the one it saved before, else beside the project's record
-// (`<studio>/state/<id>/edit/<title>.fcproj`, the title kept to letters, digits, space, `-`, `_` and `.`).
+// (`<studio>/state/<id>/edit/<title>.mortiflix`, the title kept to letters, digits, space, `-`, `_` and `.`).
 export function handoffFcproj(root, id, title) {
   const saved = loadHandoff(root, id)?.fcproj;
   if (saved) return saved;
   const name = Array.from(String(title || '')).filter((c) => /[\p{L}\p{N} ._-]/u.test(c)).join('').trim().slice(0, 120) || 'Mortiflix';
-  return join(projectPaths(root, id).state, 'edit', `${name}.fcproj`);
+  return join(projectPaths(root, id).state, 'edit', `${name}.mortiflix`);
 }
 
 // What the app imported (doc 38 "done once"): saved so later versions are swapped in, never rebuilt.
