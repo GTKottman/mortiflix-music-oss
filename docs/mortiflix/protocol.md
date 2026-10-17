@@ -66,3 +66,22 @@ Stage keys: `script`, `look`, `shots`, `voiceMusic`, `filmcraft`, `render` (inde
 - The control channel reaches all of it: `engine.execute {command: "mortiflix.request", params: {type,
   params}}` → `{id}`, then `mortiflix.reply {id}`; `mortiflix.state` returns the shared state and the
   service status.
+
+## Setup additions (part 09)
+
+Part 09's Setup window uses part 08's `setup.status`, `setup.backend`, `setup.done`, `setup.claude.test` and
+`keys.set` / `keys.remove` / `keys.check`, plus these (service branch `mfx-service/setup`, `src/service-setup.mjs`):
+
+| Type | Params | Result |
+|---|---|---|
+| `setup.backend` | also `{claudeBin?}` (`claude` or an absolute path; `backend` may then be left out) | `{backend, claudeBin}` |
+| `setup.download` | `{label?, files: [{url, dest, size, sha256}]}` | `{job}`: https only, `dest` absolute; each file streams to `<dest>.part`, size + SHA-256 checked, renamed into place; files already there are skipped. Sent only after the user said yes |
+| `setup.install` | `{tool}` | `{job}`: one of setup.mjs's components (`tools.installable` ids) with its own installer, after the user said yes |
+| `setup.cancel` | `{job}` | `{cancelled}` |
+
+| Event | Data |
+|---|---|
+| `setup.progress` | `{job, kind: download\|install, label, state: running\|done\|failed\|cancelled, line, done?, total?}` |
+
+`setup.status` → `tools.engine` = `{ok, path}` (the sound engine). `MFX_FAKE_DOWNLOADS=1` (tests only): `fake:<bytes>`
+URLs, a pretend Chrome install, and the app's model packs swapped for one small fake file each.

@@ -48,7 +48,7 @@ pub const COMMANDS: &[UiCommand] = &[
     cmd("stages.set", "Go to Stage", &[], None),
     cmd("mortiflix.state", "Mortiflix State", &[], None),
     cmd("mortiflix.newProject", "New Mortiflix Project", &[], None),
-    cmd("mortiflix.setup", "Mortiflix Setup", &[], None),
+    cmd("mortiflix.setup", "Mortiflix…", &["Edit", "Preferences"], None),
     cmd("mortiflix.request", "Mortiflix Service Request", &[], None),
     cmd("mortiflix.reply", "Mortiflix Service Reply", &[], None),
     cmd("mortiflix.renderVideo", "Render the Video", &[], None),
@@ -135,9 +135,46 @@ pub fn panel(app: &mut FilmcraftApp, ui: &mut egui::Ui, p: PanelKind, rect: egui
     finish(app, ui.ctx(), cmds, autos);
 }
 
+/// Whisper (captions) and Kokoro (natural voices), from FilmCraft's own catalogues, for the Setup
+/// window's Tools step (it asks before downloading them into `<data dir>/models`).
+pub fn model_packs() -> Vec<mfx::setup::ModelPack> {
+    use filmcraft_speech::models as speech;
+    use filmcraft_tts::catalog as kokoro;
+    use mfx::setup::{ModelPack, PackFile};
+    let Some(dir) = filmcraft_engine::transcript::models_dir() else { return Vec::new() };
+    let mut packs = Vec::new();
+    if let Some(m) = speech::find(speech::DEFAULT_MODEL) {
+        packs.push(ModelPack {
+            id: m.id.into(),
+            name: "Whisper".into(),
+            what: "captions and word timing".into(),
+            license: m.license.into(),
+            source: m.source.into(),
+            dir: speech::model_dir(&dir, m),
+            usable: filmcraft_engine::transcript::speech_available(),
+            files: m.files.iter().map(|f| PackFile { name: f.name.into(), url: f.url.into(), sha256: f.sha256.into(), size: f.size }).collect(),
+        });
+    }
+    let first = kokoro::VOICES.first().map_or("", |v| v.info.id);
+    packs.push(ModelPack {
+        id: kokoro::PACKAGE_ID.into(),
+        name: "Natural voices".into(),
+        what: "Kokoro narration voices".into(),
+        license: kokoro::LICENSE.into(),
+        source: kokoro::SOURCE.into(),
+        dir: kokoro::package_dir(&dir),
+        usable: !matches!(filmcraft_tts::voice_in(first, None), Err(filmcraft_tts::TtsError::Unavailable)),
+        files: kokoro::FILES.iter().map(|f| PackFile { name: f.name.into(), url: f.url.into(), sha256: f.sha256.into(), size: f.size }).collect(),
+    });
+    packs
+}
+
 /// The New project and Setup windows.
 pub fn dialogs(app: &mut FilmcraftApp, ctx: &egui::Context) {
     let theme = theme(&app.tokens);
+    if app.mfx.core.state.show_setup && !mfx::setup::has_model_packs(ctx) {
+        mfx::setup::set_model_packs(ctx, model_packs());
+    }
     for which in [0, 1] {
         let (open, title, id) = match which {
             0 => (app.mfx.core.state.show_new_project, "New project", "mfx-new-project"),
