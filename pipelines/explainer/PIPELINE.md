@@ -1,7 +1,8 @@
 # Explainer video
 
-A 30-second to 2-minute motion design explainer, built in Remotion. After it, a viewer understands one idea and
-remembers one thing. The owner reviews each stage in the studio (`.mortiflix/GATES.md`).
+A motion design explainer, built in Remotion: usually 30 seconds to 2 minutes, but the brief's length rules (a custom
+length such as 25 min is a long-form explainer: the same steps, still one beat per idea and one shot per beat, the
+script fitted to that length). After it, a viewer understands one idea and remembers one thing. The owner reviews each stage in the studio (`.mortiflix/GATES.md`).
 
 Skills (read the one a step names before starting it):
 - `.claude/skills/motion-design/SKILL.md`: the craft, from style frames to the final.
