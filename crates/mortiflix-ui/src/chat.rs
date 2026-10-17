@@ -652,34 +652,68 @@ fn context_bar(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, msgs: &[Msg
         b.1 = model::short(&b.1, 12);
     }
     let deep = crumbs.len() > 1;
-    ui.allocate_ui_with_layout(vec2(r.width(), BAR_H), Layout::left_to_right(Align::Center), |ui| {
-        ui.spacing_mut().item_spacing.x = 4.0;
-        ui.label(RichText::new("Talking about").size(12.0).color(t.text_faint));
-        ui.add_space(4.0);
-        let last = crumbs.len().saturating_sub(1);
-        for (i, (to, label, info)) in crumbs.iter().enumerate() {
-            if i > 0 {
-                ui.label(RichText::new("›").size(12.0).color(t.text_faint));
-            }
-            if let Some(info) = info {
-                beat_mark(ui, ctx, info);
-            }
-            let here = i == last;
-            // the AI is making or remaking it: a spinner and the words beside it
-            if here && let Some(w) = to.as_deref().and_then(|id| ctx.state.work.label(id)) {
-                let (sr, _) = ui.allocate_exact_size(vec2(14.0, 14.0), Sense::hover());
-                crate::work::spinner(ui.painter(), sr.center(), 5.5, t.accent_hover, ui.input(|i| i.time));
-                ui.label(RichText::new(w).size(12.0).color(t.accent_hover));
-                ui.ctx().request_repaint_after(crate::work::FRAME);
-            }
-            let text = RichText::new(label).size(13.0).color(if here { t.text } else { LINK });
-            let resp = if here { ui.add(egui::Label::new(text.strong()).truncate()) } else { ui.add(egui::Label::new(text.underline()).sense(Sense::click())) };
-            if !here && resp.clicked() {
-                ctx.state.selected_node = to.clone();
-            }
-            ctx.auto(&format!("mfx.chat.crumb.{i}"), &resp, label);
+    // a beat's name in the middle of a deep path stays short, so the piece itself has room
+    if crumbs.len() > 2 {
+        let last = crumbs.len() - 1;
+        for c in crumbs.iter_mut().take(last).skip(1) {
+            c.1 = model::short(&c.1, 14);
         }
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+    }
+    // The right side (✕, History, questions waiting) gets its room first; the path is clipped to
+    // what is left, so a long path never draws over History (run 2: "SF05 · The takeaway" did).
+    let waiting = model::open_questions(msgs, &st.answered).len();
+    let waiting_label = (waiting > 0 && !deep).then(|| if waiting == 1 { "1 question waiting".to_string() } else { format!("{waiting} questions waiting") });
+    let measure = |ui: &egui::Ui, text: &str| ui.painter().layout_no_wrap(text.to_string(), FontId::proportional(12.0), t.text).size().x;
+    let mut right_w = measure(ui, "History") + 2.0 * ui.spacing().button_padding.x + 8.0;
+    if deep {
+        right_w += measure(ui, "✕") + 2.0 * ui.spacing().button_padding.x + 4.0;
+    }
+    if let Some(l) = &waiting_label {
+        right_w += measure(ui, l) + 8.0 + 12.0;
+    }
+    let right_w = right_w.min(r.width() * 0.5);
+    ui.allocate_ui_with_layout(vec2(r.width(), BAR_H), Layout::left_to_right(Align::Center), |ui| {
+        let row = ui.max_rect();
+        let left = Rect::from_min_max(row.min, pos2((row.max.x - right_w - 6.0).max(row.min.x), row.max.y));
+        let right = Rect::from_min_max(pos2(left.max.x + 6.0, row.min.y), row.max);
+        let mut path = ui.new_child(UiBuilder::new().max_rect(left).layout(Layout::left_to_right(Align::Center)));
+        path.set_clip_rect(left.intersect(ui.clip_rect()));
+        {
+            let ui = &mut path;
+            ui.spacing_mut().item_spacing.x = 4.0;
+            ui.label(RichText::new("Talking about").size(12.0).color(t.text_faint));
+            ui.add_space(4.0);
+            let last = crumbs.len().saturating_sub(1);
+            for (i, (to, label, info)) in crumbs.iter().enumerate() {
+                if i > 0 {
+                    ui.label(RichText::new("›").size(12.0).color(t.text_faint));
+                }
+                if let Some(info) = info {
+                    beat_mark(ui, ctx, info);
+                }
+                let here = i == last;
+                // the AI is making or remaking it: a spinner and the words beside it
+                if here && let Some(w) = to.as_deref().and_then(|id| ctx.state.work.label(id)) {
+                    let (sr, _) = ui.allocate_exact_size(vec2(14.0, 14.0), Sense::hover());
+                    crate::work::spinner(ui.painter(), sr.center(), 5.5, t.accent_hover, ui.input(|i| i.time));
+                    ui.label(RichText::new(w).size(12.0).color(t.accent_hover));
+                    ui.ctx().request_repaint_after(crate::work::FRAME);
+                }
+                let text = RichText::new(label).size(13.0).color(if here { t.text } else { LINK });
+                let resp = if here {
+                    ui.add(egui::Label::new(text.strong()).truncate()).on_hover_text(label)
+                } else {
+                    ui.add(egui::Label::new(text.underline()).sense(Sense::click()))
+                };
+                if !here && resp.clicked() {
+                    ctx.state.selected_node = to.clone();
+                }
+                ctx.auto(&format!("mfx.chat.crumb.{i}"), &resp, label);
+            }
+        }
+        let mut side = ui.new_child(UiBuilder::new().max_rect(right).layout(Layout::right_to_left(Align::Center)));
+        {
+            let ui = &mut side;
             if deep {
                 let x = ui.add(egui::Button::new(RichText::new("✕").size(12.0)).frame(false)).on_hover_text("Back to the whole video (Esc)");
                 if x.clicked() {
@@ -692,9 +726,7 @@ fn context_bar(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, msgs: &[Msg
                 st.history_open = !st.history_open;
             }
             ctx.auto("mfx.chat.history", &h, "History");
-            let waiting = model::open_questions(msgs, &st.answered).len();
-            if waiting > 0 && !deep {
-                let label = if waiting == 1 { "1 question waiting".to_string() } else { format!("{waiting} questions waiting") };
+            if let Some(label) = waiting_label {
                 let w = ui.add(egui::Label::new(RichText::new(label.clone()).size(12.0).color(t.text)).sense(Sense::click()));
                 let (dot, _) = ui.allocate_exact_size(vec2(8.0, 8.0), Sense::hover());
                 ui.painter().circle_filled(dot.center(), 3.5, t.accent);
@@ -703,7 +735,8 @@ fn context_bar(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, msgs: &[Msg
                 }
                 ctx.auto("mfx.chat.waiting", &w, &label);
             }
-        });
+        }
+        ui.advance_cursor_after_rect(row);
     });
 }
 
