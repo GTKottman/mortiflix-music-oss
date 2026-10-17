@@ -25,7 +25,7 @@ export class RenderQueue {
     return this.view(job);
   }
 
-  // A render the desktop app runs itself (a FilmCraft export): it takes its turn in the same queue, so two heavy renders
+  // A render the desktop app runs itself (a Mortiflix Studio export): it takes its turn in the same queue, so two heavy renders
   // never run at once. The app starts when the job turns 'running', reports progress, and says when it finished.
   addExternal({ projectId = null, label, kind = 'export' }) {
     const id = this.next++;

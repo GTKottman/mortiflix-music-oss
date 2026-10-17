@@ -134,7 +134,7 @@ export function translateEvents(root, id) {
       }
       case 'EDIT_FAILED': say({ role: 'system', text: `Couldn't remake it: ${e.details}`, refs: refsIn(e.details) }); break;
       case 'MUSIC_THEME': if (e.actor !== 'you') say({ role: 'ai', text: `Music theme: ${e.details}.`, card: { kind: 'themes' } }); break;
-      case 'DELIVERED_FROM_APP': case 'DELIVERED_FROM_FILMCRAFT': say({ role: 'ai', text: `The video is rendered: ${e.details}` }); break;
+      case 'DELIVERED_FROM_APP': case 'DELIVERED_FROM_EDIT': say({ role: 'ai', text: `The video is rendered: ${e.details}` }); break;
       case 'SESSION_ENDED': if (/^error/.test(e.details)) say({ role: 'system', text: `The AI stopped: ${String(e.details).replace(/^error: /, '')}` }); break;
       default: break;
     }

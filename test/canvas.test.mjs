@@ -157,7 +157,7 @@ test('canvas: the AI runs ahead through canvas steps; the build waits until all 
   assert.equal(states().final, 'in_review', 'all approved: the build ran and the final waits');
 });
 
-test('export: "Edit the video" only on the final; the final waits in FilmCraft (editing), no session runs', async (t) => {
+test('export: "Edit the video" only on the final; the final waits in Mortiflix Studio (editing), no session runs', async (t) => {
   const { loadProject, projectPipeline } = await import('../src/projects.mjs');
   const { stepView } = await import('../src/gates.mjs');
   const root = tempStudio(t);
@@ -175,16 +175,13 @@ test('export: "Edit the video" only on the final; the final waits in FilmCraft (
   const pr = loadProject(root, p.id);
   assert.equal(pr.steps.final.state, 'editing');
   assert.equal(pr.steps.final.edit, true);
-  assert.equal(pr.state, 'waiting', 'no session runs while the owner edits in FilmCraft');
+  assert.equal(pr.state, 'waiting', 'no session runs while the owner edits in Mortiflix Studio');
   assert.equal(stepView(pr, projectPipeline(root, p.id)).find((s) => s.key === 'final').last_feedback.verdict, 'edit');
 });
 
-test('filmcraft: the final as a FilmCraft project, every shot its own named clip, mapped back to the canvas', { skip: !existsSync(join(process.env.HOME || '', 'Mortiflix/tools/craft/filmcraft/bin/filmcraft-cli')) && 'FilmCraft not installed' }, async (t) => {
-  const { makeFilmcraftProject } = await import('../src/filmcraft.mjs');
-  const { paths } = await import('../src/studio.mjs');
+test('edit: the final as a Mortiflix Studio project, every shot its own named clip, mapped back to the canvas', { skip: !(await import('../src/studio-edit.mjs')).studioBin() && 'Mortiflix Studio not found (MFX_STUDIO_BIN or PATH)' }, async (t) => {
+  const { makeEditProject } = await import('../src/studio-edit.mjs');
   const root = tempStudio(t);
-  mkdirSync(join(paths(root).root, 'tools', 'craft'), { recursive: true });
-  symlinkSync(join(process.env.HOME, 'Mortiflix/tools/craft/filmcraft'), join(paths(root).root, 'tools', 'craft', 'filmcraft'));
   const p = createProject(root, { pipeline: 'explainer', title: 'Hand off', answers: { topic: 'tides' } });
   startProject(root, p.id);
   const runner = new Runner(root);
@@ -193,13 +190,13 @@ test('filmcraft: the final as a FilmCraft project, every shot its own named clip
   await runner.loop();
   respond(root, p.id, 'brief', 1, { verdict: 'approve' });
   await runner.loop();
-  const map = makeFilmcraftProject(root, p.id);
+  const map = makeEditProject(root, p.id);
   assert.ok(existsSync(map.fcproj));
   assert.deepEqual(map.clips.filter((c) => c.kind === 'shot').map((c) => [c.node, c.start_sec, c.seconds]), [['s01', 0, 2], ['s02', 2, 2], ['s03', 4, 2], ['s04', 6, 2]]);
   assert.ok(map.clips.every((c) => Number.isInteger(c.clip) && Number.isInteger(c.item)));
 });
 
-test('filmcraft: the render out of FilmCraft is delivered only while the final is being edited', async (t) => {
+test('edit: the render out of Mortiflix Studio is delivered only while the final is being edited', async (t) => {
   const { deliverEdited } = await import('../src/gates.mjs');
   const { loadProject, projectPaths: pp } = await import('../src/projects.mjs');
   const root = tempStudio(t);
@@ -220,6 +217,6 @@ test('filmcraft: the render out of FilmCraft is delivered only while the final i
   assert.equal(r.delivered, 'reviews/final/edited-1.mp4');
   const pr = loadProject(root, p.id);
   assert.equal(pr.state, 'delivered');
-  assert.equal(pr.steps.final.delivered_from, 'filmcraft');
+  assert.equal(pr.steps.final.delivered_from, 'edit');
   assert.equal(pr.deliverables[0].file, 'reviews/final/edited-1.mp4');
 });

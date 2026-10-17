@@ -1,5 +1,5 @@
 // Short names for the beats ("Why is it blue?", "Sunlight is every colour"): shown on the nodes, the ribbon, the
-// Script panel, the preview's beats lane and FilmCraft's bins and chapter markers. Where a name comes from, first
+// Script panel, the preview's beats lane and Mortiflix Studio's bins and chapter markers. Where a name comes from, first
 // that has one:
 //   1. the script itself: `name` (or `title`) on the beat in script/beats.json (sessions write it, harness/GATES.md),
 //      or the owner's own rename (script.edit {beat_name});

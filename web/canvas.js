@@ -1,5 +1,5 @@
-// The canvas: a project as a FilmCraft-style workspace. A 38 px header with Import / Edit / Export, then panels on
-// black gutters, each part of the work in its own corner, and the board along the bottom where FilmCraft has its
+// The canvas: a project as a Mortiflix Studio-style workspace. A 38 px header with Import / Edit / Export, then panels on
+// black gutters, each part of the work in its own corner, and the board along the bottom where Mortiflix Studio has its
 // timeline. The AI fills it as it works; the owner looks, plays and steers from here.
 //
 // app.js passes its helpers in (`ui`), so this module has no imports of its own and no copy of them.
@@ -629,7 +629,7 @@ export function canvasView(ui, id, mode = 'edit') {
     const p = raw.project;
     const runner = ui.studio()?.runner;
     graph = await api(`/api/projects/${id}/canvas`).catch(() => null);
-    fcInfo = mode === 'export' ? await api(`/api/projects/${id}/filmcraft`).catch(() => null) : null;
+    fcInfo = mode === 'export' ? await api(`/api/projects/${id}/edit`).catch(() => null) : null;
     d = { ...raw, title: p.title, status: p.status || (p.state === 'waiting' ? 'Waiting for you' : p.state === 'done' ? 'Delivered' : null),
       running: runner?.project === id, intake: p.intake, pipelineName: raw.pipeline?.name, intakeQs: raw.pipeline?.intake || [] };
     const keyOf = (x) => x.id || `${x.step}/${x.version}/${x.i}`;
@@ -681,29 +681,29 @@ export function canvasView(ui, id, mode = 'edit') {
     return sub ? { step, sub } : null;
   }
 
-  // Export: the final, and the last choice. Get the video takes it as it is; Edit the video opens it in FilmCraft as a
+  // Export: the final, and the last choice. Get the video takes it as it is; Edit the video opens it in Mortiflix Studio as a
   // project, every scene and sound its own clip, so small changes are made before the big render.
   function drawExport() {
     const f = finalOf();
     if (!f) return h('div', { class: 'cv-grid cv-grid-one' }, panel('Export', h('div', { class: 'cv-body' }, h('div', { class: 'cv-empty' }, h('div', { class: 'big' }, 'No final yet'), h('p', null, 'The final appears here once everything before it is approved.')))));
     const { step, sub } = f;
-    // Once delivered from FilmCraft, the edited final is the one to show.
-    const edited = d.project.steps?.[step.key]?.delivered_from === 'filmcraft' ? (d.project.deliverables || []).find((x) => x.kind === 'video') : null;
+    // Once delivered from Mortiflix Studio, the edited final is the one to show.
+    const edited = d.project.steps?.[step.key]?.delivered_from === 'edit' ? (d.project.deliverables || []).find((x) => x.kind === 'video') : null;
     const video = edited || sub.items.find((it) => it.kind === 'video');
     const waiting = step.state === 'in_review' && step.version === sub.version;
     const editing = step.state === 'editing';
-    // What the owner clicked in FilmCraft, asked for every second while the project is open.
+    // What the owner clicked in Mortiflix Studio, asked for every second while the project is open.
     const selBox = h('div', { class: 'cv-fcsel' });
     const drawSel = (r) => {
       const s = r?.selected?.[0];
-      if (!r?.open) return fill(selBox, h('p', { class: 'help' }, r?.error ? `${r.error}.` : 'Open it in FilmCraft, then click a scene or a sound there.'));
-      if (!s) return fill(selBox, h('p', { class: 'help' }, 'In FilmCraft, click a scene or a sound: it shows here, and you can ask for a different version of it.'));
+      if (!r?.open) return fill(selBox, h('p', { class: 'help' }, r?.error ? `${r.error}.` : 'Open it in Mortiflix Studio, then click a scene or a sound there.'));
+      if (!s) return fill(selBox, h('p', { class: 'help' }, 'In Mortiflix Studio, click a scene or a sound: it shows here, and you can ask for a different version of it.'));
       if (selBox.dataset.node === s.node && selBox.querySelector('textarea')) return;
       selBox.dataset.node = s.node;
       const node = graph?.nodes?.[s.node];
       const box = h('textarea', { rows: 2, placeholder: `What should be different in ${s.label.split(' · ')[0]}?` });
       fill(selBox,
-        h('div', { class: 'cv-label' }, `In FilmCraft you clicked: ${s.label}`),
+        h('div', { class: 'cv-label' }, `In Mortiflix Studio you clicked: ${s.label}`),
         node?.pending ? h('p', { class: 'cv-status-text' }, `Making a new version (${node.pending.id}): ${node.pending.text}`) : null,
         box,
         h('div', { class: 'cv-fix-end' }, h('button', { class: 'btn primary', onclick: async () => {
@@ -715,45 +715,45 @@ export function canvasView(ui, id, mode = 'edit') {
     if (editing && fcInfo?.map) {
       // Stops once this panel is gone (redrawn or left); the first call runs before it is on the page.
       let first = true;
-      const poll = async () => { if (!first && !selBox.isConnected) return clearInterval(selTimer); first = false; drawSel(await api(`/api/projects/${id}/filmcraft/selection`).catch(() => null)); };
+      const poll = async () => { if (!first && !selBox.isConnected) return clearInterval(selTimer); first = false; drawSel(await api(`/api/projects/${id}/edit/selection`).catch(() => null)); };
       selTimer = setInterval(poll, 1000); poll();
     }
     const job = fcInfo?.job;
     const map = fcInfo?.map;
     const fcBlock = () => {
-      if (job?.state === 'making') return h('p', { class: 'cv-status-text' }, `Making your FilmCraft project… ${job.log.at(-1) || ''}`);
-      if (job?.state === 'rendering') return h('p', { class: 'cv-status-text' }, `Rendering the final from FilmCraft… ${job.log.at(-1) || ''}`);
-      if (job?.state === 'failed' && job.kind === 'make') return h('div', null, h('p', { class: 'err' }, `Couldn't make the FilmCraft project: ${job.error}`),
-        h('button', { class: 'btn', onclick: async () => { await api(`/api/projects/${id}/filmcraft/make`, { method: 'POST' }); } }, 'Try again'));
+      if (job?.state === 'making') return h('p', { class: 'cv-status-text' }, `Making your Mortiflix Studio project… ${job.log.at(-1) || ''}`);
+      if (job?.state === 'rendering') return h('p', { class: 'cv-status-text' }, `Rendering the final from Mortiflix Studio… ${job.log.at(-1) || ''}`);
+      if (job?.state === 'failed' && job.kind === 'make') return h('div', null, h('p', { class: 'err' }, `Couldn't make the Mortiflix Studio project: ${job.error}`),
+        h('button', { class: 'btn', onclick: async () => { await api(`/api/projects/${id}/edit/make`, { method: 'POST' }); } }, 'Try again'));
       if (map) return h('div', { class: 'cv-fc' },
-        h('p', { class: 'okmsg' }, `Your FilmCraft project is ready: ${map.clips.length} clips, every shot${map.clips.some((c) => c.kind === 'line') ? ', voice line' : ''}${map.clips.some((c) => c.kind === 'music') ? ' and the music' : ''} on its own.`),
+        h('p', { class: 'okmsg' }, `Your Mortiflix Studio project is ready: ${map.clips.length} clips, every shot${map.clips.some((c) => c.kind === 'line') ? ', voice line' : ''}${map.clips.some((c) => c.kind === 'music') ? ' and the music' : ''} on its own.`),
         h('div', { class: 'cv-export-actions' }, h('button', { class: 'btn primary', onclick: async () => {
-          try { await api(`/api/projects/${id}/filmcraft/open`, { method: 'POST' }); ui.toast('Opening FilmCraft'); } catch (e) { ui.toast(e.message, true); }
-        } }, 'Open in FilmCraft'),
+          try { await api(`/api/projects/${id}/edit/open`, { method: 'POST' }); ui.toast('Opening Mortiflix Studio'); } catch (e) { ui.toast(e.message, true); }
+        } }, 'Open in Mortiflix Studio'),
           h('button', { class: 'btn', onclick: async () => {
-            try { await api(`/api/projects/${id}/filmcraft/render`, { method: 'POST' }); ui.toast('Rendering the final from FilmCraft'); } catch (e) { ui.toast(e.message, true); }
+            try { await api(`/api/projects/${id}/edit/render`, { method: 'POST' }); ui.toast('Rendering the final from Mortiflix Studio'); } catch (e) { ui.toast(e.message, true); }
           } }, 'Render the final and get the video')),
         job?.state === 'failed' && job.error ? h('p', { class: 'err' }, job.error) : null,
         selBox,
         h('p', { class: 'help' }, `The project file: ${map.fcproj}`));
-      return h('p', { class: 'cv-status-text' }, 'Making your FilmCraft project…');
+      return h('p', { class: 'cv-status-text' }, 'Making your Mortiflix Studio project…');
     };
     const msg = h('div', { class: 'err' });
     const decide = async (verdict) => {
-      try { await api(`/api/projects/${id}/reviews/${step.key}/${sub.version}`, { method: 'POST', body: { verdict, notes: [], overall: '', answers: {} } }); ui.toast(verdict === 'approve' ? 'The video is yours' : 'Making your FilmCraft project'); }
+      try { await api(`/api/projects/${id}/reviews/${step.key}/${sub.version}`, { method: 'POST', body: { verdict, notes: [], overall: '', answers: {} } }); ui.toast(verdict === 'approve' ? 'The video is yours' : 'Making your Mortiflix Studio project'); }
       catch (e) { msg.textContent = e.message; }
     };
     return h('div', { class: 'cv-grid cv-grid-one' }, panel('Export', h('div', { class: 'cv-body cv-export' },
       video ? h('div', { class: 'cv-stage cv-export-stage' }, h('video', { src: fileUrl(id, video.file), controls: true, preload: 'metadata', playsinline: true })) : null,
       h('div', { class: 'cv-export-side' },
-        h('div', { class: 'cv-label' }, edited ? `${step.name}, edited in FilmCraft` : `${step.name} v${sub.version}`),
+        h('div', { class: 'cv-label' }, edited ? `${step.name}, edited in Mortiflix Studio` : `${step.name} v${sub.version}`),
         !edited && sub.note ? h('p', { class: 'cv-says' }, sub.note) : null,
         waiting ? h('div', null,
           h('p', { class: 'cv-q-text' }, 'Do you want the video, or do you want to edit the video?'),
           h('div', { class: 'cv-export-actions' },
             h('button', { class: 'btn primary', onclick: () => decide('approve') }, 'Get the video'),
             h('button', { class: 'btn', onclick: () => decide('edit') }, 'Edit the video')),
-          h('p', { class: 'help' }, 'Edit the video opens it in FilmCraft as a project: every scene, voice line and music cue its own clip. Click one and ask for a different version; small changes happen before the big render.'),
+          h('p', { class: 'help' }, 'Edit the video opens it in Mortiflix Studio as a project: every scene, voice line and music cue its own clip. Click one and ask for a different version; small changes happen before the big render.'),
           msg)
           : editing ? fcBlock()
             : d.project.state === 'delivered' ? h('div', null, h('p', { class: 'okmsg' }, 'Delivered.'),

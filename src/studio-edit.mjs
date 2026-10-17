@@ -1,28 +1,40 @@
-// "Edit the video": the final as a FilmCraft project. Every shot is its own clip on V1 (so one can be swapped at a time),
-// every narration line its own clip on A1 at its time, the music on A2, a marker per beat. It is built with FilmCraft's
-// own headless engine (`filmcraft-cli`), so the project is always in the format the installed FilmCraft writes.
-// out/filmcraft/map.json ties every clip back to its canvas piece: click a clip in FilmCraft, and the studio knows
+// "Edit the video": the final as a Mortiflix Studio project. Every shot is its own clip on V1 (so one can be swapped at a time),
+// every narration line its own clip on A1 at its time, the music on A2, a marker per beat. It is built with Mortiflix Studio's
+// own headless engine (`mortiflix-studio-cli`), so the project is always in the format the installed Mortiflix Studio writes.
+// out/edit/map.json ties every clip back to its canvas piece: click a clip in Mortiflix Studio, and the studio knows
 // which shot, line or cue it is.
 import { spawnSync, spawn } from 'node:child_process';
 import net from 'node:net';
 import { existsSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, delimiter } from 'node:path';
 import { projectPaths, loadProject } from './projects.mjs';
 import { canvasView } from './canvas.mjs';
-import { installed } from './craft.mjs';
 import { UserError } from './studio.mjs';
 
 export const CONTROL_PORT = 9876;
-const TPS = 254016000000; // FilmCraft ticks per second
+const TPS = 254016000000; // Mortiflix Studio ticks per second
 
-export function filmcraftPaths(root, id) {
-  const dir = join(projectPaths(root, id).work, 'out', 'filmcraft');
+export function editPaths(root, id) {
+  const dir = join(projectPaths(root, id).work, 'out', 'edit');
   return { dir, media: join(dir, 'media'), map: join(dir, 'map.json') };
 }
 
-export function filmcraftCli(root) {
-  const fc = installed(root, 'filmcraft');
-  if (!fc) throw new UserError('FilmCraft isn\'t installed: mortiflix craft install filmcraft (Settings › Setup › Craft apps)');
+// Mortiflix Studio, the desktop editor: its command line and app from the folder in MFX_STUDIO_BIN, else from PATH.
+export function studioBin() {
+  const exe = process.platform === 'win32' ? '.exe' : '';
+  for (const dir of [process.env.MFX_STUDIO_BIN, ...(process.env.PATH || '').split(delimiter)].filter(Boolean)) {
+    const cli = join(dir, `mortiflix-studio-cli${exe}`);
+    if (!existsSync(cli)) continue;
+    const app = join(dir, `mortiflix-studio${exe}`);
+    const v = spawnSync(cli, ['--version'], { encoding: 'utf8', timeout: 10_000 });
+    return { cli, app: existsSync(app) ? app : null, version: (v.stdout || '').trim().split(/\s+/).pop() || null };
+  }
+  return null;
+}
+
+export function studioCli() {
+  const fc = studioBin();
+  if (!fc) throw new UserError('Mortiflix Studio isn\'t found: put mortiflix-studio-cli on PATH, or set MFX_STUDIO_BIN to its folder');
   return fc;
 }
 
@@ -32,7 +44,7 @@ const run = (cmd, args, what) => {
   return r.stdout;
 };
 
-// FilmCraft reads media best re-encoded: no B-frames (else frames show late), constant 48 kHz audio from time zero.
+// Mortiflix Studio reads media best re-encoded: no B-frames (else frames show late), constant 48 kHz audio from time zero.
 function prepVideo(src, dest, { from = null, to = null, audio = true } = {}) {
   const args = ['-y', '-loglevel', 'error'];
   if (from !== null) args.push('-ss', String(from));
@@ -43,16 +55,16 @@ function prepVideo(src, dest, { from = null, to = null, audio = true } = {}) {
   args.push(dest);
   run('ffmpeg', args, `preparing ${dest}`);
 }
-// Voice and music go in as 24-bit WAV (FilmCraft reads it through Symphonia): 16-bit would round away 8 bits of the
+// Voice and music go in as 24-bit WAV (Mortiflix Studio reads it through Symphonia): 16-bit would round away 8 bits of the
 // float mix with no dither (doc 15 §3). Anything not at 48 kHz is resampled once, by soxr at its best precision.
 export const prepAudio = (src, dest) => run('ffmpeg', ['-y', '-loglevel', 'error', '-i', src, '-af', 'aresample=48000:resampler=soxr:precision=28', '-c:a', 'pcm_s24le', dest], `preparing ${dest}`);
 
-export function makeFilmcraftProject(root, id, { log = () => {} } = {}) {
-  const fc = filmcraftCli(root);
+export function makeEditProject(root, id, { log = () => {} } = {}) {
+  const fc = studioCli(root);
   const project = loadProject(root, id);
   const state = projectPaths(root, id).state;
   const g = canvasView(root, id);
-  const fp = filmcraftPaths(root, id);
+  const fp = editPaths(root, id);
   rmSync(fp.dir, { recursive: true, force: true });
   mkdirSync(fp.media, { recursive: true });
   const n = g.nodes;
@@ -92,13 +104,13 @@ export function makeFilmcraftProject(root, id, { log = () => {} } = {}) {
     files.push({ node: 'music', kind: 'music', version: music.current, beat: null, file: dest, label: 'Music', start_sec: 0 });
   }
 
-  // 2. The project, through FilmCraft's own engine.
+  // 2. The project, through Mortiflix Studio's own engine.
   const fcproj = join(fp.dir, `${project.title.replace(/[^\w .-]+/g, '').trim() || 'Mortiflix'}.fcproj`);
   const cli = (args, what) => JSON.parse(run(fc.cli, ['--compact', ...args], what).trim() || 'null');
   const exec = (cmd, params) => cli(['--project', fcproj, '--save', 'exec', cmd, JSON.stringify(params)], cmd);
   cli(['--save-as', fcproj, 'exec', 'file.newProject', JSON.stringify({ name: project.title })], 'file.newProject');
   const imported = exec('file.import', { paths: files.map((f) => f.file) });
-  if (imported.errors?.length) throw new Error(`FilmCraft couldn't import: ${JSON.stringify(imported.errors).slice(0, 300)}`);
+  if (imported.errors?.length) throw new Error(`Mortiflix Studio couldn't import: ${JSON.stringify(imported.errors).slice(0, 300)}`);
   files.forEach((f, i) => { f.item = imported.items[i]; });
   // The sequence takes the shots' own frame rate and size.
   const probe = JSON.parse(run('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height,r_frame_rate', '-of', 'json', files[0].file], 'ffprobe')).streams[0];
@@ -122,30 +134,30 @@ export function makeFilmcraftProject(root, id, { log = () => {} } = {}) {
   rmSync(jsonl, { force: true });
 
   const map = {
-    format: 'mortiflix.filmcraft', version: 1, project: id, fcproj, sequence: seq, fps, made_at: new Date().toISOString(), filmcraft: fc.version,
+    format: 'mortiflix.edit', version: 1, project: id, fcproj, sequence: seq, fps, made_at: new Date().toISOString(), studio: fc.version,
     clips: files.map(({ node, kind, version, beat, item, clip, label, start_sec, seconds, file, audio }) => ({ node, kind, version, beat, item, clip, label, start_sec, seconds: seconds ?? null, file, ...(kind === 'shot' ? { audio } : {}) })),
   };
   writeFileSync(fp.map, JSON.stringify(map, null, 2));
-  log(`FilmCraft project: ${fcproj} (${files.length} clips)`);
+  log(`Mortiflix Studio project: ${fcproj} (${files.length} clips)`);
   return map;
 }
 
 export function loadMap(root, id) {
-  try { return JSON.parse(readFileSync(filmcraftPaths(root, id).map, 'utf8')); } catch { return null; }
+  try { return JSON.parse(readFileSync(editPaths(root, id).map, 'utf8')); } catch { return null; }
 }
 
-// Open the project in desktop FilmCraft with its control channel on (loopback only), so the studio can see what the
+// Open the project in desktop Mortiflix Studio with its control channel on (loopback only), so the studio can see what the
 // owner clicks. On Hyprland it opens on workspace 9, out of the way of whatever the owner has open.
-export function openInFilmcraft(root, id, { port = CONTROL_PORT } = {}) {
-  const fc = filmcraftCli(root);
+export function openInStudio(root, id, { port = CONTROL_PORT } = {}) {
+  const fc = studioCli(root);
   const map = loadMap(root, id);
-  if (!map || !existsSync(map.fcproj)) throw new UserError('make the FilmCraft project first (Export › Edit the video)');
-  if (!fc.app) throw new UserError('this FilmCraft install has no desktop app');
+  if (!map || !existsSync(map.fcproj)) throw new UserError('make the Mortiflix Studio project first (Export › Edit the video)');
+  if (!fc.app) throw new UserError('this Mortiflix Studio install has no desktop app');
   const argv = [fc.app, '--control', String(port), map.fcproj];
   if (process.env.HYPRLAND_INSTANCE_SIGNATURE) {
-    // On a workspace that isn't on screen FilmCraft would stop drawing, and it answers its control channel only as it
-    // draws: let its window keep drawing there (FilmCraft's window only; gone at the next Hyprland reload).
-    spawnSync('hyprctl', ['keyword', 'windowrule', 'render_unfocused on, match:class ^(ai\\.storyteller\\.filmcraft)$']);
+    // On a workspace that isn't on screen Mortiflix Studio would stop drawing, and it answers its control channel only as it
+    // draws: let its window keep drawing there (Mortiflix Studio's window only; gone at the next Hyprland reload).
+    spawnSync('hyprctl', ['keyword', 'windowrule', 'render_unfocused on, match:class ^(com\\.mortiflix\\.studio)$']);
     spawnSync('hyprctl', ['dispatch', 'exec', `[workspace 9 silent] ${argv.map((a) => `'${a.replace(/'/g, "'\\''")}'`).join(' ')}`]);
   } else {
     spawn(argv[0], argv.slice(1), { detached: true, stdio: 'ignore' }).unref();
@@ -153,14 +165,14 @@ export function openInFilmcraft(root, id, { port = CONTROL_PORT } = {}) {
   return { opened: map.fcproj, port };
 }
 
-// ---- the control channel: what the owner clicked in FilmCraft ----
+// ---- the control channel: what the owner clicked in Mortiflix Studio ----
 
-// One request on FilmCraft's control channel (JSON lines on 127.0.0.1, one reply per request).
+// One request on Mortiflix Studio's control channel (JSON lines on 127.0.0.1, one reply per request).
 export function control(method, params = undefined, { port = CONTROL_PORT, timeoutMs = 8000 } = {}) {
   return new Promise((resolve, reject) => {
     const sock = net.connect({ host: '127.0.0.1', port });
     let buf = '';
-    const timer = setTimeout(() => { sock.destroy(); reject(new Error('FilmCraft isn\'t answering (is it open, with its control channel on?)')); }, timeoutMs);
+    const timer = setTimeout(() => { sock.destroy(); reject(new Error('Mortiflix Studio isn\'t answering (is it open, with its control channel on?)')); }, timeoutMs);
     sock.on('connect', () => sock.write(`${JSON.stringify({ id: 1, method, ...(params ? { params } : {}) })}\n`));
     sock.on('data', (d) => {
       buf += d;
@@ -168,16 +180,16 @@ export function control(method, params = undefined, { port = CONTROL_PORT, timeo
       if (nl < 0) return;
       clearTimeout(timer); sock.end();
       let m; try { m = JSON.parse(buf.slice(0, nl)); } catch (e) { return reject(e); }
-      if (!m.ok) return reject(new Error(m.error || 'FilmCraft refused the request'));
+      if (!m.ok) return reject(new Error(m.error || 'Mortiflix Studio refused the request'));
       resolve(m.result);
     });
-    sock.on('error', (e) => { clearTimeout(timer); reject(new Error(e.code === 'ECONNREFUSED' ? 'FilmCraft isn\'t open (Open in FilmCraft)' : e.message)); });
+    sock.on('error', (e) => { clearTimeout(timer); reject(new Error(e.code === 'ECONNREFUSED' ? 'Mortiflix Studio isn\'t open (Open in Mortiflix Studio)' : e.message)); });
   });
 }
 
-// The clips selected in FilmCraft, each with the canvas piece it is: by clip id from map.json, else through the media
+// The clips selected in Mortiflix Studio, each with the canvas piece it is: by clip id from map.json, else through the media
 // item (a clip that was cut with the razor or moved keeps its media item).
-export async function filmcraftSelection(root, id, opts = {}) {
+export async function studioSelection(root, id, opts = {}) {
   const map = loadMap(root, id);
   if (!map) return { open: false, selected: [] };
   const ui = await control('ui.inspect', undefined, opts);
@@ -201,23 +213,23 @@ export async function filmcraftSelection(root, id, opts = {}) {
   return { open: true, selected: out };
 }
 
-// ---- a new version goes into FilmCraft ----
+// ---- a new version goes into Mortiflix Studio ----
 
 // A piece got a new version on the canvas (the owner's request, made by a session): it replaces the old one in the
-// FilmCraft project, at the same place on the timeline, its linked sound with it. The old version stays in the bin, so
-// FilmCraft's own undo (or replacing back from the bin) brings it back. Through the open app when FilmCraft is open,
+// Mortiflix Studio project, at the same place on the timeline, its linked sound with it. The old version stays in the bin, so
+// Mortiflix Studio's own undo (or replacing back from the bin) brings it back. Through the open app when Mortiflix Studio is open,
 // else straight into the project file with the headless engine.
-export async function swapIntoFilmcraft(root, id, node, { log = () => {} } = {}) {
+export async function swapIntoEdit(root, id, node, { log = () => {} } = {}) {
   const map = loadMap(root, id);
-  if (!map) return { swapped: false, why: 'no FilmCraft project' };
+  if (!map) return { swapped: false, why: 'no Mortiflix Studio project' };
   const entries = map.clips.filter((c) => c.node === node);
-  if (!entries.length) return { swapped: false, why: `${node} isn't in the FilmCraft project` };
+  if (!entries.length) return { swapped: false, why: `${node} isn't in the Mortiflix Studio project` };
   const g = canvasView(root, id);
   const n = g.nodes[node];
   const v = n?.versions?.find((x) => x.v === n.current);
   if (!v?.file || entries.every((c) => c.version === n.current)) return { swapped: false, why: 'already the newest version' };
   const state = projectPaths(root, id).state;
-  const fp = filmcraftPaths(root, id);
+  const fp = editPaths(root, id);
   const isAudio = entries[0].kind !== 'shot';
   const dest = join(fp.media, `${n.label}-v${n.current}.${isAudio ? 'wav' : 'mp4'}`);
   if (isAudio) prepAudio(join(state, v.file), dest);
@@ -231,32 +243,32 @@ export async function swapIntoFilmcraft(root, id, node, { log = () => {} } = {})
   } catch { via = 'file'; }
   const exec = via === 'app'
     ? (command, params) => control('engine.execute', { command, params }, { timeoutMs: 30_000 })
-    : async (command, params) => JSON.parse(run(filmcraftCli(root).cli, ['--compact', '--project', map.fcproj, '--save', 'exec', command, JSON.stringify(params)], command).trim() || 'null');
+    : async (command, params) => JSON.parse(run(studioCli(root).cli, ['--compact', '--project', map.fcproj, '--save', 'exec', command, JSON.stringify(params)], command).trim() || 'null');
   const imp = await exec('file.import', { paths: [dest] });
-  if (imp?.errors?.length || !imp?.items?.length) throw new Error(`FilmCraft couldn't import ${dest}`);
+  if (imp?.errors?.length || !imp?.items?.length) throw new Error(`Mortiflix Studio couldn't import ${dest}`);
   const item = imp.items[0];
   await exec('clip.replaceFromBin', { clips: entries.map((c) => c.clip), item });
   for (const c of entries) await exec('clip.rename', { clip: c.clip, name });
   if (via === 'app') await exec('file.save', {});
   for (const c of entries) { (c.previous ||= []).push({ version: c.version, item: c.item, file: c.file }); Object.assign(c, { version: n.current, item, file: dest }); }
   writeFileSync(fp.map, JSON.stringify(map, null, 2));
-  log(`${n.label} v${n.current} is in FilmCraft (${via === 'app' ? 'the open app' : 'the project file'})`);
+  log(`${n.label} v${n.current} is in Mortiflix Studio (${via === 'app' ? 'the open app' : 'the project file'})`);
   return { swapped: true, via, node, version: n.current, item };
 }
 
-// ---- the big render: the edited timeline, out of FilmCraft ----
+// ---- the big render: the edited timeline, out of Mortiflix Studio ----
 
 export const RENDER_PRESET = 'Match Source – Adaptive High Bitrate';
 
-// Saves the open project (when FilmCraft is open), then exports the sequence with FilmCraft's own engine. Resolves with
-// the rendered file; `onLine` gets FilmCraft's progress lines.
-export async function renderFromFilmcraft(root, id, { onLine = () => {} } = {}) {
-  const fc = filmcraftCli(root);
+// Saves the open project (when Mortiflix Studio is open), then exports the sequence with Mortiflix Studio's own engine. Resolves with
+// the rendered file; `onLine` gets Mortiflix Studio's progress lines.
+export async function renderFromEdit(root, id, { onLine = () => {} } = {}) {
+  const fc = studioCli(root);
   const map = loadMap(root, id);
-  if (!map || !existsSync(map.fcproj)) throw new UserError('there is no FilmCraft project for this video yet');
-  try { await control('engine.execute', { command: 'file.save', params: {} }, { timeoutMs: 5000 }); onLine('Saved the open FilmCraft project'); } catch { /* not open: the file is current */ }
+  if (!map || !existsSync(map.fcproj)) throw new UserError('there is no Mortiflix Studio project for this video yet');
+  try { await control('engine.execute', { command: 'file.save', params: {} }, { timeoutMs: 5000 }); onLine('Saved the open Mortiflix Studio project'); } catch { /* not open: the file is current */ }
   const project = loadProject(root, id);
-  const outDir = join(filmcraftPaths(root, id).dir, 'render');
+  const outDir = join(editPaths(root, id).dir, 'render');
   mkdirSync(outDir, { recursive: true });
   const out = join(outDir, `${project.title.replace(/[^\w .-]+/g, '').trim() || 'Mortiflix'} (edited).mp4`);
   rmSync(out, { force: true });
@@ -266,7 +278,7 @@ export async function renderFromFilmcraft(root, id, { onLine = () => {} } = {}) 
     const take = (d) => { tail = (tail + d).slice(-4000); for (const l of String(d).split(/\r?\n/).filter(Boolean)) onLine(l.slice(0, 300)); };
     p.stdout.on('data', take); p.stderr.on('data', take);
     p.on('error', reject);
-    p.on('close', (code) => (code === 0 && existsSync(out) ? resolve() : reject(new Error(`FilmCraft's export failed (${code}): ${tail.trim().split('\n').pop() || ''}`))));
+    p.on('close', (code) => (code === 0 && existsSync(out) ? resolve() : reject(new Error(`Mortiflix Studio's export failed (${code}): ${tail.trim().split('\n').pop() || ''}`))));
   });
   return out;
 }

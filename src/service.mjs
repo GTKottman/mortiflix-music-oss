@@ -1,6 +1,6 @@
-// The Mortiflix service: the AI side of Mortiflix FilmCraft. The desktop app (Rust) runs
+// The Mortiflix service: the AI side of Mortiflix Studio. The desktop app (Rust) runs
 // `node bin/mortiflix-service.mjs` and talks JSON lines over stdin/stdout, no port.
-// Protocol: docs/mortiflix/protocol.md in the mortiflix-filmcraft repo, with every message this file handles listed
+// Protocol: docs/mortiflix/protocol.md in the Mortiflix Studio app repo, with every message this file handles listed
 // in docs/service-protocol.md here.
 //   request  {id, type, params}
 //   reply    {id, ok: true, result} | {id, ok: false, error: {code, message}}
@@ -543,7 +543,7 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
     // ---- loose preview (doc 36) ----
     'preview.plan': (p) => graph.previewPlan(root, needProject(p), { scope: ['all', 'from', 'shot', 'beat'].includes(p?.scope) ? p.scope : 'all', node: p?.node ? String(p.node) : null }),
 
-    // ---- into FilmCraft (doc 38) ----
+    // ---- into Edit (doc 38) ----
     'handoff.plan': (p) => graph.handoffPlan(root, needProject(p)),
     'handoff.done': (p) => { const id = needProject(p); const r = graph.saveHandoff(root, id, p?.map || p); chatRow(id, { role: 'stage', text: STAGE_NAMES[4], stage: 4 }); poke(); return r; },
     'handoff.get': (p) => ({ map: graph.loadHandoff(root, needProject(p)) }),

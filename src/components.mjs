@@ -1,4 +1,4 @@
-// The installer's components: the tools Mortiflix uses, offered when Mortiflix FilmCraft is installed (and later in
+// The installer's components: the tools Mortiflix uses, offered when Mortiflix Studio is installed (and later in
 // first-run setup), each with what it's for and its size. No install logic of its own: every component is one of
 // setup.mjs's tools, installed into the studio (tools/, the studio's own Blender profile) or as the user's own tool
 // (uv), never system-wide. A component that fails or is skipped never fails the rest.

@@ -140,7 +140,7 @@ export async function run({ root, projectId, workdir, env, onActivity, signal, c
         // The narration: one line per beat with its time, so the voice lane and the canvas have lines (quiet tones).
         if (step.key === 'animatic') writeDemoVoice(workdir);
       }
-      // The score as mixed, for the music lane and the FilmCraft hand-off (quiet).
+      // The score as mixed, for the music lane and the Mortiflix Studio hand-off (quiet).
       if (step.key === 'music') {
         mkdirSync(join(workdir, 'out', 'music'), { recursive: true });
         spawnSync('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', `sine=frequency=220:duration=${sec}`, '-af', 'volume=0.08', '-ar', '48000', join(workdir, 'out', 'music', 'score.wav')]);

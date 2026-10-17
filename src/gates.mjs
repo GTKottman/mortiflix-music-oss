@@ -289,9 +289,9 @@ export function respond(root, id, stepKey, version, { verdict, overall = '', not
   const pipeline = projectPipeline(root, id);
   const target = findStep(pipeline, stepKey);
   if (!['approve', 'changes', 'edit'].includes(verdict)) refuse('verdict must be approve, changes or edit');
-  // "Edit the video": instead of taking the final, the owner opens it in FilmCraft (the delivering step only).
-  if (verdict === 'edit' && !target.delivers) refuse('only the final can be edited in FilmCraft');
-  if (verdict === 'edit' && !String(overall).trim()) overall = 'Edit the video: make the FilmCraft project.';
+  // "Edit the video": instead of taking the final, the owner opens it in Mortiflix Studio (the delivering step only).
+  if (verdict === 'edit' && !target.delivers) refuse('only the final can be edited in Mortiflix Studio');
+  if (verdict === 'edit' && !String(overall).trim()) overall = 'Edit the video: make the Mortiflix Studio project.';
   const dir = join(pp.reviews, stepKey, `v${version}`);
   if (!existsSync(join(dir, 'submission.json'))) refuse(`no ${stepKey} v${version}`);
   const sub = readJson(join(dir, 'submission.json'));
@@ -337,7 +337,7 @@ export function respond(root, id, stepKey, version, { verdict, overall = '', not
     writeJson(join(pp.work, 'feedback', `${stepKey}-v${version}.json`), feedback);
     p.steps[stepKey] = {
       ...(p.steps[stepKey] || {}),
-      // Editing: the final is open in FilmCraft. Nothing runs until the owner asks for a version or the big render.
+      // Editing: the final is open in Mortiflix Studio. Nothing runs until the owner asks for a version or the big render.
       state: verdict === 'approve' ? 'approved' : verdict === 'edit' ? 'editing' : 'changes',
       ...(verdict === 'edit' ? { edit: true } : { edit: undefined }),
       version,
@@ -477,24 +477,24 @@ export function feedbackFor(root, id, stepKey) {
 
 const round = (v, d = 4) => Math.round(v * 10 ** d) / 10 ** d;
 
-// The final, rendered out of FilmCraft after the owner's edits: it becomes the delivery. The file is copied into the
+// The final, rendered out of Mortiflix Studio after the owner's edits: it becomes the delivery. The file is copied into the
 // project's record (reviews/<final>/edited-N.mp4), so it can't change after the fact.
 export function deliverEdited(root, id, file) {
   const pp = projectPaths(root, id);
   const pipeline = projectPipeline(root, id);
   const step = pipeline.steps.find((s) => s.delivers) || refuse('this pipeline has no delivering step');
   return update(root, id, (p) => {
-    if (p.steps[step.key]?.state !== 'editing') refuse(`${step.name} isn't being edited in FilmCraft`);
+    if (p.steps[step.key]?.state !== 'editing') refuse(`${step.name} isn't being edited in Mortiflix Studio`);
     const dir = join(pp.reviews, step.key);
     mkdirSync(dir, { recursive: true });
     let n = 1;
     while (existsSync(join(dir, `edited-${n}.mp4`))) n++;
     copyFileSync(file, join(dir, `edited-${n}.mp4`));
     const rel = `reviews/${step.key}/edited-${n}.mp4`;
-    p.steps[step.key] = { ...p.steps[step.key], state: 'approved', edit: undefined, delivered_from: 'filmcraft', decided_at: now() };
-    p.deliverables = [{ label: `${step.name} (edited in FilmCraft)`, kind: 'video', file: rel, size: statSync(file).size }];
+    p.steps[step.key] = { ...p.steps[step.key], state: 'approved', edit: undefined, delivered_from: 'edit', decided_at: now() };
+    p.deliverables = [{ label: `${step.name} (edited in Mortiflix Studio)`, kind: 'video', file: rel, size: statSync(file).size }];
     settle(p, pipeline);
-    event(root, id, { event: 'DELIVERED_FROM_FILMCRAFT', actor: 'you', step: step.key, details: rel });
+    event(root, id, { event: 'DELIVERED_FROM_EDIT', actor: 'you', step: step.key, details: rel });
     return { delivered: rel, project_state: p.state };
   });
 }

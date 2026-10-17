@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The installers' components step (Mortiflix FilmCraft packaging): the tools Mortiflix uses, each with what it's for
+// The installers' components step (Mortiflix Studio packaging): the tools Mortiflix uses, each with what it's for
 // and its size, installed with setup.mjs's own installers into the studio (MORTIFLIX_STUDIO, else ~/Mortiflix).
 //
 //   mortiflix-components.mjs list [--json]          what can be installed, the defaults, what's here

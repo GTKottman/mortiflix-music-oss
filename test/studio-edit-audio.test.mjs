@@ -1,18 +1,18 @@
-// The FilmCraft hand-off's audio (doc 15 A4): 24-bit, resampled once by soxr, and FilmCraft gives back what went in.
+// The Mortiflix Studio hand-off's audio (doc 15 A4): 24-bit, resampled once by soxr, and Mortiflix Studio gives back what went in.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir, homedir } from 'node:os';
-import { prepAudio } from '../src/filmcraft.mjs';
+import { tmpdir } from 'node:os';
+import { prepAudio, studioBin } from '../src/studio-edit.mjs';
 import { sine, sweep, writeWav, readWav, nullTest, spectrum, strongest } from './quality/kit.mjs';
 
 const ffmpeg = !spawnSync('ffmpeg', ['-version']).error;
-const FC = join(homedir(), 'Mortiflix/tools/craft/filmcraft/bin/filmcraft-cli');
+const FC = studioBin()?.cli || '';
 const bits = (f) => spawnSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=bits_per_sample', '-of', 'csv=p=0', f], { encoding: 'utf8' }).stdout.trim();
 
-test('voice and music go to FilmCraft as 24-bit: a float mix loses nothing above −138 dBFS', { skip: !ffmpeg && 'ffmpeg is not installed' }, (t) => {
+test('voice and music go to Mortiflix Studio as 24-bit: a float mix loses nothing above −138 dBFS', { skip: !ffmpeg && 'ffmpeg is not installed' }, (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'mfx-fca-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const src = sweep({ seconds: 2, db: -3 });
@@ -37,7 +37,7 @@ test('a 44.1 kHz file is resampled once, cleanly (noise and distortion > 100 dB 
   assert.ok(10 * Math.log10(rest) - tone.db < -100, `noise + distortion ${(10 * Math.log10(rest) - tone.db).toFixed(1)} dB`);
 });
 
-test('FilmCraft plays the 24-bit file back as it went in (24-bit export)', { skip: (!ffmpeg || !existsSync(FC)) && 'FilmCraft or ffmpeg is not installed' }, (t) => {
+test('Mortiflix Studio plays the 24-bit file back as it went in (24-bit export)', { skip: (!ffmpeg || !existsSync(FC)) && 'Mortiflix Studio or ffmpeg is not installed' }, (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'mfx-fca-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const src = sweep({ seconds: 2, db: -3 });
@@ -51,5 +51,5 @@ test('FilmCraft plays the 24-bit file back as it went in (24-bit export)', { ski
   fc('--project', proj, '--save', 'exec', 'timeline.place', JSON.stringify({ item, track: 'A1', seconds: 0, insert: false, video: false }));
   fc('--project', proj, 'export', join(dir, 'out.wav'), '--preset', 'Waveform Audio 48 kHz 24-bit');
   const r = nullTest(src, readWav(join(dir, 'out.wav')));
-  assert.ok(r.peakDb < -130, JSON.stringify(r));   // two 24-bit roundings (ours, then FilmCraft's export): ≤ 2 steps
+  assert.ok(r.peakDb < -130, JSON.stringify(r));   // two 24-bit roundings (ours, then Mortiflix Studio's export): ≤ 2 steps
 });

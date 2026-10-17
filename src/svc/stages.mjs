@@ -1,13 +1,13 @@
-// The six Mortiflix FilmCraft stages over a pipeline's steps (docs 30, 40): 1 Script · 2 Look · 3 Shots ·
-// 4 Voice & music · 5 FilmCraft · 6 Render. Each step belongs to one stage (its `stage`, else its key, else what it
+// The six Mortiflix Studio stages over a pipeline's steps (docs 30, 40): 1 Script · 2 Look · 3 Shots ·
+// 4 Voice & music · 5 Edit · 6 Render. Each step belongs to one stage (its `stage`, else its key, else what it
 // makes). A stage's status is worked out from its steps and its pieces on the canvas, never stored; only the owner's
 // Next click ("stage done") and the last stage looked at are kept, in project.json `mfx`.
 import { loadProject, projectPipeline, update, event, now } from '../projects.mjs';
 import { stepView, respond, answerQuestion, reopen, GateError } from '../gates.mjs';
 import { canvasView, loadOwner, nodeAction } from '../canvas.mjs';
 
-export const STAGES = ['script', 'look', 'shots', 'voiceMusic', 'filmcraft', 'render'];
-export const STAGE_NAMES = ['Script', 'Look', 'Shots', 'Voice & music', 'FilmCraft', 'Render'];
+export const STAGES = ['script', 'look', 'shots', 'voiceMusic', 'edit', 'render'];
+export const STAGE_NAMES = ['Script', 'Look', 'Shots', 'Voice & music', 'Edit', 'Render'];
 const DONE = ['approved', 'done', 'skipped'];
 
 const BY_KEY = {
@@ -127,8 +127,8 @@ export function stageDone(root, id, from, { reason = 'Next' } = {}) {
   return { stage: i, key: STAGES[i], kept, left };
 }
 
-// Leaving Voice & music for FilmCraft (Edit the video) or Render (Get the video): the app builds the edit from the
-// graph and renders it with FilmCraft's export (docs 38, 39), so the session never builds or renders a final. Those
+// Leaving Voice & music for Edit (Edit the video) or Render (Get the video): the app builds the edit from the
+// graph and renders it with Mortiflix Studio's export (docs 38, 39), so the session never builds or renders a final. Those
 // steps are skipped, marked as done in the app.
 export function handOverToApp(root, id, how) {
   const pipeline = projectPipeline(root, id);

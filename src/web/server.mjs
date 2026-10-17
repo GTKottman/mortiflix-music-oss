@@ -25,7 +25,7 @@ import { engineFor, enginePaths, BROWSER_COMMANDS } from '../daw-engine.mjs';
 import { applyOps } from '../song-ops.mjs';
 import { runFastFix } from '../song-fix.mjs';
 import { canvasView, nodeAction } from '../canvas.mjs';
-import * as filmcraft from '../filmcraft.mjs';
+import * as studioEdit from '../studio-edit.mjs';
 import { projectSkills, readSkillText } from '../skills.mjs';
 import * as pub from '../publish.mjs';
 import { costText } from '../usage.mjs';
@@ -274,8 +274,8 @@ export async function startServer(root, { port = 4646, host = '127.0.0.1', runne
     if (sub === '/cancel' && method === 'POST') { gates.cancel(root, id); runner.stopProject(id); return after(); }
     if ((m = sub.match(/^\/reviews\/([a-z0-9_-]+)\/(\d+)$/)) && method === 'POST') {
       const out = gates.respond(root, id, m[1], Number(m[2]), await json(req));
-      // Edit the video: the studio builds the FilmCraft project itself, right away (no session, no cost).
-      if (out.verdict === 'edit') makeFilmcraft(id);
+      // Edit the video: the studio builds the Mortiflix Studio project itself, right away (no session, no cost).
+      if (out.verdict === 'edit') makeEdit(id);
       return after(out);
     }
     // The project's skills file, as a list (fresh), and one skill's SKILL.md from the record.
@@ -284,12 +284,12 @@ export async function startServer(root, { port = 4646, host = '127.0.0.1', runne
       const text = readSkillText(root, id, m[1]);
       return text === null ? send(res, 404, { error: 'not found' }) : send(res, 200, { name: m[1], text });
     }
-    if (sub === '/filmcraft' && method === 'GET') return send(res, 200, { job: fcJobs.get(id) || null, map: filmcraft.loadMap(root, id) });
-    if (sub === '/filmcraft/make' && method === 'POST') { makeFilmcraft(id); return after({ started: true }); }
-    if (sub === '/filmcraft/open' && method === 'POST') return after(filmcraft.openInFilmcraft(root, id));
-    if (sub === '/filmcraft/render' && method === 'POST') { renderFilmcraft(id); return after({ started: true }); }
-    if (sub === '/filmcraft/selection' && method === 'GET') {
-      try { return send(res, 200, await filmcraft.filmcraftSelection(root, id, { timeoutMs: 3000 })); }
+    if (sub === '/edit' && method === 'GET') return send(res, 200, { job: fcJobs.get(id) || null, map: studioEdit.loadMap(root, id) });
+    if (sub === '/edit/make' && method === 'POST') { makeEdit(id); return after({ started: true }); }
+    if (sub === '/edit/open' && method === 'POST') return after(studioEdit.openInStudio(root, id));
+    if (sub === '/edit/render' && method === 'POST') { renderEdit(id); return after({ started: true }); }
+    if (sub === '/edit/selection' && method === 'GET') {
+      try { return send(res, 200, await studioEdit.studioSelection(root, id, { timeoutMs: 3000 })); }
       catch (e) { return send(res, 200, { open: false, selected: [], error: e.message }); }
     }
     if ((m = sub.match(/^\/questions\/([a-z0-9]+)$/)) && method === 'POST') {
@@ -377,29 +377,29 @@ export async function startServer(root, { port = 4646, host = '127.0.0.1', runne
     return send(res, 404, { error: 'not found' });
   }
 
-  // FilmCraft projects being made, one job per project (a few seconds of ffmpeg and filmcraft-cli).
+  // Mortiflix Studio projects being made, one job per project (a few seconds of ffmpeg and mortiflix-studio-cli).
   const fcJobs = new Map();
-  function makeFilmcraft(id) {
+  function makeEdit(id) {
     if (fcJobs.get(id)?.state === 'making') return;
     const job = { kind: 'make', state: 'making', log: [], started_at: new Date().toISOString() };
     fcJobs.set(id, job);
     changed();
     setImmediate(() => {
       try {
-        const map = filmcraft.makeFilmcraftProject(root, id, { log: (l) => job.log.push(l) });
+        const map = studioEdit.makeEditProject(root, id, { log: (l) => job.log.push(l) });
         Object.assign(job, { state: 'ready', fcproj: map.fcproj, clips: map.clips.length });
       } catch (e) { Object.assign(job, { state: 'failed', error: e.message }); }
       changed();
     });
   }
 
-  // The big render out of FilmCraft, then the delivery.
-  function renderFilmcraft(id) {
+  // The big render out of Mortiflix Studio, then the delivery.
+  function renderEdit(id) {
     if (fcJobs.get(id)?.state === 'rendering') return;
     const job = { kind: 'render', state: 'rendering', log: [], started_at: new Date().toISOString() };
     fcJobs.set(id, job);
     changed();
-    filmcraft.renderFromFilmcraft(root, id, { onLine: (l) => { job.log.push(l); if (job.log.length > 200) job.log.shift(); } })
+    studioEdit.renderFromEdit(root, id, { onLine: (l) => { job.log.push(l); if (job.log.length > 200) job.log.shift(); } })
       .then((file) => { const r = gates.deliverEdited(root, id, file); Object.assign(job, { state: 'delivered', file: r.delivered }); })
       .catch((e) => Object.assign(job, { state: 'failed', error: e.message }))
       .finally(() => changed());

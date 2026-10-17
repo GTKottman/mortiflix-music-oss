@@ -1,11 +1,11 @@
 // The node graph as the app draws it (doc 35), the loose preview's edit list (doc 36), the voice & music lanes
-// (doc 34) and the FilmCraft hand-off plan (doc 38): all read from the one canvas graph (src/canvas.mjs).
+// (doc 34) and the Mortiflix Studio hand-off plan (doc 38): all read from the one canvas graph (src/canvas.mjs).
 //
 // The owner's own things live beside the graph in state/<id>/canvas/:
 //   layout.json  node positions (free placement like Blender) and the film order (the chain; reorder = rewire)
 //   picks.json   which version plays, when it isn't the newest
 //   mix.json     per line / cue: level, ducking, hand-set timing, voice, length in bars
-//   filmcraft-app.json  what the app imported (node → clip), so a new version is swapped in, never rebuilt
+//   edit-app.json  what the app imported (node → clip), so a new version is swapped in, never rebuilt
 import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync, rmSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
@@ -20,7 +20,7 @@ import { boothStatus } from '../booth.mjs';
 const readOr = (f, d) => { try { return JSON.parse(readFileSync(f, 'utf8')); } catch { return d; } };
 const files = (root, id) => {
   const cp = canvasPaths(root, id);
-  return { ...cp, layout: join(cp.dir, 'layout.json'), picks: join(cp.dir, 'picks.json'), mix: join(cp.dir, 'mix.json'), app: join(cp.dir, 'filmcraft-app.json') };
+  return { ...cp, layout: join(cp.dir, 'layout.json'), picks: join(cp.dir, 'picks.json'), mix: join(cp.dir, 'mix.json'), app: join(cp.dir, 'edit-app.json') };
 };
 const save = (f, v) => { mkdirSync(join(f, '..'), { recursive: true }); writeFileSync(f, JSON.stringify(v, null, 2)); };
 const round3 = (x) => Math.round(x * 1000) / 1000;
@@ -355,11 +355,11 @@ export function voiceMusicView(root, id) {
   return { rev: gv.rev, length_sec, shots, voice, cues: [...plan, ...extra], music: sound.music, bpm: sound.bpm, beats_per_bar: sound.beats_per_bar };
 }
 
-// ------------------------------------------------------------------------------------------ into FilmCraft
+// ------------------------------------------------------------------------------------------ into Edit
 
 const SIZES = { '16:9': [1920, 1080], '9:16': [1080, 1920], '1:1': [1080, 1080], '4:5': [1080, 1350] };
 
-// Everything the app needs to build the FilmCraft project once, in-process (doc 38 §1): the sequence, bins, tracks,
+// Everything the app needs to build the Mortiflix Studio project once, in-process (doc 38 §1): the sequence, bins, tracks,
 // clips (absolute paths, in/out, start, label colour), markers, captions, your assets, older versions, cut shots.
 export function handoffPlan(root, id) {
   const project = loadProject(root, id);
@@ -409,13 +409,13 @@ export function handoffPlan(root, id) {
   };
 }
 
-// Where the app saves the FilmCraft project: the one it saved before, else beside the project's record
-// (`<studio>/state/<id>/filmcraft/<title>.fcproj`, the title kept to letters, digits, space, `-`, `_` and `.`).
+// Where the app saves the Mortiflix Studio project: the one it saved before, else beside the project's record
+// (`<studio>/state/<id>/edit/<title>.fcproj`, the title kept to letters, digits, space, `-`, `_` and `.`).
 export function handoffFcproj(root, id, title) {
   const saved = loadHandoff(root, id)?.fcproj;
   if (saved) return saved;
   const name = Array.from(String(title || '')).filter((c) => /[\p{L}\p{N} ._-]/u.test(c)).join('').trim().slice(0, 120) || 'Mortiflix';
-  return join(projectPaths(root, id).state, 'filmcraft', `${name}.fcproj`);
+  return join(projectPaths(root, id).state, 'edit', `${name}.fcproj`);
 }
 
 // What the app imported (doc 38 "done once"): saved so later versions are swapped in, never rebuilt.
@@ -424,7 +424,7 @@ export function saveHandoff(root, id, map) {
   const clean = { project: id, rev: Number(map.rev) || null, fcproj: map.fcproj ? String(map.fcproj).slice(0, 2000) : null, made_at: new Date().toISOString(),
     clips: map.clips.slice(0, 20_000).filter((c) => c && NODE_ID.test(String(c.node || '')) || c?.node === 'music').map((c) => ({ node: String(c.node), version: Number(c.version) || null, clip: c.clip ?? null, item: c.item ?? null })) };
   save(files(root, id).app, clean);
-  event(root, id, { event: 'FILMCRAFT_IMPORTED', actor: 'you', details: `${clean.clips.length} clips into the app` });
+  event(root, id, { event: 'EDIT_IMPORTED', actor: 'you', details: `${clean.clips.length} clips into the app` });
   return clean;
 }
 
@@ -449,14 +449,14 @@ export function handoffSwaps(root, id) {
 export function markSwapped(root, id, nid, version, { clip = undefined, item = undefined } = {}) {
   const f = files(root, id);
   const map = loadHandoff(root, id);
-  if (!map) throw new CanvasError('nothing is in FilmCraft yet');
+  if (!map) throw new CanvasError('nothing is in Mortiflix Studio yet');
   const c = map.clips.find((x) => x.node === nid);
-  if (!c) throw new CanvasError(`${nid} isn't in FilmCraft`);
+  if (!c) throw new CanvasError(`${nid} isn't in Mortiflix Studio`);
   c.version = Number(version) || c.version;
   if (clip !== undefined) c.clip = clip;
   if (item !== undefined) c.item = item;
   save(f.app, map);
-  event(root, id, { event: 'FILMCRAFT_UPDATED', actor: 'studio', details: `${nid} v${c.version} swapped into the app` });
+  event(root, id, { event: 'EDIT_UPDATED', actor: 'studio', details: `${nid} v${c.version} swapped into the app` });
   return c;
 }
 

@@ -1,5 +1,5 @@
 // Beat names (owner's first run: "Look up! On a…" cut off): the script's own name, else the AI's, else a title from
-// the words, on the nodes, the Script panel and FilmCraft's bins.
+// the words, on the nodes, the Script panel and Mortiflix Studio's bins.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { writeFileSync, mkdirSync } from 'node:fs';

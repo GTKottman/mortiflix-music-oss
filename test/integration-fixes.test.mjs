@@ -1,4 +1,4 @@
-// Fixes found while merging the Mortiflix FilmCraft parts: a missing BPM stays missing, ComfyUI counts as installed
+// Fixes found while merging the Mortiflix Studio parts: a missing BPM stays missing, ComfyUI counts as installed
 // only when it is the studio's own, handoff.plan names the .fcproj, asset nodes keep their place, shot versions get a
 // PNG still.
 import { test } from 'node:test';
@@ -49,7 +49,7 @@ test('handoff.plan names the .fcproj beside the project record; asset nodes keep
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const p = makeHandoffDemo(root);
   const plan = handoffPlan(root, p.id);
-  assert.match(plan.fcproj, /[/\\]state[/\\][a-z0-9-]+[/\\]filmcraft[/\\][^/\\]+\.fcproj$/);
+  assert.match(plan.fcproj, /[/\\]state[/\\][a-z0-9-]+[/\\]edit[/\\][^/\\]+\.fcproj$/);
   // an asset id is known to node.move; graph.get sends its pos back
   update(root, p.id, (project) => { project.assets = [...(project.assets || []), { id: 'a01', name: 'logo.png', kind: 'logo', file: 'assets/logo.png', use: 'fits', where: null, note: '', versions: [], used_in: [] }]; });
   const r = moveNodes(root, p.id, { a01: [120, -40] });

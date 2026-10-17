@@ -1,4 +1,4 @@
-// The Mortiflix FilmCraft service (part 08): every handler the app's parts use, driven in-process with the demo
+// The Mortiflix Studio service (part 08): every handler the app's parts use, driven in-process with the demo
 // backend (no Claude, no cost) and the studio's runner stepped by hand so each step is checked.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -217,7 +217,7 @@ test('service core: new project from preset + idea + assets + theme, the whole f
   assert.equal(loadProject(root, id).mfx.stage, 5);
   assert.ok((await call('stage.remakes', { stage: 'look' })).remade.some((r) => r.step === 'animatic'));
 
-  // Into FilmCraft: the plan, the map back, a new version to swap in.
+  // Into Mortiflix Studio: the plan, the map back, a new version to swap in.
   const plan = await call('handoff.plan');
   assert.equal(plan.clips.filter((c) => c.kind === 'shot').length, 5);
   assert.ok(plan.clips.some((c) => c.kind === 'transition'));

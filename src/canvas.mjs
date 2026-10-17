@@ -1,6 +1,6 @@
 // The canvas's project graph: every piece of a project (beats of the script, style frames, shots, voice lines, music
 // sections, transitions) as one node with a stable id, its beat's colour and every version it has had. The shot board,
-// the node view and the FilmCraft hand-off all read this one graph.
+// the node view and the Mortiflix Studio hand-off all read this one graph.
 //
 // Sessions write plain files in their working folder (script/beats.json, design/frames.json, out/scenes.json,
 // voice/lines.json, music/blueprint.json, transitions/board.json). `syncCanvas` reads them, copies each new version's
@@ -13,7 +13,7 @@ import { projectPaths, update, event, projectPipeline, loadProject } from './pro
 import { settle, GateError, stepView, respond } from './gates.mjs';
 import { withLock, isInside } from './studio.mjs';
 
-// One FilmCraft label colour per beat, in order (crates/project Label::rgb / marker_rgb, v0.8.0). Their marker colours
+// One Mortiflix Studio label colour per beat, in order (crates/project Label::rgb / marker_rgb, v0.8.0). Their marker colours
 // all differ; Yellow is left out because text on its fill fails contrast. The beat number always sits beside it.
 export const BEAT_COLOURS = [
   { label: 'Violet', hex: '#380ea7', chip: '#a98caf' },
@@ -162,7 +162,7 @@ export function syncCanvas(root, id) {
       const t = timing[l.id];
       put(l.id, 'line', { label: l.id, title: String(l.script || l.text || ''), beat, order: i, start_sec: t?.start ?? null, end_sec: t?.end ?? null }, s || { sha: sha(String(l.script || l.text || '')), file: null });
     }
-    // The music as mixed (a video's score, or the owner's own master), for the FilmCraft hand-off's music track.
+    // The music as mixed (a video's score, or the owner's own master), for the Mortiflix Studio hand-off's music track.
     const mix = ['music/own-master/master.wav', 'out/music/master.wav', 'out/music/score.wav'].find((f) => workFile(work, f));
     if (mix) put('music', 'music', { label: 'Music', title: 'The music', beat: null, order: 0 }, snapshot(mix, 'music'));
 
@@ -352,12 +352,12 @@ export function finishEdit(root, id, eid, { ok, note = '', via = null } = {}) {
     writeFileSync(cp.edits, JSON.stringify({ edits: all }, null, 2));
     syncEditCount(root, id, all);
     event(root, id, { event: ok ? 'EDIT_DONE' : 'EDIT_FAILED', details: `${eid} on ${e.label}${note ? `: ${String(note).slice(0, 200)}` : ''}` });
-    // A piece that is in the FilmCraft project gets its new version there too (filmcraft.mjs), right after.
+    // A piece that is in the Mortiflix Studio project gets its new version there too (studio-edit.mjs), right after.
     if (ok) {
-      setImmediate(() => import('./filmcraft.mjs')
-        .then((f) => f.swapIntoFilmcraft(root, id, e.node))
-        .then((r) => { if (r.swapped) event(root, id, { event: 'FILMCRAFT_UPDATED', details: `${e.label} v${r.version} replaced its clip in FilmCraft (${r.via === 'app' ? 'the open app' : 'the project file'})` }); })
-        .catch((err) => event(root, id, { event: 'FILMCRAFT_UPDATE_FAILED', details: `${e.label}: ${err.message}` })));
+      setImmediate(() => import('./studio-edit.mjs')
+        .then((f) => f.swapIntoEdit(root, id, e.node))
+        .then((r) => { if (r.swapped) event(root, id, { event: 'EDIT_UPDATED', details: `${e.label} v${r.version} replaced its clip in Mortiflix Studio (${r.via === 'app' ? 'the open app' : 'the project file'})` }); })
+        .catch((err) => event(root, id, { event: 'EDIT_UPDATE_FAILED', details: `${e.label}: ${err.message}` })));
     }
     return e;
   });

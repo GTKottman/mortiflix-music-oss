@@ -1,4 +1,4 @@
-// What the Mortiflix FilmCraft app adds to a session's brief (projects/<id>/CLAUDE.md, written by torch.mjs): the
+// What the Mortiflix Studio app adds to a session's brief (projects/<id>/CLAUDE.md, written by torch.mjs): the
 // owner's assets with how to use them, the music theme, and what the owner said in the chat since the last session.
 import { assetsBrief } from './assets.mjs';
 import { chatForSession } from './chat.mjs';

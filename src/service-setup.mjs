@@ -1,5 +1,5 @@
 // First-run setup, the part the app's Setup window adds to part 08's setup.* / keys.* (src/svc/setup.mjs): downloads
-// and installs the user said yes to, with progress. `setup.download` fetches model files (FilmCraft's Whisper and
+// and installs the user said yes to, with progress. `setup.download` fetches model files (Mortiflix Studio's Whisper and
 // Kokoro catalogues, which the app sends) with their size and SHA-256 checked; `setup.install` installs one of
 // setup.mjs's components (TOOLS: Chrome, Strudel, transitions, Blender + toolkits, uv tools, ComfyUI, sound engine); `setup.cancel` stops either. Each runs as a job: the reply is {job}, then `setup.progress` events
 // {job, kind, label, state: running|done|failed|cancelled, line, done?, total?}. Nothing downloads on its own.
