@@ -152,6 +152,21 @@ fn build(app: &mut StudioApp, plan: &into::Plan) {
         }
         return;
     }
+    // started again: the edit built before stays in the project, named so, and its tab closes (one edit open)
+    let h = &mut app.mfx.core.state.handoff;
+    if let Some(old) = h.before.take().filter(|o| Some(*o) != h.sequence)
+        && app.session.project.sequence(mortiflix_project::ItemId(old)).is_some()
+    {
+        let name = format!("{} (before rebuild)", plan.title);
+        if let Err(e) = app.session.execute("clip.rename", json!({"item": old, "name": name})) {
+            log::warn!("Mortiflix: rename the old edit: {e}");
+        }
+        if app.session.state.open_sequences.contains(&mortiflix_project::ItemId(old))
+            && let Err(e) = app.session.execute("sequence.close", json!({"item": old}))
+        {
+            log::warn!("Mortiflix: close the old edit: {e}");
+        }
+    }
     let path = app.mfx.core.state.handoff.fcproj.clone();
     if !path.is_empty() {
         if let Some(dir) = std::path::Path::new(&path).parent() {
@@ -370,6 +385,21 @@ mod tests {
                 let want = (t * fps).round() / fps;
                 assert!((clip.start.seconds() - want).abs() < 1e-6, "{fps} fps: {} at {} s, the plan says {t} s", clip.name, clip.start.seconds());
             }
+            // run 2: Start the Edit Again left two tabs both named after the video; the one built before is
+            // renamed "… (before rebuild)" and closed, the new one is the open edit
+            let first = app.mfx.core.state.handoff.sequence;
+            // an edit made since (unsaved): the rebuild goes into this project, beside the old edit
+            let clip = app.mfx.core.state.handoff.placed[0].clip;
+            app.session.execute("clip.rename", json!({"clip": clip, "name": "mine"})).unwrap();
+            let core = &mut app.mfx.core;
+            mfx::into_edit::start(&mut core.state, &mut core.service, true);
+            build(&mut app, &plan);
+            let h = &app.mfx.core.state.handoff;
+            assert_eq!(h.phase, into::Phase::Done);
+            assert_ne!(h.sequence, first);
+            let old = mortiflix_project::ItemId(first.unwrap());
+            assert!(!app.session.state.open_sequences.contains(&old), "the old edit isn't open");
+            assert_eq!(app.session.project.item(old).map(|i| i.name.as_str()), Some("Timing (before rebuild)"));
             let _ = std::fs::remove_dir_all(&dir);
         }
     }

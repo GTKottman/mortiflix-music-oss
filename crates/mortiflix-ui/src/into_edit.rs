@@ -615,6 +615,10 @@ pub struct Handoff {
     pub width: u32,
     pub height: u32,
     pub sequence: Option<u64>,
+    /// Start the Edit Again: the sequence built before, to be renamed "… (before rebuild)" and closed
+    /// once the new one is in (run 2: two tabs both named after the video).
+    #[serde(default)]
+    pub before: Option<u64>,
     pub beats: Vec<PlanBeat>,
     pub bins: Vec<BinRow>,
     pub bin_ids: BTreeMap<String, u64>,
@@ -743,7 +747,8 @@ pub fn start(state: &mut MfxState, service: &mut Service, again: bool) -> bool {
     }
     let keep_talk = std::mem::take(&mut h.talk);
     let seq = h.event_seq;
-    *h = Handoff { phase: Phase::Preparing, rows: Handoff::fresh_rows(), show_summary: true, talk: keep_talk, event_seq: seq, ..Handoff::default() };
+    let before = if again { h.sequence.or(h.before) } else { None };
+    *h = Handoff { phase: Phase::Preparing, rows: Handoff::fresh_rows(), show_summary: true, talk: keep_talk, event_seq: seq, before, ..Handoff::default() };
     let params = match &state.project_id {
         Some(p) => json!({"project": p}),
         None => json!({}),
