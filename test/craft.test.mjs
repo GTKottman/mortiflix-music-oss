@@ -179,14 +179,14 @@ test('craft: the web studio\'s setup lists the apps and saves the choice', async
   assert.deepEqual(removed.status.craft.apps.filter((a) => a.chosen).map((a) => a.id), ['effectcraft']);
 });
 
-test('craft: FilmCraft is pinned to 0.8.0 (the owner moves the pin); the pinned tag is what gets fetched', async () => {
+test('craft: the owner pins an app (craftPins); the pinned tag is what gets fetched', async () => {
   const { pinFor, latestRelease } = await import('../src/craft.mjs');
-  assert.equal(pinFor({}, 'filmcraft'), '0.8.0');
-  assert.equal(pinFor({ craftPins: { filmcraft: '0.9.1' } }, 'filmcraft'), '0.9.1');
+  assert.equal(pinFor({}, 'photocraft'), null);
+  assert.equal(pinFor({ craftPins: { photocraft: '0.9.1' } }, 'photocraft'), '0.9.1');
   assert.equal(pinFor({}, 'gridcraft'), null);
   const seen = [];
   const fetchImpl = async (url) => { seen.push(url); return new Response(JSON.stringify({ tag_name: 'v0.8.0', assets: [] }), { status: 200 }); };
-  const r = await latestRelease('filmcraft', { fetchImpl, version: '0.8.0' });
+  const r = await latestRelease('photocraft', { fetchImpl, version: '0.8.0' });
   assert.equal(r.version, '0.8.0');
-  assert.match(seen[0], /\/repos\/storytold\/filmcraft\/releases\/tags\/v0\.8\.0$/);
+  assert.match(seen[0], /\/repos\/storytold\/photocraft\/releases\/tags\/v0\.8\.0$/);
 });

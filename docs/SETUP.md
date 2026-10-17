@@ -15,7 +15,7 @@ never system-wide and never as root. Deleting `tools/` removes it all.
 | **Music** | an original score, written to the approved animatic | Strudel (`@strudel/web` from npm) and a headless Chrome (yours is reused) | ~20 MB (+~100 MB without Chrome) |
 | **Assets** | stock assets from sites you already use, in your own Chrome | browser-harness (browser-use, via uv) and the list of your sites | ~60 MB |
 | **3D** | 3D scenes rendered in Blender | Blender (yours is reused) and the 3D toolkits, in the studio's own Blender profile | ~350 MB + ~15 MB |
-| **Craft apps** | sessions work in real design apps (After Effects, Photoshop, Illustrator, Premiere… remakes) through their MCP servers | the official builds of the apps you pick, into `tools/craft` | 15–80 MB each, ~900 MB for all 12 |
+| **Craft apps** | sessions work in real design apps (After Effects, Photoshop, Illustrator… remakes) through their MCP servers | the official builds of the apps you pick, into `tools/craft` | 15–80 MB each, ~900 MB for all 12 |
 
 ## Claude
 
@@ -101,7 +101,6 @@ menu item is a command Claude can run, headless.
 | App | Remakes | In a motion design studio |
 |---|---|---|
 | EffectCraft | After Effects | compositions, keyframes, shape and text layers, puppet pins, 3D layers; renders MP4/WebM |
-| FilmCraft | Premiere Pro | editing on a timeline, trims, grades, captions, audio mix |
 | PhotoCraft | Photoshop | layered images and PSD files, adjustment layers, masks, brushes |
 | VectorCraft | Illustrator | vector artwork, logos, paths, Pathfinder; SVG/PDF/PNG |
 | LightCraft | Lightroom | developing photos and raw files |

@@ -195,7 +195,7 @@ Everything goes into the studio folder, never system-wide. Full details: [docs/S
 - **3D.** Blender with the studio's toolkits, in its own profile (your Blender setup is never touched): MoBlend
   (MoGraph), Camera, Animate, Math, Circuits, Camera Flight for flying the camera yourself (`mortiflix blender`), and
   **Nova FX**, Mortiflix's own particle engine (particles, fire, sparks, fireworks), which builds on Linux only for now.
-- **Craft apps.** Optional: EffectCraft, FilmCraft, PhotoCraft, VectorCraft, LightCraft and seven more, the
+- **Craft apps.** Optional: EffectCraft, PhotoCraft, VectorCraft, LightCraft and seven more, the
   open-source (MIT/Apache-2.0) remakes of the Adobe apps by the team behind [ArtCraft](https://github.com/storytold).
   `mortiflix craft install` pulls their official builds, checked against each release's SHA256SUMS. Sessions drive
   them through each app's own MCP server and hand you files you can open and change (PSD, SVG, comps, edits).

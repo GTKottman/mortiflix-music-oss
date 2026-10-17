@@ -53,7 +53,7 @@ export function projectSkills(root, id) {
   const servers = Object.keys(mcpServers(root, { dir: pp.work }).mcpServers || {});
   for (const s of servers) {
     out.push({ name: s, kind: 'mcp', tools: `mcp__${s}__*`, state: backend === 'claude-code' ? 'ready' : 'not on this backend',
-      use: s === 'filmcraft' ? 'The edit stage: the final as a FilmCraft project (Export › Edit the video); the studio drives the app itself.' : `The ${s} app, headless.`,
+      use: `The ${s} app, headless.`,
       fix: backend === 'claude-code' ? null : 'needs the claude-code backend (Settings)' });
   }
   return { backend, pipeline: project.pipeline, items: out };

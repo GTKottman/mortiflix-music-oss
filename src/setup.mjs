@@ -100,7 +100,7 @@ export const PARTS = [
   {
     id: 'craft',
     title: 'Craft apps',
-    why: 'Sessions can work in real design apps the way a person does: compositions in EffectCraft, layered images in PhotoCraft, vectors in VectorCraft, edits in FilmCraft, and more. They are open-source remakes of the Adobe apps, and each comes with an MCP server, so Claude runs their menus and tools directly and hands you files you can open in them.',
+    why: 'Sessions can work in real design apps the way a person does: compositions in EffectCraft, layered images in PhotoCraft, vectors in VectorCraft, and more. They are open-source remakes of the Adobe apps, and each comes with an MCP server, so Claude runs their menus and tools directly and hands you files you can open in them.',
     needs: `Optional. The official builds of the apps you pick, from github.com/${craft.OWNER} (MIT or Apache-2.0; 15 to 80 MB each, about 900 MB for all ${craft.APPS.length}), checked against each release's SHA256SUMS. They are young (most are weeks old), so expect gaps.`,
     tools: ['craft'],
   },

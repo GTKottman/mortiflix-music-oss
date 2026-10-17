@@ -27,7 +27,6 @@ export const OWNER = 'storytold';
 // running app unless told --headless; PhotoCraft's reads and writes nothing until it's given its roots.
 export const APPS = [
   { id: 'effectcraft', name: 'EffectCraft', replaces: 'After Effects', use: 'compositions, keyframes, shape and text layers, puppet pins, 3D layers; renders MP4/WebM' },
-  { id: 'filmcraft', name: 'FilmCraft', replaces: 'Premiere Pro', use: 'editing on a timeline, trims, grades, captions, audio mix; exports H.264/HEVC/ProRes' },
   { id: 'photocraft', name: 'PhotoCraft', replaces: 'Photoshop', use: 'layered images and PSD files, adjustment layers, masks, brushes; the most mature of them', mcp: (dir) => ['--automation-read-root', dir, '--automation-write-root', dir] },
   { id: 'vectorcraft', name: 'VectorCraft', replaces: 'Illustrator', use: 'vector artwork, logos, paths, Pathfinder; exports SVG/PDF/PNG', mcp: () => ['--headless'] },
   { id: 'lightcraft', name: 'LightCraft', replaces: 'Lightroom', use: 'developing photos and raw files, masks, batch looks' },
@@ -96,8 +95,8 @@ async function gh(path, fetchImpl) {
 }
 
 // Apps held at a version the studio was built and tested against; the owner moves a pin on (config craftPins).
-// FilmCraft: the canvas's FilmCraft hand-off and click-to-regenerate are written for 0.8.0.
-export const PINS = { filmcraft: '0.8.0' };
+// None is pinned now (the edit stage uses Mortiflix Studio, not a Craft app).
+export const PINS = {};
 export const pinFor = (config, id) => ({ ...PINS, ...(config.craftPins || {}) })[id] || null;
 
 export async function latestRelease(id, { fetchImpl = fetch, version = null } = {}) {
