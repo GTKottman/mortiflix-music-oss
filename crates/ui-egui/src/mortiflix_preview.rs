@@ -100,6 +100,26 @@ pub fn frame(app: &mut StudioApp, ctx: &egui::Context) {
         // Mortiflix Studio's own sequence is on the monitor now; the loose one stays in the bin
         app.mfx.preview.range = None;
         app.mfx.core.state.preview.player.ready = false;
+        // back from Mortiflix (Back to Mortiflix, then Edit): the edit's sequence again, not the loose preview the
+        // stages 1-4 put on the monitor (run 2: Edit showed the Loose preview sequence, and Render would export it)
+        if let Some(loose) = app.mfx.preview.seq
+            && app.session.state.open_sequences.contains(&loose)
+            && let Some(edit) = app.mfx.core.state.handoff.sequence.map(ItemId)
+            && app.session.project.sequence(edit).is_some()
+        {
+            if app.playback.playing {
+                app.stop();
+            }
+            if app.session.state.active_sequence != Some(edit)
+                && let Err(e) = app.session.execute("sequence.open", json!({"item": edit.0}))
+            {
+                log::warn!("edit sequence: {e}");
+            }
+            // the loose preview is Mortiflix's own: never a tab in Edit (it stays in its bin)
+            if let Err(e) = app.session.execute("sequence.close", json!({"item": loose.0})) {
+                log::warn!("loose preview tab: {e}");
+            }
+        }
         return;
     }
     let plan_empty = app.mfx.core.state.preview.plan.shots.is_empty();
@@ -589,6 +609,24 @@ mod tests {
             ..Plan::default()
         };
         (app, ctx)
+    }
+
+    /// Run 2: Back to Mortiflix, then Edit again showed the Loose preview sequence (hash names, no beat colours) as
+    /// the open timeline; Edit always shows the edit's own sequence, and the loose preview is never a tab there.
+    #[test]
+    fn edit_shows_the_edit_sequence_never_the_loose_preview() {
+        let (mut app, ctx) = app_with_plan();
+        let r = app.session.execute("file.newSequence", json!({"name": "The edit", "fps": 30})).unwrap();
+        let edit = r["sequence"].as_u64().unwrap();
+        frame(&mut app, &ctx);
+        let loose = app.mfx.preview.seq.unwrap();
+        assert_eq!(app.session.state.active_sequence, Some(loose), "stages 1-4: the loose preview plays");
+        app.mfx.core.state.stage = mfx::STAGE_EDIT;
+        app.mfx.core.state.handoff.sequence = Some(edit);
+        frame(&mut app, &ctx);
+        assert_eq!(app.session.state.active_sequence, Some(ItemId(edit)));
+        assert!(!app.session.state.open_sequences.contains(&loose), "no Loose preview tab in Edit");
+        assert!(app.session.project.sequence(loose).is_some(), "it stays in its bin");
     }
 
     #[test]
