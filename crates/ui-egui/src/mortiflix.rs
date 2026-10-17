@@ -27,6 +27,8 @@ pub struct Host {
     pub preview: crate::mortiflix_preview::HostPreview,
     /// The FilmCraft workspace to return to on stages 5-6.
     pub edit_workspace: String,
+    /// Stage 6 Render: the Export page (part 39, `mortiflix_export.rs`).
+    pub export: crate::mortiflix_export::ExportHost,
 }
 
 const fn cmd(id: &'static str, label: &'static str, menu: &'static [&'static str], shortcut: Option<&'static str>) -> UiCommand {
@@ -162,6 +164,7 @@ pub fn frame_begin(app: &mut FilmcraftApp, ctx: &egui::Context) {
     app.mfx.core.poll();
     crate::mortiflix_preview::frame(app, ctx);
     crate::mortiflix_into::frame(app, ctx);
+    crate::mortiflix_export::frame(app, ctx);
     let s = &app.mfx.core.state;
     if !s.active {
         return;
@@ -325,10 +328,7 @@ pub fn route(app: &mut FilmcraftApp, ctx: &egui::Context, id: &str, params: &Val
             }
             None => Err("mortiflix.reply needs an `id`".into()),
         },
-        "mortiflix.renderVideo" => {
-            app.ui.status = "Render the video: pick a preset in Export (doc 39)".into();
-            Ok(Value::Null)
-        }
+        "mortiflix.renderVideo" => crate::mortiflix_export::route(app, params),
         "mortiflix.showNeedsYou" => Ok(Value::Null),
         "mortiflix.chooseFileAndSend" => return Some(choose_file_and_send(app, params)),
         _ => return None,
@@ -430,6 +430,9 @@ fn stage_command(app: &mut FilmcraftApp, what: &str, params: &Value) -> Result<V
     let nav = app.mfx.core.navigate(&key, force).ok_or_else(|| format!("unknown stage command `stages.{what}`"))?;
     if let Nav::Moved { to, .. } = nav {
         apply_stage(app, to);
+        if what == "getVideo" {
+            crate::mortiflix_export::get_video(app);
+        }
     }
     let s = &app.mfx.core.state;
     Ok(json!({"stage": s.stage, "key": mfx::stage_key(s.stage), "asked": nav == Nav::Asked}))

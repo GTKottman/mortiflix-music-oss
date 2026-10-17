@@ -49,6 +49,7 @@ pub mod menus;
 pub mod mortiflix;
 pub mod mortiflix_preview;
 pub mod mortiflix_into;
+pub mod mortiflix_export;
 pub mod native_dialogs;
 pub mod panels;
 pub mod perf;
@@ -1808,6 +1809,7 @@ impl FilmcraftApp {
         match self.ui.mode {
             state::Mode::Edit => self.dock_area(ui, body),
             state::Mode::Import => panels::import_mode::show(self, ui, body),
+            state::Mode::Export if self.mfx.core.state.active => mortiflix_export::show(self, ui, body),
             state::Mode::Export => panels::export_mode::show(self, ui, body),
         }
         // the Timeline has had its chance to place a file drop this frame; anything left stays a bin import
