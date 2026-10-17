@@ -959,9 +959,9 @@ fn message_body(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, i: usize, 
             st.samples = Some(Vec::new());
         }
         if out.change_words {
-            ctx.state.selected_node = None;
-            st.draft = "Change the words: ".into();
-            st.focus_composer = true;
+            // the Script panel, its first line open for editing (owner, 2026-10-16: not the composer)
+            ctx.state.script.focus_first = true;
+            ctx.command("stages.script", json!({}));
         }
     }
     if let Some(q) = &m.question {

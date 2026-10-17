@@ -142,6 +142,23 @@ questions and failed remakes.
 | `music.cues` | `{}` | one cue per beat: the plan before the score, the sections after (`scored`) |
 | `music.cue.set` | `{cue, feel?, energy?, text?, bars?, part?}` | before the score: `{plan}`; once scored: a Fix on that cue, `{edit}` |
 
+#### Script (stage 1, doc 11 §9.1)
+
+| Type | Params | Result |
+|---|---|---|
+| `script.get` | `{}` | `{project, rev, writing, version, beats: [{id, no, name, name_auto, colour, visual, target_sec, state, lines: [{id, words, changed, changed_at, read_only, remaking: {shots, lines}, feeds: [{node, kind: line\|shot, label, state, current, made, remaking}]}]}]}`. Line ids = voice line ids (`b01-1`), forever; `feeds` = the line's voice line and its beat's shots (the graph's `says` edges); while `writing`, the newest line is `read_only` |
+| `script.edit` | one edit or `{edits: [edit…]}`; edit = `{beat, beat_name}` \| `{beat, line, words}` \| `{beat, add_after: line id \| key \| null, words, key?}` \| `{beat, line, delete: true \| false}` | `{project, beats, changed[], added[], keys: {key: id}, deleted[], restored[], renamed[], remaking: [{node, kind, edit}]}` (also the `script.changed` event) |
+
+The app (`crates/mortiflix-ui/src/script.rs`): the Script panel and the chat's script card share one editor and one
+draft. Click a line: it becomes a text field in place; Enter or clicking away keeps it in the draft, Esc drops it.
+Kept changes are marked until **Save** (or Ctrl/Cmd+S) sends them all in one `script.edit {edits}`; **Discard** drops
+them; a stage command that would leave with a draft asks first (Save and go on / Discard / Keep editing). The service
+writes them into `script/beats.json` and `voice/lines.json` and remakes only what used the changed words that already
+exists (a Fix each: the line's voice line and its beat's shots; versions kept); a deleted line's voice line is cut,
+`delete: false` brings it back. The panel reads the script again on `script.changed` / `node.changed` and shows
+"changed · remaking 1 shot and 1 voice line" until the remakes are in. The chat card's **Change the words** opens
+stage 1 with the first line's field open.
+
 #### Voice & music stage (doc 34)
 
 | Type | Params | Result |
@@ -243,6 +260,7 @@ URLs, a pretend Chrome install, and the app's model packs swapped for one small 
 | `chat.message` | a chat row (see `chat.history`) |
 | `chat.typing` | `{on}` while the AI writes a reply |
 | `chat.context` | `{context}` |
+| `script.changed` | `{project, beats, changed, added, keys, deleted, restored, renamed, remaking}`: script edits were saved (the `script.edit` result) |
 | `node.changed` | `{project, rev, nodes: [{id, kind, current, state, owner, missing}]}` (`all: true` on the first look at a project) |
 | `activity` | `{project, t, kind: text\|tool\|todo\|info\|error, text, todos?}` |
 | `assets.progress` | `{project, asset, name, done, total}` |

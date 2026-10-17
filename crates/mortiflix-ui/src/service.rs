@@ -650,10 +650,13 @@ mod tests {
         m.state.project_id = Some("p-one".into());
         out.send(Incoming::Line(json!({"id": HELLO_ID, "ok": true, "result": {"version": "0.1.0"}}))).unwrap();
         m.poll();
-        let open = sent.try_recv().unwrap();
-        assert_eq!((open["type"].as_str(), open["params"]["id"].as_str()), (Some("project.open"), Some("p-one")));
+        // (the Script panel's `script.get` goes too: only `project.open` matters here)
+        let opens = |sent: &std::sync::mpsc::Receiver<Value>| sent.try_iter().filter(|m| m["type"] == "project.open").collect::<Vec<_>>();
+        let open = opens(&sent);
+        assert_eq!(open.len(), 1);
+        assert_eq!(open[0]["params"]["id"].as_str(), Some("p-one"));
         m.poll();
-        assert!(sent.try_recv().is_err(), "only once per restart");
+        assert!(opens(&sent).is_empty(), "only once per restart");
     }
 
     #[test]

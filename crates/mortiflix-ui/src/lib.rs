@@ -153,6 +153,7 @@ impl Mortiflix {
     pub fn poll(&mut self) {
         for msg in self.service.poll() {
             self.state.apply_service_message(&msg);
+            self.state.script.on_message(&msg);
         }
         // A service that was restarted (it crashed or was stopped) has no project open: open the
         // one the app is on again, so the chat, nodes and preview carry on.
@@ -163,7 +164,9 @@ impl Mortiflix {
             if again && let Some(id) = self.state.project_id.clone() {
                 self.service.request("project.open", serde_json::json!({"id": id}));
             }
+            self.state.script.refresh();
         }
+        script::tick(&mut self.state, &mut self.service);
     }
     /// Go to a stage (0-5). `done`: the stage being left was finished with Next. Tells the service.
     /// Returns the stage it was on, or None when `to` is out of range.
@@ -177,6 +180,14 @@ impl Mortiflix {
     /// `force` skips the "still need you" question. None = unknown command.
     pub fn navigate(&mut self, what: &str, force: bool) -> Option<Nav> {
         let stage = self.state.stage;
+        // Unsaved script changes ask first (Save / Discard / Keep editing), except on the way to the
+        // Script stage itself, where the draft is.
+        let known = matches!(what, "back" | "next" | "getVideo" | "editVideo") || stage_by_key(what).is_some();
+        let to_script = stage_by_key(what) == Some(0) || (what == "back" && stage == 1);
+        if known && !force && !to_script && self.state.script.unsaved() {
+            self.state.script.leave = Some(what.to_string());
+            return Some(Nav::Asked);
+        }
         let ask = |s: &mut MfxState, to_render: bool| -> bool {
             let st = s.status(stage);
             if force || st.kind != StatusKind::NeedsYou {

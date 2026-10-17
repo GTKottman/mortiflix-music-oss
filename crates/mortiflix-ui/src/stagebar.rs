@@ -21,7 +21,7 @@ pub fn hint(ctx: &MfxCtx) -> String {
         return "You're looking back. A change here only remakes what it touches.".into();
     }
     match ctx.state.stage {
-        0 => "Read the script. Ask for changes in the chat, then press Next.",
+        0 => "Click any line to change it, Save, then press Next.",
         1 => "Pick the look you like, then press Next.",
         2 => "Check each shot: OK, Fix or Cut it.",
         3 => "Listen with the shots. Get the video, or edit it in FilmCraft first.",
@@ -142,6 +142,7 @@ pub fn show(ui: &mut egui::Ui, rect: Rect, ctx: &mut MfxCtx) {
     }
 
     confirm_popup(ui, ctx);
+    crate::script::leave_popup(ui, ctx);
 }
 
 /// A stage-bar button: blue (the one accent) when `primary`, else grey. It always works.

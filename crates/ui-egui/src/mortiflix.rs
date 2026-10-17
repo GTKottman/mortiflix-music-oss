@@ -162,6 +162,11 @@ pub fn hides_mode_tabs(app: &FilmcraftApp) -> bool {
 pub fn frame_begin(app: &mut FilmcraftApp, ctx: &egui::Context) {
     app.mfx.core.service.set_waker(ctx);
     app.mfx.core.poll();
+    // Ctrl/Cmd+S saves unsaved script changes first (FilmCraft's own Save is for its project).
+    if app.mfx.core.state.script.unsaved() && ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::S)) {
+        let core = &mut app.mfx.core;
+        mfx::script::save(&mut core.state.script, &mut core.service);
+    }
     crate::mortiflix_preview::frame(app, ctx);
     crate::mortiflix_into::frame(app, ctx);
     crate::mortiflix_export::frame(app, ctx);

@@ -19,7 +19,7 @@ pub struct CardOut {
     /// (question id, choice id): a pick on a Looks or Music card.
     pub answer: Option<(String, String)>,
     pub action: Option<ActionButton>,
-    /// Change the words (Script): the composer, about the whole video.
+    /// Change the words (Script): the Script panel with its first line open.
     pub change_words: bool,
     /// Hear the music themes: ask the service for its samples (`music.theme.samples`).
     pub samples: bool,
@@ -123,7 +123,14 @@ fn beat(ui: &mut egui::Ui, ctx: &MfxCtx, id: &str) {
 fn script(ui: &mut egui::Ui, ctx: &mut MfxCtx, msg: usize, card: &Value, open: bool, out: &mut CardOut) {
     let t = ctx.theme;
     let beats = list(card, "beats");
-    for b in beats.iter().take(40) {
+    // The live script, every line editable in place (the Script panel's own editor and draft); the
+    // card's own copy only until the script has been read.
+    let scope = format!("chat.{msg}");
+    let live = crate::script::editor(ui, ctx, &scope, true, open);
+    if live && (ctx.state.script.unsaved() || ctx.state.script.saving) {
+        ui.horizontal(|ui| crate::script::save_bar(ui, ctx, &scope));
+    }
+    for b in beats.iter().take(if live { 0 } else { 40 }) {
         let id = text(b, "id");
         let start = text(b, "start");
         let right = if start.is_empty() { secs(b.get("target_sec")) } else { start };

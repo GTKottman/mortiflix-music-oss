@@ -135,6 +135,8 @@ pub struct MfxState {
     pub preview: crate::preview::PreviewState,
     /// Into FilmCraft (doc 38): the hand-off and the stage-5 Mortiflix panel.
     pub handoff: crate::into_filmcraft::Handoff,
+    /// The script, line by line, and the owner's unsaved draft (Script panel + chat card).
+    pub script: crate::script::ScriptState,
 }
 
 impl Default for MfxState {
@@ -159,6 +161,7 @@ impl Default for MfxState {
             nodes: crate::nodes::NodeArea::default(),
             preview: Default::default(),
             handoff: Default::default(),
+            script: Default::default(),
         }
     }
 }
