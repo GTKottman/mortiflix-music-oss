@@ -384,7 +384,11 @@ pub fn node(graph: &Value, id: &str) -> NodeInfo {
     let get = |k: &str| raw.and_then(|r| r.get(k)).and_then(|v| s(v, MAX_FIELD)).unwrap_or_default();
     let kind = Some(get("kind")).filter(|k| !k.is_empty()).unwrap_or_else(|| kind_of_id(id).to_string());
     // a beat is called by its short name (graph.get `name`), never its first words cut off
-    let title = if kind == "beat" { Some(get("name")).filter(|t| !t.is_empty()).unwrap_or_else(|| get("title")) } else { Some(get("title")).filter(|t| !t.is_empty()).unwrap_or_else(|| get("name")) };
+    let title = if kind == "beat" {
+        Some(get("name")).filter(|t| !t.is_empty()).unwrap_or_else(|| get("title"))
+    } else {
+        Some(get("title")).filter(|t| !t.is_empty()).unwrap_or_else(|| get("name"))
+    };
     let beat = if kind == "beat" { Some(id.to_string()) } else { Some(get("beat")).filter(|b| !b.is_empty()) };
     let field_no = |r: &Value| r.get("beat_no").or_else(|| r.get("no")).and_then(Value::as_u64).and_then(|n| u32::try_from(n).ok());
     let beat_no = raw.and_then(field_no).or_else(|| beat.as_deref().and_then(id_number));
