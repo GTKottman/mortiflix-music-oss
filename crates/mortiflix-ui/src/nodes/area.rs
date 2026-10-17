@@ -281,6 +281,8 @@ pub struct NodeArea {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Frame {
     All,
+    /// Every shot of the film (and its cuts) as large as fits: what opening a project shows.
+    Film,
     Selected,
     Node(String),
     Beat(String),
@@ -788,6 +790,13 @@ impl NodeArea {
     /// A fresh `node.list` arrived.
     pub fn load(&mut self, result: &Value) {
         let mut g = Graph::from_json(result);
+        // Frame all on its own when a project opens and when its shots first appear (owner's first run:
+        // zoomed in, they thought shots were missing). Later loads keep the view the person set.
+        let first = !self.loaded || self.graph.nodes.is_empty();
+        let shots_appear = self.graph.film.is_empty() && !g.film.is_empty();
+        if (first && !g.nodes.is_empty()) || shots_appear {
+            self.want_frame = Some(if g.film.is_empty() { Frame::All } else { Frame::Film });
+        }
         if let Some(order) = &self.film_override {
             // keep the order changed here; shots the studio added since go at the end
             let mut film: Vec<String> = order.iter().filter(|id| g.film.contains(id)).cloned().collect();
@@ -1113,5 +1122,18 @@ mod tests {
         let near = node_size(&n, Lod::Near);
         let far = node_size(&n, Lod::Far);
         assert!(near.y > far.y && near.x == far.x);
+    }
+
+    #[test]
+    fn frames_all_when_a_project_opens_and_when_its_shots_first_appear() {
+        let mut a = NodeArea::default();
+        a.load(&json!({"nodes": [{"id": "b01", "kind": "beat", "order": 0, "title": "One"}]}));
+        assert!(matches!(a.want_frame.take(), Some(Frame::All)), "opened: frame all");
+        a.load(&json!({"nodes": [{"id": "b01", "kind": "beat", "order": 0, "title": "One"}]}));
+        assert!(a.want_frame.is_none(), "a later load keeps the person's view");
+        a.load(&crate::nodes::model::tests::sample());
+        assert!(matches!(a.want_frame.take(), Some(Frame::Film)), "the shots appeared: frame them all");
+        a.load(&crate::nodes::model::tests::sample());
+        assert!(a.want_frame.is_none());
     }
 }

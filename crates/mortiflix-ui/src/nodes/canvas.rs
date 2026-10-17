@@ -180,6 +180,16 @@ pub fn show(parent: &mut egui::Ui, area: &mut NodeArea, t: &MfxTheme, rect: Rect
     if let Some(f) = area.want_frame.take() {
         let r = match &f {
             Frame::All => Some(area.content_rect()),
+            Frame::Film => {
+                let mut r = Rect::NOTHING;
+                for id in area.graph.film.clone() {
+                    if let Some(nr) = area.node_rect(&id) {
+                        r = r.union(nr);
+                    }
+                }
+                // the beat labels over the shots stay in view
+                (r != Rect::NOTHING).then(|| r.expand2(vec2(16.0, 0.0)).with_min_y(r.min.y - 28.0)).or_else(|| Some(area.content_rect()))
+            }
             Frame::Selected => {
                 let mut r = Rect::NOTHING;
                 for id in area.selection.clone() {
