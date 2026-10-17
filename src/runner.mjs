@@ -10,6 +10,7 @@ import { listProjects, loadProject, projectPaths, projectPipeline, update, event
 import { settle, needsYou } from './gates.mjs';
 import { projectMissingKeys, missingKeysText } from './keys.mjs';
 import { prepareWorkdir, writeTorch, sessionReason } from './torch.mjs';
+import { loadTheme } from './svc/theme.mjs';
 import { openBridge } from './bridge.mjs';
 import { RenderQueue } from './renderq.mjs';
 import * as claudeCode from './backends/claude-code.mjs';
@@ -173,10 +174,15 @@ export class Runner extends EventEmitter {
     const gated = newEvents.some((e) => GATE_PROGRESS.includes(e.event));
     const pipeline = projectPipeline(root, projectId);
     let pausedFor = null;
+    let themesMade = false;
     update(root, projectId, (p) => {
       p.session = null;
-      // the themes asked for were this session's to make (made or not, one session only: never a loop)
-      if (p.mfx?.samples_wanted) delete p.mfx.samples_wanted;
+      // the themes asked for were this session's to make (made or not, one session only: never a loop); made, they
+      // go in the chat as a themes card
+      if (p.mfx?.samples_wanted) {
+        delete p.mfx.samples_wanted;
+        themesMade = true;
+      }
       p.usage.sessions += 1;
       p.usage.input_tokens += result?.usage?.input_tokens || 0;
       p.usage.output_tokens += result?.usage?.output_tokens || 0;
@@ -196,6 +202,10 @@ export class Runner extends EventEmitter {
         if (pausedFor) { p.state = 'paused'; p.needs_you = { text: pausedFor, at: now(), ...(loginTrouble(result?.error) ? { cause: 'login' } : {}) }; }
       }
     });
+    if (themesMade) {
+      const t = loadTheme(root, projectId);
+      if (t?.samples?.length) event(root, projectId, { event: 'MUSIC_THEME', actor: 'studio', details: `${t.samples.length} themes to hear: ${t.samples.map((x) => x.name).filter(Boolean).join(', ').slice(0, 160)}` });
+    }
     event(root, projectId, { event: 'SESSION_ENDED', details: `${result?.ok ? 'ok' : `error: ${result?.error}`} · ${minutes} min` });
     if (pausedFor) event(root, projectId, { event: 'NEEDS_YOU', details: pausedFor });
     this.addActivity(projectId, { kind: result?.ok ? 'info' : 'error', text: result?.ok ? `Session ended (${minutes} min).` : `Session ended: ${result?.error}` });

@@ -110,6 +110,8 @@ export function sessionReason(root, id) {
     RESUMED: 'The owner resumed the project.',
     EDIT_REQUESTED: `The owner asked for a change on the canvas (${e.details}).`,
     EDIT_VIDEO: 'The owner chose Edit the video: make the Mortiflix Studio project (GATES.md, "Edit the video").',
+    // run 2: said only in the brief, a session read "nothing to work on" and ended without them
+    THEME_SAMPLES_WANTED: 'The owner asked for three 15 s music themes to hear: write them as plain default Strudel into `music/theme.json` `samples` ({id, name, desc, strudel, wav, bpm, key}), render each to a quiet WAV (paths in the working folder); the studio puts them in the chat when the session ends. This is the work of this session.',
   }[e.event])).filter(Boolean).join(' ') || 'Carrying on.';
 }
 
