@@ -479,13 +479,17 @@ fn bar(ui: &mut egui::Ui, ctx: &mut MfxCtx, r: Rect) {
         }
         let br = Rect::from_min_max(pos2(x0, beats_r.min.y), pos2(x1, beats_r.max.y));
         p.rect_filled(Rect::from_min_size(br.min, vec2(br.width(), 3.0)), 0.0, hex(&b.chip));
-        p.with_clip_rect(br).text(
-            pos2(x0 + 2.0, br.min.y + 5.0),
-            Align2::LEFT_TOP,
-            format!("{} {}", b.number, b.title),
-            FontId::proportional(12.0),
-            t.text_dim,
-        );
+        // Only where the beat's number fits whole: 70 beats in a 26 min film cut "12", "13"… to a row of "1 1 1".
+        let number_w = p.layout_no_wrap(b.number.to_string(), FontId::proportional(12.0), t.text_dim).size().x;
+        if br.width() >= number_w + 4.0 {
+            p.with_clip_rect(br).text(
+                pos2(x0 + 2.0, br.min.y + 5.0),
+                Align2::LEFT_TOP,
+                format!("{} {}", b.number, b.title),
+                FontId::proportional(12.0),
+                t.text_dim,
+            );
+        }
     }
     // shots: solid = moving, stripes = still, dashed = not made yet
     let under = if pv.player.playing { pv.shot_at_playhead.clone() } else { None };
