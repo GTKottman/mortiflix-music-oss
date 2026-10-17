@@ -885,7 +885,7 @@ fn shot_node(
                 let f = look.still()?;
                 stills.get(&resolve(f, &area.graph.base, &area.studio, area.project.as_deref())?)
             });
-        match tex {
+        match &tex {
             Some(tex) => {
                 let tint = if dim {
                     Color32::from_white_alpha(90)
@@ -897,17 +897,32 @@ fn shot_node(
                 p.image(tex.id(), still, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), tint);
             }
             None => {
-                // no picture yet: an empty 16:9 frame, nothing written on it
+                // no picture yet: the shot's words and where it is at, never an empty box (owner's first run)
                 p.rect_filled(still, 0.0, fade(Color32::from_gray(30), dim));
                 p.rect_stroke(still.shrink(6.0 * z), 2.0, Stroke::new(1.0, fade(Color32::from_gray(48), dim)), StrokeKind::Inside);
+                plan_card(p, n, still, working.is_some(), z, dim, t);
             }
+        }
+        // a plan shown with its look's picture: say so on it, so it never reads as a made shot
+        if n.state == NodeState::Planned && working.is_none() && n.still().is_none() && tex.is_some() && still.height() > 24.0 {
+            let tag = Rect::from_min_size(pos2(still.min.x + 4.0, still.max.y - 4.0 - 18.0 * z.max(0.8)), vec2(still.width() - 8.0, 18.0 * z.max(0.8)));
+            p.rect_filled(tag, 3.0, Color32::from_black_alpha(190));
+            let g = line(p, "Planned · its look for now", text_size(z, 11.0), t.text, tag.width() - 8.0);
+            p.galley(pos2(tag.min.x + 5.0, tag.center().y - g.size().y / 2.0), g, t.text);
         }
         if n.state == NodeState::Planned {
             let pts = vec![still.left_top(), still.right_top(), still.right_bottom(), still.left_bottom(), still.left_top()];
             p.extend(Shape::dashed_line(&pts, Stroke::new(1.0, t.text_faint), 5.0, 4.0));
         }
         if let Some(w) = &working {
-            crate::work::badge(p, still, w, t.accent_hover, text_size(z, 13.0), time);
+            if tex.is_none() {
+                // the words stay readable above it
+                crate::work::sweep(p, still, t.accent_hover, time);
+                let low = Rect::from_min_max(pos2(still.min.x, still.center().y + still.height() * 0.1), still.max);
+                crate::work::pill(p, low, w, t.accent_hover, text_size(z, 12.0), time);
+            } else {
+                crate::work::badge(p, still, w, t.accent_hover, text_size(z, 13.0), time);
+            }
         }
         y = still.max.y;
         if lod == Lod::Near {
@@ -920,6 +935,8 @@ fn shot_node(
         let mut word = format!("{} {}", n.state.glyph(), n.state.word());
         if let Some(w) = &working {
             word = format!("» {w}");
+        } else if n.state == NodeState::Planned {
+            word = if area.work.running { "· Planned · the AI makes it later".into() } else { "· Planned · waiting".into() };
         } else if n.state.making() {
             // asked for, but the AI isn't on it right now
             word = if area.work.running { "· Fix queued: the AI does it next".into() } else { "· Fix waiting: the AI isn't running".into() };
@@ -1008,6 +1025,29 @@ fn shot_node(
     if area.show.inputs {
         let c = pos2(r.center().x, r.min.y - sr - 2.0);
         p.circle_stroke(c, sr * 0.8, Stroke::new(1.2, fade(t.text_faint, dim)));
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+/// A shot not made yet: its words in the frame (up to three lines) and, when the AI isn't on it,
+/// "Planned · waiting" under them.
+fn plan_card(p: &Painter, n: &Node, still: Rect, working: bool, z: f32, dim: bool, t: &MfxTheme) {
+    if still.width() < 30.0 || still.height() < 20.0 {
+        return;
+    }
+    let inner = still.shrink(8.0 * z.max(0.6));
+    let size = text_size(z, 12.0);
+    let words = if n.title.trim().is_empty() { "A shot from the script".to_string() } else { n.title.trim().to_string() };
+    let mut job = egui::text::LayoutJob::simple(words, FontId::proportional(size), fade(t.text, dim), inner.width());
+    job.wrap.max_rows = if working { 2 } else { 3 };
+    job.wrap.break_anywhere = false;
+    job.wrap.overflow_character = Some('…');
+    let g = p.layout_job(job);
+    let words_h = g.size().y;
+    p.with_clip_rect(inner.intersect(p.clip_rect())).galley(inner.min, g, t.text);
+    if !working && inner.height() > words_h + size + 4.0 {
+        let s = line(p, "Planned · waiting", text_size(z, 11.0), fade(t.text_faint, dim), inner.width());
+        p.galley(pos2(inner.min.x, inner.max.y - s.size().y), s, t.text_faint);
     }
 }
 

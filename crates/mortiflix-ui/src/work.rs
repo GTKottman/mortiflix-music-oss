@@ -178,6 +178,11 @@ pub fn sweep(p: &Painter, r: Rect, col: Color32, time: f64) {
 /// centre ("Making…", "Remaking v2…"). `size` = the words' size.
 pub fn badge(p: &Painter, r: Rect, words: &str, col: Color32, size: f32, time: f64) {
     sweep(p, r, col, time);
+    pill(p, r, words, col, size, time);
+}
+
+/// The spinner and words in a dark pill at the centre of `r` (the badge without its sweep).
+pub fn pill(p: &Painter, r: Rect, words: &str, col: Color32, size: f32, time: f64) {
     if r.width() < 24.0 || r.height() < 12.0 {
         return;
     }
