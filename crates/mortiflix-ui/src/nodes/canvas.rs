@@ -879,7 +879,10 @@ fn shot_node(
         for (i, (key, label)) in [("ok", "OK"), ("fix", "Fix"), ("cut", "Cut it")].iter().enumerate() {
             #[allow(clippy::cast_precision_loss)]
             let br = Rect::from_min_size(pos2(r.min.x + 4.0 + i as f32 * (bw + 4.0), y + 2.0), vec2(bw, bh));
-            let resp = ui.interact(br, egui::Id::new(("mfx-node-btn", &n.id, *key)), Sense::click());
+            // OK waits until the shot exists: a plan has nothing to OK yet
+            let off = *key == "ok" && n.versions.is_empty();
+            let resp = ui.interact(br, egui::Id::new(("mfx-node-btn", &n.id, *key)), if off { Sense::hover() } else { Sense::click() });
+            let resp = if off { resp.on_hover_text("Not made yet: OK it once it exists") } else { resp };
             let on = *key == "ok" && n.state == NodeState::Ok;
             let bg = if resp.hovered() {
                 t.hover.gamma_multiply(1.6)
@@ -890,7 +893,7 @@ fn shot_node(
             };
             p.rect_filled(br, 3.0, fade(bg, dim));
             let text = if on { "OK ✓" } else { label };
-            let g = line(p, text, text_size(z, 11.0), fade(t.text, dim), br.width() - 4.0);
+            let g = line(p, text, text_size(z, 11.0), fade(if off { t.text_faint } else { t.text }, dim || off), br.width() - 4.0);
             p.galley(br.center() - g.size() / 2.0, g, t.text);
             out.auto(format!("mfx.nodes.node.{}.{key}", n.id), &resp, label);
             if resp.clicked() {

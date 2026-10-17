@@ -281,6 +281,7 @@ fn state_of(v: &Value, versions: usize) -> NodeState {
         "generating" | "making" => NodeState::Making,
         "planned" => NodeState::Planned,
         _ if stale => NodeState::OutOfDate,
+        "approved" | "ok" if versions == 0 => NodeState::Planned,
         "approved" | "ok" => NodeState::Ok,
         _ if planned => NodeState::Planned,
         _ => NodeState::Ready,
@@ -617,7 +618,11 @@ impl Graph {
                 continue;
             }
             c.shots += 1;
+            if !n.versions.is_empty() {
+                c.made += 1;
+            }
             match n.state {
+                NodeState::Ok if n.versions.is_empty() => {}
                 NodeState::Ok => c.ok += 1,
                 NodeState::NeedsYou => c.need += 1,
                 s if s.making() => c.making += 1,
@@ -632,6 +637,9 @@ impl Graph {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Counts {
     pub shots: usize,
+    /// Shots that exist (have a version); the rest are still plans.
+    pub made: usize,
+    /// Made shots you OK'd.
     pub ok: usize,
     pub need: usize,
     pub making: usize,
@@ -639,11 +647,15 @@ pub struct Counts {
 }
 
 impl Counts {
-    /// `14 shots · 3 OK · 1 needs you · 3 making · 1 transition to pick`
+    /// `8 shots · made 5 of 8 · OK'd 3 · 1 needs you · 3 making · 1 transition to pick`: made and
+    /// OK'd are said apart, so an OK never reads as "done" (owner's first run).
     pub fn line(&self) -> String {
         let mut parts = vec![if self.shots == 1 { "1 shot".to_string() } else { format!("{} shots", self.shots) }];
+        if self.shots > 0 && self.made < self.shots {
+            parts.push(format!("made {} of {}", self.made, self.shots));
+        }
         if self.ok > 0 {
-            parts.push(format!("{} OK", self.ok));
+            parts.push(format!("OK'd {}", self.ok));
         }
         if self.need > 0 {
             parts.push(if self.need == 1 { "1 needs you".into() } else { format!("{} need you", self.need) });
@@ -713,7 +725,7 @@ pub(crate) mod tests {
         assert!(g.cuts.get(1).is_some_and(|c| !c.pick && c.id == "cut:s02:s03"));
         assert_eq!(g.beat_title("b02"), (2, "The bet".to_string()));
         assert_eq!(g.beat_title("b01").1, "Cold open on a…");
-        assert_eq!(g.counts().line(), "5 shots · 1 OK · 1 needs you");
+        assert_eq!(g.counts().line(), "5 shots · made 3 of 5 · OK'd 1 · 1 needs you");
         // a cut that only exists because the order changed is a choice left to you
         let mut moved = g.clone();
         moved.set_film(vec!["s01".into(), "s03".into(), "s02".into(), "s04".into(), "x".into()]);

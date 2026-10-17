@@ -1150,7 +1150,11 @@ fn moves_row(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, info: Option<
                 for mv in model::moves(&n.kind) {
                     let done = decided.as_deref() == Some(mv.key());
                     let label = if done { format!("{} ✓", mv.label(&n.kind)) } else { mv.label(&n.kind).to_string() };
-                    if small_button(ui, ctx, &format!("mfx.chat.move.{}", mv.key()), &label, false).clicked() {
+                    // a piece not made yet has nothing to OK (Fix still changes the plan)
+                    let plan = *mv == model::Move::Ok && n.versions == 0 && n.kind != "beat";
+                    let r = ui.add_enabled_ui(!plan, |ui| small_button(ui, ctx, &format!("mfx.chat.move.{}", mv.key()), &label, false)).inner;
+                    let r = if plan { r.on_disabled_hover_text("Not made yet: OK it once it exists") } else { r };
+                    if r.clicked() {
                         run_move(ctx, st, n, *mv, now);
                     }
                 }

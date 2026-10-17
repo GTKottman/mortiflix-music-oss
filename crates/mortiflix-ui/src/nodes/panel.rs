@@ -449,7 +449,11 @@ fn decisions(ui: &mut egui::Ui, area: &mut NodeArea, n: &Node, t: &MfxTheme, out
             return;
         }
         let ok_label = if n.state == NodeState::Ok { "OK ✓" } else { "OK" };
-        if button(ui, out, "inspector.ok", ok_label, n.state != NodeState::Ok, t).clicked() {
+        if n.versions.is_empty() && matches!(n.kind, Kind::Shot | Kind::Frame | Kind::Line | Kind::Cue | Kind::Transition) {
+            // a plan: nothing to OK until it exists (Fix still changes the plan)
+            let r = ui.add_enabled(false, egui::Button::new("OK")).on_disabled_hover_text("Not made yet: OK it once it exists");
+            out.auto.push(("mfx.nodes.inspector.ok".into(), r, "OK (not made yet)".into()));
+        } else if button(ui, out, "inspector.ok", ok_label, n.state != NodeState::Ok, t).clicked() {
             out.cmds.push((if n.state == NodeState::Ok { "nodes.bringBack" } else { "nodes.ok" }.into(), json!({"node": n.id})));
         }
         if button(ui, out, "inspector.fix", "Fix", false, t).clicked() {
@@ -777,14 +781,16 @@ fn draw_transition(p: &egui::Painter, r: Rect, kind: &str, t: &MfxTheme) {
 fn beat(ui: &mut egui::Ui, area: &mut NodeArea, n: &Node, t: &MfxTheme, out: &mut Out) {
     breadcrumb(ui, area, Some(n), out);
     let shots: Vec<Node> = area.graph.beat_shots(&n.id).into_iter().filter(|s| s.state != NodeState::Cut).cloned().collect();
-    let ok = shots.iter().filter(|s| s.state == NodeState::Ok).count();
+    let ok = shots.iter().filter(|s| s.state == NodeState::Ok && !s.versions.is_empty()).count();
+    let made = shots.iter().filter(|s| !s.versions.is_empty()).count();
     let (num, name) = area.graph.beat_title(&n.id);
     ui.label(RichText::new(format!("{num} {name}")).strong().color(t.text));
     ui.label(RichText::new(&n.title).color(t.text_dim));
-    ui.label(RichText::new(format!("{} shots · {ok} OK", shots.len())).color(t.text_dim));
+    ui.label(RichText::new(format!("{} shots · made {made} of {} · OK'd {ok}", shots.len(), shots.len())).color(t.text_dim));
     let ids: Vec<String> = shots.iter().map(|s| s.id.clone()).collect();
     ui.horizontal(|ui| {
-        if button(ui, out, "inspector.okAll", &format!("OK all {} shots", shots.len()), true, t).clicked() {
+        let label = if made == shots.len() { format!("OK all {} shots", shots.len()) } else { format!("OK the {made} made") };
+        if made > 0 && button(ui, out, "inspector.okAll", &label, true, t).clicked() {
             out.cmds.push(("nodes.ok".into(), json!({"nodes": ids})));
         }
         if button(ui, out, "inspector.fixBeat", "Fix the beat", false, t).clicked() {

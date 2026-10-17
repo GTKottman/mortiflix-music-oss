@@ -408,6 +408,12 @@ pub fn command(m: &mut Mortiflix, what: &str, params: &Value) -> Result<Value, S
                 });
                 return Ok(json!({"asked": true}));
             }
+            // OK skips shots not made yet (several at once); one alone says why
+            let unmade = |id: &String| area.graph.get(id).is_some_and(|n| n.kind != Kind::Beat && n.versions.is_empty());
+            let ids: Vec<String> = if action == "ok" && ids.len() > 1 { ids.iter().filter(|i| !unmade(i)).cloned().collect() } else { ids };
+            if ids.is_empty() {
+                return Err("None of them is made yet: OK a shot once it exists".into());
+            }
             let mut done = Vec::new();
             for id in &ids {
                 if let Some(cut) = area.graph.cuts.iter().find(|c| &c.id == id).cloned() {
@@ -424,7 +430,13 @@ pub fn command(m: &mut Mortiflix, what: &str, params: &Value) -> Result<Value, S
                 }
                 if area.graph.get(id).is_some_and(|n| matches!(n.kind, Kind::Beat)) {
                     // a beat: act on its shots
-                    let shots: Vec<String> = area.graph.beat_shots(id).iter().filter(|s| s.state != NodeState::Cut).map(|s| s.id.clone()).collect();
+                    let shots: Vec<String> = area
+                        .graph
+                        .beat_shots(id)
+                        .iter()
+                        .filter(|s| s.state != NodeState::Cut && (action != "ok" || !s.versions.is_empty()))
+                        .map(|s| s.id.clone())
+                        .collect();
                     for s in shots {
                         area.decide(service, &s, action, "", true)?;
                         done.push(s);
@@ -661,6 +673,16 @@ mod tests {
         m.state.nodes.load(&sample());
         m.state.nodes.canvas = [0.0, 0.0, 1200.0, 500.0];
         m
+    }
+
+    #[test]
+    fn ok_is_only_for_made_shots() {
+        let mut m = loaded();
+        // OK on several skips the plans; on a plan alone it says why
+        let r = command(&mut m, "ok", &json!({"nodes": ["s02", "s03"]})).unwrap();
+        assert_eq!(r["done"], json!(["s02"]));
+        assert!(command(&mut m, "ok", &json!({"node": "s03"})).is_err());
+        command(&mut m, "bringBack", &json!({"node": "s02"})).unwrap();
     }
 
     #[test]

@@ -878,6 +878,10 @@ impl NodeArea {
             _ => None,
         };
         let has_versions = !n.versions.is_empty();
+        // an OK is on a made piece (owner's first run: OK on plans, then "4 OK" read as 4 shots done)
+        if action == "ok" && !has_versions {
+            return Err(format!("{} isn't made yet: OK it once it exists", n.display_name()));
+        }
         let mut params = json!({"node": node, "action": action});
         match action {
             "fix" => {
@@ -1095,6 +1099,8 @@ mod tests {
         assert_eq!(a.graph.get("s04").map(|n| n.state), Some(NodeState::Remaking));
         assert!(a.decide(&mut svc, "ghost", "ok", "", true).is_err());
         assert!(a.decide(&mut svc, "s04", "explode", "", true).is_err());
+        // a plan (s03 has no version) has nothing to OK
+        assert!(a.decide(&mut svc, "s03", "ok", "", true).is_err_and(|e| e.contains("isn't made yet")));
         a.undo_redo(&mut svc, true); // the cut
         assert_eq!(a.graph.get("s03").map(|n| n.state), Some(NodeState::Planned));
         a.undo_redo(&mut svc, true); // the OK
