@@ -115,6 +115,10 @@ struct ChatUi {
     todos: Vec<(String, String)>,
     /// The render queue's running job: (done 0-1, line).
     render: Option<(f32, String)>,
+    /// No project open: the studio's projects (`project.list`), newest first, and when asked.
+    projects: Vec<(String, String, String)>,
+    projects_req: Option<u64>,
+    projects_at: Option<f64>,
     history_for: Option<String>,
     graph_for: Option<String>,
     /// This panel loaded the graph (so it reloads it on `node.changed`).
@@ -743,7 +747,7 @@ fn context_bar(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, msgs: &[Msg
 fn thread(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, msgs: &[Msg], view: Option<&str>, now: f64) {
     let t = ctx.theme;
     if msgs.is_empty() && st.queued.is_empty() {
-        empty_state(ui, ctx, now);
+        empty_state(ui, ctx, st, now);
         return;
     }
     let rows = model::rows(&ctx.state.graph, msgs, view);
@@ -807,17 +811,65 @@ fn thread(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, msgs: &[Msg], vi
     }
 }
 
-fn empty_state(ui: &mut egui::Ui, ctx: &mut MfxCtx, now: f64) {
+/// The studio's projects for the no-project state: `project.list` rows as (id, title, last change),
+/// newest first (`updated_at`, else `created_at`).
+fn project_rows(v: &Value) -> Vec<(String, String, String)> {
+    let mut rows: Vec<(String, String, String)> = v
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .filter_map(|p| {
+                    let id = p.get("id").and_then(Value::as_str)?.to_string();
+                    let title = p.get("title").and_then(Value::as_str).filter(|t| !t.trim().is_empty()).unwrap_or(&id).to_string();
+                    let at = p.get("updated_at").or_else(|| p.get("created_at")).and_then(Value::as_str).unwrap_or("").to_string();
+                    Some((id, title, at))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    rows.sort_by(|a, b| b.2.cmp(&a.2));
+    rows
+}
+
+fn empty_state(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, now: f64) {
     let t = ctx.theme;
     ui.add_space(24.0);
     ui.vertical_centered(|ui| {
         if ctx.state.project_id.is_none() {
-            ui.label(RichText::new("No project yet.").size(14.0).color(t.text));
+            // the studio's projects, so one made before (another run of the app) opens again
+            if st.projects_req.is_none() && st.projects_at.is_none_or(|at| now - at > 10.0) && ctx.service.status().is_connected() {
+                st.projects_req = Some(ctx.service.request("project.list", json!({})));
+                st.projects_at = Some(now);
+            }
+            if let Some(id) = st.projects_req
+                && let Some(r) = ctx.service.take_reply(id)
+            {
+                st.projects_req = None;
+                if r.ok {
+                    st.projects = project_rows(&r.result);
+                }
+            }
+            ui.label(RichText::new(if st.projects.is_empty() { "No project yet." } else { "No project open." }).size(14.0).color(t.text));
             ui.label(RichText::new("Start one and Mortiflix writes the script first.").size(12.0).color(t.text_dim));
             ui.add_space(8.0);
             let b = small_button(ui, ctx, "mfx.chat.newProject", "New project…", true);
             if b.clicked() {
                 ctx.command("mortiflix.newProject", json!({}));
+            }
+            if !st.projects.is_empty() {
+                ui.add_space(16.0);
+                ui.label(RichText::new("Or open one of yours").size(12.0).color(t.text_faint));
+                ui.add_space(4.0);
+                for (id, title, at) in st.projects.iter().take(8) {
+                    let day = at.get(..10).unwrap_or("");
+                    let text = RichText::new(format!("{}  ·  {day}", model::short(title, 40))).size(13.0).color(LINK);
+                    let r = ui.add(egui::Label::new(text).sense(Sense::click())).on_hover_text(id);
+                    if r.clicked() {
+                        // through mortiflix.request: unsaved script words are asked about first
+                        ctx.command("mortiflix.request", json!({"type": "project.open", "params": {"id": id}}));
+                    }
+                    ctx.auto(&format!("mfx.chat.open.{id}"), &r, title);
+                }
             }
         } else {
             let pulse = (0.55 + 0.45 * (now * 3.0).sin()) as f32;
@@ -1425,6 +1477,23 @@ fn go_to_message(ctx: &mut MfxCtx, st: &mut ChatUi, m: &Msg, i: usize) {
 mod tests {
     use super::*;
     use crate::Mortiflix;
+
+    /// Run 2: after a restart there was no way back into a project made before; the no-project
+    /// state lists the studio's projects, newest first.
+    #[test]
+    fn the_no_project_state_lists_projects_newest_first() {
+        let v = json!([
+            {"id": "p-old", "title": "Old one", "updated_at": "2026-10-01T10:00:00Z"},
+            {"id": "p-new", "title": "How Bees Make Honey", "updated_at": "2026-10-17T18:00:00Z"},
+            {"id": "p-blank", "title": " ", "created_at": "2026-10-05T10:00:00Z"},
+            {"title": "no id"},
+            "junk"
+        ]);
+        let rows = project_rows(&v);
+        assert_eq!(rows.iter().map(|r| r.0.as_str()).collect::<Vec<_>>(), ["p-new", "p-blank", "p-old"]);
+        assert_eq!(rows[1].1, "p-blank", "a project without a title shows its id");
+        assert!(project_rows(&json!({"x": 1})).is_empty());
+    }
 
     fn run(m: &mut Mortiflix, frames: usize, mut each: impl FnMut(&mut egui::Context)) -> egui::Context {
         let mut ectx = egui::Context::default();
