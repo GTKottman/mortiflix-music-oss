@@ -184,7 +184,10 @@ test('service core: new project from preset + idea + assets + theme, the whole f
   const samples = await call('music.theme.samples');
   assert.equal(samples.samples.length, 3);
   assert.ok(existsSync(samples.samples[0].wav));
-  assert.equal((await call('music.theme.use', { sample: 't2' })).theme.using, 't2');
+  const used = await call('music.theme.use', { sample: 't2' });
+  assert.equal(used.theme.using, 't2');
+  // the music is written already: the theme pick remakes it in that theme (run 2: it changed nothing)
+  assert.equal(used.edit?.node, 'music');
   await call('voice.line.take', { line: 'b03-1' });
   await call('chat.send', { text: 'Keep the logo small', context: 'video' });
   await until(async () => (await call('chat.history')).filter((r) => r.role === 'ai' && /Demo: noted/.test(r.text)).length === 2);

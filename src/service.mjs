@@ -420,7 +420,25 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
     'music.theme.set': (p) => { const id = needProject(p); const t = saveTheme(root, id, { ...(p?.theme || bad('music.theme.set needs a theme')), picked_by: 'you' }); chatRow(id, { role: 'action', text: `Music theme: ${[t.genre, ...t.mood].filter(Boolean).join(', ') || 'changed'}` }); poke(); return { theme: t }; },
     // Before a project exists (New project › Music › Choose…) pass no project: the demo makes samples in the studio.
     'music.theme.samples': async (p) => themeSamples(root, p?.project || projectId() || null, p?.theme || {}),
-    'music.theme.use': (p) => { const id = needProject(p); const t = loadTheme(root, id) || bad('no theme yet'); if (!t.samples?.some((s) => s.id === p?.sample)) bad(`no theme sample ${p?.sample}`); t.using = p.sample; return { theme: saveTheme(root, id, t) }; },
+    'music.theme.use': (p) => {
+      const id = needProject(p);
+      const t = loadTheme(root, id) || bad('no theme yet');
+      const sample = t.samples?.find((s) => s.id === p?.sample) || bad(`no theme sample ${p?.sample}`);
+      const before = t.using;
+      t.using = p.sample;
+      const theme = saveTheme(root, id, t);
+      // a theme picked after the music is written remakes the music in it (a Fix on the score; versions kept). Run 2:
+      // the pick changed nothing you could hear
+      const music = canvasView(root, id).nodes.music;
+      let edit = null;
+      if (before !== p.sample && music?.versions?.length) {
+        edit = nodeAction(root, id, 'music', { action: 'fix', text: `The owner picked the music theme "${sample.name}" (music/theme.json, using ${sample.id}): rewrite the score in it, keeping the cue timing and the mix under the voice.` }).edit;
+        runner?.wake();
+      }
+      chatRow(id, { role: 'action', text: `Music theme: ${sample.name}${edit ? ' · remaking the music in it' : ''}`, ...(edit ? { edit: edit.id, refs: ['music'] } : {}) });
+      poke();
+      return { theme, edit };
+    },
     'music.theme.check': (p) => ({ theme: cleanTheme(p?.theme || {}) }),
     'music.cues': (p) => graph.voiceMusicView(root, needProject(p)).cues,
     // A cue's feel or energy: before the score it changes the plan; once scored it's a Fix on that cue (only it changes).
