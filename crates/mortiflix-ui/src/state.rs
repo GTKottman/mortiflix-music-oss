@@ -111,6 +111,10 @@ pub struct MfxState {
     pub show_setup: bool,
     /// Next asked first: something still needs you.
     pub confirm_next: Option<NextConfirm>,
+    /// Files chosen in an OS dialog a part asked for (`mortiflix.pickFiles {key}`), by key, until
+    /// the part takes them ([`MfxState::take_picked`]).
+    #[serde(skip)]
+    pub picked: Vec<(String, Vec<String>)>,
 }
 
 impl Default for MfxState {
@@ -130,6 +134,7 @@ impl Default for MfxState {
             show_new_project: false,
             show_setup: false,
             confirm_next: None,
+            picked: Vec::new(),
         }
     }
 }
@@ -154,6 +159,25 @@ impl MfxState {
         self.furthest = self.furthest.max(to);
         self.confirm_next = None;
         Some(from)
+    }
+    /// Files a dialog (or an agent, `mortiflix.pickFiles {key, paths}`) chose for `key`.
+    pub fn push_picked(&mut self, key: &str, paths: Vec<String>) {
+        if self.picked.len() < 64 {
+            self.picked.push((key.chars().take(100).collect(), paths.into_iter().take(1000).collect()));
+        }
+    }
+    /// Take the files chosen for `key` (each pick once).
+    pub fn take_picked(&mut self, key: &str) -> Vec<String> {
+        let mut out = Vec::new();
+        self.picked.retain_mut(|(k, paths)| {
+            if k == key {
+                out.append(paths);
+                false
+            } else {
+                true
+            }
+        });
+        out
     }
     pub fn push_chat(&mut self, msg: ChatMessage) {
         self.chat.push(msg);
