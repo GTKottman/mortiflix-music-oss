@@ -3,7 +3,7 @@
 # exports VERSION and NFPM_ARCH.
 #
 #   nfpm package -f packaging/linux/nfpm.yaml -p deb -t dist/release/
-name: mortiflix-filmcraft
+name: mortiflix-studio
 arch: ${NFPM_ARCH}
 platform: linux
 version: ${VERSION}
@@ -12,19 +12,19 @@ version_schema: semver
 release: 1
 section: video
 priority: optional
-maintainer: ${FILMCRAFT_MAINTAINER}
-vendor: Mortiflix (based on FilmCraft by Learning Machines LLC)
+maintainer: ${MFX_STUDIO_MAINTAINER}
+vendor: Mortiflix (based on an open-source editor by Learning Machines LLC)
 homepage: https://mortiflix.com
 license: MIT OR Apache-2.0
 description: |-
-  Mortiflix FilmCraft: make a video with AI step by step (node-based), then edit
-  and render it in a full video editor. Built on FilmCraft (open-source, native
+  Mortiflix Studio: make a video with AI step by step (node-based), then edit
+  and render it in a full video editor. Built on Mortiflix Studio (open-source, native
   video editor: edit video, color and sound).
   Timeline editing with source and program monitors, color grading and scopes,
   effects and keyframes, titles and captions, audio mixing with loudness meters,
   and export; GPU compositing (wgpu).
-  Includes mortiflix-filmcraft-cli, a headless command runner, MCP server and exporter.
-  Installs its own command names, so it never clashes with upstream FilmCraft.
+  Includes mortiflix-studio-cli, a headless command runner, MCP server and exporter.
+  Installs its own command names, so it never clashes with upstream Mortiflix Studio.
 
 # The binaries link only glibc and libgcc_s directly. Windowing (X11/Wayland, xkbcommon) and the
 # GPU (Vulkan, EGL/GL) are loaded at runtime, so they are dependencies/recommendations here
@@ -46,7 +46,7 @@ overrides:
       - libxrandr2
       - mesa-vulkan-drivers
       - xdg-desktop-portal
-      # the sound engine (lib/mortiflix-filmcraft/bin/mortiflix-engine)
+      # the sound engine (lib/mortiflix-studio/bin/mortiflix-engine)
       - libfreetype6
       - libfontconfig1
       - libatomic1
@@ -66,24 +66,24 @@ overrides:
       - libXrandr
       - mesa-vulkan-drivers
       - xdg-desktop-portal
-      # the sound engine (lib/mortiflix-filmcraft/bin/mortiflix-engine)
+      # the sound engine (lib/mortiflix-studio/bin/mortiflix-engine)
       - freetype
       - fontconfig
       - libatomic
 
 contents:
-  - src: ${STAGE}/usr/bin/mortiflix-filmcraft
-    dst: /usr/bin/mortiflix-filmcraft
+  - src: ${STAGE}/usr/bin/mortiflix-studio
+    dst: /usr/bin/mortiflix-studio
     file_info: { mode: 0755 }
-  - src: ${STAGE}/usr/bin/mortiflix-filmcraft-cli
-    dst: /usr/bin/mortiflix-filmcraft-cli
+  - src: ${STAGE}/usr/bin/mortiflix-studio-cli
+    dst: /usr/bin/mortiflix-studio-cli
     file_info: { mode: 0755 }
   - src: ${STAGE}/usr/share/
     dst: /usr/share/
     type: tree
-  # Mortiflix FilmCraft: the service, its Node, ffmpeg and the sound engine (packaging/mortiflix)
-  - src: ${STAGE}/usr/lib/mortiflix-filmcraft/
-    dst: /usr/lib/mortiflix-filmcraft/
+  # Mortiflix Studio: the service, its Node, ffmpeg and the sound engine (packaging/mortiflix)
+  - src: ${STAGE}/usr/lib/mortiflix-studio/
+    dst: /usr/lib/mortiflix-studio/
     type: tree
 
 scripts:

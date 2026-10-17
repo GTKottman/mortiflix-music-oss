@@ -1,9 +1,9 @@
-# Mortiflix FilmCraft installers for anybody new: Linux (tarball, .deb, .rpm, AppImage, Flatpak),
-# Windows (.msi + portable zip) and macOS (.dmg). Each package carries the app, filmcraft-cli and
+# Mortiflix Studio installers for anybody new: Linux (tarball, .deb, .rpm, AppImage, Flatpak),
+# Windows (.msi + portable zip) and macOS (.dmg). Each package carries the app, mortiflix-studio-cli and
 # the Mortiflix bundle (the service with its own Node, ffmpeg and the sound engine:
 # packaging/mortiflix/bundle.sh). Run by hand; the artifacts land on the run's page.
 #
-# Signing is optional and uses the same secrets as FilmCraft's own release (packaging/macos/package.sh,
+# Signing is optional and uses the same secrets as Mortiflix Studio's own release (packaging/macos/package.sh,
 # packaging/windows/sign.ps1). Without them the macOS build is ad-hoc signed and not notarized, and
 # the Windows files are unsigned: fine for testing, not for strangers.
 name: Mortiflix release
@@ -77,11 +77,11 @@ jobs:
       - name: Fresh install with the default tools launches to first-run setup
         run: >-
           xvfb-run -a -s "-screen 0 1920x1080x24" python3 packaging/mortiflix/test_install.py
-          dist/release/mortiflix-filmcraft-*-linux-x86_64.tar.gz --hide-host-tools --components default
+          dist/release/mortiflix-studio-*-linux-x86_64.tar.gz --hide-host-tools --components default
           --expect-installed blender,blender-addons,chrome,strudel,transitions,uv
       - uses: actions/upload-artifact@v4
         with:
-          name: mortiflix-filmcraft-linux
+          name: mortiflix-studio-linux
           path: dist/release/*
 
   windows:
@@ -132,8 +132,8 @@ jobs:
           $msi = Get-ChildItem dist/release/*.msi | Select-Object -First 1
           $p = Start-Process msiexec.exe -Wait -PassThru -ArgumentList '/i', $msi.FullName, '/qn', '/l*v', 'msi.log'
           if ($p.ExitCode -ne 0) { Get-Content msi.log -Tail 50; exit $p.ExitCode }
-          $dir = Join-Path ${env:ProgramFiles} 'Mortiflix FilmCraft'
-          & (Join-Path $dir 'filmcraft-cli.exe') --version
+          $dir = Join-Path ${env:ProgramFiles} 'Mortiflix Studio'
+          & (Join-Path $dir 'mortiflix-studio-cli.exe') --version
           $node = Join-Path $dir 'mortiflix\node\node.exe'
           $hello = '{"id":1,"type":"hello","params":{"client":"ci","protocol":1}}' | & $node (Join-Path $dir 'mortiflix\service\bin\mortiflix-service.mjs') | Select-Object -First 1
           Write-Output $hello
@@ -144,7 +144,7 @@ jobs:
           Select-String -Path msi.log -Pattern 'MfxToolsRun|ok blender|!! ' | Select-Object -Last 20
       - uses: actions/upload-artifact@v4
         with:
-          name: mortiflix-filmcraft-windows
+          name: mortiflix-studio-windows
           path: |
             dist/release/*.msi
             dist/release/*.zip
@@ -188,7 +188,7 @@ jobs:
         run: |
           app="$(mktemp -d)"
           hdiutil attach -nobrowse -mountpoint "$app" dist/release/*.dmg
-          mfx="$app/Mortiflix FilmCraft.app/Contents/Resources/mortiflix"
+          mfx="$app/Mortiflix Studio.app/Contents/Resources/mortiflix"
           lipo -info "$mfx/node/bin/node" "$mfx/bin/ffmpeg"
           printf '%s\n' '{"id":1,"type":"hello","params":{"client":"ci","protocol":1}}' \
             | "$mfx/node/bin/node" "$mfx/service/bin/mortiflix-service.mjs" | head -n1 | tee hello.json
@@ -196,5 +196,5 @@ jobs:
           hdiutil detach "$app"
       - uses: actions/upload-artifact@v4
         with:
-          name: mortiflix-filmcraft-macos
+          name: mortiflix-studio-macos
           path: dist/release/*

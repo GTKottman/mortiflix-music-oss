@@ -2,27 +2,27 @@
 <!-- AppStream metadata (software centres, Flathub). Template: package.sh and the Flatpak
      manifest substitute @VERSION@ and @DATE@ from Cargo.toml and the build date. -->
 <component type="desktop-application">
-  <id>com.mortiflix.filmcraft</id>
+  <id>com.mortiflix.studio</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT OR Apache-2.0</project_license>
-  <name>Mortiflix FilmCraft</name>
+  <name>Mortiflix Studio</name>
   <summary>Make a video with AI step by step, then edit and render it</summary>
   <developer id="com.mortiflix">
     <name>Mortiflix</name>
   </developer>
   <description>
     <p>
-      Mortiflix FilmCraft walks you through a video with node-based AI generation, then opens it in a full
-      video editor with every piece placed, ready for final edits and the render. It is built on FilmCraft by
-      Learning Machines LLC (storytold/filmcraft, MIT OR Apache-2.0), whose notices and credits it keeps.
+      Mortiflix Studio walks you through a video with node-based AI generation, then opens it in a full
+      video editor with every piece placed, ready for final edits and the render. It is built on an open-source video editor by
+      Learning Machines LLC (MIT OR Apache-2.0), whose notices and credits it keeps.
     </p>
   </description>
-  <launchable type="desktop-id">com.mortiflix.filmcraft.desktop</launchable>
-  <icon type="stock">com.mortiflix.filmcraft</icon>
+  <launchable type="desktop-id">com.mortiflix.studio.desktop</launchable>
+  <icon type="stock">com.mortiflix.studio</icon>
   <!-- Only url types known to appstream 0.15 (Ubuntu 22.04, where CI validates): no vcs-browser. -->
-  <url type="homepage">https://getartcraft.com/apps/filmcraft</url>
-  <url type="bugtracker">https://github.com/storytold/filmcraft/issues</url>
-  <url type="help">https://github.com/storytold/filmcraft</url>
+  <url type="homepage">https://mortiflix.com</url>
+  <url type="bugtracker">https://mortiflix.com</url>
+  <url type="help">https://mortiflix.com</url>
   <url type="contact">https://discord.gg/artcraft</url>
   <categories>
     <category>AudioVideo</category>
@@ -36,12 +36,6 @@
     <keyword>color grading</keyword>
     <keyword>nle</keyword>
   </keywords>
-  <screenshots>
-    <screenshot type="default">
-      <caption>Color workspace: a documentary cut with Lumetri Color, scopes, captions and loudness meters</caption>
-      <image>https://raw.githubusercontent.com/storytold/filmcraft/main/docs/images/filmcraft-hero.png</image>
-    </screenshot>
-  </screenshots>
   <branding>
     <color type="primary" scheme_preference="light">#9fd0ff</color>
     <color type="primary" scheme_preference="dark">#1f64ba</color>
@@ -55,8 +49,8 @@
     <control>tablet</control>
   </supports>
   <provides>
-    <binary>filmcraft</binary>
-    <mediatype>application/x-filmcraft</mediatype>
+    <binary>mortiflix-studio</binary>
+    <mediatype>application/x-mortiflix-studio</mediatype>
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>

@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Mortiflix Studio
+GenericName=Video Editor
+Comment=Make a video with AI, step by step, then edit and render it (based on Mortiflix Studio)
+Exec=mortiflix-studio %F
+TryExec=mortiflix-studio
+Icon=com.mortiflix.studio
+Terminal=false
+StartupNotify=true
+StartupWMClass=com.mortiflix.studio
+Categories=AudioVideo;Video;AudioVideoEditing;
+MimeType=application/x-mortiflix-studio;video/mp4;video/x-m4v;video/quicktime;video/x-matroska;video/webm;video/vnd.avi;video/x-msvideo;application/mxf;video/mp2t;video/mpeg;video/3gpp;
+Keywords=video;editor;film;timeline;color;grading;nle;

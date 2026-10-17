@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Mortiflix FilmCraft: a fresh install from the Linux tarball launches to first-run setup.
+"""Mortiflix Studio: a fresh install from the Linux tarball launches to first-run setup.
 
 Extracts the release tarball, installs it with its install.sh into a temporary prefix, then starts
 the installed app as a brand-new user (temporary HOME and XDG folders, no MFX_* variables) and
 drives it over the control channel:
 
-  1. the app finds the Mortiflix bundle beside itself (lib/mortiflix-filmcraft) and the bundled
+  1. the app finds the Mortiflix bundle beside itself (lib/mortiflix-studio) and the bundled
      service connects (its own Node; nothing from this machine's PATH or settings),
   2. the first-run setup window is on screen (opened by the app itself on a first launch),
   3. screenshots of both go to --shots,
@@ -122,7 +122,7 @@ def main():
         prefix = tmp / "prefix"
         home = tmp / "home"
         home.mkdir()
-        env = {k: v for k, v in os.environ.items() if not k.startswith(("MFX_", "MORTIFLIX_", "FILMCRAFT_", "XDG_"))}
+        env = {k: v for k, v in os.environ.items() if not k.startswith(("MFX_", "MORTIFLIX_", "MFX_STUDIO_", "XDG_"))}
         env.update(HOME=str(home), XDG_DATA_HOME=str(home / ".local/share"), XDG_CONFIG_HOME=str(home / ".config"),
                    XDG_CACHE_HOME=str(home / ".cache"), XDG_STATE_HOME=str(home / ".local/state"))
         if "XDG_RUNTIME_DIR" in os.environ:
@@ -153,19 +153,19 @@ def main():
                 failures.append(f"component {cid} not installed: {comps.get(cid, {}).get('detail')}")
             elif comps[cid].get("path") and not str(comps[cid]["path"]).startswith(str(home)):
                 failures.append(f"component {cid} found outside the new user's home: {comps[cid].get('path')}")
-        bundle = prefix / "lib/mortiflix-filmcraft"
-        for path in ("bin/mortiflix-filmcraft", "bin/mortiflix-filmcraft-cli", "lib/mortiflix-filmcraft/service/bin/mortiflix-service.mjs",
-                     "lib/mortiflix-filmcraft/node/bin/node", "lib/mortiflix-filmcraft/bin/ffmpeg",
-                     "share/applications/com.mortiflix.filmcraft.desktop"):
+        bundle = prefix / "lib/mortiflix-studio"
+        for path in ("bin/mortiflix-studio", "bin/mortiflix-studio-cli", "lib/mortiflix-studio/service/bin/mortiflix-service.mjs",
+                     "lib/mortiflix-studio/node/bin/node", "lib/mortiflix-studio/bin/ffmpeg",
+                     "share/applications/com.mortiflix.studio.desktop"):
             if not (prefix / path).exists():
                 failures.append(f"missing after install: {path}")
         print("installed:", ", ".join(sorted(p.name for p in bundle.iterdir())) if bundle.exists() else "no bundle")
-        print(subprocess.run([str(prefix / "bin/mortiflix-filmcraft-cli"), "--version"], env=env, capture_output=True,
+        print(subprocess.run([str(prefix / "bin/mortiflix-studio-cli"), "--version"], env=env, capture_output=True,
                              text=True).stdout.strip())
 
         # ---- first launch -------------------------------------------------------------------------
         log = open(tmp / "app.log", "w")
-        proc = subprocess.Popen([str(prefix / "bin/mortiflix-filmcraft"), "--control", str(args.port), "--no-recover"],
+        proc = subprocess.Popen([str(prefix / "bin/mortiflix-studio"), "--control", str(args.port), "--no-recover"],
                                 env=env, stdout=log, stderr=subprocess.STDOUT, cwd=home)
         print(f"started the installed app, pid {proc.pid}")
         app = App(args.port)

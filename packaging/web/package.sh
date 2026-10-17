@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Build the browser version and zip it:  $DIST/filmcraft-web-<version>.zip
+# Build the browser version and zip it:  $DIST/mortiflix-studio-web-<version>.zip
 #
 # Usage: packaging/web/package.sh [--skip-build]
 #
 # Needs: the wasm32-unknown-unknown target and the wasm-bindgen CLI at the crate's exact version
-# (cargo install wasm-bindgen-cli --version <see xtask WASM_BINDGEN> --locked); `cargo xtask web` builds it. The zip holds a self-contained static site in filmcraft-web-<version>/ that works
+# (cargo install wasm-bindgen-cli --version <see xtask WASM_BINDGEN> --locked); `cargo xtask web` builds it. The zip holds a self-contained static site in mortiflix-studio-web-<version>/ that works
 # from any URL path and inside an <iframe>. Hosting notes: packaging/web/README.md.
 set -euo pipefail
 # shellcheck source=../env.sh
@@ -31,7 +31,7 @@ if grep -Eq '(src|href)="/[^/]' "$SITE/index.html"; then
   exit 1
 fi
 
-NAME="filmcraft-web-$VERSION"
+NAME="mortiflix-studio-web-$VERSION"
 WORK="$CARGO_TARGET_DIR/web-package"
 rm -rf "$WORK"
 mkdir -p "$WORK/$NAME"

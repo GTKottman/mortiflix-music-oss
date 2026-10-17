@@ -3,10 +3,10 @@
      Installed to /usr/share/mime/packages/ (update-mime-database runs on install).
      The type name matches the macOS UTI's public.mime-type in packaging/macos/Info.plist.in. -->
 <mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
-  <mime-type type="application/x-filmcraft">
-    <comment>FilmCraft project</comment>
+  <mime-type type="application/x-mortiflix-studio">
+    <comment>Mortiflix Studio project</comment>
     <sub-class-of type="application/json"/>
-    <icon name="com.mortiflix.filmcraft"/>
+    <icon name="com.mortiflix.studio"/>
     <glob pattern="*.fcproj"/>
   </mime-type>
 </mime-info>

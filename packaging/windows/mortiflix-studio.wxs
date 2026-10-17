@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  FilmCraft MSI (WiX Toolset v5: `dotnet tool install -g wix`). Built by package.ps1:
+  Mortiflix Studio MSI (WiX Toolset v5: `dotnet tool install -g wix`). Built by package.ps1:
 
-    wix build filmcraft.wxs -arch x64 -d Version=1.2.3 -d BinDir=... -d IconPath=... -o out.msi
+    wix build mortiflix-studio.wxs -arch x64 -d Version=1.2.3 -d BinDir=... -d IconPath=... -o out.msi
 
   Per-machine install into Program Files and a Start Menu shortcut. No file associations.
 
-  Mortiflix FilmCraft: with -d MfxDir=<folder> it also installs the Mortiflix bundle (the service,
+  Mortiflix Studio: with -d MfxDir=<folder> it also installs the Mortiflix bundle (the service,
   its own Node, ffmpeg, the sound engine; packaging/mortiflix/bundle.sh) into INSTALLFOLDER\mortiflix,
   harvested with WiX v5's Files element, and a "Mortiflix tools" feature tree (WixUI_FeatureTree:
   needs -ext WixToolset.UI.wixext -ext WixToolset.Util.wixext and -d LicenseRtf=...). Each ticked tool is
@@ -17,35 +17,35 @@
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
   <Package
-      Name="Mortiflix FilmCraft"
+      Name="Mortiflix Studio"
       Manufacturer="Mortiflix"
       Version="$(var.Version)"
       UpgradeCode="A88A5426-57F6-41A9-8466-AA5DDBD97B74"
       Scope="perMachine"
       Compressed="yes"
       Language="1033">
-    <SummaryInformation Description="Mortiflix FilmCraft (based on the FilmCraft video editor by Learning Machines LLC)" Manufacturer="Mortiflix" />
+    <SummaryInformation Description="Mortiflix Studio (based on the Mortiflix Studio video editor by Learning Machines LLC)" Manufacturer="Mortiflix" />
     <!-- Same-version upgrades let successive pre-releases of one X.Y.Z replace each other
          (MSI versions are numeric, so 1.2.3-rc.1 and 1.2.3-rc.2 are both 1.2.3). -->
     <MajorUpgrade AllowSameVersionUpgrades="yes"
-        DowngradeErrorMessage="A newer version of Mortiflix FilmCraft is already installed." />
+        DowngradeErrorMessage="A newer version of Mortiflix Studio is already installed." />
     <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
 
-    <Icon Id="FilmcraftIcon.ico" SourceFile="$(var.IconPath)" />
-    <Property Id="ARPPRODUCTICON" Value="FilmcraftIcon.ico" />
+    <Icon Id="StudioIcon.ico" SourceFile="$(var.IconPath)" />
+    <Property Id="ARPPRODUCTICON" Value="StudioIcon.ico" />
     <Property Id="ARPURLINFOABOUT" Value="https://mortiflix.com" />
     <Property Id="ARPURLUPDATEINFO" Value="https://mortiflix.com" />
     <Property Id="ARPHELPLINK" Value="https://mortiflix.com" />
 
     <StandardDirectory Id="ProgramFiles6432Folder">
-      <Directory Id="INSTALLFOLDER" Name="Mortiflix FilmCraft">
+      <Directory Id="INSTALLFOLDER" Name="Mortiflix Studio">
         <Directory Id="MFXFOLDER" Name="mortiflix" />
       </Directory>
     </StandardDirectory>
     <StandardDirectory Id="ProgramMenuFolder" />
 
-    <Feature Id="Main" Title="Mortiflix FilmCraft" Level="1">
-      <ComponentGroupRef Id="FilmcraftFiles" />
+    <Feature Id="Main" Title="Mortiflix Studio" Level="1">
+      <ComponentGroupRef Id="StudioFiles" />
 <?ifdef MfxDir?>
       <ComponentGroupRef Id="MortiflixFiles" />
 <?endif?>
@@ -109,19 +109,19 @@
   </Package>
 
   <Fragment>
-    <ComponentGroup Id="FilmcraftFiles" Directory="INSTALLFOLDER">
-      <Component Id="FilmcraftApp" Guid="C998A73B-874C-4C24-A24E-8C0AE840B0FF">
-        <File Id="FilmcraftExe" Source="$(var.BinDir)\filmcraft.exe" KeyPath="yes">
-          <Shortcut Id="StartMenuShortcut" Directory="ProgramMenuFolder" Name="Mortiflix FilmCraft"
-              Description="Mortiflix FilmCraft: make a video with AI, then edit and render it" WorkingDirectory="INSTALLFOLDER" Advertise="yes"
-              Icon="FilmcraftIcon.ico" IconIndex="0" />
+    <ComponentGroup Id="StudioFiles" Directory="INSTALLFOLDER">
+      <Component Id="StudioApp" Guid="C998A73B-874C-4C24-A24E-8C0AE840B0FF">
+        <File Id="StudioExe" Source="$(var.BinDir)\mortiflix-studio.exe" KeyPath="yes">
+          <Shortcut Id="StartMenuShortcut" Directory="ProgramMenuFolder" Name="Mortiflix Studio"
+              Description="Mortiflix Studio: make a video with AI, then edit and render it" WorkingDirectory="INSTALLFOLDER" Advertise="yes"
+              Icon="StudioIcon.ico" IconIndex="0" />
         </File>
 
-        <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\App Paths\mortiflix-filmcraft.exe" Value="[#FilmcraftExe]" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\App Paths\mortiflix-studio.exe" Value="[#StudioExe]" Type="string" />
       </Component>
 
-      <Component Id="FilmcraftCli">
-        <File Id="FilmcraftCliExe" Source="$(var.BinDir)\filmcraft-cli.exe" KeyPath="yes" />
+      <Component Id="StudioCli">
+        <File Id="StudioCliExe" Source="$(var.BinDir)\mortiflix-studio-cli.exe" KeyPath="yes" />
       </Component>
     </ComponentGroup>
   </Fragment>
@@ -136,13 +136,13 @@
   <!-- One small marker per tool feature (an MSI feature needs a component): which tools were picked. -->
   <Fragment>
     <DirectoryRef Id="MFXFOLDER">
-      <Component Id="MfxPickBlender"><RegistryValue Root="HKLM" Key="Software\Mortiflix FilmCraft\Tools" Name="blender" Value="1" Type="integer" KeyPath="yes" /></Component>
-      <Component Id="MfxPickAddons"><RegistryValue Root="HKLM" Key="Software\Mortiflix FilmCraft\Tools" Name="blender-addons" Value="1" Type="integer" KeyPath="yes" /></Component>
-      <Component Id="MfxPickChrome"><RegistryValue Root="HKLM" Key="Software\Mortiflix FilmCraft\Tools" Name="chrome" Value="1" Type="integer" KeyPath="yes" /></Component>
-      <Component Id="MfxPickStrudel"><RegistryValue Root="HKLM" Key="Software\Mortiflix FilmCraft\Tools" Name="strudel" Value="1" Type="integer" KeyPath="yes" /></Component>
-      <Component Id="MfxPickTransitions"><RegistryValue Root="HKLM" Key="Software\Mortiflix FilmCraft\Tools" Name="transitions" Value="1" Type="integer" KeyPath="yes" /></Component>
-      <Component Id="MfxPickUv"><RegistryValue Root="HKLM" Key="Software\Mortiflix FilmCraft\Tools" Name="uv" Value="1" Type="integer" KeyPath="yes" /></Component>
-      <Component Id="MfxPickComfyui"><RegistryValue Root="HKLM" Key="Software\Mortiflix FilmCraft\Tools" Name="comfyui" Value="1" Type="integer" KeyPath="yes" /></Component>
+      <Component Id="MfxPickBlender"><RegistryValue Root="HKLM" Key="Software\Mortiflix Studio\Tools" Name="blender" Value="1" Type="integer" KeyPath="yes" /></Component>
+      <Component Id="MfxPickAddons"><RegistryValue Root="HKLM" Key="Software\Mortiflix Studio\Tools" Name="blender-addons" Value="1" Type="integer" KeyPath="yes" /></Component>
+      <Component Id="MfxPickChrome"><RegistryValue Root="HKLM" Key="Software\Mortiflix Studio\Tools" Name="chrome" Value="1" Type="integer" KeyPath="yes" /></Component>
+      <Component Id="MfxPickStrudel"><RegistryValue Root="HKLM" Key="Software\Mortiflix Studio\Tools" Name="strudel" Value="1" Type="integer" KeyPath="yes" /></Component>
+      <Component Id="MfxPickTransitions"><RegistryValue Root="HKLM" Key="Software\Mortiflix Studio\Tools" Name="transitions" Value="1" Type="integer" KeyPath="yes" /></Component>
+      <Component Id="MfxPickUv"><RegistryValue Root="HKLM" Key="Software\Mortiflix Studio\Tools" Name="uv" Value="1" Type="integer" KeyPath="yes" /></Component>
+      <Component Id="MfxPickComfyui"><RegistryValue Root="HKLM" Key="Software\Mortiflix Studio\Tools" Name="comfyui" Value="1" Type="integer" KeyPath="yes" /></Component>
     </DirectoryRef>
   </Fragment>
 <?endif?>

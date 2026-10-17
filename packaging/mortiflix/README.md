@@ -1,6 +1,6 @@
-# Mortiflix FilmCraft packaging
+# Mortiflix Studio packaging
 
-Every Mortiflix FilmCraft package carries the app, `filmcraft-cli` and the **Mortiflix bundle**: the
+Every Mortiflix Studio package carries the app, `mortiflix-studio-cli` and the **Mortiflix bundle**: the
 Mortiflix service with its own Node runtime, ffmpeg and the sound engine. Someone new installs one
 file and the app works; Claude Code is not bundled (first-run setup links it).
 
@@ -16,21 +16,21 @@ file and the app works; Claude Code is not bundled (first-run setup links it).
 | `LICENSES/` | Node, ffmpeg, the service (AGPL-3.0) and the engine |
 | `BUNDLE.json` | what went in: versions, service commit, ffmpeg URL, engine version |
 
-Env: `MFX_SERVICE_SRC` (the mortiflix-oss checkout; default `../mortiflix-oss-filmcraft`),
+Env: `MFX_SERVICE_SRC` (the mortiflix-oss checkout; default `../mortiflix-oss`),
 `MFX_SERVICE_REF` (default `HEAD`; `worktree` = the files as they are), `NODE_VERSION`,
 `MFX_ENGINE_BIN` (a built engine; or `--build-engine` builds one with the service's own
 `mortiflix setup daw-engine --build`), `FFMPEG_URL` / `FFMPEG_SHA256`, `MFX_CACHE` (downloads).
 When the bundle is for this machine, it ends by sending the service `hello` with the bundled Node.
 
-## Names (never clashes with upstream FilmCraft)
+## Names (never clashes with upstream Mortiflix Studio)
 
-Mortiflix FilmCraft installs under its own names, so it sits beside an upstream FilmCraft without
-replacing it: app id `com.mortiflix.filmcraft` (Linux `.desktop`, icons, AppStream, Flatpak, Wayland
-app id; macOS bundle id), package `mortiflix-filmcraft` (deb/rpm), commands `mortiflix-filmcraft` and
-`mortiflix-filmcraft-cli` (Linux), `Mortiflix FilmCraft.app` (macOS), the MSI's own UpgradeCode, install
-folder `Mortiflix FilmCraft` and App Paths `mortiflix-filmcraft.exe` (Windows), and artefacts named
-`mortiflix-filmcraft-<version>-…`. Cargo's binaries are still `filmcraft` / `filmcraft-cli`; the icon
-files keep FilmCraft's names in `assets/` and are installed under the new id. FilmCraft's notices,
+Mortiflix Studio installs under its own names, so it sits beside an upstream Mortiflix Studio without
+replacing it: app id `com.mortiflix.studio` (Linux `.desktop`, icons, AppStream, Flatpak, Wayland
+app id; macOS bundle id), package `mortiflix-studio` (deb/rpm), commands `mortiflix-studio` and
+`mortiflix-studio-cli` (Linux), `Mortiflix Studio.app` (macOS), the MSI's own UpgradeCode, install
+folder `Mortiflix Studio` and App Paths `mortiflix-studio.exe` (Windows), and artefacts named
+`mortiflix-studio-<version>-…`. Cargo's binaries are still `mortiflix-studio` / `mortiflix-studio-cli`; the icon
+files keep Mortiflix Studio's names in `assets/` and are installed under the new id. Mortiflix Studio's notices,
 licences and credits ship unchanged. The bundle takes the service from `mfx-service/integration`
 (`MFX_SERVICE_REF`).
 
@@ -41,9 +41,9 @@ licences and credits ship unchanged. The bundle takes the service from `mfx-serv
 
 | OS | Binary | Bundle |
 |---|---|---|
-| Linux (tarball, deb, rpm, AppImage, Flatpak) | `<prefix>/bin/mortiflix-filmcraft` | `<prefix>/lib/mortiflix-filmcraft` |
-| Windows (MSI, portable zip) | `<install dir>\filmcraft.exe` | `<install dir>\mortiflix` |
-| macOS | `Mortiflix FilmCraft.app/Contents/MacOS/FilmCraft` | `Mortiflix FilmCraft.app/Contents/Resources/mortiflix` |
+| Linux (tarball, deb, rpm, AppImage, Flatpak) | `<prefix>/bin/mortiflix-studio` | `<prefix>/lib/mortiflix-studio` |
+| Windows (MSI, portable zip) | `<install dir>\mortiflix-studio.exe` | `<install dir>\mortiflix` |
+| macOS | `Mortiflix Studio.app/Contents/MacOS/Mortiflix Studio` | `Mortiflix Studio.app/Contents/Resources/mortiflix` |
 
 `MFX_BUNDLE` points at a bundle anywhere. The bundled Node is used unless `MFX_NODE` or `nodePath` says
 otherwise. The service starts with the bundle's `bin/` and Node first on its `PATH` (so `ffmpeg`,
@@ -53,9 +53,9 @@ bundled engine unless the user set one.
 ## Per OS
 
 - **Linux:** `packaging/linux/package.sh [--formats "tar deb rpm appimage"] [--no-mortiflix]`
-  stages the bundle at `usr/lib/mortiflix-filmcraft` for every format; `install.sh` copies
-  `lib/mortiflix-filmcraft` fresh on each install. Flatpak: `flatpak-bundle.sh` repackages the
-  tarball (`com.mortiflix.filmcraft.bundle.yml` installs the bundle to `/app/lib`; both manifests
+  stages the bundle at `usr/lib/mortiflix-studio` for every format; `install.sh` copies
+  `lib/mortiflix-studio` fresh on each install. Flatpak: `flatpak-bundle.sh` repackages the
+  tarball (`com.mortiflix.studio.bundle.yml` installs the bundle to `/app/lib`; both manifests
   now grant `--share=network`, which the AI needs).
 - **Windows:** `pwsh packaging/windows/package.ps1 -Arch x64|arm64 [-NoMortiflix]` runs `bundle.sh`
   under Git Bash into `mortiflix\`, signs its `.exe` files with `sign.ps1`, and the MSI harvests the
@@ -66,7 +66,7 @@ bundled engine unless the user set one.
   Node with `node-entitlements.plist` (JIT), so notarization covers it.
 - **CI:** `.github/workflows/mortiflix-release.yml` (run by hand) builds all three, optionally the
   sound engine per OS, installs the MSI and checks the service answers, mounts the DMG and checks
-  the same, and runs `test_install.py` on Linux. Signing secrets are the same as FilmCraft's; without
+  the same, and runs `test_install.py` on Linux. Signing secrets are the same as Mortiflix Studio's; without
   them the builds are unsigned (Windows) / ad-hoc (macOS).
 
 ## The Mortiflix tools (components step)
@@ -111,7 +111,7 @@ Chrome for Testing come over HTTPS from their GitHub/Google sources without a pu
 
 ## Proving a fresh install
 
-`xvfb-run -a -s "-screen 0 1920x1080x24" python3 packaging/mortiflix/test_install.py dist/release/mortiflix-filmcraft-<v>-linux-x86_64.tar.gz --shots DIR`
+`xvfb-run -a -s "-screen 0 1920x1080x24" python3 packaging/mortiflix/test_install.py dist/release/mortiflix-studio-<v>-linux-x86_64.tar.gz --shots DIR`
 extracts the tarball, installs it into a temporary prefix with `install.sh`, starts the installed app
 as a new user (temporary `HOME`/XDG folders, no `MFX_*`) on the control channel, waits for the
 bundled service to connect, checks the first-run setup window is on screen and takes screenshots.

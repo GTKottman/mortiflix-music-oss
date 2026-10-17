@@ -1,11 +1,11 @@
 kind = "app"
 categories = ["AudioVideo", "Video", "AudioVideoEditing"]
-icon = "assets/app-icon/hicolor/256x256/apps/ai.storyteller.filmcraft.png"
+icon = "assets/app-icon/hicolor/256x256/apps/com.mortiflix.studio.png"
 
 [linux.x86_64]
-asset = "filmcraft-{version}-linux-x86_64.tar.gz"
-exec = "filmcraft-{version}-linux-x86_64/bin/filmcraft"
+asset = "mortiflix-studio-{version}-linux-x86_64.tar.gz"
+exec = "mortiflix-studio-{version}-linux-x86_64/bin/mortiflix-studio"
 
 [linux.aarch64]
-asset = "filmcraft-{version}-linux-aarch64.tar.gz"
-exec = "filmcraft-{version}-linux-aarch64/bin/filmcraft"
+asset = "mortiflix-studio-{version}-linux-aarch64.tar.gz"
+exec = "mortiflix-studio-{version}-linux-aarch64/bin/mortiflix-studio"

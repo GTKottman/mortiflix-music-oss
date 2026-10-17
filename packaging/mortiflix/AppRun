@@ -1,10 +1,10 @@
 #!/bin/sh
-# Mortiflix FilmCraft AppImage entry. On the first run from a terminal it offers the Mortiflix tools
+# Mortiflix Studio AppImage entry. On the first run from a terminal it offers the Mortiflix tools
 # (packaging/mortiflix/components.sh) once; started from a desktop, the app's own first-run setup offers
 # them instead (components.status / components.install). Then it starts the app.
 here="$(dirname "$(readlink -f "$0")")"
-mfx="$here/usr/lib/mortiflix-filmcraft/components.sh"
-asked="${XDG_CONFIG_HOME:-$HOME/.config}/mortiflix-filmcraft/components-asked"
+mfx="$here/usr/lib/mortiflix-studio/components.sh"
+asked="${XDG_CONFIG_HOME:-$HOME/.config}/mortiflix-studio/components-asked"
 if [ -x "$mfx" ] && [ ! -e "$asked" ]; then
   if [ -n "${MORTIFLIX_COMPONENTS:-}" ]; then
     mkdir -p "$(dirname "$asked")" && : >"$asked"
@@ -15,4 +15,4 @@ if [ -x "$mfx" ] && [ ! -e "$asked" ]; then
     "$mfx" choose || true
   fi
 fi
-exec "$here/usr/bin/mortiflix-filmcraft" "$@"
+exec "$here/usr/bin/mortiflix-studio" "$@"

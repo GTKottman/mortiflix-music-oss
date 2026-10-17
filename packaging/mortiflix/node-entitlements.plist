@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!-- Hardened-runtime entitlements for the Node runtime in the Mortiflix bundle
-     (FilmCraft.app/Contents/Resources/mortiflix/node/bin/node), re-signed by packaging/macos/package.sh.
+     (Mortiflix Studio.app/Contents/Resources/mortiflix/node/bin/node), re-signed by packaging/macos/package.sh.
      V8 compiles JavaScript at run time, so Node needs JIT and writable-executable memory; these are the
      entitlements Node's own macOS release builds are signed with. Nothing else in the app gets them. -->
 <plist version="1.0">

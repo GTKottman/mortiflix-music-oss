@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Build and package FilmCraft for Linux (<arch> is x86_64 or aarch64, or riscv64 when cross-compiling):
+# Build and package Mortiflix Studio for Linux (<arch> is x86_64 or aarch64, or riscv64 when cross-compiling):
 #
-#   $DIST/filmcraft-<version>-linux-<arch>.AppImage  any distro with glibc >= the build host's
-#   $DIST/filmcraft-<version>-linux-<arch>.AppImage.zsync  delta updates (needs zsyncmake)
-#   $DIST/filmcraft-<version>-linux-<arch>.deb       Debian, Ubuntu, Mint, Pop!_OS, ...
-#   $DIST/filmcraft-<version>-linux-<arch>.rpm       Fedora, openSUSE, RHEL, ...
-#   $DIST/filmcraft-<version>-linux-<arch>.tar.gz    plain FHS-style tree (bin/, lib/, share/)
+#   $DIST/mortiflix-studio-<version>-linux-<arch>.AppImage  any distro with glibc >= the build host's
+#   $DIST/mortiflix-studio-<version>-linux-<arch>.AppImage.zsync  delta updates (needs zsyncmake)
+#   $DIST/mortiflix-studio-<version>-linux-<arch>.deb       Debian, Ubuntu, Mint, Pop!_OS, ...
+#   $DIST/mortiflix-studio-<version>-linux-<arch>.rpm       Fedora, openSUSE, RHEL, ...
+#   $DIST/mortiflix-studio-<version>-linux-<arch>.tar.gz    plain FHS-style tree (bin/, lib/, share/)
 #
 # Usage: packaging/linux/package.sh [--skip-build] [--formats "appimage deb rpm tar"] [--no-mortiflix]
 #
-# Mortiflix FilmCraft: every format also carries the Mortiflix bundle (the service, its own Node,
-# ffmpeg, the sound engine) in lib/mortiflix-filmcraft, made by packaging/mortiflix/bundle.sh (its
+# Mortiflix Studio: every format also carries the Mortiflix bundle (the service, its own Node,
+# ffmpeg, the sound engine) in lib/mortiflix-studio, made by packaging/mortiflix/bundle.sh (its
 # env: MFX_SERVICE_SRC, MFX_ENGINE_BIN, NODE_VERSION, ...). --no-mortiflix leaves it out.
 #
 # Needs: cargo; nfpm for deb/rpm (https://nfpm.goreleaser.com); appimagetool for the AppImage
@@ -25,7 +25,7 @@ set -euo pipefail
 # shellcheck source=../env.sh
 . "$(dirname "${BASH_SOURCE[0]}")/../env.sh"
 HERE="$ROOT/packaging/linux"
-APP_ID=com.mortiflix.filmcraft
+APP_ID=com.mortiflix.studio
 
 SKIP_BUILD=0
 MORTIFLIX=1
@@ -47,16 +47,16 @@ case "$ARCH" in
   aarch64 | arm64) ARCH=aarch64; DEB_ARCH=arm64 ;;
   *) echo "unsupported architecture $ARCH" >&2; exit 2 ;;
 esac
-export FILMCRAFT_MAINTAINER="${FILMCRAFT_MAINTAINER:-FilmCraft maintainers <filmcraft@storyteller.ai>}"
-BASENAME="mortiflix-filmcraft-$VERSION-linux-$ARCH"
+export MFX_STUDIO_MAINTAINER="${MFX_STUDIO_MAINTAINER:-Mortiflix Studio maintainers <mortiflix-studio@storyteller.ai>}"
+BASENAME="mortiflix-studio-$VERSION-linux-$ARCH"
 
-echo "==> Mortiflix FilmCraft $VERSION for Linux $ARCH ($FORMATS)"
+echo "==> Mortiflix Studio $VERSION for Linux $ARCH ($FORMATS)"
 
 if [ "$SKIP_BUILD" = 0 ]; then
   if [ -n "${CROSS_TARGET:-}" ]; then
-    (cd "$ROOT" && cargo build --release --locked -p filmcraft -p filmcraft-cli --target "$CROSS_TARGET")
+    (cd "$ROOT" && cargo build --release --locked -p mortiflix-studio -p mortiflix-studio-cli --target "$CROSS_TARGET")
   else
-    (cd "$ROOT" && cargo build --release --locked -p filmcraft -p filmcraft-cli)
+    (cd "$ROOT" && cargo build --release --locked -p mortiflix-studio -p mortiflix-studio-cli)
   fi
 fi
 BIN="$CARGO_TARGET_DIR/${CROSS_TARGET:+$CROSS_TARGET/}release"
@@ -65,29 +65,29 @@ STAGE="$WORK/root"
 rm -rf "$WORK"
 
 # ---- stage an FHS tree (shared by every format) -------------------------------------------------
-# Mortiflix FilmCraft installs its own command names and ids, so it never clashes with upstream FilmCraft.
-install -Dm755 "$BIN/filmcraft" "$STAGE/usr/bin/mortiflix-filmcraft"
-install -Dm755 "$BIN/filmcraft-cli" "$STAGE/usr/bin/mortiflix-filmcraft-cli"
-"${CROSS_COMPILE:-}strip" "$STAGE/usr/bin/mortiflix-filmcraft" "$STAGE/usr/bin/mortiflix-filmcraft-cli" 2>/dev/null || true
+# Mortiflix Studio installs its own command names and ids, so it never clashes with upstream Mortiflix Studio.
+install -Dm755 "$BIN/mortiflix-studio" "$STAGE/usr/bin/mortiflix-studio"
+install -Dm755 "$BIN/mortiflix-studio-cli" "$STAGE/usr/bin/mortiflix-studio-cli"
+"${CROSS_COMPILE:-}strip" "$STAGE/usr/bin/mortiflix-studio" "$STAGE/usr/bin/mortiflix-studio-cli" 2>/dev/null || true
 install -Dm644 "$HERE/$APP_ID.desktop" "$STAGE/usr/share/applications/$APP_ID.desktop"
 install -Dm644 "$HERE/$APP_ID.mime.xml" "$STAGE/usr/share/mime/packages/$APP_ID.xml"
 mkdir -p "$STAGE/usr/share/metainfo"
-sed -e "s/@VERSION@/$VERSION/g" -e "s/@DATE@/$FILMCRAFT_BUILD_DATE/g" \
+sed -e "s/@VERSION@/$VERSION/g" -e "s/@DATE@/$MFX_STUDIO_BUILD_DATE/g" \
   "$HERE/$APP_ID.metainfo.xml.in" >"$STAGE/usr/share/metainfo/$APP_ID.metainfo.xml"
 mkdir -p "$STAGE/usr/share/icons"
 cp -R "$ROOT/assets/app-icon/hicolor" "$STAGE/usr/share/icons/"
-# the icons keep FilmCraft's file names in the repo; installed under this app's id
-find "$STAGE/usr/share/icons/hicolor" -name 'ai.storyteller.filmcraft.*' | while read -r f; do mv "$f" "${f%/*}/$APP_ID.${f##*.}"; done
-mkdir -p "$STAGE/usr/share/doc/mortiflix-filmcraft"
-copy_docs "$STAGE/usr/share/doc/mortiflix-filmcraft"
+# the icons keep Mortiflix Studio's file names in the repo; installed under this app's id
+find "$STAGE/usr/share/icons/hicolor" -name 'com.mortiflix.studio.*' | while read -r f; do mv "$f" "${f%/*}/$APP_ID.${f##*.}"; done
+mkdir -p "$STAGE/usr/share/doc/mortiflix-studio"
+copy_docs "$STAGE/usr/share/doc/mortiflix-studio"
 
-# The Mortiflix bundle, found by the app at ../lib/mortiflix-filmcraft from its binary. The folder
+# The Mortiflix bundle, found by the app at ../lib/mortiflix-studio from its binary. The folder
 # always exists so nfpm's tree entry is valid without it.
-mkdir -p "$STAGE/usr/lib/mortiflix-filmcraft"
+mkdir -p "$STAGE/usr/lib/mortiflix-studio"
 if [ "$MORTIFLIX" = 1 ]; then
   case "$ARCH" in x86_64) MFX_ARCH=x64 ;; aarch64) MFX_ARCH=arm64 ;; *) MFX_ARCH="" ;; esac
   if [ -n "$MFX_ARCH" ]; then
-    "$ROOT/packaging/mortiflix/bundle.sh" --os linux --arch "$MFX_ARCH" --out "$STAGE/usr/lib/mortiflix-filmcraft"
+    "$ROOT/packaging/mortiflix/bundle.sh" --os linux --arch "$MFX_ARCH" --out "$STAGE/usr/lib/mortiflix-studio"
   else
     warn "no Mortiflix bundle for $ARCH (Node and ffmpeg builds exist for x86_64 and aarch64 only)"
   fi
@@ -125,17 +125,17 @@ fi
 
 # ---- AppImage -----------------------------------------------------------------------------------
 if has appimage; then
-  APPDIR="$WORK/MortiflixFilmCraft.AppDir"
+  APPDIR="$WORK/MortiflixStudio.AppDir"
   cp -R "$STAGE" "$APPDIR"
   mv "$APPDIR/usr/share/doc" "$WORK/doc-unused"
-  # Mortiflix FilmCraft: AppRun offers the Mortiflix tools on a first run from a terminal, then starts the app.
-  if [ -x "$APPDIR/usr/lib/mortiflix-filmcraft/components.sh" ]; then
+  # Mortiflix Studio: AppRun offers the Mortiflix tools on a first run from a terminal, then starts the app.
+  if [ -x "$APPDIR/usr/lib/mortiflix-studio/components.sh" ]; then
     install -m755 "$ROOT/packaging/mortiflix/AppRun" "$APPDIR/AppRun"
   else
-    ln -s usr/bin/mortiflix-filmcraft "$APPDIR/AppRun"
+    ln -s usr/bin/mortiflix-studio "$APPDIR/AppRun"
   fi
   cp "$HERE/$APP_ID.desktop" "$APPDIR/$APP_ID.desktop"
-  cp "$ROOT/assets/app-icon/hicolor/256x256/apps/ai.storyteller.filmcraft.png" "$APPDIR/$APP_ID.png"
+  cp "$ROOT/assets/app-icon/hicolor/256x256/apps/com.mortiflix.studio.png" "$APPDIR/$APP_ID.png"
   ln -s "$APP_ID.png" "$APPDIR/.DirIcon"
 
   TOOL="${APPIMAGETOOL:-$(command -v appimagetool || true)}"
@@ -156,13 +156,14 @@ if has appimage; then
   # Update information: AppImageUpdate, AppImageLauncher and the like read it from the file and
   # fetch only the blocks that changed in a newer release, through the .zsync published next to
   # each AppImage on GitHub Releases. `latest` is the newest published release that is not a
-  # pre-release. A fork's builds point at its own releases through GITHUB_REPOSITORY.
-  REPO="${GITHUB_REPOSITORY:-storytold/filmcraft}"
-  UPDATE_INFO="gh-releases-zsync|${REPO%%/*}|${REPO#*/}|latest|mortiflix-filmcraft-*-linux-$ARCH.AppImage.zsync"
+  # pre-release. The releases are GITHUB_REPOSITORY's; without it the AppImage carries no update information.
+  REPO="${GITHUB_REPOSITORY:-}"
+  UPDATE_ARGS=()
+  [ -n "$REPO" ] && UPDATE_ARGS=(-u "gh-releases-zsync|${REPO%%/*}|${REPO#*/}|latest|mortiflix-studio-*-linux-$ARCH.AppImage.zsync")
   # Extract-and-run: works without FUSE (containers, CI). The output embeds the static runtime,
   # so users don't need libfuse2 either. With zsyncmake on the host (CI installs the zsync
   # package) appimagetool also writes the .zsync, into its working directory, hence the cd.
-  (cd "$DIST" && ARCH="$ARCH" APPIMAGE_EXTRACT_AND_RUN=1 "$TOOL" --no-appstream -u "$UPDATE_INFO" "$APPDIR" "$OUT")
+  (cd "$DIST" && ARCH="$ARCH" APPIMAGE_EXTRACT_AND_RUN=1 "$TOOL" --no-appstream "${UPDATE_ARGS[@]}" "$APPDIR" "$OUT")
   echo "wrote $OUT"
   if [ -s "$OUT.zsync" ]; then
     echo "wrote $OUT.zsync"
@@ -172,9 +173,9 @@ if has appimage; then
 fi
 
 if [ -z "${CROSS_TARGET:-}" ]; then
-  "$STAGE/usr/bin/mortiflix-filmcraft-cli" --version
+  "$STAGE/usr/bin/mortiflix-studio-cli" --version
 elif [ -n "${EMULATOR:-}" ]; then
-  "$EMULATOR" "$STAGE/usr/bin/mortiflix-filmcraft-cli" --version
+  "$EMULATOR" "$STAGE/usr/bin/mortiflix-studio-cli" --version
 fi
 echo "==> done"
 ls -lh "$DIST"

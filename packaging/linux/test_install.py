@@ -12,12 +12,12 @@ import unittest
 
 
 HERE = Path(__file__).resolve().parent
-APP_ID = "com.mortiflix.filmcraft"
+APP_ID = "com.mortiflix.studio"
 
 
 class InstallTests(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory(prefix="filmcraft-install-")
+        self.temp = tempfile.TemporaryDirectory(prefix="mortiflix-install-")
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.bundle = self.root / "extracted bundle"
@@ -28,11 +28,11 @@ class InstallTests(unittest.TestCase):
         shutil.copyfile(
             HERE / f"{APP_ID}.desktop", self.share / "applications" / f"{APP_ID}.desktop"
         )
-        for name in ("mortiflix-filmcraft", "mortiflix-filmcraft-cli"):
+        for name in ("mortiflix-studio", "mortiflix-studio-cli"):
             (self.bundle / "bin" / name).write_text(
                 '#!/bin/sh\nprintf \'%s\\n\' "$0" "$@" > "$(dirname "$0")/launched"\n'
             )
-        for path in ("doc/filmcraft/LICENSE-MIT", "icons/hicolor/test", "mime/packages/test.xml"):
+        for path in ("doc/mortiflix-studio/LICENSE-MIT", "icons/hicolor/test", "mime/packages/test.xml"):
             target = self.share / path
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text("fixture\n")
@@ -50,20 +50,20 @@ class InstallTests(unittest.TestCase):
         other.parent.mkdir(parents=True)
         other.write_text("unrelated\n")
         for version in ("first", "updated"):
-            (self.bundle / "share/doc/filmcraft/LICENSE-MIT").write_text(version)
+            (self.bundle / "share/doc/mortiflix-studio/LICENSE-MIT").write_text(version)
             result = self.install("--prefix", prefix)
             self.assertEqual(result.returncode, 0, result.stderr)
-            for name in ("mortiflix-filmcraft", "mortiflix-filmcraft-cli"):
+            for name in ("mortiflix-studio", "mortiflix-studio-cli"):
                 self.assertTrue(os.access(prefix / "bin" / name, os.X_OK))
                 self.assertEqual(
                     (prefix / "bin" / name).read_bytes(), (self.bundle / "bin" / name).read_bytes()
                 )
-            self.assertEqual((prefix / "share/doc/filmcraft/LICENSE-MIT").read_text(), version)
+            self.assertEqual((prefix / "share/doc/mortiflix-studio/LICENSE-MIT").read_text(), version)
             self.assertTrue((prefix / "share/icons/hicolor/test").is_file())
             self.assertTrue((prefix / "share/mime/packages/test.xml").is_file())
             self.assertEqual(other.read_text(), "unrelated\n")
         desktop = prefix / "share/applications" / f"{APP_ID}.desktop"
-        self.assertIn(f'Exec="{prefix}/bin/mortiflix-filmcraft" %F\n', desktop.read_text())
+        self.assertIn(f'Exec="{prefix}/bin/mortiflix-studio" %F\n', desktop.read_text())
         if shutil.which("desktop-file-validate"):
             subprocess.run(["desktop-file-validate", str(desktop)], check=True)
 
@@ -72,18 +72,18 @@ class InstallTests(unittest.TestCase):
         prefix = self.root / 'programs with "quotes" $dollar `tick` \\slash & more'
         result = self.install("--prefix", prefix)
         self.assertEqual(result.returncode, 0, result.stderr)
-        document = self.root / "my film.filmcraft"
+        document = self.root / "my film.mortiflix"
         document.touch()
         desktop = prefix / "share/applications" / f"{APP_ID}.desktop"
         subprocess.run(["gio", "launch", str(desktop), str(document)], check=True, timeout=10)
         launched = prefix / "bin/launched"
         for _ in range(100):
             if launched.exists() and launched.read_text().splitlines() == [
-                str(prefix / "bin/mortiflix-filmcraft"), str(document)
+                str(prefix / "bin/mortiflix-studio"), str(document)
             ]:
                 break
             time.sleep(0.01)
-        self.assertEqual(launched.read_text().splitlines(), [str(prefix / "bin/mortiflix-filmcraft"), str(document)])
+        self.assertEqual(launched.read_text().splitlines(), [str(prefix / "bin/mortiflix-studio"), str(document)])
 
     def test_invalid_arguments_fail_before_writing(self):
         for args in (("--prefix",), ("--prefix", "relative"), ("--prefix", "/"), ("--unknown",),
@@ -96,7 +96,7 @@ class InstallTests(unittest.TestCase):
                 self.assertNotEqual(self.install(*args).returncode, 0)
 
     def test_incomplete_bundle_does_not_install(self):
-        (self.bundle / "bin/mortiflix-filmcraft-cli").unlink()
+        (self.bundle / "bin/mortiflix-studio-cli").unlink()
         prefix = self.root / "destination"
         result = self.install("--prefix", prefix)
         self.assertNotEqual(result.returncode, 0)
@@ -104,20 +104,20 @@ class InstallTests(unittest.TestCase):
         self.assertFalse(prefix.exists())
 
     def test_mortiflix_bundle_is_installed_fresh(self):
-        # Mortiflix FilmCraft: lib/mortiflix-filmcraft is copied whole, and an update leaves no old files.
-        service = self.bundle / "lib/mortiflix-filmcraft/service/bin/mortiflix-service.mjs"
+        # Mortiflix Studio: lib/mortiflix-studio is copied whole, and an update leaves no old files.
+        service = self.bundle / "lib/mortiflix-studio/service/bin/mortiflix-service.mjs"
         service.parent.mkdir(parents=True)
         service.write_text("// first\n")
-        stale = self.bundle / "lib/mortiflix-filmcraft/service/old.mjs"
+        stale = self.bundle / "lib/mortiflix-studio/service/old.mjs"
         stale.write_text("// old\n")
         prefix = self.root / "fresh"
         self.assertEqual(self.install("--prefix", prefix).returncode, 0)
-        self.assertTrue((prefix / "lib/mortiflix-filmcraft/service/old.mjs").is_file())
+        self.assertTrue((prefix / "lib/mortiflix-studio/service/old.mjs").is_file())
         stale.unlink()
         service.write_text("// second\n")
         result = self.install("--prefix", prefix)
         self.assertEqual(result.returncode, 0, result.stderr)
-        installed = prefix / "lib/mortiflix-filmcraft/service"
+        installed = prefix / "lib/mortiflix-studio/service"
         self.assertEqual((installed / "bin/mortiflix-service.mjs").read_text(), "// second\n")
         self.assertFalse((installed / "old.mjs").exists())
 
@@ -128,10 +128,10 @@ class InstallTests(unittest.TestCase):
         target = self.root / "target"
         binaries = target / "release"
         binaries.mkdir(parents=True)
-        # cargo's binaries keep their names; package.sh installs them as mortiflix-filmcraft[-cli]
-        for name in ("filmcraft", "filmcraft-cli"):
+        # cargo's binaries keep their names; package.sh installs them as mortiflix-studio[-cli]
+        for name in ("mortiflix-studio", "mortiflix-studio-cli"):
             binary = binaries / name
-            binary.write_text("#!/bin/sh\necho 'FilmCraft fixture'\n")
+            binary.write_text("#!/bin/sh\necho 'Mortiflix Studio fixture'\n")
             binary.chmod(0o755)
         dist = self.root / "dist"
         result = subprocess.run(

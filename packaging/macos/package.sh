@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Build, sign and (optionally) notarize the macOS release artifacts:
 #
-#   $DIST/mortiflix-filmcraft-<version>-macos-<arch>.dmg  Mortiflix FilmCraft.app on a drag-to-Applications DMG
-#   $DIST/filmcraft-cli-<version>-macos-<arch>.zip      the headless CLI
-#   $DIST/filmcraft-<version>-macos-<arch>.pkg          Mortiflix FilmCraft: the app + "Mortiflix tools" choices
+#   $DIST/mortiflix-studio-<version>-macos-<arch>.dmg  Mortiflix Studio.app on a drag-to-Applications DMG
+#   $DIST/mortiflix-studio-cli-<version>-macos-<arch>.zip      the headless CLI
+#   $DIST/mortiflix-studio-<version>-macos-<arch>.pkg          Mortiflix Studio: the app + "Mortiflix tools" choices
 #                                                       (Blender, 3D toolkits, Chrome, Strudel, transitions, uv
 #                                                       ticked; ComfyUI not), downloaded during the install.
 #                                                       Signed with MACOS_INSTALLER_IDENTITY ("Developer ID
@@ -11,7 +11,7 @@
 #
 # Usage: packaging/macos/package.sh [--arch universal|aarch64|x86_64] [--skip-build] [--no-mortiflix]
 #
-# Mortiflix FilmCraft: FilmCraft.app also carries the Mortiflix bundle (the service, its own Node,
+# Mortiflix Studio: Mortiflix Studio.app also carries the Mortiflix bundle (the service, its own Node,
 # ffmpeg, the sound engine) in Contents/Resources/mortiflix, made by packaging/mortiflix/bundle.sh
 # (env: MFX_SERVICE_SRC, NODE_VERSION, FFMPEG_SHA256, ...; MFX_ENGINE_BIN = the arm64 or only
 # engine, MFX_ENGINE_BIN_X64 = the x86_64 one for a universal build). Universal: each tool is
@@ -53,10 +53,10 @@ export MACOSX_DEPLOYMENT_TARGET=11.0
 IDENTITY="${MACOS_SIGN_IDENTITY:--}"
 SHORT_VERSION="${VERSION%%-*}"
 WORK="$CARGO_TARGET_DIR/macos-package"
-APP="$WORK/Mortiflix FilmCraft.app"
-DMG="$DIST/mortiflix-filmcraft-$VERSION-macos-$ARCH.dmg"
-CLI_ZIP="$DIST/filmcraft-cli-$VERSION-macos-$ARCH.zip"
-PKG="$DIST/mortiflix-filmcraft-$VERSION-macos-$ARCH.pkg"
+APP="$WORK/Mortiflix Studio.app"
+DMG="$DIST/mortiflix-studio-$VERSION-macos-$ARCH.dmg"
+CLI_ZIP="$DIST/mortiflix-studio-cli-$VERSION-macos-$ARCH.zip"
+PKG="$DIST/mortiflix-studio-$VERSION-macos-$ARCH.pkg"
 
 NOTARIZE=0
 if [ "$IDENTITY" = "-" ]; then
@@ -67,18 +67,18 @@ else
   warn "macOS: APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID incomplete; signed but not notarized"
 fi
 
-echo "==> FilmCraft $VERSION for macOS ($ARCH), identity: $IDENTITY, notarize: $NOTARIZE"
+echo "==> Mortiflix Studio $VERSION for macOS ($ARCH), identity: $IDENTITY, notarize: $NOTARIZE"
 
 # ---- build -------------------------------------------------------------------------------------
 if [ "$SKIP_BUILD" = 0 ]; then
   args=()
   for t in "${TARGETS[@]}"; do args+=(--target "$t"); done
-  (cd "$ROOT" && cargo build --release --locked -p filmcraft -p filmcraft-cli "${args[@]}")
+  (cd "$ROOT" && cargo build --release --locked -p mortiflix-studio -p mortiflix-studio-cli "${args[@]}")
 fi
 
 rm -rf "$WORK"
 mkdir -p "$WORK/bin"
-for bin in filmcraft filmcraft-cli; do
+for bin in mortiflix-studio mortiflix-studio-cli; do
   inputs=()
   for t in "${TARGETS[@]}"; do inputs+=("$CARGO_TARGET_DIR/$t/release/$bin"); done
   lipo -create -output "$WORK/bin/$bin" "${inputs[@]}"
@@ -112,14 +112,14 @@ notarize() {
   fi
 }
 
-# ---- FilmCraft.app ----------------------------------------------------------------------------
+# ---- Mortiflix Studio.app ----------------------------------------------------------------------------
 echo "==> assembling $APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 # Executable and icon carry the display name (CFBundleExecutable / CFBundleIconFile).
-cp "$WORK/bin/filmcraft" "$APP/Contents/MacOS/FilmCraft"
-cp "$ROOT/assets/app-icon/filmcraft.icns" "$APP/Contents/Resources/FilmCraft.icns"
+cp "$WORK/bin/mortiflix-studio" "$APP/Contents/MacOS/Mortiflix Studio"
+cp "$ROOT/assets/app-icon/mortiflix-studio.icns" "$APP/Contents/Resources/Mortiflix Studio.icns"
 sed -e "s/@VERSION@/$VERSION/g" -e "s/@SHORT_VERSION@/$SHORT_VERSION/g" \
-  -e "s/@BUILD_SHA@/${FILMCRAFT_BUILD_SHA:-unknown}/g" \
+  -e "s/@BUILD_SHA@/${MFX_STUDIO_BUILD_SHA:-unknown}/g" \
   "$HERE/Info.plist.in" >"$APP/Contents/Info.plist"
 plutil -lint "$APP/Contents/Info.plist"
 printf 'APPL????' >"$APP/Contents/PkgInfo"
@@ -163,13 +163,13 @@ if [ -d "$MFX" ]; then
     fi
   done < <(find "$MFX" -type f)
 fi
-sign --options runtime --entitlements "$HERE/entitlements.plist" "$APP/Contents/MacOS/FilmCraft"
+sign --options runtime --entitlements "$HERE/entitlements.plist" "$APP/Contents/MacOS/Mortiflix Studio"
 sign --options runtime --entitlements "$HERE/entitlements.plist" "$APP"
 codesign --verify --strict --deep --verbose=2 "$APP"
 
 if [ "$NOTARIZE" = 1 ]; then
-  ditto -c -k --keepParent "$APP" "$WORK/FilmCraft-notarize.zip"
-  notarize "$WORK/FilmCraft-notarize.zip"
+  ditto -c -k --keepParent "$APP" "$WORK/Mortiflix Studio-notarize.zip"
+  notarize "$WORK/Mortiflix Studio-notarize.zip"
   xcrun stapler staple "$APP"
   xcrun stapler validate "$APP"
   spctl --assess --type execute -vvv "$APP"
@@ -179,7 +179,7 @@ fi
 echo "==> building $DMG"
 STAGE="$WORK/dmg"
 mkdir -p "$STAGE"
-ditto "$APP" "$STAGE/Mortiflix FilmCraft.app"
+ditto "$APP" "$STAGE/Mortiflix Studio.app"
 ln -s /Applications "$STAGE/Applications"
 # Finder window layout: background, icon size and positions (packaging/macos/dmg/README.md).
 mkdir -p "$STAGE/.background"
@@ -189,7 +189,7 @@ rm -f "$DMG" "$WORK/raw.dmg"
 # makehybrid + convert builds the image without attaching a device, unlike `create -srcfolder`,
 # which is flaky on CI runners ("Resource busy") and hangs in sandboxed sessions.
 # The volume name has no version: .DS_Store finds the background through an alias that includes it.
-hdiutil makehybrid -hfs -hfs-volume-name "Mortiflix FilmCraft" -hfs-openfolder "$STAGE" -o "$WORK/raw.dmg" "$STAGE"
+hdiutil makehybrid -hfs -hfs-volume-name "Mortiflix Studio" -hfs-openfolder "$STAGE" -o "$WORK/raw.dmg" "$STAGE"
 hdiutil convert "$WORK/raw.dmg" -format UDZO -imagekey zlib-level=9 -o "$DMG"
 rm -f "$WORK/raw.dmg"
 sign "$DMG"
@@ -208,7 +208,7 @@ if [ -d "$MFX" ]; then
   echo "==> building $PKG"
   PW="$WORK/pkg"
   rm -rf "$PW" && mkdir -p "$PW/parts"
-  pkgbuild --component "$APP" --install-location /Applications --identifier com.mortiflix.filmcraft --version "$SHORT_VERSION" "$PW/parts/app.pkg"
+  pkgbuild --component "$APP" --install-location /Applications --identifier com.mortiflix.studio --version "$SHORT_VERSION" "$PW/parts/app.pkg"
   # id|title|ticked|description
   TOOLS=(
     "blender|Blender (~350 MB)|true|3D shots: the newest official Blender, checked against its sha256 list (yours is reused if you have one)."
@@ -225,21 +225,21 @@ if [ -d "$MFX" ]; then
     mkdir -p "$PW/scripts-$id"
     sed "s/@TOOL_ID@/$id/" "$ROOT/packaging/mortiflix/macos-tool-postinstall.sh" >"$PW/scripts-$id/postinstall"
     chmod 755 "$PW/scripts-$id/postinstall"
-    pkgbuild --nopayload --scripts "$PW/scripts-$id" --identifier "com.mortiflix.filmcraft.tools.$id" --version "$SHORT_VERSION" "$PW/parts/tool-$id.pkg"
+    pkgbuild --nopayload --scripts "$PW/scripts-$id" --identifier "com.mortiflix.studio.tools.$id" --version "$SHORT_VERSION" "$PW/parts/tool-$id.pkg"
     lines="$lines<line choice=\"$id\"/>"
-    choices="$choices<choice id=\"$id\" title=\"$title\" description=\"$desc\" start_selected=\"$on\"><pkg-ref id=\"com.mortiflix.filmcraft.tools.$id\"/></choice>"
-    refs="$refs<pkg-ref id=\"com.mortiflix.filmcraft.tools.$id\" version=\"$SHORT_VERSION\">tool-$id.pkg</pkg-ref>"
+    choices="$choices<choice id=\"$id\" title=\"$title\" description=\"$desc\" start_selected=\"$on\"><pkg-ref id=\"com.mortiflix.studio.tools.$id\"/></choice>"
+    refs="$refs<pkg-ref id=\"com.mortiflix.studio.tools.$id\" version=\"$SHORT_VERSION\">tool-$id.pkg</pkg-ref>"
   done
   cat >"$PW/distribution.xml" <<XML
 <?xml version="1.0" encoding="utf-8"?>
 <installer-gui-script minSpecVersion="2">
-  <title>Mortiflix FilmCraft</title>
+  <title>Mortiflix Studio</title>
   <options customize="always" require-scripts="false" hostArchitectures="arm64,x86_64"/>
   <choices-outline><line choice="app"/><line choice="tools">$lines</line></choices-outline>
-  <choice id="app" title="Mortiflix FilmCraft" enabled="false" selected="true"><pkg-ref id="com.mortiflix.filmcraft"/></choice>
+  <choice id="app" title="Mortiflix Studio" enabled="false" selected="true"><pkg-ref id="com.mortiflix.studio"/></choice>
   <choice id="tools" title="Mortiflix tools (downloaded now)" description="The tools Mortiflix uses, downloaded into your own Mortiflix studio. Skip any: Mortiflix setup can install them later. Log: ~/Library/Logs/Mortiflix tools.log"/>
   $choices
-  <pkg-ref id="com.mortiflix.filmcraft" version="$SHORT_VERSION">app.pkg</pkg-ref>
+  <pkg-ref id="com.mortiflix.studio" version="$SHORT_VERSION">app.pkg</pkg-ref>
   $refs
 </installer-gui-script>
 XML
@@ -258,18 +258,18 @@ fi
 
 # ---- CLI ---------------------------------------------------------------------------------------
 echo "==> building $CLI_ZIP"
-CLI_DIR="$WORK/filmcraft-cli-$VERSION-macos-$ARCH"
+CLI_DIR="$WORK/mortiflix-studio-cli-$VERSION-macos-$ARCH"
 mkdir -p "$CLI_DIR"
-cp "$WORK/bin/filmcraft-cli" "$CLI_DIR/"
+cp "$WORK/bin/mortiflix-studio-cli" "$CLI_DIR/"
 copy_docs "$CLI_DIR"
-sign --options runtime "$CLI_DIR/filmcraft-cli"
-codesign --verify --strict --verbose=2 "$CLI_DIR/filmcraft-cli"
+sign --options runtime "$CLI_DIR/mortiflix-studio-cli"
+codesign --verify --strict --verbose=2 "$CLI_DIR/mortiflix-studio-cli"
 rm -f "$CLI_ZIP"
 ditto -c -k --keepParent "$CLI_DIR" "$CLI_ZIP"
 # A bare Mach-O can't carry a stapled ticket; Gatekeeper looks the notarization up online.
 if [ "$NOTARIZE" = 1 ]; then notarize "$CLI_ZIP"; fi
 
-"$WORK/bin/filmcraft-cli" --version
+"$WORK/bin/mortiflix-studio-cli" --version
 echo "==> done"
 ls -lh "$DMG" "$CLI_ZIP"
 if [ -f "$PKG" ]; then ls -lh "$PKG"; fi

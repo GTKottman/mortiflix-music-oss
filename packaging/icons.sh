@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Regenerate every derived app icon from assets/app-icon/filmcraft.svg (the canonical artwork; a
-# 512-unit full-bleed tile with rx=112). filmcraft-small.svg is a lighter trace of the same drawing
+# Regenerate every derived app icon from assets/app-icon/mortiflix-studio.svg (the canonical artwork; a
+# 512-unit full-bleed tile with rx=112). mortiflix-studio-small.svg is a lighter trace of the same drawing
 # and is copied, not generated.
 #
 # Needs: resvg (brew install resvg / cargo install resvg). On macOS, iconutil also writes the
@@ -10,8 +10,8 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIR="$ROOT/assets/app-icon"
-SVG="$DIR/filmcraft.svg"
-APP_ID="ai.storyteller.filmcraft"
+SVG="$DIR/mortiflix-studio.svg"
+APP_ID="com.mortiflix.studio"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
@@ -25,9 +25,9 @@ grep -q 'viewBox="-62.14' "$MAC" || { echo "error: unexpected viewBox in $SVG" >
 
 render() { resvg -w "$2" -h "$2" "$1" "$3" </dev/null; }
 
-render "$SVG" 1024 "$DIR/filmcraft-1024.png"
-# Runtime window/Dock icon on macOS (apps/filmcraft/src/main.rs embeds it).
-render "$MAC" 512 "$DIR/filmcraft-macos-512.png"
+render "$SVG" 1024 "$DIR/mortiflix-studio-1024.png"
+# Runtime window/Dock icon on macOS (apps/mortiflix-studio/src/main.rs embeds it).
+render "$MAC" 512 "$DIR/mortiflix-studio-macos-512.png"
 
 # Linux hicolor theme. Windows and Linux use the full-bleed tile.
 for s in 16 24 32 48 64 128 256 512; do
@@ -35,10 +35,10 @@ for s in 16 24 32 48 64 128 256 512; do
   render "$SVG" "$s" "$DIR/hicolor/${s}x${s}/apps/$APP_ID.png"
 done
 mkdir -p "$DIR/hicolor/scalable/apps"
-cp "$DIR/filmcraft-small.svg" "$DIR/hicolor/scalable/apps/$APP_ID.svg"
+cp "$DIR/mortiflix-studio-small.svg" "$DIR/hicolor/scalable/apps/$APP_ID.svg"
 
 # Web app favicon and loading image.
-render "$SVG" 128 "$ROOT/apps/filmcraft-web/web/favicon.png"
+render "$SVG" 128 "$ROOT/apps/mortiflix-studio-web/web/favicon.png"
 
 # Windows .ico.
 ICO_PNGS=()
@@ -46,18 +46,18 @@ for s in 16 20 24 32 40 48 64 128 256; do
   render "$SVG" "$s" "$TMP/ico-$s.png"
   ICO_PNGS+=("$TMP/ico-$s.png")
 done
-(cd "$ROOT" && cargo run -q -p xtask -- ico "$DIR/filmcraft.ico" "${ICO_PNGS[@]}")
+(cd "$ROOT" && cargo run -q -p xtask -- ico "$DIR/mortiflix-studio.ico" "${ICO_PNGS[@]}")
 
 # macOS .icns.
 if command -v iconutil >/dev/null; then
-  SET="$TMP/filmcraft.iconset"
+  SET="$TMP/mortiflix-studio.iconset"
   mkdir -p "$SET"
   for s in 16 32 128 256 512; do
     render "$MAC" "$s" "$SET/icon_${s}x${s}.png"
     render "$MAC" $((s * 2)) "$SET/icon_${s}x${s}@2x.png"
   done
-  iconutil -c icns -o "$DIR/filmcraft.icns" "$SET"
+  iconutil -c icns -o "$DIR/mortiflix-studio.icns" "$SET"
 else
-  echo "warning: iconutil not found (macOS only); filmcraft.icns not regenerated" >&2
+  echo "warning: iconutil not found (macOS only); mortiflix-studio.icns not regenerated" >&2
 fi
 echo "icons written to $DIR"

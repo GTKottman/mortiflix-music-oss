@@ -1,7 +1,7 @@
 # Flatpak manifest for the single-file bundle attached to every GitHub release
-# (mortiflix-filmcraft-<version>-linux-<arch>.flatpak). Build it with packaging/linux/flatpak-bundle.sh.
+# (mortiflix-studio-<version>-linux-<arch>.flatpak). Build it with packaging/linux/flatpak-bundle.sh.
 #
-# It repackages the release's own Linux tarball (mortiflix-filmcraft-<version>-linux-<arch>.tar.gz,
+# It repackages the release's own Linux tarball (mortiflix-studio-<version>-linux-<arch>.tar.gz,
 # built on Ubuntu 22.04 by package.sh) instead of compiling Rust inside flatpak-builder: no
 # network and no vendored crate sources during the build, a few seconds instead of 20+ minutes,
 # and byte-for-byte the same binaries as the AppImage/deb/rpm. The script unpacks the tarball
@@ -10,13 +10,13 @@
 # ALSA routes through PulseAudio/PipeWire), and the GPU driver comes from its
 # org.freedesktop.Platform.GL extension.
 #
-# com.mortiflix.filmcraft.yml (same directory) is the from-source manifest for Flathub. Keep
+# com.mortiflix.studio.yml (same directory) is the from-source manifest for Flathub. Keep
 # runtime-version and finish-args identical in both (packaging-lint checks this).
-id: com.mortiflix.filmcraft
+id: com.mortiflix.studio
 runtime: org.freedesktop.Platform
 runtime-version: '25.08'
 sdk: org.freedesktop.Sdk
-command: mortiflix-filmcraft
+command: mortiflix-studio
 finish-args:
   # X11 shared memory (MIT-SHM). Without it the X11 fallback is slow or fails.
   - --share=ipc
@@ -30,7 +30,7 @@ finish-args:
   - --device=dri
   # A project refers to its media by absolute path (docs/project-files.md), and the document
   # portal only exposes the file it was handed, not the media beside it: a project opened from
-  # ~/Videos found none of its clips (#107). So, as other video editors do, FilmCraft reads and
+  # ~/Videos found none of its clips (#107). So, as other video editors do, Mortiflix Studio reads and
   # writes the home directory (media, projects, exports, autosave next to the project) and the
   # usual mount points of external drives, where footage often lives. Open/Save dialogs still go
   # through the file-chooser portal; nothing outside these locations is granted.
@@ -38,26 +38,26 @@ finish-args:
   - --filesystem=/media
   - --filesystem=/run/media
   - --filesystem=/mnt
-  # Mortiflix FilmCraft: the Mortiflix service talks to the AI (Claude), voice and posting
-  # services over the network. (Upstream FilmCraft grants no network.) Still not granted:
+  # Mortiflix Studio: the Mortiflix service talks to the AI (Claude), voice and posting
+  # services over the network. (Upstream Mortiflix Studio grants no network.) Still not granted:
   # host-wide filesystem access. The --control server stays on 127.0.0.1 and off by default.
   - --share=network
 modules:
-  - name: filmcraft
+  - name: mortiflix-studio
     buildsystem: simple
     build-commands:
-      - install -Dm755 bin/mortiflix-filmcraft /app/bin/mortiflix-filmcraft
-      - install -Dm755 bin/mortiflix-filmcraft-cli /app/bin/mortiflix-filmcraft-cli
-      - install -Dm644 share/applications/com.mortiflix.filmcraft.desktop /app/share/applications/com.mortiflix.filmcraft.desktop
+      - install -Dm755 bin/mortiflix-studio /app/bin/mortiflix-studio
+      - install -Dm755 bin/mortiflix-studio-cli /app/bin/mortiflix-studio-cli
+      - install -Dm644 share/applications/com.mortiflix.studio.desktop /app/share/applications/com.mortiflix.studio.desktop
       # The same MIME file the deb/rpm install: it defines the .fcproj project type (the
       # runtime's shared-mime-info already knows the video and audio formats).
-      - install -Dm644 share/mime/packages/com.mortiflix.filmcraft.xml /app/share/mime/packages/com.mortiflix.filmcraft.xml
+      - install -Dm644 share/mime/packages/com.mortiflix.studio.xml /app/share/mime/packages/com.mortiflix.studio.xml
       # Already has the release's version and date substituted by package.sh.
-      - install -Dm644 share/metainfo/com.mortiflix.filmcraft.metainfo.xml /app/share/metainfo/com.mortiflix.filmcraft.metainfo.xml
-      - mkdir -p /app/share/icons /app/share/doc && cp -R share/icons/hicolor /app/share/icons/ && cp -R share/doc/mortiflix-filmcraft /app/share/doc/
-      # Mortiflix FilmCraft: the service, its Node, ffmpeg and the sound engine; the app finds it at
-      # /app/lib/mortiflix-filmcraft (../lib from /app/bin). Tarballs made with --no-mortiflix lack it.
-      - if [ -d lib/mortiflix-filmcraft/service ]; then mkdir -p /app/lib && cp -R lib/mortiflix-filmcraft /app/lib/; fi
+      - install -Dm644 share/metainfo/com.mortiflix.studio.metainfo.xml /app/share/metainfo/com.mortiflix.studio.metainfo.xml
+      - mkdir -p /app/share/icons /app/share/doc && cp -R share/icons/hicolor /app/share/icons/ && cp -R share/doc/mortiflix-studio /app/share/doc/
+      # Mortiflix Studio: the service, its Node, ffmpeg and the sound engine; the app finds it at
+      # /app/lib/mortiflix-studio (../lib from /app/bin). Tarballs made with --no-mortiflix lack it.
+      - if [ -d lib/mortiflix-studio/service ]; then mkdir -p /app/lib && cp -R lib/mortiflix-studio /app/lib/; fi
     sources:
       - type: dir
         path: stage

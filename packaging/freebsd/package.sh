@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Build and package FilmCraft for FreeBSD:
+# Build and package Mortiflix Studio for FreeBSD:
 #
-#   $DIST/mortiflix-filmcraft-<version>-freebsd-x86_64.tar.gz   a /usr/local-style tree:
-#       mortiflix-filmcraft-<version>-freebsd-x86_64/{bin, share/applications, share/icons, share/mime,
-#       share/metainfo, share/doc/mortiflix-filmcraft}
+#   $DIST/mortiflix-studio-<version>-freebsd-x86_64.tar.gz   a /usr/local-style tree:
+#       mortiflix-studio-<version>-freebsd-x86_64/{bin, share/applications, share/icons, share/mime,
+#       share/metainfo, share/doc/mortiflix-studio}
 #
 # Install by copying the tree's contents into /usr/local:
-#   tar -xzf mortiflix-filmcraft-<version>-freebsd-x86_64.tar.gz --strip-components 1 -C /usr/local
+#   tar -xzf mortiflix-studio-<version>-freebsd-x86_64.tar.gz --strip-components 1 -C /usr/local
 #
 # Usage: packaging/freebsd/package.sh [--skip-build] [--dry-run]
 #   --dry-run   stage the tree from stub binaries and list it, without building (works on any OS)
@@ -16,7 +16,7 @@ set -euo pipefail
 # shellcheck source=../env.sh
 . "$(dirname "${BASH_SOURCE[0]}")/../env.sh"
 LINUX="$ROOT/packaging/linux"
-APP_ID=com.mortiflix.filmcraft
+APP_ID=com.mortiflix.studio
 
 SKIP_BUILD=0
 DRY_RUN=0
@@ -40,14 +40,14 @@ if [ "$DRY_RUN" = 0 ] && [ "$(uname -s)" != FreeBSD ]; then
   echo "error: build on FreeBSD (or pass --dry-run to check the tree layout)" >&2
   exit 2
 fi
-BASENAME="mortiflix-filmcraft-$VERSION-freebsd-$ARCH"
+BASENAME="mortiflix-studio-$VERSION-freebsd-$ARCH"
 
-echo "==> FilmCraft $VERSION for FreeBSD $ARCH"
+echo "==> Mortiflix Studio $VERSION for FreeBSD $ARCH"
 
 # The release VM has 12 GB; full parallelism on the biggest crates runs it out of memory.
 export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-4}"
 if [ "$SKIP_BUILD" = 0 ]; then
-  (cd "$ROOT" && cargo build --release --locked -p filmcraft -p filmcraft-cli)
+  (cd "$ROOT" && cargo build --release --locked -p mortiflix-studio -p mortiflix-studio-cli)
 fi
 WORK="$CARGO_TARGET_DIR/freebsd-package"
 STAGE="$WORK/$BASENAME"
@@ -61,7 +61,7 @@ if [ "$DRY_RUN" = 1 ]; then
   BIN="$WORK/stub-bin"
   OUT_DIR="$WORK"
   mkdir -p "$BIN"
-  for b in filmcraft filmcraft-cli; do
+  for b in mortiflix-studio mortiflix-studio-cli; do
     printf '#!/bin/sh\necho "%s %s (dry-run stub)"\n' "$b" "$VERSION" >"$BIN/$b"
     chmod 755 "$BIN/$b"
   done
@@ -70,26 +70,26 @@ fi
 # ---- stage a /usr/local-style tree --------------------------------------------------------------
 # FreeBSD's install(1) has no -D: create the directories first.
 mkdir -p "$STAGE/bin" "$STAGE/share/applications" "$STAGE/share/mime/packages" \
-  "$STAGE/share/metainfo" "$STAGE/share/icons" "$STAGE/share/doc/mortiflix-filmcraft"
-# Mortiflix FilmCraft installs its own command names and ids, so it never clashes with upstream FilmCraft.
-install -m 755 "$BIN/filmcraft" "$STAGE/bin/mortiflix-filmcraft"
-install -m 755 "$BIN/filmcraft-cli" "$STAGE/bin/mortiflix-filmcraft-cli"
-strip "$STAGE/bin/mortiflix-filmcraft" "$STAGE/bin/mortiflix-filmcraft-cli" 2>/dev/null || true
+  "$STAGE/share/metainfo" "$STAGE/share/icons" "$STAGE/share/doc/mortiflix-studio"
+# Mortiflix Studio installs its own command names and ids, so it never clashes with upstream Mortiflix Studio.
+install -m 755 "$BIN/mortiflix-studio" "$STAGE/bin/mortiflix-studio"
+install -m 755 "$BIN/mortiflix-studio-cli" "$STAGE/bin/mortiflix-studio-cli"
+strip "$STAGE/bin/mortiflix-studio" "$STAGE/bin/mortiflix-studio-cli" 2>/dev/null || true
 # The desktop entry, MIME type, metainfo and icons are the freedesktop files Linux ships.
 install -m 644 "$LINUX/$APP_ID.desktop" "$STAGE/share/applications/$APP_ID.desktop"
 install -m 644 "$LINUX/$APP_ID.mime.xml" "$STAGE/share/mime/packages/$APP_ID.xml"
-sed -e "s/@VERSION@/$VERSION/g" -e "s/@DATE@/$FILMCRAFT_BUILD_DATE/g" \
+sed -e "s/@VERSION@/$VERSION/g" -e "s/@DATE@/$MFX_STUDIO_BUILD_DATE/g" \
   "$LINUX/$APP_ID.metainfo.xml.in" >"$STAGE/share/metainfo/$APP_ID.metainfo.xml"
 cp -R "$ROOT/assets/app-icon/hicolor" "$STAGE/share/icons/"
-find "$STAGE/share/icons/hicolor" -name 'ai.storyteller.filmcraft.*' | while read -r f; do mv "$f" "${f%/*}/$APP_ID.${f##*.}"; done
-copy_docs "$STAGE/share/doc/mortiflix-filmcraft"
+find "$STAGE/share/icons/hicolor" -name 'com.mortiflix.studio.*' | while read -r f; do mv "$f" "${f%/*}/$APP_ID.${f##*.}"; done
+copy_docs "$STAGE/share/doc/mortiflix-studio"
 for f in NOTICE ATTRIBUTION.md; do
-  if [ -f "$ROOT/$f" ]; then install -m 644 "$ROOT/$f" "$STAGE/share/doc/mortiflix-filmcraft/"; fi
+  if [ -f "$ROOT/$f" ]; then install -m 644 "$ROOT/$f" "$STAGE/share/doc/mortiflix-studio/"; fi
 done
 
-for f in bin/mortiflix-filmcraft bin/mortiflix-filmcraft-cli "share/applications/$APP_ID.desktop" \
+for f in bin/mortiflix-studio bin/mortiflix-studio-cli "share/applications/$APP_ID.desktop" \
   "share/icons/hicolor/256x256/apps/$APP_ID.png" "share/icons/hicolor/scalable/apps/$APP_ID.svg" \
-  share/doc/mortiflix-filmcraft/LICENSE-MIT share/doc/mortiflix-filmcraft/LICENSE-APACHE; do
+  share/doc/mortiflix-studio/LICENSE-MIT share/doc/mortiflix-studio/LICENSE-APACHE; do
   if [ ! -e "$STAGE/$f" ]; then echo "error: $f is missing from the package" >&2; exit 1; fi
 done
 
@@ -98,7 +98,7 @@ mkdir -p "$OUT_DIR"
 tar -C "$WORK" -czf "$OUT_DIR/$BASENAME.tar.gz" "$BASENAME"
 echo "wrote $OUT_DIR/$BASENAME.tar.gz"
 
-"$STAGE/bin/mortiflix-filmcraft-cli" --version
+"$STAGE/bin/mortiflix-studio-cli" --version
 if [ "$DRY_RUN" = 1 ]; then
   echo "==> dry run: tarball contents"
   tar -tzvf "$OUT_DIR/$BASENAME.tar.gz"

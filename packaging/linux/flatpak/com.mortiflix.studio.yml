@@ -1,28 +1,28 @@
-# Flatpak manifest for Mortiflix FilmCraft (based on FilmCraft), ready for a Flathub submission.
+# Flatpak manifest for Mortiflix Studio (based on Mortiflix Studio), ready for a Flathub submission.
 #
 # Flatpak builds run offline, so the crate sources must be vendored first. From the repo root:
 #
 #   curl -fsSLO https://raw.githubusercontent.com/flatpak/flatpak-builder-tools/master/cargo/flatpak-cargo-generator.py
 #   python3 flatpak-cargo-generator.py Cargo.lock -o packaging/linux/flatpak/cargo-sources.json
-#   flatpak-builder --user --install --force-clean build-flatpak packaging/linux/flatpak/com.mortiflix.filmcraft.yml
-#   flatpak run com.mortiflix.filmcraft
+#   flatpak-builder --user --install --force-clean build-flatpak packaging/linux/flatpak/com.mortiflix.studio.yml
+#   flatpak run com.mortiflix.studio
 #
 # The command-line tool and its MCP server run in the same sandbox, without opening a window:
 #
-#   flatpak run --command=mortiflix-filmcraft-cli com.mortiflix.filmcraft --version
-#   flatpak run --command=mortiflix-filmcraft-cli com.mortiflix.filmcraft mcp
+#   flatpak run --command=mortiflix-studio-cli com.mortiflix.studio --version
+#   flatpak run --command=mortiflix-studio-cli com.mortiflix.studio mcp
 #
 # For Flathub, replace the `dir` source with a `git` source pinned to a release tag and commit.
 #
-# Mortiflix FilmCraft: this from-source manifest builds the app only. The Mortiflix bundle (service,
-# Node, ffmpeg, sound engine) ships in the release Flatpak, com.mortiflix.filmcraft.bundle.yml.
-id: com.mortiflix.filmcraft
+# Mortiflix Studio: this from-source manifest builds the app only. The Mortiflix bundle (service,
+# Node, ffmpeg, sound engine) ships in the release Flatpak, com.mortiflix.studio.bundle.yml.
+id: com.mortiflix.studio
 runtime: org.freedesktop.Platform
 runtime-version: '25.08'
 sdk: org.freedesktop.Sdk
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.rust-stable
-command: mortiflix-filmcraft
+command: mortiflix-studio
 finish-args:
   # X11 shared memory (MIT-SHM). Without it the X11 fallback is slow or fails.
   - --share=ipc
@@ -36,7 +36,7 @@ finish-args:
   - --device=dri
   # A project refers to its media by absolute path (docs/project-files.md), and the document
   # portal only exposes the file it was handed, not the media beside it: a project opened from
-  # ~/Videos found none of its clips (#107). So, as other video editors do, FilmCraft reads and
+  # ~/Videos found none of its clips (#107). So, as other video editors do, Mortiflix Studio reads and
   # writes the home directory (media, projects, exports, autosave next to the project) and the
   # usual mount points of external drives, where footage often lives. Open/Save dialogs still go
   # through the file-chooser portal; nothing outside these locations is granted.
@@ -44,33 +44,33 @@ finish-args:
   - --filesystem=/media
   - --filesystem=/run/media
   - --filesystem=/mnt
-  # Mortiflix FilmCraft: the Mortiflix service talks to the AI (Claude), voice and posting
-  # services over the network. (Upstream FilmCraft grants no network.) Still not granted:
+  # Mortiflix Studio: the Mortiflix service talks to the AI (Claude), voice and posting
+  # services over the network. (Upstream Mortiflix Studio grants no network.) Still not granted:
   # host-wide filesystem access. The --control server stays on 127.0.0.1 and off by default.
   - --share=network
 build-options:
   append-path: /usr/lib/sdk/rust-stable/bin
 modules:
-  - name: filmcraft
+  - name: mortiflix-studio
     buildsystem: simple
     build-options:
       env:
-        CARGO_HOME: /run/build/filmcraft/cargo
+        CARGO_HOME: /run/build/mortiflix-studio/cargo
         CARGO_NET_OFFLINE: 'true'
     build-commands:
-      - cargo --offline build --release --locked -p filmcraft -p filmcraft-cli
-      - install -Dm755 target/release/filmcraft /app/bin/mortiflix-filmcraft
+      - cargo --offline build --release --locked -p mortiflix-studio -p mortiflix-studio-cli
+      - install -Dm755 target/release/mortiflix-studio /app/bin/mortiflix-studio
       # The headless CLI and its stdio MCP server, as in the release bundle (#346).
-      - install -Dm755 target/release/filmcraft-cli /app/bin/mortiflix-filmcraft-cli
-      - install -Dm644 packaging/linux/com.mortiflix.filmcraft.desktop /app/share/applications/com.mortiflix.filmcraft.desktop
-      - install -Dm644 packaging/linux/com.mortiflix.filmcraft.mime.xml /app/share/mime/packages/com.mortiflix.filmcraft.xml
+      - install -Dm755 target/release/mortiflix-studio-cli /app/bin/mortiflix-studio-cli
+      - install -Dm644 packaging/linux/com.mortiflix.studio.desktop /app/share/applications/com.mortiflix.studio.desktop
+      - install -Dm644 packaging/linux/com.mortiflix.studio.mime.xml /app/share/mime/packages/com.mortiflix.studio.xml
       - mkdir -p /app/share/icons && cp -R assets/app-icon/hicolor /app/share/icons/
-      - find /app/share/icons/hicolor -name 'ai.storyteller.filmcraft.*' -exec sh -c 'mv "$1" "${1%/*}/com.mortiflix.filmcraft.${1##*.}"' _ {} \;
+      - find /app/share/icons/hicolor -name 'com.mortiflix.studio.*' -exec sh -c 'mv "$1" "${1%/*}/com.mortiflix.studio.${1##*.}"' _ {} \;
       - >-
         version=$(awk '/^\[/{p=($0=="[workspace.package]");next} p&&$1=="version"{gsub(/[" ]/,"",$3);print $3;exit}' Cargo.toml);
         install -d /app/share/metainfo;
         sed -e "s/@VERSION@/$version/" -e "s/@DATE@/$(date -u +%Y-%m-%d)/"
-        packaging/linux/com.mortiflix.filmcraft.metainfo.xml.in > /app/share/metainfo/com.mortiflix.filmcraft.metainfo.xml
+        packaging/linux/com.mortiflix.studio.metainfo.xml.in > /app/share/metainfo/com.mortiflix.studio.metainfo.xml
     sources:
       - type: dir
         path: ../../..

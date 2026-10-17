@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Mortiflix FilmCraft: assemble the Mortiflix bundle every package ships beside the app.
+# Mortiflix Studio: assemble the Mortiflix bundle every package ships beside the app.
 #
 #   <out>/service/   the Mortiflix service (mortiflix-oss: bin/mortiflix-service.mjs, src, pipelines, ...)
 #                    with its production node_modules
@@ -9,16 +9,16 @@
 #   <out>/BUNDLE.json  what went in (versions, sources)
 #
 # The app finds it beside its binary (crates/mortiflix-ui/src/service.rs `bundled_dir`):
-#   Linux / AppImage / Flatpak  <prefix>/lib/mortiflix-filmcraft   (binary in <prefix>/bin)
-#   Windows                     <install dir>\mortiflix            (beside filmcraft.exe)
-#   macOS                       FilmCraft.app/Contents/Resources/mortiflix
+#   Linux / AppImage / Flatpak  <prefix>/lib/mortiflix-studio   (binary in <prefix>/bin)
+#   Windows                     <install dir>\mortiflix            (beside mortiflix-studio.exe)
+#   macOS                       Mortiflix Studio.app/Contents/Resources/mortiflix
 #
 # Usage: packaging/mortiflix/bundle.sh --os linux|windows|macos --arch x64|arm64 --out DIR
 #                                      [--no-ffmpeg] [--no-engine] [--build-engine]
 #
 # Env:
-#   MFX_SERVICE_SRC  the mortiflix-oss checkout (default: ../mortiflix-oss-filmcraft beside this repo)
-#   MFX_SERVICE_REF  git ref packaged from it (default mfx-service/integration, the merged Mortiflix FilmCraft service; "worktree" copies the files as they are)
+#   MFX_SERVICE_SRC  the mortiflix-oss checkout (default: ../mortiflix-oss beside this repo)
+#   MFX_SERVICE_REF  git ref packaged from it (default mfx-service/integration, the merged Mortiflix Studio service; "worktree" copies the files as they are)
 #   NODE_VERSION     Node runtime (default below; checked against nodejs.org's SHASUMS256.txt)
 #   MFX_ENGINE_BIN   a built mortiflix-engine for this OS/arch. Without it, --build-engine builds one
 #                    with the service's own recipe (`mortiflix setup daw-engine --build`: CMake, Ninja,
@@ -50,7 +50,7 @@ case "$OS" in linux | windows | macos) ;; *) echo "error: --os linux|windows|mac
 case "$ARCH" in x64 | arm64) ;; x86_64 | amd64) ARCH=x64 ;; aarch64) ARCH=arm64 ;; *) echo "error: --arch x64|arm64" >&2; exit 2 ;; esac
 [ -n "$OUT" ] || { echo "error: --out DIR" >&2; exit 2; }
 
-SRC="${MFX_SERVICE_SRC:-$(cd "$ROOT/.." && pwd)/mortiflix-oss-filmcraft}"
+SRC="${MFX_SERVICE_SRC:-$(cd "$ROOT/.." && pwd)/mortiflix-oss}"
 REF="${MFX_SERVICE_REF:-mfx-service/integration}"
 [ -f "$SRC/bin/mortiflix-service.mjs" ] || { echo "error: no Mortiflix service at $SRC (set MFX_SERVICE_SRC)" >&2; exit 1; }
 CACHE="${MFX_CACHE:-$CARGO_TARGET_DIR/mortiflix-downloads}"
@@ -240,7 +240,7 @@ cat >"$OUT/BUNDLE.json" <<EOF
 }
 EOF
 cat >"$OUT/LICENSES/README.txt" <<'EOF'
-The Mortiflix bundle is a separate program that Mortiflix FilmCraft starts as a child process.
+The Mortiflix bundle is a separate program that Mortiflix Studio starts as a child process.
 Each part keeps its own licence:
   service/    the Mortiflix service: AGPL-3.0-only (mortiflix-service-AGPL-3.0.txt); its source is the
               service/ folder itself
