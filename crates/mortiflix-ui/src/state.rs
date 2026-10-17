@@ -144,6 +144,8 @@ pub struct MfxState {
     pub look: crate::look::LookState,
     /// Put the keyboard in the chat's message box (Ask for changes on a look).
     pub focus_chat: bool,
+    /// What the AI is working on now (`work.active`): the pieces every part animates.
+    pub work: crate::work::Work,
 }
 
 impl Default for MfxState {
@@ -171,6 +173,7 @@ impl Default for MfxState {
             script: Default::default(),
             look: Default::default(),
             focus_chat: false,
+            work: crate::work::Work::default(),
         }
     }
 }
@@ -258,6 +261,7 @@ impl MfxState {
                     self.push_chat(m);
                 }
             }
+            "work.active" => self.work = crate::work::Work::from_json(data),
             _ => {}
         }
     }

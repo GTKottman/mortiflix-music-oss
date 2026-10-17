@@ -25,6 +25,7 @@ pub mod setup;
 pub mod stagebar;
 pub mod state;
 pub mod voice_music;
+pub mod work;
 
 use egui::Color32;
 use serde_json::Value;

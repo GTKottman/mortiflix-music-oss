@@ -98,7 +98,13 @@ pub fn show(ui: &mut egui::Ui, rect: Rect, ctx: &mut MfxCtx) {
         }
         let st = ctx.state.status(i);
         let status_y = tab.min.y + 30.0;
-        status_icon(&tp, pos2(tab.min.x + 21.0, status_y), &st, &t);
+        // the stage the AI works in now: a turning spinner (never colour alone: its words beside it)
+        if ctx.state.work.stage() == Some(i) {
+            crate::work::spinner(&tp, pos2(tab.min.x + 21.0, status_y), 4.0, t.accent_hover, ui.input(|inp| inp.time));
+            ui.ctx().request_repaint_after(crate::work::FRAME);
+        } else {
+            status_icon(&tp, pos2(tab.min.x + 21.0, status_y), &st, &t);
+        }
         tp.text(pos2(tab.min.x + 30.0, status_y), Align2::LEFT_CENTER, st.line(), FontId::proportional(11.0), if here { t.text_dim } else { t.text_faint });
         if resp.clicked() {
             ctx.command(&format!("stages.{key}"), json!({}));

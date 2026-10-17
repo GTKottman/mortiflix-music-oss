@@ -410,7 +410,9 @@ fn caption(ui: &mut egui::Ui, ctx: &mut MfxCtx, r: Rect) {
     if shot.version > 0 {
         head.push_str(&format!(" · v{}", shot.version));
     }
-    if shot.making {
+    if let Some(w) = ctx.state.work.label(&shot.id) {
+        head.push_str(&format!(" · {w} the AI is on it"));
+    } else if shot.making {
         head.push_str(&format!(" · v{} making · swaps in when done", shot.versions.saturating_add(1)));
     }
     let kind = shot.media.kind_text();
@@ -453,6 +455,7 @@ fn t_of(area: Rect, total: f64, x: f32) -> f64 {
 
 fn bar(ui: &mut egui::Ui, ctx: &mut MfxCtx, r: Rect) {
     let t = ctx.theme;
+    let now = ui.input(|i| i.time);
     if r.height() < BAR_H - 1.0 {
         return;
     }
@@ -519,9 +522,15 @@ fn bar(ui: &mut egui::Ui, ctx: &mut MfxCtx, r: Rect) {
         if selected.as_deref() == Some(s.id.as_str()) {
             p.rect_stroke(sr.shrink(if under.as_deref() == Some(s.id.as_str()) { 2.0 } else { 0.0 }), 2.0, Stroke::new(1.0, t.text), StrokeKind::Inside);
         }
-        if s.making {
+        // the AI is making or remaking this shot: the working sign on its block
+        if let Some(w) = ctx.state.work.label(&s.id) {
+            crate::work::badge(&p, sr, &w, t.accent_hover, 11.0, now);
+        } else if s.making {
             p.circle_filled(pos2(sr.max.x - 6.0, sr.min.y + 6.0), 3.0, t.ok);
         }
+    }
+    if ctx.state.work.animating() {
+        ui.ctx().request_repaint_after(crate::work::FRAME);
     }
     // voice and music: only what exists; dotted = stand-in
     for (row, sounds) in [(voice_r, pv.plan.voice.iter().collect::<Vec<_>>()), (music_r, pv.plan.music.iter().collect())] {

@@ -175,6 +175,14 @@ pub fn show(parent: &mut egui::Ui, area: &mut NodeArea, t: &MfxTheme, rect: Rect
     let was_following = area.follow_playhead;
     let stills = Stills::of(&ctx);
     stills.poll(&ctx);
+    // the AI's working signs move: keep drawing while it works
+    let time = ctx.input(|i| i.time);
+    if area.work.animating() {
+        ctx.request_repaint_after(crate::work::FRAME);
+    }
+    // the cut the AI makes next while it builds the transition board (the first with no transition yet)
+    let board_next: Option<String> =
+        if area.work.making_kind("transition") { area.graph.cuts.iter().find(|c| c.transition.is_none()).map(|c| c.id.clone()) } else { None };
 
     // ---- framing asked by a command or a key
     if let Some(f) = area.want_frame.take() {
@@ -399,14 +407,28 @@ pub fn show(parent: &mut egui::Ui, area: &mut NodeArea, t: &MfxTheme, rect: Rect
         }
         let r = area.rect_to_screen(wr);
         let sel = selected.contains(&cut.id);
-        let (kind, sec, pick) = area.cut_label(cut);
+        let (mut kind, sec, mut pick) = area.cut_label(cut);
+        // while the AI builds the board, a cut it hasn't reached is its plan, never "Pick one"
+        let working = cut
+            .transition
+            .as_deref()
+            .and_then(|t| area.work.label(t))
+            .or_else(|| (board_next.as_deref() == Some(cut.id.as_str())).then(|| "Making…".to_string()));
+        let planned = working.is_none() && cut.transition.is_none() && area.work.making_kind("transition");
+        if let Some(w) = &working {
+            kind.clone_from(w);
+            pick = false;
+        } else if planned {
+            kind = "Planned".into();
+            pick = false;
+        }
         let dim = !area.find.trim().is_empty() && !found.contains(&cut.id) || area.highlight != super::area::Highlight::All;
         let fill = fade(if pick { t.error.gamma_multiply(0.18) } else { t.header_bg }, dim);
         let radius = CornerRadius::same(u8::try_from(((r.height() / 2.0) as i32).clamp(2, 40)).unwrap_or(8));
         p.rect_filled(r, radius, fill);
-        if pick {
+        if pick || planned {
             let pts = vec![r.left_top(), r.right_top(), r.right_bottom(), r.left_bottom(), r.left_top()];
-            p.extend(Shape::dashed_line(&pts, Stroke::new(1.2, fade(t.error, dim)), 5.0, 3.0));
+            p.extend(Shape::dashed_line(&pts, Stroke::new(1.2, fade(if pick { t.error } else { t.text_faint }, dim)), 5.0, 3.0));
         } else {
             p.rect_stroke(r, radius, Stroke::new(1.0, fade(t.separator.gamma_multiply(2.0), dim)), StrokeKind::Inside);
         }
@@ -414,13 +436,30 @@ pub fn show(parent: &mut egui::Ui, area: &mut NodeArea, t: &MfxTheme, rect: Rect
             p.rect_stroke(r.expand(2.0), radius, Stroke::new(2.0, SELECTED), StrokeKind::Outside);
         }
         let text = match sec {
-            Some(s) if !pick && kind != "Cut" => format!("{kind} {s:.1} s"),
+            Some(s) if !pick && !planned && working.is_none() && kind != "Cut" => format!("{kind} {s:.1} s"),
             _ => kind.clone(),
         };
-        // far out the pill is too small for words: its kind shows on hover and in the inspector
-        if r.width() >= 44.0 && r.height() >= 13.0 {
+        if let Some(w) = &working {
+            crate::work::badge(&p, r, w, t.accent_hover, text_size(z, 11.0), time);
+        } else if r.width() >= 44.0 && r.height() >= 13.0 {
+            // far out the pill is too small for words: its kind shows on hover and in the inspector
             let size = text_size(z, 11.5);
-            let g = line(&p, &text, size, fade(if pick { t.error } else { t.text_dim }, dim), r.width() - 8.0);
+            let g = line(
+                &p,
+                &text,
+                size,
+                fade(
+                    if pick {
+                        t.error
+                    } else if planned {
+                        t.text_faint
+                    } else {
+                        t.text_dim
+                    },
+                    dim,
+                ),
+                r.width() - 8.0,
+            );
             p.galley(r.center() - g.size() / 2.0, g, t.text);
         }
         let resp = ui.interact(r, egui::Id::new(("mfx-cut", &cut.id)), Sense::click_and_drag());
@@ -471,7 +510,14 @@ pub fn show(parent: &mut egui::Ui, area: &mut NodeArea, t: &MfxTheme, rect: Rect
             Kind::Cue => cue_node(&p, area, &n, r, dim, sel, t),
             _ => input_node(&p, area, &n, r, lod, dim, sel, &stills, t),
         }
-        let label = format!("{} {}", n.display_name(), n.state.word());
+        // the AI is making or remaking it: the working sign over it (shots draw theirs on the picture)
+        let working = area.work.label(&id);
+        if n.kind != Kind::Shot
+            && let Some(w) = &working
+        {
+            crate::work::badge(&p, r, w, t.accent_hover, text_size(z, 11.5), time);
+        }
+        let label = format!("{} {}", n.display_name(), working.unwrap_or_else(|| n.state.word().to_string()));
         out.auto(format!("mfx.nodes.node.{id}"), &resp, &label);
         node_input(area, &n, &resp, &mut drag, press_world, mods, out);
         if n.kind == Kind::Shot {
@@ -778,6 +824,8 @@ fn shot_node(
     drag: &mut Drag,
 ) {
     let z = area.zoom;
+    let time = ui.input(|i| i.time);
+    let working = area.work.label(&n.id);
     let colour = area.graph.colour_of(n);
     let fill = colour.map_or(t.hover, |c| c.fill);
     let chip = colour.map_or(t.text_dim, |c| c.chip);
@@ -813,9 +861,14 @@ fn shot_node(
     let name_w = name.size().x;
     p.galley(pos2(name_x, head.center().y - name.size().y / 2.0), name, Color32::WHITE);
     if lod == Lod::Far {
-        // far: `#4` + state on one line
-        let g = line(p, n.state.glyph(), size, fade(state_colour(n.state, t), dim), 20.0);
-        p.galley(pos2(name_x + name_w + 6.0, head.center().y - g.size().y / 2.0), g, t.text);
+        // far: `#4` + state on one line (a spinner while the AI works on it)
+        if working.is_some() {
+            crate::work::spinner(p, pos2(name_x + name_w + 6.0 + size * 0.45, head.center().y), size * 0.45, t.accent_hover, time);
+            crate::work::sweep(p, r, t.accent_hover, time);
+        } else {
+            let g = line(p, n.state.glyph(), size, fade(state_colour(n.state, t), dim), 20.0);
+            p.galley(pos2(name_x + name_w + 6.0, head.center().y - g.size().y / 2.0), g, t.text);
+        }
     } else if let Some((s, len)) = start {
         let when = format!("{} · {len:.1} s", clock(s));
         let g = line(p, &when, (size - 1.0).max(11.0), fade(Color32::from_white_alpha(200), dim), (head.max.x - name_x - name_w - 12.0).max(1.0));
@@ -853,6 +906,9 @@ fn shot_node(
             let pts = vec![still.left_top(), still.right_top(), still.right_bottom(), still.left_bottom(), still.left_top()];
             p.extend(Shape::dashed_line(&pts, Stroke::new(1.0, t.text_faint), 5.0, 4.0));
         }
+        if let Some(w) = &working {
+            crate::work::badge(p, still, w, t.accent_hover, text_size(z, 13.0), time);
+        }
         y = still.max.y;
         if lod == Lod::Near {
             let words = Rect::from_min_size(pos2(r.min.x + 6.0, y + 3.0), vec2(r.width() - 12.0, 22.0 * z));
@@ -862,8 +918,11 @@ fn shot_node(
         }
         let st = Rect::from_min_size(pos2(r.min.x + 6.0, y), vec2(r.width() - 12.0, (20.0 * z).max(14.0)));
         let mut word = format!("{} {}", n.state.glyph(), n.state.word());
-        if n.state == NodeState::Remaking {
-            word = format!("» Remaking v{}…", n.versions.len() + 1);
+        if let Some(w) = &working {
+            word = format!("» {w}");
+        } else if n.state.making() {
+            // asked for, but the AI isn't on it right now
+            word = if area.work.running { "· Fix queued: the AI does it next".into() } else { "· Fix waiting: the AI isn't running".into() };
         }
         if let Some(v) = n.version_tag() {
             word = format!("{word}  {v}");

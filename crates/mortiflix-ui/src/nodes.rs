@@ -47,6 +47,10 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
             ctx.state.graph = raw;
         }
     }
+    // what the AI is working on: those nodes are drawn working (spinner, sweep, words)
+    if ctx.state.nodes.work != ctx.state.work {
+        ctx.state.nodes.work = ctx.state.work.clone();
+    }
     // the loose preview's playhead: blue outline, and Follow the playhead keeps that shot in view
     let before = ctx.state.nodes.playhead_shot.clone();
     sync_preview(ctx.state);

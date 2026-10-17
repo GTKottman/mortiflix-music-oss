@@ -275,6 +275,9 @@ pub struct NodeArea {
     /// Nodes being dragged right now and how far (world units); dropped = saved with `node.move`.
     #[serde(skip)]
     pub drag_offset: Option<(Vec<String>, [f32; 2])>,
+    /// What the AI is working on (copied from `state.work` each frame): the pieces drawn working.
+    #[serde(skip)]
+    pub work: crate::work::Work,
 }
 
 /// What to frame next draw.
@@ -335,6 +338,7 @@ impl Default for NodeArea {
             drag_offset: None,
             playhead_shot: None,
             playing: false,
+            work: crate::work::Work::default(),
         }
     }
 }

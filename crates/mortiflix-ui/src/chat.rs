@@ -635,7 +635,13 @@ fn context_bar(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, msgs: &[Msg
     let t = ctx.theme;
     let r = ui.max_rect();
     ui.painter().line_segment([pos2(r.min.x, r.max.y - 0.5), pos2(r.max.x, r.max.y - 0.5)], Stroke::new(1.0, t.separator));
-    let crumbs = model::crumbs(&ctx.state.graph, ctx.state.selected_node.as_deref());
+    let mut crumbs = model::crumbs(&ctx.state.graph, ctx.state.selected_node.as_deref());
+    // the working sign needs room beside the last crumb: the beat's name gives way
+    if crumbs.len() > 2 && crumbs.last().and_then(|c| c.0.as_deref()).is_some_and(|id| ctx.state.work.on(id).is_some()) {
+        if let Some(b) = crumbs.get_mut(1) {
+            b.1 = model::short(&b.1, 12);
+        }
+    }
     let deep = crumbs.len() > 1;
     ui.allocate_ui_with_layout(vec2(r.width(), BAR_H), Layout::left_to_right(Align::Center), |ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
@@ -650,6 +656,13 @@ fn context_bar(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, msgs: &[Msg
                 beat_mark(ui, ctx, info);
             }
             let here = i == last;
+            // the AI is making or remaking it: a spinner and the words beside it
+            if here && let Some(w) = to.as_deref().and_then(|id| ctx.state.work.label(id)) {
+                let (sr, _) = ui.allocate_exact_size(vec2(14.0, 14.0), Sense::hover());
+                crate::work::spinner(ui.painter(), sr.center(), 5.5, t.accent_hover, ui.input(|i| i.time));
+                ui.label(RichText::new(w).size(12.0).color(t.accent_hover));
+                ui.ctx().request_repaint_after(crate::work::FRAME);
+            }
             let text = RichText::new(label).size(13.0).color(if here { t.text } else { LINK });
             let resp = if here { ui.add(egui::Label::new(text.strong()).truncate()) } else { ui.add(egui::Label::new(text.underline()).sense(Sense::click())) };
             if !here && resp.clicked() {

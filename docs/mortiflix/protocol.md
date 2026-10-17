@@ -218,6 +218,18 @@ stage 1 with the first line's field open.
 | `node.insert` | `{after, text}` | `{edit, node}`: a new shot after `after` |
 | `node.find` | `{query}` | matching nodes |
 
+What the AI works on (`work.active`, `src/svc/work.mjs`): only real state. Nothing is animated unless a session runs
+for the project (`running`). Then the owner's open Fixes come first (the runner does edit requests first): each such
+piece is `remaking` (`v` = the version being made) or `making` (not made yet). Otherwise `step` is the step the runner
+works on (the first ready / working / changes step) and its canvas pieces not made yet are `making` (a step sent back
+with notes: its pieces not OK'd are `remaking`). `current` = the piece the newest activity line names, else the first
+in film order. `doing` = the same in plain words with progress ("Animating shot 4 of 8", "Making the transitions between
+shots: cut 3 of 7", "Recording the voice: line 2 of 8", "Remaking shot 3 (your Fix)", "· rendering 40%"); the `status`
+line uses it while a session runs. `before_shots` / `shots_eta_min` = the steps still to come before the first shot and
+about how long (minutes per step so far in this project), for stage 3 before any shot exists. The app animates exactly
+`nodes` (node area, the preview's shot bar, the chat's "talking about" item) and the stage bar step `step.stage`
+(spinner + words, never colour alone) and stops when they leave the list.
+
 Board transitions on their cuts (`src/canvas.mjs` `cutEnds`): a transition node's `from`/`to` (the shots either
 side of its cut) come from the board's shot ids (`from_scene`/`to_scene`, or `s03` in `from`/`to`), else the beat it
 lands on (`lands_on: "… in B03"`, `to_beat`: the cut into that beat's first shot), else the style frames either side
@@ -260,6 +272,7 @@ blue." → "The sky is bright blue"), never the first words cut off.
 | `chat.answer` | `{question, value}` | answers an open question |
 | `questions.list` | `{}` | the project's questions |
 | `activity.list` | `{limit?}` | the session's recent activity (Details) |
+| `work.get` | `{}` | the `work.active` data now |
 
 `Context` = `"video"` (the whole video), a piece id (`s01`, `b02`, `sf01`, `b01-2`, `m01`, `music`, `a01`), a cut with no
 transition yet (`cut:s02:s03`: the node area's cut pills; a typed message about it goes to the AI, or is a Fix on the
@@ -320,6 +333,7 @@ URLs, a pretend Chrome install, and the app's model packs swapped for one small 
 | `assets.added` / `assets.failed` | `{project, asset, replaced?}` / `{project, path?, asset?, message}` |
 | `setup.progress` | `{job, kind: download\|install, label, state: running\|done\|failed\|cancelled, line, done?, total?}` |
 | `render.job` | a queue job `{id, label, state: waiting\|running\|done\|failed, project, external?, kind?, progress?, file?, error?, cancelled?}` |
+| `work.active` | `{project, running, step: {key, name, stage, kind, state, version} \| null, nodes: [{id, kind, what: making\|remaking, v, edit?}], current, doing, progress: {done, total, noun} \| null, shots_eta_min, before_shots[]}`: what the AI is working on now (`src/svc/work.mjs`), sent when it changes and on `hello` |
 
 ### Engine changes behind it (Node side)
 
