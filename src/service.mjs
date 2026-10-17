@@ -10,7 +10,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { REPO, studioRoot, ensureStudio, loadConfig, paths, UserError } from './studio.mjs';
-import { createProject, loadProject, listProjects, startProject, readEvents, projectPipeline } from './projects.mjs';
+import { createProject, loadProject, listProjects, startProject, readEvents, projectPipeline, update as updateProject, event as projectEvent } from './projects.mjs';
 import { Runner } from './runner.mjs';
 import { findPipeline } from './pipelines.mjs';
 import { canvasView, nodeAction } from './canvas.mjs';
@@ -458,7 +458,23 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
     'chat.action': (p) => chatRow(needProject(p), { role: 'action', text: String(p?.text || bad('chat.action needs text')).slice(0, 2000), context: p?.context, refs: Array.isArray(p?.refs) ? p.refs.map(String).filter((x) => NODE_ID.test(x)) : [] }),
     'chat.answer': (p) => {
       const id = needProject(p);
-      const r = gates.answerQuestion(root, id, String(p?.question || ''), p?.value ?? null);
+      const qid = String(p?.question || '');
+      if (!loadProject(root, id).questions.some((x) => x.id === qid)) {
+        // A question that went on with its default (the `defaults` card): the owner's answer is kept with the
+        // project, said in the chat (the AI reads the chat) and logged; nothing waits on it.
+        const sub = [...gates.submissions(root, id)].reverse().find((s) => (s.questions || []).some((q) => q?.id === qid));
+        const q = sub?.questions.find((x) => x?.id === qid);
+        if (!q) bad(`no question ${qid}`);
+        const value = String(p?.value ?? '').trim().slice(0, 4000) || q.default;
+        if (value === null || value === undefined) bad('this question needs an answer');
+        updateProject(root, id, (pr) => { pr.mfx = pr.mfx || {}; pr.mfx.answers = { ...(pr.mfx.answers || {}), [qid]: { step: sub.step, text: String(q.text).slice(0, 400), answer: value, at: new Date().toISOString() } }; });
+        projectEvent(root, id, { event: 'ANSWERED', actor: 'you', step: sub.step, details: `${String(q.text).slice(0, 120)} → ${value}` });
+        chatRow(id, { role: 'action', text: `${q.text} → ${value}` });
+        runner?.wake();
+        poke();
+        return { question: qid, answer: value, was_default: true };
+      }
+      const r = gates.answerQuestion(root, id, qid, p?.value ?? null);
       const q = loadProject(root, id).questions.find((x) => x.id === p.question);
       chatRow(id, { role: 'action', text: `${q?.text || p.question} → ${q?.answer ?? p.value}` });
       runner?.wake();

@@ -74,3 +74,26 @@ test('every shot version gets a PNG still (its first frame)', { skip: !hasFfmpeg
     assert.match(v.still, /\.png$/);
   }
 });
+
+test('chat.answer changes a question that went on with its default (the defaults card)', async (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'mfx-answer-'));
+  const out = [];
+  const { createService } = await import('../src/service.mjs');
+  const svc = createService({ root, send: (m) => out.push(m), runner: false, tickMs: 0 });
+  t.after(() => { svc.close(); rmSync(root, { recursive: true, force: true }); });
+  const p = makeHandoffDemo(root);
+  const dir = join(root, 'state', p.id, 'reviews', 'brief', 'v1');
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'submission.json'), JSON.stringify({ step: 'brief', version: 1, submitted_at: new Date().toISOString(),
+    questions: [{ id: 'pace', text: 'Should it feel calm or energetic?', choices: ['Calm', 'Energetic'], default: 'Energetic' }] }));
+  let n = 1;
+  const call = async (type, params = {}) => { const id = n++; await svc.handle({ id, type, params }); return out.find((m) => m.id === id); };
+  const r = await call('chat.answer', { project: p.id, question: 'pace', value: 'Calm' });
+  assert.equal(r.ok, true, JSON.stringify(r.error));
+  assert.equal(r.result.answer, 'Calm');
+  const rows = (await call('chat.history', { project: p.id, limit: 10 })).result;
+  const list = Array.isArray(rows) ? rows : rows.rows || rows.messages || [];
+  assert.ok(list.some((m) => m.role === 'action' && /calm or energetic\? → Calm/.test(m.text)), JSON.stringify(list.slice(-3)));
+  const bad = await call('chat.answer', { project: p.id, question: 'nope', value: 'x' });
+  assert.equal(bad.ok, false);
+});
