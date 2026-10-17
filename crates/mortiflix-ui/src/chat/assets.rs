@@ -323,7 +323,7 @@ pub fn show_assets(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     ui.horizontal(|ui| {
         let add = super::small_button(ui, ctx, "mfx.assets.add", "Add files…", false);
         if add.clicked() {
-            ctx.command("mortiflix.pickFiles", json!({"purpose": "assets.add", "multiple": true}));
+            ctx.command("mortiflix.chooseFiles", json!({"purpose": "assets.add", "multiple": true}));
         }
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             let label = |f: Filter| match f {
@@ -475,7 +475,7 @@ fn detail(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut AssetsUi, graph: &Value,
         });
         ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
             if super::small_button(ui, ctx, "mfx.assets.replace", "Replace…", false).clicked() {
-                ctx.command("mortiflix.pickFiles", json!({"purpose": format!("assets.replace:{}", a.id), "multiple": false}));
+                ctx.command("mortiflix.chooseFiles", json!({"purpose": format!("assets.replace:{}", a.id), "multiple": false}));
             }
         });
     });

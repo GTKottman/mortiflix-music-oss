@@ -18,8 +18,12 @@ Design Docs › Mortiflix FilmCraft). The binary is still `filmcraft`; the windo
   `stages.editVideo`, `stages.set {stage}`. Ctrl+Alt+Left/Right were taken (Slip, Font Size).
   Also `mortiflix.state`, `mortiflix.newProject`, `mortiflix.setup`, `mortiflix.request {type, params}`,
   `mortiflix.reply {id}`, `mortiflix.renderVideo`, `mortiflix.showNeedsYou` (stubs where a part owns it).
-  `mortiflix.pickFiles {key, exts?, folder?, paths?}`: an OS file/folder dialog for a part; the paths land in
-  `state.picked` under `key` (`ctx.state.take_picked(key)`); with `paths` no dialog opens (agents, tests).
+  File dialogs are one pair: `mortiflix.chooseFiles {purpose, exts?, folder?, multiple?, paths?}` (an OS
+  file/folder dialog; the paths wait in `state.files_in` under `purpose`, taken with
+  `ctx.state.take_files(purpose)` / `take_paths(purpose)`; with `paths` no dialog opens: agents, tests) and
+  `mortiflix.chooseFileAndSend {request: {type, params}, field, filter?, exts?}` (one file, then that service
+  request with the path in `params[field]`). Files dropped on stages 1-4 (or on the New project window) wait
+  under purpose `drop`.
 - **Service:** the app runs `node <mortiflix-oss>/bin/mortiflix-service.mjs` (JSON lines, no port), see
   [protocol.md](protocol.md). Path: `MFX_SERVICE` (file or the mortiflix-oss folder) or `servicePath` in
   `<data dir>/mortiflix.json`.

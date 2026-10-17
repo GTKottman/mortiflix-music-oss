@@ -42,7 +42,7 @@ Docs 37 (Talking with the AI) and 32b (Assets tab). Code: `crates/mortiflix-ui/s
   `mortiflix.preview.play {scope: all | shot | beat, node?}`; a music theme sample opens its file in the system
   player (`mortiflix.reveal {open: true}`).
 - `MfxState::files_in` + `push_files` / `take_files(purpose)`: files from the OS dialog or a desktop drop.
-  `mortiflix.pickFiles {purpose, multiple}` opens the dialog (`paths` skips it, for agents and tests). On stages 1-4
+  `mortiflix.chooseFiles {purpose, multiple}` opens the dialog (`paths` skips it, for agents and tests). On stages 1-4
   (or with New project open) files dropped on the window arrive with purpose `drop` instead of going to FilmCraft's
   bin: **part 01** takes `drop` while its window is open; otherwise the chat (node context: attach; whole video:
   Assets) or the Assets tab takes them.

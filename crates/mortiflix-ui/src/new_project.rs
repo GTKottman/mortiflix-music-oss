@@ -35,7 +35,7 @@ const ROW_H: f32 = 44.0;
 /// How long the "Saved your preset" note stays (doc 31: 4 s).
 const TOAST_SECS: f64 = 4.0;
 
-/// The purposes this window asks `mortiflix.pickFiles` for.
+/// The purposes this window asks `mortiflix.chooseFiles` for.
 pub const PICK_ASSETS: &str = "newProject.assets";
 pub const PICK_REFERENCE: &str = "newProject.reference";
 pub const PICK_CREATOR_REFERENCE: &str = "newProject.creator.reference";
@@ -346,7 +346,7 @@ pub(crate) fn drops(ui: &egui::Ui, ctx: &mut MfxCtx) -> (Vec<String>, usize) {
 
 /// Ask the host for an OS file dialog; the paths come back in `state.files_in` under `purpose`.
 pub(crate) fn pick(ctx: &mut MfxCtx, purpose: &str, exts: &[&str], folder: bool) {
-    ctx.command("mortiflix.pickFiles", json!({"purpose": purpose, "exts": exts, "folder": folder}));
+    ctx.command("mortiflix.chooseFiles", json!({"purpose": purpose, "exts": exts, "folder": folder}));
 }
 
 /// A kind glyph in a fixed 16:9 frame (doc 32a: nothing is drawn over a thumbnail).

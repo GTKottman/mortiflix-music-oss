@@ -1208,7 +1208,7 @@ fn composer(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, info: Option<&
         let plus =
             ui.add(egui::Button::new(RichText::new("+").size(16.0)).min_size(vec2(30.0, 30.0)).fill(t.hover).corner_radius(4.0)).on_hover_text("Attach files");
         if plus.clicked() {
-            ctx.command("mortiflix.pickFiles", json!({"purpose": "chat.attach", "multiple": true}));
+            ctx.command("mortiflix.chooseFiles", json!({"purpose": "chat.attach", "multiple": true}));
         }
         ctx.auto("mfx.chat.attach", &plus, "Attach files");
         let has_text = !st.draft.trim().is_empty() || !st.attachments.is_empty();

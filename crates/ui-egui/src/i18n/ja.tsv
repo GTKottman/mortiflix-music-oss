@@ -3626,7 +3626,6 @@
 	Get the video	動画を書き出す
 	Go to Stage	ステージへ移動
 	Mortiflix	Mortiflix
-	Mortiflix Pick Files	Mortiflix 用のファイルを選択
 	Mortiflix Service Reply	Mortiflix サービスの応答
 	Mortiflix Service Request	Mortiflix サービスへの要求
 	Mortiflix Setup	Mortiflix のセットアップ
@@ -3635,6 +3634,7 @@
 	Render the Video	動画をレンダリング
 	Show What Needs You	確認が必要な項目を表示
 	Choose Files for Mortiflix	Mortiflix 用のファイルを選択
+	Choose a File and Send It to Mortiflix	ファイルを選んで Mortiflix に送る
 	Show in Folder	フォルダーに表示
 # Mortiflix FilmCraft: node area commands (part 03)
 	Previous Node	前のノード

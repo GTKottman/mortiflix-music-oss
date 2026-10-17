@@ -3627,7 +3627,6 @@
 	Get the video	Obtener el vídeo
 	Go to Stage	Ir a la etapa
 	Mortiflix	Mortiflix
-	Mortiflix Pick Files	Elegir archivos para Mortiflix
 	Mortiflix Service Reply	Respuesta del servicio de Mortiflix
 	Mortiflix Service Request	Solicitud al servicio de Mortiflix
 	Mortiflix Setup	Configuración de Mortiflix
@@ -3636,6 +3635,7 @@
 	Render the Video	Renderizar el vídeo
 	Show What Needs You	Mostrar lo que te necesita
 	Choose Files for Mortiflix	Elegir archivos para Mortiflix
+	Choose a File and Send It to Mortiflix	Elegir un archivo y enviarlo a Mortiflix
 	Show in Folder	Mostrar en la carpeta
 # Mortiflix FilmCraft: node area commands (part 03)
 	Previous Node	Nodo anterior

@@ -79,7 +79,7 @@ pub struct ChatMessage {
     pub extra: serde_json::Map<String, Value>,
 }
 
-/// Files the person chose in an OS dialog (`mortiflix.pickFiles`) or dropped on the window during
+/// Files the person chose in an OS dialog (`mortiflix.chooseFiles`) or dropped on the window during
 /// stages 1-4 (`purpose: "drop"`): the part that asked takes them by its purpose.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
