@@ -53,6 +53,7 @@ pub const COMMANDS: &[UiCommand] = &[
     cmd("mortiflix.reply", "Mortiflix Service Reply", &[], None),
     cmd("mortiflix.renderVideo", "Render the Video", &[], None),
     cmd("mortiflix.showNeedsYou", "Show What Needs You", &[], None),
+    cmd("mortiflix.pickFiles", "Mortiflix Pick Files", &[], None),
 ];
 
 /// The Mortiflix panels.
@@ -149,7 +150,17 @@ pub fn dialogs(app: &mut FilmcraftApp, ctx: &egui::Context) {
         let mut still_open = true;
         let mut cmds = Vec::new();
         let mut autos = Vec::new();
-        egui::Window::new(title).id(egui::Id::new(id)).open(&mut still_open).collapsible(false).default_size([840.0, 560.0]).show(ctx, |ui| {
+        // New project: the title is a breadcrumb of its page and it sizes to the page (doc 31)
+        let title = if which == 0 { mfx::new_project::window_title(ctx) } else { title.to_string() };
+        let mut window = egui::Window::new(title).id(egui::Id::new(id)).open(&mut still_open).collapsible(false).default_size([840.0, 560.0]);
+        if which == 0 {
+            window = window
+                .id(egui::Id::new((id, mfx::new_project::window_key(ctx))))
+                .resizable(false)
+                .pivot(egui::Align2::CENTER_TOP)
+                .default_pos(ctx.content_rect().center_top() + egui::vec2(0.0, 90.0));
+        }
+        window.show(ctx, |ui| {
             ui.set_min_size(egui::vec2(480.0, 320.0));
             let mut c = app.mfx.core.ctx(theme);
             if which == 0 {
@@ -225,9 +236,39 @@ pub fn route(app: &mut FilmcraftApp, id: &str, params: &Value) -> Option<Result<
             Ok(Value::Null)
         }
         "mortiflix.showNeedsYou" => Ok(Value::Null),
+        "mortiflix.pickFiles" => return Some(pick_files(app, params)),
         _ => return None,
     };
     Some(r)
+}
+
+/// `mortiflix.pickFiles {key, exts?, folder?, paths?}`: an OS file (or folder) dialog for a
+/// Mortiflix part; the chosen paths land in `state.picked` under `key` for the part to take. With
+/// `paths` (agents, tests) no dialog opens and those paths are delivered as if chosen.
+fn pick_files(app: &mut FilmcraftApp, params: &Value) -> Result<Value, String> {
+    let key = params.get("key").and_then(Value::as_str).filter(|k| !k.is_empty() && k.len() <= 100).ok_or("mortiflix.pickFiles needs a `key`")?.to_string();
+    if let Some(paths) = params.get("paths").and_then(Value::as_array) {
+        let paths: Vec<String> = paths.iter().filter_map(Value::as_str).filter(|p| !p.is_empty() && p.len() <= 4096).take(1000).map(str::to_string).collect();
+        let n = paths.len();
+        app.mfx.core.state.push_picked(&key, paths);
+        return Ok(json!({"picked": n}));
+    }
+    let dialog = if params.get("folder").and_then(Value::as_bool).unwrap_or(false) {
+        crate::native_dialogs::FileDialog::Folder { at: None }
+    } else {
+        let exts: Vec<String> = params
+            .get("exts")
+            .and_then(Value::as_array)
+            .map(|a| a.iter().filter_map(Value::as_str).filter(|e| e.len() <= 10).take(64).map(str::to_string).collect())
+            .unwrap_or_default();
+        crate::native_dialogs::FileDialog::OpenFiles { exts }
+    };
+    app.pick_ui(dialog, move |app, paths| {
+        if !paths.is_empty() {
+            app.mfx.core.state.push_picked(&key, paths);
+        }
+    });
+    Ok(json!({"dialog": "open"}))
 }
 
 fn stage_command(app: &mut FilmcraftApp, what: &str, params: &Value) -> Result<Value, String> {
@@ -279,6 +320,22 @@ pub fn apply_stage(app: &mut FilmcraftApp, stage: u8) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pick_files_delivers_paths_to_the_part_and_refuses_bad_params() {
+        let mut app = FilmcraftApp::new(filmcraft_engine::Session::default());
+        let ctx = egui::Context::default();
+        let r = crate::menus::invoke(&mut app, &ctx, "mortiflix.pickFiles", json!({"key": "newProject.assets", "paths": ["/a.png", 5, ""]})).unwrap();
+        assert_eq!(r["picked"], 1);
+        assert_eq!(app.mfx.core.state.take_picked("newProject.assets"), vec!["/a.png".to_string()]);
+        assert!(app.mfx.core.state.take_picked("newProject.assets").is_empty());
+        assert!(crate::menus::invoke(&mut app, &ctx, "mortiflix.pickFiles", json!({})).is_err());
+        assert!(crate::menus::invoke(&mut app, &ctx, "mortiflix.pickFiles", json!({"key": 7})).is_err());
+        assert!(crate::menus::invoke(&mut app, &ctx, "mortiflix.pickFiles", json!({"key": "x".repeat(101)})).is_err());
+        // no host dialog here: nothing is picked, nothing breaks
+        assert!(crate::menus::invoke(&mut app, &ctx, "mortiflix.pickFiles", json!({"key": "k", "exts": [1, "png"], "folder": "yes"})).is_ok());
+        assert!(app.mfx.core.state.take_picked("k").is_empty());
+    }
 
     #[test]
     fn stage_commands_switch_layout_and_mode() {

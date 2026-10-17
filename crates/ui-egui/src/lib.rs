@@ -1384,6 +1384,11 @@ impl FilmcraftApp {
     /// Import dropped files. With Timeline ▸ drop imports to the timeline, the new items are also
     /// queued to be placed at the pointer (see `timeline::interact`).
     fn handle_drops(&mut self, ctx: &egui::Context) {
+        // Mortiflix's New project window takes the files dropped while it is open (doc 32a)
+        if self.mfx.core.state.show_new_project {
+            self.file_drag_hover = None;
+            return;
+        }
         // While files hover, the OS sends no cursor events: poll the cursor each frame to draw the Timeline preview.
         let hovering = ctx.input(|i| i.raw.hovered_files.len());
         self.file_drag_hover = if hovering > 0 && self.session.prefs.timeline.drop_import_to_timeline {
