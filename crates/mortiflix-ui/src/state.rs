@@ -111,6 +111,8 @@ pub struct MfxState {
     pub show_setup: bool,
     /// Next asked first: something still needs you.
     pub confirm_next: Option<NextConfirm>,
+    /// Into FilmCraft (doc 38): the hand-off and the stage-5 Mortiflix panel.
+    pub handoff: crate::into_filmcraft::Handoff,
 }
 
 impl Default for MfxState {
@@ -130,6 +132,7 @@ impl Default for MfxState {
             show_new_project: false,
             show_setup: false,
             confirm_next: None,
+            handoff: Default::default(),
         }
     }
 }

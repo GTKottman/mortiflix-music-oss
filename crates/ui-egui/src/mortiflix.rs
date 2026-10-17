@@ -53,6 +53,11 @@ pub const COMMANDS: &[UiCommand] = &[
     cmd("mortiflix.reply", "Mortiflix Service Reply", &[], None),
     cmd("mortiflix.renderVideo", "Render the Video", &[], None),
     cmd("mortiflix.showNeedsYou", "Show What Needs You", &[], None),
+    // Into FilmCraft (doc 38): crate::mortiflix_into
+    cmd("mortiflix.importEdit", "Bring the Video into FilmCraft", &[], None),
+    cmd("mortiflix.restartEdit", "Start the Edit Again from Mortiflix…", &["File"], None),
+    cmd("mortiflix.useVersion", "Use This Version", &[], None),
+    cmd("mortiflix.timelineEdit", "Mortiflix Timeline Edit", &[], None),
 ];
 
 /// The Mortiflix panels.
@@ -93,6 +98,7 @@ pub fn hides_mode_tabs(app: &FilmcraftApp) -> bool {
 pub fn frame_begin(app: &mut FilmcraftApp, ctx: &egui::Context) {
     app.mfx.core.service.set_waker(ctx);
     app.mfx.core.poll();
+    crate::mortiflix_into::frame(app, ctx);
     let s = &app.mfx.core.state;
     if !s.active {
         return;
@@ -196,6 +202,9 @@ pub fn route(app: &mut FilmcraftApp, id: &str, params: &Value) -> Option<Result<
     if let Some(what) = id.strip_prefix("stages.") {
         return Some(stage_command(app, what, params));
     }
+    if let Some(r) = crate::mortiflix_into::route(app, id, params) {
+        return Some(r);
+    }
     let core = &mut app.mfx.core;
     let r = match id {
         "mortiflix.state" => Ok(json!({"state": core.state, "service": core.service.status(), "workspace": app.ui.workspace})),
@@ -274,6 +283,7 @@ pub fn apply_stage(app: &mut FilmcraftApp, stage: u8) {
         }
     }
     app.ui.mode = if stage >= mfx::STAGE_RENDER { Mode::Export } else { Mode::Edit };
+    crate::mortiflix_into::on_stage(app, stage);
 }
 
 #[cfg(test)]
