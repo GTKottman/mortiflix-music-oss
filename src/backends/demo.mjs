@@ -192,7 +192,10 @@ export async function run({ root, projectId, workdir, env, onActivity, signal, c
       const scene = sc.scenes.find((x) => x.key === e.node);
       if (!scene) return `Demo: ${e.node} isn't in out/scenes.json.`;
       const file = `edits/${e.id}/${e.node}.mp4`;
-      const job = await mfx('render', { label: `${e.label} (${e.id})`, argv: ['ffmpeg', '-y', '-loglevel', 'error', '-f', 'lavfi', '-i', `smptebars=size=1280x720:rate=${FPS}:duration=${scene.frames / FPS}`, '-pix_fmt', 'yuv420p', '-c:v', 'libx264', '-bf', '0', join(workdir, file)], cwd: workdir });
+      const job = await mfx('render', { label: `${e.label} (${e.id})`, argv: ['ffmpeg', '-y', '-loglevel', 'error', '-f', 'lavfi', '-i', `smptebars=size=1280x720:rate=${FPS}:duration=${scene.frames / FPS}`, '-pix_fmt', 'yuv420p', '-c:v', 'libx264', '-bf', '0',
+        // each remake is its own file: the canvas dedupes versions by content, so a second Fix of the same shot that came
+        // out byte for byte like the first was "no new version yet" (still v2)
+        '-metadata', `comment=${e.id}`, join(workdir, file)], cwd: workdir });
       let r = job;
       while (!['done', 'failed'].includes(r.state)) r = await mfx('render-wait', { id: job.id, seconds: 30 });
       if (r.state === 'failed') return `Demo: the render failed: ${r.output_tail}`;

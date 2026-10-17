@@ -120,6 +120,14 @@ test('canvas: OK, Cut it and Fix; a fix starts a session that remakes only that 
   assert.equal(g.nodes.s02.edits[0].state, 'done');
   assert.equal(loadProject(root, p.id).state, 'waiting', 'back to waiting on the music review');
 
+  // A second Fix on the same shot is a new version too (the remake used to come out byte for byte like the first:
+  // "S02 has no new version yet (still v2)")
+  nodeAction(root, p.id, 's02', { action: 'fix', text: 'now a little faster' });
+  await runner.loop();
+  g = canvasView(root, p.id);
+  assert.equal(g.nodes.s02.versions.length, before + 2, 's02 has its second remake');
+  assert.deepEqual(g.nodes.s02.edits.map((e) => e.state), ['done', 'done']);
+
   nodeAction(root, p.id, 's03', { action: 'fix', text: 'please fail this one' });
   await runner.loop();
   g = canvasView(root, p.id);
