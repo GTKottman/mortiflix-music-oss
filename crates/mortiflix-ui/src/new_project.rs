@@ -16,7 +16,7 @@
 
 mod creator;
 mod model;
-mod music;
+pub(crate) mod music;
 
 use egui::{Align, Color32, CornerRadius, FontId, Key, Layout, RichText, Sense, Stroke, StrokeKind, vec2};
 use serde_json::{Value, json};

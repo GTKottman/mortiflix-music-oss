@@ -143,6 +143,7 @@ pub fn show(ui: &mut egui::Ui, rect: Rect, ctx: &mut MfxCtx) {
 
     confirm_popup(ui, ctx);
     crate::script::leave_popup(ui, ctx);
+    crate::look::popups(ui, ctx);
 }
 
 /// A stage-bar button: blue (the one accent) when `primary`, else grey. It always works.

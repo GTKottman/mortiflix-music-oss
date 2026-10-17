@@ -16,3 +16,6 @@ serde_json = { workspace = true }
 log = { workspace = true }
 # node stills (pure Rust; the same version and formats filmcraft-media already builds)
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+# style frames drawn as SVG (the Look stage, the chat's looks card): pure Rust, MIT OR Apache-2.0; text with the
+# system's fonts, no raster images inside SVGs, no memory-mapped fonts
+resvg = { version = "0.45", default-features = false, features = ["text", "system-fonts"] }

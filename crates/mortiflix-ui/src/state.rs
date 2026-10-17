@@ -137,6 +137,10 @@ pub struct MfxState {
     pub handoff: crate::into_filmcraft::Handoff,
     /// The script, line by line, and the owner's unsaved draft (Script panel + chat card).
     pub script: crate::script::ScriptState,
+    /// Stage 2 Look: the looks, the one in use, the music theme (Look panel + chat's looks card).
+    pub look: crate::look::LookState,
+    /// Put the keyboard in the chat's message box (Ask for changes on a look).
+    pub focus_chat: bool,
 }
 
 impl Default for MfxState {
@@ -162,6 +166,8 @@ impl Default for MfxState {
             preview: Default::default(),
             handoff: Default::default(),
             script: Default::default(),
+            look: Default::default(),
+            focus_chat: false,
         }
     }
 }

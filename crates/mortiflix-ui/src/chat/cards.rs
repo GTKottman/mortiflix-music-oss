@@ -224,7 +224,7 @@ fn still_of(graph: &Value, node: &str, v: Option<u64>) -> Option<String> {
     let ver = vs.iter().find(|x| x.get("v").and_then(Value::as_u64) == want).or_else(|| vs.last())?;
     let picture = |p: &&str| {
         let ext = std::path::Path::new(p).extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).unwrap_or_default();
-        matches!(ext.as_str(), "png" | "jpg" | "jpeg" | "webp")
+        matches!(ext.as_str(), "png" | "jpg" | "jpeg" | "webp" | "svg")
     };
     ver.get("still").and_then(Value::as_str).filter(|x| !x.is_empty()).or_else(|| ver.get("path").and_then(Value::as_str).filter(picture)).map(str::to_string)
 }
@@ -233,7 +233,8 @@ fn looks(ui: &mut egui::Ui, ctx: &mut MfxCtx, msg: usize, card: &Value, answered
     let t = ctx.theme;
     let question = text(card, "question");
     let looks = if card.get("frames").is_some() { list(card, "frames") } else { list(card, "looks") };
-    let using = text(card, "using");
+    // the look in use now (the Look stage), else the one the card was sent with
+    let using = ctx.state.look.view.using.clone().filter(|_| question.is_empty()).unwrap_or_else(|| text(card, "using"));
     let picked = answered
         .get(if question.is_empty() { "look" } else { &question })
         .cloned()
@@ -247,23 +248,30 @@ fn looks(ui: &mut egui::Ui, ctx: &mut MfxCtx, msg: usize, card: &Value, answered
             ui.spacing_mut().item_spacing.x = gap;
             for l in row {
                 let id = text(l, "id");
-                let name = Some(text(l, "name")).filter(|n| !n.is_empty()).unwrap_or_else(|| text(l, "label"));
+                // the Look stage's own record of it (its name, its picture now), else the card's
+                let live = ctx.state.look.view.frame(&id).cloned();
+                let name = Some(text(l, "name"))
+                    .filter(|n| !n.is_empty())
+                    .or_else(|| live.as_ref().map(|f| f.name.clone()).filter(|n| !n.is_empty()))
+                    .unwrap_or_else(|| text(l, "label"));
                 let on = picked.as_deref() == Some(id.as_str());
                 ui.vertical(|ui| {
                     ui.set_width(w);
                     let beat_colour = model::node(&ctx.state.graph, &text(l, "beat")).colour.map(|c| c.gamma_multiply(0.5));
                     let fill = l.get("colour").and_then(model::hex_colour).or(beat_colour).unwrap_or(t.hover);
-                    let still = Some(text(l, "still")).filter(|x| !x.is_empty()).or_else(|| still_of(&ctx.state.graph, &id, None));
+                    // the look's own picture: the card's (`still`, else its `path`, SVG too), else the graph's
+                    let still = Some(text(l, "still"))
+                        .filter(|x| !x.is_empty())
+                        .or_else(|| live.as_ref().map(|f| f.path.clone()).filter(|x| !x.is_empty()))
+                        .or_else(|| Some(text(l, "path")).filter(|x| !x.is_empty()))
+                        .or_else(|| still_of(&ctx.state.graph, &id, None));
                     let r = frame(ui, w, fill, on.then_some(t.text), still.as_deref());
                     let r = r.on_hover_text(format!("Use {name}"));
                     if r.clicked() && !on {
                         if question.is_empty() {
-                            // part 08: picking a look is OK on that look's piece
-                            out.action = Some(ActionButton {
-                                label: name.clone(),
-                                act: Act::Request { ty: "node.edit".into(), params: json!({"node": id, "action": "ok"}) },
-                                primary: false,
-                            });
+                            // the Look stage's own pick: asks first when shots would be remade (look.use)
+                            let MfxCtx { state, service, .. } = ctx;
+                            crate::look::pick(state, service, &id);
                         } else {
                             out.answer = Some((question.clone(), id.clone()));
                         }

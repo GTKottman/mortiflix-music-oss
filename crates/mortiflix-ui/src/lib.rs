@@ -154,6 +154,7 @@ impl Mortiflix {
         for msg in self.service.poll() {
             self.state.apply_service_message(&msg);
             self.state.script.on_message(&msg);
+            self.state.look.on_message(&msg);
         }
         // A service that was restarted (it crashed or was stopped) has no project open: open the
         // one the app is on again, so the chat, nodes and preview carry on.
@@ -165,8 +166,10 @@ impl Mortiflix {
                 self.service.request("project.open", serde_json::json!({"id": id}));
             }
             self.state.script.refresh();
+            self.state.look.refresh();
         }
         script::tick(&mut self.state, &mut self.service);
+        look::tick(&mut self.state, &mut self.service);
     }
     /// Go to a stage (0-5). `done`: the stage being left was finished with Next. Tells the service.
     /// Returns the stage it was on, or None when `to` is out of range.

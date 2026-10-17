@@ -136,6 +136,10 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     read_events(ctx, &mut st, now);
     load_history(ctx, &mut st, now);
     sync_context(ctx, &mut st, now);
+    // Ask for changes on a look (stage 2): the chat is about that look, the keyboard in its box
+    if std::mem::take(&mut ctx.state.focus_chat) {
+        st.focus_composer = true;
+    }
     send_queued(ctx, &mut st, now);
 
     let full = ui.max_rect();

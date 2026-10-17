@@ -1,6 +1,11 @@
 //! Stills on the nodes: pictures decoded off the UI thread (pure Rust `image`), shrunk to a small
 //! texture once and kept. Only what is on screen asks for a still; a missing or broken file leaves the
 //! node's empty frame, never an error.
+//!
+//! The same cache draws the style frames of the Look stage and the chat's looks card: SVG frames are
+//! rasterised in pure Rust (`resvg`, text in the system's fonts), and each picture's main colours are
+//! read once (its palette, when the service has none). [`Stills::large`] keeps bigger textures for
+//! frames shown large.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -9,6 +14,12 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 /// Width the stills are shrunk to (a shot node is 216 px wide at 100 %, 324 at 150 %).
 const THUMB_W: u32 = 384;
+/// Width of the large stills (a style frame on the Look stage, up to ~900 px on a big screen).
+const LARGE_W: u32 = 1280;
+/// Largest SVG file read (bytes).
+const MAX_SVG: u64 = 16 * 1024 * 1024;
+/// Most colours read from a picture.
+const MAX_PALETTE: usize = 6;
 /// Largest picture file read (bytes).
 const MAX_FILE: u64 = 64 * 1024 * 1024;
 /// Largest picture decoded (pixels): a hostile header can't ask for a huge allocation.
@@ -20,15 +31,20 @@ const MAX_KEPT: usize = 600;
 
 enum Entry {
     Loading,
-    Ready(egui::TextureHandle),
+    /// The texture and the picture's main colours.
+    Ready(egui::TextureHandle, Vec<egui::Color32>),
     Failed,
 }
 
+type Decoded = Result<(egui::ColorImage, Vec<egui::Color32>), String>;
+
 struct Inner {
     map: HashMap<PathBuf, Entry>,
-    tx: Sender<(PathBuf, Result<egui::ColorImage, String>)>,
-    rx: Receiver<(PathBuf, Result<egui::ColorImage, String>)>,
+    tx: Sender<(PathBuf, Decoded)>,
+    rx: Receiver<(PathBuf, Decoded)>,
     loading: usize,
+    /// Width the pictures are shrunk to.
+    width: u32,
 }
 
 /// The still cache, kept in egui's memory for the node area.
@@ -37,15 +53,33 @@ pub struct Stills(Arc<Mutex<Inner>>);
 
 impl Default for Stills {
     fn default() -> Self {
-        let (tx, rx) = channel();
-        Self(Arc::new(Mutex::new(Inner { map: HashMap::new(), tx, rx, loading: 0 })))
+        Self::with_width(THUMB_W)
     }
 }
 
 impl Stills {
+    fn with_width(width: u32) -> Self {
+        let (tx, rx) = channel();
+        Self(Arc::new(Mutex::new(Inner { map: HashMap::new(), tx, rx, loading: 0, width })))
+    }
+
     /// The cache for this egui context.
     pub fn of(ctx: &egui::Context) -> Stills {
         ctx.data_mut(|d| d.get_temp_mut_or_default::<Stills>(egui::Id::new("mfx-nodes-stills")).clone())
+    }
+
+    /// The cache of large stills (style frames shown large) for this egui context.
+    pub fn large(ctx: &egui::Context) -> Stills {
+        ctx.data_mut(|d| d.get_temp_mut_or(egui::Id::new("mfx-large-stills"), Stills::with_width(LARGE_W)).clone())
+    }
+
+    /// The main colours of a picture already decoded (None while it loads or when it failed).
+    pub fn palette(&self, path: &Path) -> Option<Vec<egui::Color32>> {
+        let g = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+        match g.map.get(path) {
+            Some(Entry::Ready(_, p)) => Some(p.clone()),
+            _ => None,
+        }
     }
 
     /// Take decoded pictures in as textures (call once per frame).
@@ -58,7 +92,10 @@ impl Stills {
         for (path, r) in arrived {
             g.loading = g.loading.saturating_sub(1);
             let e = match r {
-                Ok(img) => Entry::Ready(ctx.load_texture(format!("mfx-still:{}", path.display()), img, egui::TextureOptions::LINEAR)),
+                Ok((img, palette)) => {
+                    let name = format!("mfx-still:{}:{}", g.width, path.display());
+                    Entry::Ready(ctx.load_texture(name, img, egui::TextureOptions::LINEAR), palette)
+                }
                 Err(e) => {
                     log::debug!("node still {}: {e}", path.display());
                     Entry::Failed
@@ -72,7 +109,7 @@ impl Stills {
     pub fn get(&self, path: &Path) -> Option<egui::TextureHandle> {
         let mut g = self.0.lock().unwrap_or_else(PoisonError::into_inner);
         match g.map.get(path) {
-            Some(Entry::Ready(t)) => return Some(t.clone()),
+            Some(Entry::Ready(t, _)) => return Some(t.clone()),
             Some(Entry::Loading | Entry::Failed) => return None,
             None => {}
         }
@@ -86,8 +123,9 @@ impl Stills {
         g.loading += 1;
         let tx = g.tx.clone();
         let p = path.to_path_buf();
+        let width = g.width;
         let spawned = std::thread::Builder::new().name("mfx-node-still".into()).spawn(move || {
-            let r = std::panic::catch_unwind(|| decode(&p)).unwrap_or_else(|_| Err("the decoder failed".into()));
+            let r = std::panic::catch_unwind(|| decode_at(&p, width)).unwrap_or_else(|_| Err("the decoder failed".into()));
             let _ = tx.send((p, r));
         });
         if spawned.is_err() {
@@ -98,12 +136,31 @@ impl Stills {
     }
 }
 
-/// Read and shrink one picture.
+/// Read and shrink one picture (a node's still).
 pub fn decode(path: &Path) -> Result<egui::ColorImage, String> {
+    decode_at(path, THUMB_W).map(|(img, _)| img)
+}
+
+/// Read one picture (PNG, JPEG, WebP or SVG) shrunk to `width`, and its main colours.
+pub fn decode_at(path: &Path, width: u32) -> Decoded {
     let meta = std::fs::metadata(path).map_err(|e| e.to_string())?;
     if !meta.is_file() || meta.len() > MAX_FILE {
         return Err("not a picture file, or too big".into());
     }
+    let ext = path.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).unwrap_or_default();
+    let img = if matches!(ext.as_str(), "svg" | "svgz") {
+        if meta.len() > MAX_SVG {
+            return Err("the SVG is too big".into());
+        }
+        svg(path, width)?
+    } else {
+        raster(path, width)?
+    };
+    let palette = palette_of(&img);
+    Ok((img, palette))
+}
+
+fn raster(path: &Path, width: u32) -> Result<egui::ColorImage, String> {
     let reader = image::ImageReader::open(path).map_err(|e| e.to_string())?.with_guessed_format().map_err(|e| e.to_string())?;
     let (w, h) = reader.into_dimensions().map_err(|e| e.to_string())?;
     if w == 0 || h == 0 || u64::from(w) * u64::from(h) > MAX_PIXELS {
@@ -111,12 +168,96 @@ pub fn decode(path: &Path) -> Result<egui::ColorImage, String> {
     }
     let img =
         image::ImageReader::open(path).map_err(|e| e.to_string())?.with_guessed_format().map_err(|e| e.to_string())?.decode().map_err(|e| e.to_string())?;
-    let tw = THUMB_W.min(w);
+    let tw = width.clamp(1, 4096).min(w);
     let th = (u64::from(h) * u64::from(tw) / u64::from(w)).clamp(1, 4096);
     let th = u32::try_from(th).unwrap_or(1);
     let small = image::imageops::thumbnail(&img.to_rgba8(), tw, th);
     let size = [usize::try_from(small.width()).unwrap_or(0), usize::try_from(small.height()).unwrap_or(0)];
     Ok(egui::ColorImage::from_rgba_unmultiplied(size, small.as_raw()))
+}
+
+/// The fonts SVG text is drawn with: the system's, loaded once; the generic families point at a face
+/// that exists here (`sans-serif` → DejaVu Sans, Noto Sans, Arial…).
+fn fonts() -> Arc<resvg::usvg::fontdb::Database> {
+    static DB: std::sync::OnceLock<Arc<resvg::usvg::fontdb::Database>> = std::sync::OnceLock::new();
+    DB.get_or_init(|| {
+        let mut db = resvg::usvg::fontdb::Database::new();
+        db.load_system_fonts();
+        let has = |db: &resvg::usvg::fontdb::Database, name: &str| db.faces().any(|f| f.families.iter().any(|(n, _)| n.eq_ignore_ascii_case(name)));
+        let first = |db: &resvg::usvg::fontdb::Database, names: &[&str]| names.iter().find(|n| has(db, n)).map(|n| (*n).to_string());
+        if let Some(n) = first(&db, &["DejaVu Sans", "Noto Sans", "Liberation Sans", "Arial", "Helvetica", "Segoe UI"]) {
+            db.set_sans_serif_family(n);
+        }
+        if let Some(n) = first(&db, &["DejaVu Serif", "Noto Serif", "Liberation Serif", "Times New Roman", "Georgia"]) {
+            db.set_serif_family(n);
+        }
+        if let Some(n) = first(&db, &["DejaVu Sans Mono", "Noto Sans Mono", "Liberation Mono", "Consolas", "Menlo"]) {
+            db.set_monospace_family(n);
+        }
+        Arc::new(db)
+    })
+    .clone()
+}
+
+/// Rasterise an SVG (pure Rust) to `width` px wide, keeping its shape.
+fn svg(path: &Path, width: u32) -> Result<egui::ColorImage, String> {
+    use resvg::{tiny_skia, usvg};
+    let data = std::fs::read(path).map_err(|e| e.to_string())?;
+    let mut opt = usvg::Options { fontdb: fonts(), ..usvg::Options::default() };
+    opt.resources_dir = path.parent().map(Path::to_path_buf);
+    let tree = usvg::Tree::from_data(&data, &opt).map_err(|e| e.to_string())?;
+    let size = tree.size();
+    let (sw, sh) = (size.width(), size.height());
+    if !(sw.is_finite() && sh.is_finite() && sw > 0.0 && sh > 0.0) {
+        return Err("the SVG has no size".into());
+    }
+    let tw = width.clamp(16, 4096);
+    let th_f = (f64::from(sh) * f64::from(tw) / f64::from(sw)).round().clamp(1.0, 4096.0);
+    let th = th_f as u32;
+    let mut pixmap = tiny_skia::Pixmap::new(tw, th).ok_or("the SVG is too big to draw")?;
+    let scale = tw as f32 / sw;
+    resvg::render(&tree, tiny_skia::Transform::from_scale(scale, th as f32 / sh), &mut pixmap.as_mut());
+    let size = [usize::try_from(tw).unwrap_or(0), usize::try_from(th).unwrap_or(0)];
+    Ok(egui::ColorImage::from_rgba_premultiplied(size, pixmap.data()))
+}
+
+/// A picture's main colours, most used first (at most [`MAX_PALETTE`], each clearly different).
+pub fn palette_of(img: &egui::ColorImage) -> Vec<egui::Color32> {
+    let mut buckets: HashMap<u16, (u64, u64, u64, u64)> = HashMap::new();
+    let step = (img.pixels.len() / 40_000).max(1);
+    for p in img.pixels.iter().step_by(step).filter(|p| p.a() >= 128) {
+        let key = (u16::from(p.r() >> 4) << 8) | (u16::from(p.g() >> 4) << 4) | u16::from(p.b() >> 4);
+        let e = buckets.entry(key).or_insert((0, 0, 0, 0));
+        e.0 += 1;
+        e.1 += u64::from(p.r());
+        e.2 += u64::from(p.g());
+        e.3 += u64::from(p.b());
+    }
+    let mut list: Vec<(u64, egui::Color32)> = buckets
+        .into_values()
+        .filter(|b| b.0 > 0)
+        .map(|(n, r, g, b)| {
+            let avg = |x: u64| u8::try_from(x / n).unwrap_or(u8::MAX);
+            (n, egui::Color32::from_rgb(avg(r), avg(g), avg(b)))
+        })
+        .collect();
+    list.sort_by_key(|x| std::cmp::Reverse(x.0));
+    let total: u64 = list.iter().map(|x| x.0).sum();
+    let mut out: Vec<egui::Color32> = Vec::new();
+    for (n, c) in list {
+        // a colour on less than 0.5 % of the picture is a detail, not the palette
+        if n.saturating_mul(200) < total {
+            break;
+        }
+        let far = |o: &egui::Color32| u32::from(c.r().abs_diff(o.r())) + u32::from(c.g().abs_diff(o.g())) + u32::from(c.b().abs_diff(o.b())) > 60;
+        if out.iter().all(far) {
+            out.push(c);
+            if out.len() >= MAX_PALETTE {
+                break;
+            }
+        }
+    }
+    out
 }
 
 /// Where a media path from the service is on disk: absolute as is; relative to the graph's `base`,
@@ -169,6 +310,31 @@ mod tests {
         assert!(decode(&junk).is_err());
         assert!(decode(&dir.join("missing.png")).is_err());
         assert!(decode(&dir).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Style frames are often SVG (the AI writes them): drawn in pure Rust, with their colours read.
+    #[test]
+    fn draws_an_svg_frame_large_and_reads_its_colours() {
+        let dir = std::env::temp_dir().join(format!("mfx-stills-svg-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let svg = dir.join("sf01.svg");
+        std::fs::write(
+            &svg,
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080"><rect width="1920" height="1080" fill="#0f172a"/><rect x="0" y="0" width="960" height="1080" fill="#f97316"/><text x="100" y="900" font-family="sans-serif" font-size="80" fill="#fff">SF01</text></svg>"##,
+        )
+        .unwrap();
+        let (img, palette) = decode_at(&svg, 1280).unwrap();
+        assert_eq!(img.size, [1280, 720]);
+        let at = |x: usize, y: usize| img.pixels[y * 1280 + x];
+        assert_eq!(at(100, 100), egui::Color32::from_rgb(0xf9, 0x73, 0x16));
+        assert_eq!(at(1200, 100), egui::Color32::from_rgb(0x0f, 0x17, 0x2a));
+        assert!(palette.contains(&egui::Color32::from_rgb(0xf9, 0x73, 0x16)) && palette.contains(&egui::Color32::from_rgb(0x0f, 0x17, 0x2a)), "{palette:?}");
+        assert_eq!(decode(&svg).unwrap().size, [384, 216], "node stills stay small");
+        std::fs::write(dir.join("bad.svg"), "<svg").unwrap();
+        assert!(decode_at(&dir.join("bad.svg"), 1280).is_err());
+        std::fs::write(dir.join("empty.svg"), r#"<svg xmlns="http://www.w3.org/2000/svg" width="0" height="0"/>"#).unwrap();
+        assert!(decode_at(&dir.join("empty.svg"), 1280).is_err());
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
