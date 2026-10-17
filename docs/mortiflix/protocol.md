@@ -69,7 +69,7 @@ Stage keys: `script`, `look`, `shots`, `voiceMusic`, `filmcraft`, `render` (inde
 
 ## Service core messages (part 08)
 
-Every message below is implemented in the Node service (`mortiflix-oss`, branch `mfx-service/core`: `src/service.mjs`
+Every message below is implemented in the Node service (`mortiflix-oss`, branch `mfx-service/integration`: `src/service.mjs`
 over `src/svc/*.mjs`; full reference with the engine changes: `docs/service-protocol.md` there). Parts send them with
 `ctx.service.request(type, params)`; events the shared state doesn't apply come through `ctx.service.events_since`.
 
@@ -159,7 +159,7 @@ questions and failed remakes.
 
 | Type | Params | Result |
 |---|---|---|
-| `graph.get` | `{}` | `{rev, fps, order: {beats, shots, frames, lines, cues, transitions, film}, beats: [{id, no, title, colour}], nodes: [...], edges: [{from, to, kind: next\|says\|look\|uses\|under}], assets, open_edits, problems}`; each node: `id, kind, label, title, beat, beat_no, colour, state, owner, current, plays, versions[{v, path, from_sec, to_sec}], pending, failed, edits, pos, default_pos, mix, uses` |
+| `graph.get` | `{}` | `{rev, fps, order: {beats, shots, frames, lines, cues, transitions, film}, beats: [{id, no, title, colour}], nodes: [...], edges: [{from, to, kind: next\|says\|look\|uses\|under}], assets, open_edits, problems}`; each node: `id, kind, label, title, beat, beat_no, colour, state, owner, current, plays, versions[{v, path, from_sec, to_sec, still}], pending, failed, edits, pos, default_pos, mix, uses`. `still` = a PNG of a shot version's first frame (null until made; a picture version is its own still); `assets[]` carry `pos` |
 | `node.list` | `{}` | the foundation's flat list (kept) |
 | `node.edit` | `{node, action: ok\|fix\|cut\|clear, text?, bars?, part?}` | OK / Fix / Cut it; every press is a grey line in the chat |
 | `node.move` | `{positions: {id: [x, y] \| null}}` | `{moved}`: free placement, saved per project |
@@ -179,7 +179,7 @@ questions and failed remakes.
 
 | Type | Params | Result |
 |---|---|---|
-| `handoff.plan` | `{}` | `{sequence: {name, width, height, fps, length_sec}, tracks, bins, clips: [{node, kind, track, bin, name, label, version, start_sec, dur_sec, media}], markers: [{kind: chapter\|comment, time_sec, name, label, comment}], captions, your_assets, older_versions, cut_on_board, notes, previews}`; transitions carry `native` + the FilmCraft transition name |
+| `handoff.plan` | `{}` | `{fcproj, sequence: {name, width, height, fps, length_sec}, tracks, bins, clips: [{node, kind, track, bin, name, label, version, start_sec, dur_sec, media}], markers: [{kind: chapter\|comment, time_sec, name, label, comment}], captions, your_assets, older_versions, cut_on_board, notes, previews}`; `fcproj` = where the app saves the FilmCraft project (`<studio>/state/<id>/filmcraft/<title>.fcproj`, or the one saved before); transitions carry `native` + the FilmCraft transition name |
 | `handoff.done` | `{map: {clips: [{node, version, clip, item}], fcproj?, rev?}}` | saves what the app imported (done once) |
 | `handoff.get` | `{}` | `{map}` |
 | `handoff.swaps` | `{}` | `{imported, swaps: [{node, version, clip, item, path, from_sec, to_sec}]}`: newer versions to swap in (`clip.replaceFromBin`) |
@@ -219,12 +219,20 @@ Cards: `script {beats}`, `looks {frames, using}`, `shots`/`transitions {nodes}`,
 | Type | Params | Result |
 |---|---|---|
 | `setup.status` | `{}` | `{backend, backends, claude: {found, path, version, logged_in, auth_method, subscription, login_command, detail}, keys, voice, tools: {node, ffmpeg, ffprobe, installable, studio}, first_run}` |
-| `setup.backend` | `{backend: claude-code\|anthropic-api\|demo}` | |
+| `setup.backend` | `{backend?: claude-code\|anthropic-api\|demo, claudeBin?}` (`claude` or an absolute path; `backend` may then be left out) | `{backend, claudeBin}` |
 | `setup.done` | `{done?: true}` | first run finished |
 | `setup.claude.test` | `{}` | `{ok, reply, seconds}`: one short `claude -p` with no tools |
 | `keys.list` | `{}` | `[{id, name, for, get, set, source}]`, never the values |
 | `keys.set` / `keys.remove` | `{id, value}` / `{id}` | `anthropic`, `elevenlabs`, `uploadpost`, `postiz` (secrets.json) and `gemini` (session.env) |
 | `keys.check` | `{id}` | a free check of a saved key (network, only on request) |
+| `setup.download` | `{label?, files: [{url, dest, size, sha256}]}` | `{job}`: https only, `dest` absolute; each file streams to `<dest>.part`, size + SHA-256 checked, renamed into place; files already there are skipped. Sent only after the user said yes |
+| `setup.install` | `{tool}` | `{job}`: one of setup.mjs's components (`tools.installable` ids) with its own installer, after the user said yes |
+| `setup.cancel` | `{job}` | `{cancelled}` |
+| `components.status` | `{}` | `{components: [{id, name, for, what, where, size, default, needs, installed, detail, path}], installing}`: the installer's components; ComfyUI counts as `installed` only when it is the studio's own (`tools/ComfyUI`) |
+| `components.install` | `{ids?: [id] \| "default" \| "all"}` | `{started}`, then `components.progress` events and one `components.done` |
+
+`setup.status` → `tools.engine` = `{ok, path}` (the sound engine). `MFX_FAKE_DOWNLOADS=1` (tests only): `fake:<bytes>`
+URLs, a pretend Chrome install, and the app's model packs swapped for one small fake file each.
 
 ### Events
 
@@ -239,6 +247,7 @@ Cards: `script {beats}`, `looks {frames, using}`, `shots`/`transitions {nodes}`,
 | `activity` | `{project, t, kind: text\|tool\|todo\|info\|error, text, todos?}` |
 | `assets.progress` | `{project, asset, name, done, total}` |
 | `assets.added` / `assets.failed` | `{project, asset, replaced?}` / `{project, path?, asset?, message}` |
+| `setup.progress` | `{job, kind: download\|install, label, state: running\|done\|failed\|cancelled, line, done?, total?}` |
 | `render.job` | a queue job `{id, label, state: waiting\|running\|done\|failed, project, external?, kind?, progress?, file?, error?, cancelled?}` |
 
 ### Engine changes behind it (Node side)
@@ -252,21 +261,13 @@ Cards: `script {beats}`, `looks {frames, using}`, `shots`/`transitions {nodes}`,
 - `backends/demo.mjs`: voice lines with clips and a quiet score (so every lane has something), new shots, line remakes.
 - Policies in the service: questions never block (a questions step whose questions all have defaults goes on with
   them; `config.mfxQuestionsBlock: true` turns that off), and a stage the owner moved on from keeps what arrives.
-## Setup additions (part 09)
 
-Part 09's Setup window uses part 08's `setup.status`, `setup.backend`, `setup.done`, `setup.claude.test` and
-`keys.set` / `keys.remove` / `keys.check`, plus these (service branch `mfx-service/setup`, `src/service-setup.mjs`):
+## App-side commands (for agents and the control channel)
 
-| Type | Params | Result |
-|---|---|---|
-| `setup.backend` | also `{claudeBin?}` (`claude` or an absolute path; `backend` may then be left out) | `{backend, claudeBin}` |
-| `setup.download` | `{label?, files: [{url, dest, size, sha256}]}` | `{job}`: https only, `dest` absolute; each file streams to `<dest>.part`, size + SHA-256 checked, renamed into place; files already there are skipped. Sent only after the user said yes |
-| `setup.install` | `{tool}` | `{job}`: one of setup.mjs's components (`tools.installable` ids) with its own installer, after the user said yes |
-| `setup.cancel` | `{job}` | `{cancelled}` |
-
-| Event | Data |
-|---|---|
-| `setup.progress` | `{job, kind: download\|install, label, state: running\|done\|failed\|cancelled, line, done?, total?}` |
-
-`setup.status` → `tools.engine` = `{ok, path}` (the sound engine). `MFX_FAKE_DOWNLOADS=1` (tests only): `fake:<bytes>`
-URLs, a pretend Chrome install, and the app's model packs swapped for one small fake file each.
+Not service messages, but how the parts reach the host: `mortiflix.request {type, params}` / `mortiflix.reply {id}`
+(any message above), `mortiflix.chooseFiles {purpose, exts?, folder?, multiple?, paths?}` (OS dialog; files wait in
+`state.files_in` under `purpose`; dropped files on stages 1-4 or on New project come as purpose `drop`),
+`mortiflix.chooseFileAndSend {request: {type, params}, field, filter?, exts?}` (one file, then that request with the
+path in `params[field]`), `mortiflix.reveal {path, open?}`, `mortiflix.preview.*` (doc 36), `nodes.*` (doc 35),
+`mortiflix.importEdit` / `mortiflix.import.run {open_edit?}` (doc 38; Get the video runs `import.run {open_edit:
+false}` before rendering), `mortiflix.renderVideo` (doc 39).
