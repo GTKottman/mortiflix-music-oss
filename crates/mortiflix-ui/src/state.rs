@@ -126,6 +126,8 @@ pub struct MfxState {
     pub confirm_next: Option<NextConfirm>,
     /// Chosen or dropped files waiting for the part that asked (see [`FilesIn`]), oldest first.
     pub files_in: Vec<FilesIn>,
+    /// The node area (part 35): view, selection, where nodes sit, the typed graph.
+    pub nodes: crate::nodes::NodeArea,
 }
 
 impl Default for MfxState {
@@ -146,6 +148,7 @@ impl Default for MfxState {
             show_setup: false,
             confirm_next: None,
             files_in: Vec::new(),
+            nodes: crate::nodes::NodeArea::default(),
         }
     }
 }

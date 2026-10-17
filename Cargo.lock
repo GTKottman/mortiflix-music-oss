@@ -2127,6 +2127,7 @@ name = "filmcraft-mortiflix-ui"
 version = "0.8.0"
 dependencies = [
  "egui",
+ "image",
  "log",
  "serde",
  "serde_json",

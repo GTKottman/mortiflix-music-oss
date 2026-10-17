@@ -55,6 +55,56 @@ pub const COMMANDS: &[UiCommand] = &[
     cmd("mortiflix.showNeedsYou", "Show What Needs You", &[], None),
     cmd("mortiflix.pickFiles", "Choose Files for Mortiflix", &[], None),
     cmd("mortiflix.reveal", "Show in Folder", &[], None),
+    // The node area (part 35): its keys are panel-scoped ("Mortiflix Nodes") in the engine's
+    // FILMCRAFT_PANEL table, so ←/→ walk the film there and step frames everywhere else.
+    cmd("nodes.prev", "Previous Node", &[], None),
+    cmd("nodes.next", "Next Node", &[], None),
+    cmd("nodes.up", "Node Above", &[], None),
+    cmd("nodes.down", "Node Below", &[], None),
+    cmd("nodes.enter", "OK and On to the Next Shot", &[], None),
+    cmd("nodes.fixKey", "Fix the Selected Node", &[], None),
+    cmd("nodes.delete", "Cut It", &[], None),
+    cmd("nodes.frameSelected", "Frame Selected Nodes", &[], None),
+    cmd("nodes.frameAll", "Frame All Nodes", &[], None),
+    cmd("nodes.zoomIn", "Zoom In on the Nodes", &[], None),
+    cmd("nodes.zoomOut", "Zoom Out of the Nodes", &[], None),
+    cmd("nodes.duplicate", "Duplicate Shot", &[], None),
+    cmd("nodes.find", "Find a Shot", &[], None),
+    cmd("nodes.selectAll", "Select All Shots", &[], None),
+    cmd("nodes.escape", "Clear Search or Deselect", &[], None),
+    cmd("nodes.undo", "Undo in the Node Area", &[], None),
+    cmd("nodes.redo", "Redo in the Node Area", &[], None),
+    cmd("nodes.addShot", "Add a Shot", &[], None),
+    cmd("nodes.frameBeat1", "Frame Beat 1", &[], None),
+    cmd("nodes.frameBeat2", "Frame Beat 2", &[], None),
+    cmd("nodes.frameBeat3", "Frame Beat 3", &[], None),
+    cmd("nodes.frameBeat4", "Frame Beat 4", &[], None),
+    cmd("nodes.frameBeat5", "Frame Beat 5", &[], None),
+    cmd("nodes.frameBeat6", "Frame Beat 6", &[], None),
+    cmd("nodes.frameBeat7", "Frame Beat 7", &[], None),
+    cmd("nodes.frameBeat8", "Frame Beat 8", &[], None),
+    cmd("nodes.frameBeat9", "Frame Beat 9", &[], None),
+    cmd("nodes.select", "Select a Node", &[], None),
+    cmd("nodes.ok", "OK", &[], None),
+    cmd("nodes.fix", "Fix", &[], None),
+    cmd("nodes.cut", "Cut It", &[], None),
+    cmd("nodes.bringBack", "Bring It Back", &[], None),
+    cmd("nodes.move", "Move Nodes", &[], None),
+    cmd("nodes.reorder", "Move a Shot in the Film", &[], None),
+    cmd("nodes.moveInFilm", "Move a Shot Earlier or Later", &[], None),
+    cmd("nodes.pickTransition", "Pick a Transition", &[], None),
+    cmd("nodes.add", "New Shot", &[], None),
+    cmd("nodes.useVersion", "Use This Version", &[], None),
+    cmd("nodes.note", "Add a Note", &[], None),
+    cmd("nodes.use", "Use in Shot", &[], None),
+    cmd("nodes.play", "Play the Node", &[], None),
+    cmd("nodes.show", "Show in the Node Area", &[], None),
+    cmd("nodes.highlight", "Highlight Nodes", &[], None),
+    cmd("nodes.wheel", "Mouse Wheel in the Node Area", &[], None),
+    cmd("nodes.zoomTo", "Zoom the Nodes To", &[], None),
+    cmd("nodes.tidy", "Put Nodes Back in Film Order", &[], None),
+    cmd("nodes.refresh", "Reload the Nodes", &[], None),
+    cmd("nodes.state", "Node Area State", &[], None),
 ];
 
 /// What `mortiflix.pickFiles` offers: the kinds of files a project's assets can be (doc 32a).
@@ -227,6 +277,9 @@ pub fn route(app: &mut FilmcraftApp, ctx: &egui::Context, id: &str, params: &Val
         "mortiflix.pickFiles" => return Some(pick_files(app, params)),
         "mortiflix.reveal" => return Some(reveal(app, ctx, params)),
         _ => {}
+    }
+    if let Some(what) = id.strip_prefix("nodes.") {
+        return Some(mfx::nodes::command(&mut app.mfx.core, what, params));
     }
     let core = &mut app.mfx.core;
     let r = match id {

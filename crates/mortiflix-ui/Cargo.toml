@@ -14,3 +14,5 @@ egui = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }
+# node stills (pure Rust; the same version and formats filmcraft-media already builds)
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
