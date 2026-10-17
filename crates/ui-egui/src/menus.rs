@@ -879,6 +879,7 @@ pub fn external_commands() -> Vec<filmcraft_engine::shortcuts::CommandInfo> {
         .iter()
         .chain(crate::panels::keyboard::COMMANDS)
         .chain(crate::mortiflix::COMMANDS)
+        .chain(crate::mortiflix_preview::COMMANDS)
         .map(|c| CommandInfo::new(c.id, c.label, c.menu, c.shortcut))
         .collect();
     for p in PanelKind::ALL {

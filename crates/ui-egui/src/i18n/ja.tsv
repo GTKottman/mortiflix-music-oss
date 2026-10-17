@@ -3684,3 +3684,15 @@
 	Frame Beat 8	ビート8を表示
 	Frame Beat 9	ビート9を表示
 	Nodes	ノード
+# Mortiflix FilmCraft: loose preview (doc 36)
+	Play the Loose Preview	ラフプレビューを再生
+	Play or Pause the Loose Preview	ラフプレビューを再生／一時停止
+	Pause the Loose Preview	ラフプレビューを一時停止
+	Go to a Shot in the Loose Preview	ラフプレビューのショットへ移動
+	Previous Shot	前のショット
+	Next Shot	次のショット
+	Loose Preview Plays	ラフプレビューの再生範囲
+	Loop the Loose Preview	ラフプレビューをループ
+	Follow the Playhead	再生ヘッドに追従
+	Rebuild the Loose Preview	ラフプレビューを作り直す
+	Show the Shot's File	ショットのファイルを表示

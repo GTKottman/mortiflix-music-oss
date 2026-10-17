@@ -46,6 +46,8 @@ pub const FILMCRAFT_PANEL: &[Entry] = &[
     ("nodes.frameBeat7", "7", "Mortiflix Nodes"),
     ("nodes.frameBeat8", "8", "Mortiflix Nodes"),
     ("nodes.frameBeat9", "9", "Mortiflix Nodes"),
+    // Mortiflix FilmCraft: Loop in the loose preview (app-wide Cmd+L is Link)
+    ("mortiflix.preview.loop", "Cmd+L", "Mortiflix Preview"),
 ];
 
 /// Premiere Pro's default keyboard (macOS) mapped onto FilmCraft commands. FilmCraft Default takes

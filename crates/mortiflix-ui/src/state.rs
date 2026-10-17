@@ -128,6 +128,8 @@ pub struct MfxState {
     pub files_in: Vec<FilesIn>,
     /// The node area (part 35): view, selection, where nodes sit, the typed graph.
     pub nodes: crate::nodes::NodeArea,
+    /// The loose preview (doc 36): its plan, scope, loop and the player as the host saw it.
+    pub preview: crate::preview::PreviewState,
 }
 
 impl Default for MfxState {
@@ -149,6 +151,7 @@ impl Default for MfxState {
             confirm_next: None,
             files_in: Vec::new(),
             nodes: crate::nodes::NodeArea::default(),
+            preview: Default::default(),
         }
     }
 }
