@@ -27,6 +27,7 @@ import { appendChat, chatHistory, translateEvents, typedMove, quickReply, applyM
 import { exportTarget, deliverFromApp, postPlan, postSend } from './svc/export.mjs';
 import * as setup from './svc/setup.mjs';
 import { componentsStatus, installComponents, parseComponents } from './components.mjs';
+import { setupHandlers } from './service-setup.mjs';
 
 export const PROTOCOL = 1;
 export { STAGES };
@@ -511,7 +512,7 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
 
     // ---- setup (part 09) ----
     'setup.status': () => setup.setupStatus(root),
-    'setup.backend': (p) => setup.setBackend(root, String(p?.backend || '')),
+    'setup.backend': (p) => setup.setBackend(root, p?.backend === undefined ? undefined : String(p.backend), p?.claudeBin),
     'setup.done': (p) => setup.setupDone(root, p?.done !== false),
     'setup.claude.test': async () => setup.claudeTest(root),
     'keys.list': () => setup.keysList(root),
@@ -532,6 +533,8 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
       return { started: ids };
     },
   };
+  // Setup downloads and installs (part 09): setup.download / setup.install / setup.cancel, setup.progress events.
+  Object.assign(handlers, setupHandlers({ root, emit, ProtocolError }));
 
   async function handle(msg) {
     if (!msg || typeof msg !== 'object' || Array.isArray(msg)) return send({ id: null, ok: false, error: { code: 'bad_request', message: 'a request is a JSON object' } });

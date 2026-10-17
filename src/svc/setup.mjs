@@ -2,10 +2,12 @@
 // keys (Anthropic as a fallback only, ElevenLabs, Gemini, Upload-Post, Postiz), and a tool check. Keys are kept by the
 // studio (secrets.json / session.env, mode 600), never in project files, and never sent back to the app.
 import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { isAbsolute } from 'node:path';
 import { loadConfig, saveConfig, readSessionEnv, UserError } from '../studio.mjs';
 import { KEYS, keySource, keyValue, saveKey, verifyKey, setSessionKey } from '../keys.mjs';
 import { which } from '../platform.mjs';
-import { setupStatusSync, TOOLS, TOOL_INFO } from '../setup.mjs';
+import { setupStatusSync, TOOLS, TOOL_INFO, dawEngineBin } from '../setup.mjs';
 import { voiceConfig } from '../voice/index.mjs';
 import { runClaude } from './chat.mjs';
 
@@ -70,6 +72,7 @@ export function toolsStatus(root) {
     node: { ok: true, version: process.version, path: process.execPath },
     ffmpeg: { ok: Boolean(which('ffmpeg')), path: which('ffmpeg'), for: 'every render and the demo' },
     ffprobe: { ok: Boolean(which('ffprobe')), path: which('ffprobe') },
+    engine: { ok: existsSync(dawEngineBin(root)), path: dawEngineBin(root), for: 'plays the music mix' },
     installable: TOOLS.map((t) => ({ id: t, ...(TOOL_INFO[t] || {}) })),
     studio: tools,
   };
@@ -87,10 +90,20 @@ export function setupStatus(root) {
   };
 }
 
-export function setBackend(root, backend) {
-  if (!BACKENDS.includes(backend)) throw new UserError(`backend: ${BACKENDS.join(', ')}`);
-  saveConfig(root, { backend });
-  return { backend };
+// The backend, and (part 09) where `claude` is: the app finds it in the install folders a desktop app's PATH lacks.
+export function setBackend(root, backend, claudeBin) {
+  const patch = {};
+  if (backend !== undefined || claudeBin === undefined) {
+    if (!BACKENDS.includes(backend)) throw new UserError(`backend: ${BACKENDS.join(', ')}`);
+    patch.backend = backend;
+  }
+  if (claudeBin !== undefined) {
+    const bin = String(claudeBin || '').trim() || 'claude';
+    if (bin.length > 4096 || /[\r\n\0]/.test(bin) || (bin !== 'claude' && !isAbsolute(bin))) throw new UserError('claudeBin is `claude` or an absolute path');
+    patch.claudeBin = bin;
+  }
+  const c = saveConfig(root, patch);
+  return { backend: c.backend, claudeBin: c.claudeBin };
 }
 
 export function setupDone(root, done = true) {
