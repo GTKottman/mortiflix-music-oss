@@ -169,9 +169,12 @@ test('service core: new project from preset + idea + assets + theme, the whole f
   assert.ok((await call('node.find', { query: 's05' })).length === 1);
 
   // Voice & music: levels, nudges, cues, theme samples (demo: quiet placeholders).
+  const start = (await call('voicemusic.view')).voice.find((l) => l.node === 'b02-1').start_sec;
   const mix = await call('mix.set', { node: 'b02-1', gain_db: -3, nudge_sec: 0.1 });
   assert.equal(mix.mix.gain_db, -3);
-  assert.equal(mix.mix.start_sec, 2.3);
+  assert.equal(mix.mix.start_sec, Math.round((start + 0.1) * 1000) / 1000, '+0.1 s is exactly 0.1 s later');
+  assert.equal((await call('mix.set', { node: 'b02-1', nudge_sec: -0.1 })).mix.start_sec, start, 'and -0.1 s is back where it was');
+  await call('mix.set', { node: 'b02-1', nudge_sec: 0.1 });
   const vm = await call('voicemusic.view');
   assert.equal(vm.voice.find((l) => l.node === 'b02-1').timing_locked, true);
   assert.equal(vm.cues.length, 4);

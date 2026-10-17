@@ -320,9 +320,11 @@ export function setMix(root, id, nid, patch = {}) {
     const num = (v, lo, hi) => (Number.isFinite(Number(v)) ? Math.min(hi, Math.max(lo, Math.round(Number(v) * 10) / 10)) : undefined);
     if (patch.gain_db !== undefined) m.gain_db = num(patch.gain_db, -60, 12);
     if (n.kind === 'line') {
+      // times to the millisecond: rounded to tenths, a first ±0.1 s on a line starting at 3.05 s moved it 0.15 s (run 2)
+      const sec = (v) => (Number.isFinite(Number(v)) ? Math.min(36000, Math.max(0, Math.round(Number(v) * 1000) / 1000)) : undefined);
       if (patch.start_sec === null) delete m.start_sec;
-      else if (patch.start_sec !== undefined) m.start_sec = num(patch.start_sec, 0, 36000);
-      if (patch.nudge_sec !== undefined) m.start_sec = num((m.start_sec ?? n.start_sec ?? 0) + Number(patch.nudge_sec), 0, 36000);
+      else if (patch.start_sec !== undefined) m.start_sec = sec(patch.start_sec);
+      if (patch.nudge_sec !== undefined) m.start_sec = sec((m.start_sec ?? n.start_sec ?? 0) + Number(patch.nudge_sec));
       if (patch.voice !== undefined) m.voice = patch.voice ? String(patch.voice).slice(0, 120) : null;
     } else {
       if (patch.duck_db !== undefined) m.duck_db = patch.duck_db === null ? null : num(patch.duck_db, -40, 0);
