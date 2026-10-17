@@ -26,6 +26,7 @@ import * as graph from './svc/graph.mjs';
 import { appendChat, chatHistory, translateEvents, typedMove, quickReply, applyMove, initChat, actionText } from './svc/chat.mjs';
 import { exportTarget, deliverFromApp, postPlan, postSend } from './svc/export.mjs';
 import * as setup from './svc/setup.mjs';
+import { componentsStatus, installComponents, parseComponents } from './components.mjs';
 
 export const PROTOCOL = 1;
 export { STAGES };
@@ -54,6 +55,7 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
     context: 'video',
   };
   const emit = (event, data) => send({ event, data });
+  let installing = null; // component ids being installed (components.install)
   const activity = new Map(); // project id -> recent activity rows
   let runner = null;
   let runnerNote = '';
@@ -516,6 +518,19 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
     'keys.set': (p) => setup.keySet(root, String(p?.id || ''), p?.value ?? null),
     'keys.remove': (p) => setup.keySet(root, String(p?.id || ''), null),
     'keys.check': async (p) => setup.keyCheck(root, String(p?.id || '')),
+    // ---- the installer's components (packaging): status, and installing skipped ones later ----
+    'components.status': async () => ({ components: await componentsStatus(root), installing }),
+    'components.install': (p) => {
+      if (installing) throw new ProtocolError('busy', `already installing ${installing.join(', ')}`);
+      let ids;
+      try { ids = parseComponents(Array.isArray(p?.ids) ? p.ids.join(',') : p?.ids ?? 'default'); } catch (e) { bad(e.message); }
+      installing = ids;
+      installComponents(root, ids, { onEvent: (e) => emit('components.progress', e) })
+        .then((results) => emit('components.done', { results }))
+        .catch((e) => emit('components.done', { results: [], error: e.message }))
+        .finally(() => { installing = null; });
+      return { started: ids };
+    },
   };
 
   async function handle(msg) {

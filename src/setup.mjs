@@ -150,6 +150,26 @@ async function download(url, file, log) {
   return file;
 }
 
+// Checks `file` against a known sha256 (deleted when it doesn't match).
+export async function checkFileSha256(file, want, what = file, log = () => {}) {
+  const { createHash } = await import('node:crypto');
+  const { createReadStream } = await import('node:fs');
+  const h = createHash('sha256');
+  for await (const chunk of createReadStream(file)) h.update(chunk);
+  const got = h.digest('hex');
+  if (got !== String(want).toLowerCase()) { rmSync(file, { force: true }); throw new Error(`${what}: checksum ${got} doesn't match ${want}; the download was deleted`); }
+  log(`Checksum OK (sha256 ${got.slice(0, 16)}…)`);
+}
+
+// Checks `file` against the line for `name` in a SHA256SUMS-style list at `sumsUrl` (deleted when it doesn't match).
+export async function checkSha256(file, sumsUrl, name, log = () => {}, { fetchImpl = fetch } = {}) {
+  const res = await fetchImpl(sumsUrl);
+  if (!res.ok) throw new Error(`no checksums at ${sumsUrl} (${res.status})`);
+  const want = (await res.text()).split('\n').map((l) => l.trim().split(/\s+\*?/)).find((f) => f[1] === name)?.[0]?.toLowerCase();
+  if (!want) throw new Error(`${name} isn't in ${sumsUrl}`);
+  return checkFileSha256(file, want, name, log);
+}
+
 // ---- detecting each tool ----
 
 export const TRANSITIONS_REPO = 'GTKottman/remotion-transitions';
@@ -199,6 +219,11 @@ const UV_PLACES = () => [which('uv'), join(homedir(), '.local', 'bin', `uv${EXE}
 const findUv = () => UV_PLACES().filter(Boolean).find((p) => existsSync(p)) || null;
 const BH_PLACES = () => [which('browser-harness'), join(homedir(), '.local', 'bin', `browser-harness${EXE}`)];
 export const findBrowserHarness = () => BH_PLACES().filter(Boolean).find((p) => existsSync(p)) || null;
+
+function uvStatus() {
+  const bin = findUv();
+  return bin ? { ok: true, path: bin, detail: version(bin) || bin } : { ok: false, detail: 'not installed' };
+}
 
 function browserHarnessStatus() {
   const bin = findBrowserHarness();
@@ -265,6 +290,7 @@ export async function setupStatus(root) {
     strudel: strudelStatus(root),
     chrome: chromeStatus(root),
     'browser-harness': browserHarnessStatus(),
+    uv: uvStatus(),
     comfyui: await comfyStatus(root),
     blender: blenderStatus(root),
     'blender-addons': addonsStatus(root),
@@ -459,7 +485,10 @@ export async function latestBlender({ fetchImpl = fetch } = {}) {
     const dir = `${base}Blender${maj}.${min}/`;
     const list = await (await fetchImpl(dir)).text();
     const files = [...list.matchAll(new RegExp(`href="(blender-(\\d+)\\.(\\d+)\\.(\\d+)-${want})"`, 'g'))].sort((a, b) => Number(b[4]) - Number(a[4]));
-    if (files.length) return { version: `${files[0][2]}.${files[0][3]}.${files[0][4]}`, url: dir + files[0][1], file: files[0][1] };
+    if (files.length) {
+      const version = `${files[0][2]}.${files[0][3]}.${files[0][4]}`;
+      return { version, url: dir + files[0][1], file: files[0][1], sums: `${dir}blender-${version}.sha256` };
+    }
   }
   throw new Error(`no Blender build found for ${OS} ${arch()} at ${base}`);
 }
@@ -471,6 +500,7 @@ async function installBlender(root, log) {
   log(`Blender ${rel.version} for ${OS} ${arch()}`);
   const dest = join(toolsDir(root), 'blender');
   const file = await download(rel.url, join(toolsDir(root), 'downloads', rel.file), log);
+  await checkSha256(file, rel.sums, rel.file, log);
   mkdirSync(dest, { recursive: true });
   if (OS === 'darwin') {
     const mnt = join(tmpdir(), `mfx-blender-${process.pid}`);
@@ -528,7 +558,8 @@ export function startComfy(root) {
 // calls it inside Blender (see the blender-3d skill); `owner` ones are for you, in `mortiflix blender`.
 export const ADDONS = [
   { id: 'moblend', name: 'MoBlend', about: 'MoGraph: cloners, effectors, fields, MoText, fracture', repo: 'GTKottman/moblend', dir: 'moblend', kit: 'mograph' },
-  { id: 'nova_fx', name: 'Nova FX', about: 'Mortiflix\'s own particle engine: particles, fire, sparks and fireworks (Linux only for now)', vendored: 'vendor/nova-fx', dir: 'addon/nova_fx', kit: 'particles', stage: { from: 'core', to: 'lib', files: ['nova_core.c', 'gpu_vk.c', 'nova_params.h', 'shaders_spv.h'] } },
+  // Pinned: this commit's GitHub archive, checked against its sha256 (tested 2026-10-16).
+  { id: 'nova_fx', name: 'Nova FX', about: 'Mortiflix\'s own particle engine: particles, fire, sparks and fireworks (Linux only for now)', repo: 'GTKottman/nova-fx', commit: '01facc9ad601e0d2e661e9bb2082a32f80808150', sha256: '8a863290c84d69d31467beba0823c1534711dfe9bb71c6fb8c01ab574829b303', dir: 'addon/nova_fx', kit: 'particles', stage: { from: 'core', to: 'lib', files: ['nova_core.c', 'gpu_vk.c', 'nova_params.h', 'shaders_spv.h'] } },
   { id: 'blender_cam_mcp', name: 'Camera', about: 'framing, shot presets, camera moves, shake, cuts, contact sheets', repo: 'GTKottman/Blender-Cam', build: 'scripts/build_addon.py', zip: 'dist/blender_cam_mcp.zip', kit: 'camera', skills: ['skills/blender-camera-director'] },
   { id: 'blender_animate', name: 'Animate', about: 'easing, springs, paths and motion analysis', repo: 'GTKottman/Blender-Animate', build: 'scripts/build_addon.py', zip: 'dist/blender_animate.zip', kit: 'animate', skills: ['skills/blender-animate'] },
   { id: 'blender_math_bridge', name: 'Math', about: 'LaTeX and exact math, drawn in 3D', repo: 'GTKottman/Blender-Math', build: 'scripts/build_addon.py', zip: 'dist/blender_math_bridge.zip', kit: 'math', skills: ['.claude/skills/blender-math'] },
@@ -554,11 +585,13 @@ async function blenderPython(bin) {
   return py;
 }
 
-// A repository's default branch, unpacked under tools/blender-addons/src/<name> (replaced on every install).
-async function fetchRepo(root, repo, log) {
+// A repository's default branch (or a pinned `commit`, checked against `sha256`), unpacked under
+// tools/blender-addons/src/<name> (replaced on every install).
+async function fetchRepo(root, repo, log, { commit = null, sha256 = null } = {}) {
   const name = repo.split('/')[1];
   const dest = join(toolsDir(root), 'blender-addons', 'src', name);
-  const tgz = await download(`https://codeload.github.com/${repo}/tar.gz/HEAD`, join(toolsDir(root), 'downloads', `${name}.tar.gz`), log);
+  const tgz = await download(`https://codeload.github.com/${repo}/tar.gz/${commit || 'HEAD'}`, join(toolsDir(root), 'downloads', `${name}.tar.gz`), log);
+  if (sha256) await checkFileSha256(tgz, sha256, `${repo}@${commit.slice(0, 7)}`, log);
   rmSync(dest, { recursive: true, force: true });
   mkdirSync(dest, { recursive: true });
   await run(plat.systemTar(), ['-xzf', tgz, '-C', dest, '--strip-components=1'], { log });
@@ -591,10 +624,10 @@ async function installAddons(root, log) {
   for (const a of ADDONS) {
     log(`\n${a.name}: ${a.about}`);
     let zip;
-    if (a.vendored) {
+    if (a.vendored || a.stage) {
       const stage = join(toolsDir(root), 'blender-addons', 'stage', a.id);
       rmSync(stage, { recursive: true, force: true });
-      const src = join(REPO_ROOT, a.vendored);
+      const src = a.vendored ? join(REPO_ROOT, a.vendored) : await fetchRepo(root, a.repo, log, { commit: a.commit, sha256: a.sha256 });
       const { cpSync, copyFileSync } = await import('node:fs');
       cpSync(join(src, a.dir), join(stage, a.id), { recursive: true });
       if (a.stage) {
@@ -717,7 +750,7 @@ async function installDawEngine(root, log, { build = false } = {}) {
   return st;
 }
 
-const INSTALLERS = { transitions: installTransitions, strudel: installStrudel, chrome: installChrome, 'browser-harness': installBrowserHarness, blender: installBlender, 'blender-addons': installAddons, comfyui: installComfy,
+const INSTALLERS = { uv: async (_root, log) => { await ensureUv(log); return uvStatus(); }, transitions: installTransitions, strudel: installStrudel, chrome: installChrome, 'browser-harness': installBrowserHarness, blender: installBlender, 'blender-addons': installAddons, comfyui: installComfy,
   'daw-engine': installDawEngine, craft: (root, log) => craft.installCraft(root, { log }) };
 export const TOOLS = Object.keys(INSTALLERS);
 
@@ -725,12 +758,13 @@ export const TOOL_INFO = {
   transitions: { name: 'Transitions library', what: 'github.com/GTKottman/remotion-transitions (MIT): 50 transitions for Remotion, a catalog and a preview of each', where: 'tools/remotion-transitions', size: '~5 MB' },
   strudel: { name: 'Strudel', what: `@strudel/web ${STRUDEL_VERSION} from npm (AGPL-3.0)`, where: 'tools/strudel', size: '~20 MB' },
   chrome: { name: 'Headless Chrome', what: 'Chrome for Testing\'s headless shell, from Google (only if you have no Chrome or Chromium)', where: 'tools/browsers', size: '~100 MB' },
+  uv: { name: 'uv (Python)', what: 'Astral\'s uv, which installs and runs the Python tools (browser-harness, ComfyUI) with their own Python, from astral.sh', where: '~/.local/bin', size: '~40 MB' },
   'browser-harness': { name: 'browser-harness', what: 'browser-use/browser-harness, installed with uv (Python 3.12) as your own tool', where: '~/.local/bin', size: '~60 MB' },
   comfyui: { name: 'ComfyUI + TTS Audio Suite', what: 'ComfyUI and diodiogod/TTS-Audio-Suite from GitHub, PyTorch with CUDA, in their own Python environment; the Qwen3-TTS models download on first use', where: 'tools/ComfyUI', size: '~10 GB with the models' },
   blender: { name: 'Blender', what: 'the newest official build from download.blender.org (your own Blender is reused if you have one)', where: 'tools/blender', size: '~350 MB' },
   craft: { name: 'The Craft apps', what: `the official builds of the apps you picked, from github.com/${craft.OWNER}, each checked against its release's SHA256SUMS and started once as an MCP server`, where: 'tools/craft', size: '15-80 MB each' },
   'daw-engine': { name: 'Sound engine', what: 'mortiflix-engine (this repository\'s engine/, AGPL-3.0) built from the pinned Tracktion Engine (GPL-3.0) and JUCE (AGPL-3.0) commits with CMake and Ninja', where: 'tools/daw-engine (source and build files in ~/.cache/mortiflix)', size: '~27 MB (+ ~400 MB cache)' },
-  'blender-addons': { name: 'The 3D toolkits', what: 'MoBlend, Camera, Animate, Math, Circuits and Camera Flight from their GitHub repositories, and Nova FX from this repository, installed into the studio\'s own Blender profile', where: 'tools/blender-profile', size: '~15 MB' },
+  'blender-addons': { name: 'The 3D toolkits', what: 'MoBlend, Nova FX, Camera, Animate, Math, Circuits and Camera Flight from their GitHub repositories (Nova FX pinned to a checked commit), installed into the studio\'s own Blender profile', where: 'tools/blender-profile', size: '~15 MB' },
 };
 
 export async function installTool(root, id, { log = () => {}, build = false } = {}) {
@@ -767,7 +801,7 @@ export const blenderDocsDir = (root) => join(toolsDir(root), 'blender-addons', '
 // What the session brief says about this studio's tools (no network calls: ComfyUI is the narration skill's business).
 export function setupStatusSync(root) {
   const config = loadConfig(root);
-  return { transitions: transitionsStatus(root), strudel: strudelStatus(root), chrome: chromeStatus(root), 'browser-harness': browserHarnessStatus(), blender: blenderStatus(root),
+  return { transitions: transitionsStatus(root), strudel: strudelStatus(root), chrome: chromeStatus(root), 'browser-harness': browserHarnessStatus(), uv: uvStatus(), blender: blenderStatus(root),
     'blender-addons': addonsStatus(root), craft: craft.craftStatus(root), music: musicConfig(config), daw: dawConfig(config), assets: assetsConfig(config) };
 }
 

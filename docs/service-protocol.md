@@ -155,6 +155,8 @@ Cards: `script {beats}`, `looks {frames, using}`, `shots`/`transitions {nodes}`,
 | `keys.list` | `{}` | `[{id, name, for, get, set, source}]`, never the values |
 | `keys.set` / `keys.remove` | `{id, value}` / `{id}` | `anthropic`, `elevenlabs`, `uploadpost`, `postiz` (secrets.json) and `gemini` (session.env) |
 | `keys.check` | `{id}` | a free check of a saved key (network, only on request) |
+| `components.status` | `{}` | `{components: [{id, name, for, what, where, size, default, needs, installed, detail, path}], installing: [id]\|null}`: the installer's components (blender, blender-addons, chrome, strudel, transitions, uv, comfyui) |
+| `components.install` | `{ids?: [id] \| "default" \| "all"}` | `{started: [id]}` at once; then `components.progress` events and one `components.done`. `busy` while one runs. A failed component never stops the others |
 
 ## Events
 
@@ -170,6 +172,8 @@ Cards: `script {beats}`, `looks {frames, using}`, `shots`/`transitions {nodes}`,
 | `assets.progress` | `{project, asset, name, done, total}` |
 | `assets.added` / `assets.failed` | `{project, asset, replaced?}` / `{project, path?, asset?, message}` |
 | `render.job` | a queue job `{id, label, state: waiting\|running\|done\|failed, project, external?, kind?, progress?, file?, error?, cancelled?}` |
+| `components.progress` | `{id, phase: start\|line\|done\|failed\|skipped, name?, size?, line?, detail?, error?, seconds?}` |
+| `components.done` | `{results: [{id, ok, detail?, error?, problems?, seconds}], error?}` |
 
 ## Engine changes behind it
 
