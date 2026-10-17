@@ -191,9 +191,18 @@ export function syncCanvas(root, id) {
     }
 
     const board = readJson(work, 'transitions/board.json', problems);
+    const ends = cutEnds(nodes, frames);
     (board?.cuts || []).forEach((c, i) => {
-      const tid = c.id || `t${String(i + 1).padStart(2, '0')}`;
-      put(tid, 'transition', { label: tid.toUpperCase(), title: c.transition || c.name || c.style || 'cut', from: c.from_scene || null, to: c.to_scene || null, order: i, beat: null }, { sha: sha(JSON.stringify(c)) });
+      if (!c || typeof c !== 'object') return;
+      const tid = /^t\d{2,3}$/.test(String(c.id || '')) ? c.id : `t${String(i + 1).padStart(2, '0')}`;
+      const [from, to] = ends(c);
+      // its picture or clip: what the board names, else the board's own render (out/board/cut-01.mp4 / .png)
+      const n2 = String(i + 1).padStart(2, '0');
+      const rel = [c.file, c.video, c.clip, c.preview, `out/board/cut-${n2}.mp4`, `out/board/cut-${n2}.webm`, `out/board/cut-${n2}.png`, `out/board/cut-${n2}.jpg`]
+        .find((x) => typeof x === 'string' && workFile(work, x));
+      const media = rel ? snapshot(rel, tid) : null;
+      put(tid, 'transition', { label: tid.toUpperCase(), title: transitionName(c), from, to, order: i, beat: to ? nodes[to]?.beat || null : null },
+        { sha: sha(JSON.stringify(c) + (media?.sha || '')), ...(media ? { file: media.file } : {}) });
     });
 
     // Ids are forever: a node that disappeared from the files stays, marked missing, never deleted.
@@ -212,6 +221,37 @@ export function syncCanvas(root, id) {
     writeFileSync(cp.graph, JSON.stringify(graph, null, 2));
     return graph;
   });
+}
+
+// A transition's name: the board's `transition` (a string, or {new, inspired_by} for a new one), else its name/style.
+function transitionName(c) {
+  const t = c.transition;
+  const name = typeof t === 'string' ? t : t && typeof t === 'object' ? t.new || t.name || t.kind : null;
+  return String(name || c.name || c.style || 'cut').replace(/[-_]+/g, ' ').trim().slice(0, 80) || 'cut';
+}
+
+// Which cut of the film a board transition sits on (the shot before → the shot after). Boards say it in several
+// ways: shot ids (`from_scene`/`to_scene`, or s03 in `from`/`to`), the beat it lands on (`lands_on: "… in B03"`,
+// `to_beat`), or the style frames on either side (`from: "SF01 · Opening"`, `to: "SF02 · …"`: the cut into the
+// first shot of the next frame's beats). Unknown = [null, null] (it shows on no cut).
+function cutEnds(nodes, frames) {
+  const shots = Object.values(nodes).filter((n) => n.kind === 'shot').sort((a, b) => a.order - b.order).map((n) => n.id);
+  const shotOf = (v) => { const m = String(v ?? '').match(/\b(s\d{2,3})\b/i); return m && nodes[m[1].toLowerCase()]?.kind === 'shot' ? m[1].toLowerCase() : null; };
+  const beatOf = (v) => String(v ?? '').match(/\b(b\d{2,3})\b/i)?.[1]?.toLowerCase() || null;
+  const frameOf = (v) => String(v ?? '').match(/\b(sf\d{2,3})\b/i)?.[1]?.toLowerCase() || null;
+  const firstShotOf = (beat) => shots.find((s) => nodes[s].beat === beat) || null;
+  const into = (to) => { const i = shots.indexOf(to); return i > 0 ? [shots[i - 1], to] : [null, null]; };
+  return (c) => {
+    if (shotOf(c.from_scene) && shotOf(c.to_scene)) return [shotOf(c.from_scene), shotOf(c.to_scene)];
+    if (shotOf(c.from) && shotOf(c.to)) return [shotOf(c.from), shotOf(c.to)];
+    const beat = beatOf(c.to_beat) || beatOf(c.lands_on) || beatOf(c.to);
+    if (beat && firstShotOf(beat)) return into(firstShotOf(beat));
+    const f = frameOf(c.to);
+    const fr = f && frames.find((x) => x?.id === f);
+    const first = f ? (fr?.beats || []).map(firstShotOf).find(Boolean) || shots.find((s) => nodes[s].look === f) : null;
+    if (first) return into(first);
+    return [null, null];
+  };
 }
 
 // ---- what the owner does on the canvas, and the edit requests it makes ----
