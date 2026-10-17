@@ -29,6 +29,30 @@ pub struct Host {
     pub edit_workspace: String,
     /// Stage 6 Render: the Export page (part 39, `mortiflix_export.rs`).
     pub export: crate::mortiflix_export::ExportHost,
+    /// The OS window title last sent (sent again only when it changes).
+    pub window_title: String,
+}
+
+/// The document title the header shows (and the OS window gets) while a Mortiflix project is open:
+/// "<project title> – Mortiflix FilmCraft", not FilmCraft's own project name ("FilmCraft Demo").
+/// None = no Mortiflix project: FilmCraft's own title.
+pub fn doc_title(app: &FilmcraftApp) -> Option<String> {
+    let s = &app.mfx.core.state;
+    if !s.active || s.project_id.is_none() {
+        return None;
+    }
+    let name = s.project_title.trim();
+    Some(if name.is_empty() { "Mortiflix FilmCraft".to_string() } else { format!("{name} \u{2013} Mortiflix FilmCraft") })
+}
+
+/// The OS window title follows the header's (FilmCraft's unsaved mark kept).
+fn window_title(app: &mut FilmcraftApp, ctx: &egui::Context) {
+    let base = doc_title(app).unwrap_or_else(|| "Mortiflix FilmCraft".to_string());
+    let title = if app.session.is_dirty() { tlf!("{name} - Edited", name = base) } else { base };
+    if title != app.mfx.window_title {
+        ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
+        app.mfx.window_title = title;
+    }
 }
 
 const fn cmd(id: &'static str, label: &'static str, menu: &'static [&'static str], shortcut: Option<&'static str>) -> UiCommand {
@@ -171,6 +195,7 @@ pub fn frame_begin(app: &mut FilmcraftApp, ctx: &egui::Context) {
         mfx::script::save(&mut core.state.script, &mut core.service);
     }
     script_go_on(app, ctx);
+    window_title(app, ctx);
     crate::mortiflix_preview::frame(app, ctx);
     crate::mortiflix_into::frame(app, ctx);
     crate::mortiflix_export::frame(app, ctx);
@@ -619,6 +644,18 @@ mod tests {
         // no host dialog here: nothing is picked, nothing breaks
         assert!(crate::menus::invoke(&mut app, &ctx, "mortiflix.chooseFiles", json!({"purpose": "k", "exts": [1, "png"], "folder": "yes"})).is_ok());
         assert!(app.mfx.core.state.take_paths("k").is_empty());
+    }
+
+    #[test]
+    fn the_title_names_the_mortiflix_project_not_filmcrafts_demo() {
+        let mut app = FilmcraftApp::new(filmcraft_engine::Session::default());
+        assert_eq!(doc_title(&app), None);
+        app.mfx.core.activate();
+        app.mfx.core.state.apply_service_message(&json!({"event": "status", "data": {"project": "p1", "title": "Why the Sky Is Blue"}}));
+        assert_eq!(doc_title(&app).as_deref(), Some("Why the Sky Is Blue \u{2013} Mortiflix FilmCraft"));
+        let ctx = egui::Context::default();
+        window_title(&mut app, &ctx);
+        assert!(app.mfx.window_title.starts_with("Why the Sky Is Blue \u{2013} Mortiflix FilmCraft"));
     }
 
     #[test]

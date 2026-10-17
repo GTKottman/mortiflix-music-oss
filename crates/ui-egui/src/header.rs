@@ -72,7 +72,9 @@ pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
         left_end = mu.min_rect().max.x;
     }
     // Document title, centred
-    let title = if app.session.is_dirty() { tlf!("{name} - Edited", name = app.session.project.name) } else { app.session.project.name.clone() };
+    // A Mortiflix project open: "<its title> – Mortiflix FilmCraft" (the unsaved mark kept)
+    let name = crate::mortiflix::doc_title(app).unwrap_or_else(|| app.session.project.name.clone());
+    let title = if app.session.is_dirty() { tlf!("{name} - Edited", name = name) } else { name };
     // Right cluster: icons at ~38 pt pitch, then workspace name in caps.
     let mut rx = rect.max.x - 14.0;
     let mut btn = |ui: &mut egui::Ui, icon: Icon, id: &str, tip: &str, app: &mut FilmcraftApp| -> egui::Response {

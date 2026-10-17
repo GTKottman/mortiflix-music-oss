@@ -245,6 +245,10 @@ impl MfxState {
                 if let Some(p) = data.get("project").and_then(Value::as_str) {
                     self.project_id = Some(p.chars().take(200).collect());
                 }
+                // the project's title (window title, export names)
+                if let Some(t) = data.get("title").and_then(Value::as_str).map(str::trim).filter(|t| !t.is_empty()) {
+                    self.project_title = t.chars().take(200).collect();
+                }
             }
             "chat.message" => {
                 if let Ok(m) = serde_json::from_value::<ChatMessage>(data.clone()) {
@@ -279,6 +283,8 @@ mod tests {
         assert_eq!(s.status(1).line(), "making 9/14");
         assert_eq!(s.status(2).kind, StatusKind::NotStarted);
         assert_eq!(s.status(3).line(), "2 need you");
+        s.apply_service_message(&json!({"event": "status", "data": {"project": "p1", "title": "Why the Sky Is Blue"}}));
+        assert_eq!(s.project_title, "Why the Sky Is Blue");
         s.apply_service_message(&json!({"event": "chat.message", "data": {"role": "ai", "text": "Hi"}}));
         s.apply_service_message(&json!({"event": "chat.message", "data": 7}));
         s.apply_service_message(&json!({"event": 3}));
