@@ -79,6 +79,7 @@ pub fn show(
             "voice" => voice(ui, ctx, msg, card, open, out),
             "music" => music(ui, ctx, msg, card, answered, out),
             "themes" => themes(ui, ctx, msg, card, samples, out),
+            "cues" => crate::voice_music::show_cue_plan(ui, ctx),
             "defaults" | "submission" => defaults(ui, ctx, msg, card, answered, out),
             "render" => render(ui, ctx, msg, card, out),
             _ => {}
@@ -179,15 +180,44 @@ fn script(ui: &mut egui::Ui, ctx: &mut MfxCtx, msg: usize, card: &Value, open: b
 }
 
 /// A fixed 16:9 frame (rule: framed for real content, nothing drawn over it).
-fn frame(ui: &mut egui::Ui, w: f32, fill: Color32, outline: Option<Color32>) -> egui::Response {
+fn frame(ui: &mut egui::Ui, w: f32, fill: Color32, outline: Option<Color32>, still: Option<&str>) -> egui::Response {
     let (r, resp) = ui.allocate_exact_size(vec2(w, w * 9.0 / 16.0), Sense::click());
     ui.painter().rect_filled(r, 4.0, fill);
+    if let Some(path) = still.map(std::path::Path::new).filter(|p| p.is_absolute()) {
+        // the piece's still (graph.get `still`, the node area's decoder and cache), cropped to fill
+        let stills = crate::nodes::stills::Stills::of(ui.ctx());
+        stills.poll(ui.ctx());
+        match stills.get(path) {
+            Some(tex) => {
+                let [tw, th] = tex.size().map(|x| x.max(1) as f32);
+                let (fw, fh) = (r.width().max(1.0), r.height().max(1.0));
+                let (sx, sy) = if tw / th > fw / fh { ((fw / fh) / (tw / th), 1.0) } else { (1.0, (tw / th) / (fw / fh)) };
+                let uv = egui::Rect::from_min_max(pos2((1.0 - sx) / 2.0, (1.0 - sy) / 2.0), pos2((1.0 + sx) / 2.0, (1.0 + sy) / 2.0));
+                ui.painter().image(tex.id(), r, uv, Color32::WHITE);
+            }
+            None => ui.ctx().request_repaint_after(std::time::Duration::from_millis(250)),
+        }
+    }
     if let Some(c) = outline {
         ui.painter().rect_stroke(r.expand(2.0), 5.0, Stroke::new(2.0, c), egui::StrokeKind::Outside);
     } else if resp.hovered() {
         ui.painter().rect_stroke(r.expand(2.0), 5.0, Stroke::new(1.0, Color32::from_gray(120)), egui::StrokeKind::Outside);
     }
     resp
+}
+
+/// The picture of a node's version (`v`, else the one that plays) from `graph.get`: its `still` (a
+/// shot version's first frame, PNG), else the version itself when it is a picture (a look).
+fn still_of(graph: &Value, node: &str, v: Option<u64>) -> Option<String> {
+    let raw = model::raw_node(graph, node)?;
+    let want = v.or_else(|| raw.get("plays").or_else(|| raw.get("current")).and_then(Value::as_u64));
+    let vs = raw.get("versions")?.as_array()?;
+    let ver = vs.iter().find(|x| x.get("v").and_then(Value::as_u64) == want).or_else(|| vs.last())?;
+    let picture = |p: &&str| {
+        let ext = std::path::Path::new(p).extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).unwrap_or_default();
+        matches!(ext.as_str(), "png" | "jpg" | "jpeg" | "webp")
+    };
+    ver.get("still").and_then(Value::as_str).filter(|x| !x.is_empty()).or_else(|| ver.get("path").and_then(Value::as_str).filter(picture)).map(str::to_string)
 }
 
 fn looks(ui: &mut egui::Ui, ctx: &mut MfxCtx, msg: usize, card: &Value, answered: &BTreeMap<String, String>, out: &mut CardOut) {
@@ -214,7 +244,8 @@ fn looks(ui: &mut egui::Ui, ctx: &mut MfxCtx, msg: usize, card: &Value, answered
                     ui.set_width(w);
                     let beat_colour = model::node(&ctx.state.graph, &text(l, "beat")).colour.map(|c| c.gamma_multiply(0.5));
                     let fill = l.get("colour").and_then(model::hex_colour).or(beat_colour).unwrap_or(t.hover);
-                    let r = frame(ui, w, fill, on.then_some(t.text));
+                    let still = Some(text(l, "still")).filter(|x| !x.is_empty()).or_else(|| still_of(&ctx.state.graph, &id, None));
+                    let r = frame(ui, w, fill, on.then_some(t.text), still.as_deref());
                     let r = r.on_hover_text(format!("Use {name}"));
                     if r.clicked() && !on {
                         if question.is_empty() {
@@ -257,7 +288,7 @@ fn versions(ui: &mut egui::Ui, ctx: &mut MfxCtx, msg: usize, card: &Value, out: 
                 a.iter()
                     .take(12)
                     .filter_map(|v| v.get("v").and_then(Value::as_u64).or_else(|| v.as_u64()))
-                    .map(|v| json!({"v": v, "inUse": Some(v) == plays}))
+                    .map(|v| json!({"v": v, "inUse": Some(v) == plays, "still": still_of(&ctx.state.graph, &node, Some(v))}))
                     .collect()
             })
             .unwrap_or_default();
@@ -275,7 +306,8 @@ fn versions(ui: &mut egui::Ui, ctx: &mut MfxCtx, msg: usize, card: &Value, out: 
             let making = v.get("making").and_then(Value::as_bool).unwrap_or(false);
             ui.vertical(|ui| {
                 ui.set_width(w);
-                let r = frame(ui, w, if making { t.panel_bg } else { t.hover }, in_use.then_some(t.text));
+                let still = Some(text(v, "still")).filter(|x| !x.is_empty() && !making);
+                let r = frame(ui, w, if making { t.panel_bg } else { t.hover }, in_use.then_some(t.text), still.as_deref());
                 if making {
                     // striped slot: the new version is on its way
                     let p = ui.painter().with_clip_rect(r.rect);
@@ -441,6 +473,8 @@ fn themes(ui: &mut egui::Ui, ctx: &mut MfxCtx, msg: usize, card: &Value, samples
     if card.get("themes").is_some() {
         return music(ui, ctx, msg, card, &BTreeMap::new(), out);
     }
+    // the theme in words and the one in use (part 05, doc 33b), then the samples to hear here
+    crate::voice_music::show_theme_card(ui, ctx);
     match samples {
         None => {
             if button(ui, ctx, &format!("mfx.chat.card.{msg}.hearThemes"), "Hear the music themes").clicked() {
@@ -471,6 +505,9 @@ fn themes(ui: &mut egui::Ui, ctx: &mut MfxCtx, msg: usize, card: &Value, samples
             }
         }
     }
+    // the per-beat music cues once the beats exist (doc 33b)
+    ui.add_space(6.0);
+    crate::voice_music::show_cue_plan(ui, ctx);
 }
 
 /// Questions that went on with their defaults (or a submission's questions): each one's chips, the
