@@ -500,6 +500,11 @@ pub fn tick(state: &mut MfxState, service: &mut Service) {
                 st.editing = None;
             }
             st.script = script;
+            // the last save's remakes are all in: say so
+            let busy = st.script.beats.iter().flat_map(|b| &b.lines).any(|l| l.remaking_shots + l.remaking_lines > 0);
+            if !busy && st.saving_req.is_none() && st.note.starts_with("Saved · remaking") {
+                st.note = st.note.replacen("Saved · remaking", "Saved · remade", 1);
+            }
         } else if r.error.get("code").and_then(Value::as_str) != Some("no_project") {
             st.note = format!("Couldn't read the script: {}", text(&r.error, "message", 200));
         }
