@@ -27,6 +27,7 @@ import { scriptView, applyScriptEdits, remakesFor, scriptActionText, scriptLogge
 import { lookView, useLook, moreLooks } from './svc/look.mjs';
 import { appendChat, chatHistory, translateEvents, typedMove, quickReply, applyMove, initChat, actionText, askAI } from './svc/chat.mjs';
 import { nameBeats, unnamed } from './svc/beatnames.mjs';
+import { activeWork } from './svc/work.mjs';
 import { exportTarget, deliverFromApp, postPlan, postSend } from './svc/export.mjs';
 import * as setup from './svc/setup.mjs';
 import { componentsStatus, installComponents, parseComponents } from './components.mjs';
@@ -76,6 +77,8 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
   let lastStatus = '';
   let lastNodes = new Map();
   let lastProjectState = '';
+  let lastWork = '';
+  let work = null; // the last work.active data for the open project
   let timer = null;
   let interval = null;
   let closed = false;
@@ -120,6 +123,8 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
   function liveLine(p) {
     if (!p) return runnerNote || '';
     if (p.state === 'paused' && p.needs_you) return `Needs you: ${p.needs_you.text}`.slice(0, 300);
+    // what the AI is doing, in plain words with progress (work.active `doing`)
+    if (p.session?.running && work?.project === p.id && work.doing) return work.doing.slice(0, 300);
     if (p.status?.text) return p.status.text;
     const last = (activity.get(p.id) || []).filter((a) => ['text', 'tool'].includes(a.kind)).at(-1);
     if (p.session?.running && last) return String(last.text).split('\n')[0].slice(0, 200);
@@ -204,10 +209,21 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
         if (lastNodes.size && changed.length) emit('node.changed', { project: id, rev: g.rev, nodes: changed });
         else if (!lastNodes.size && seen.size) emit('node.changed', { project: id, rev: g.rev, nodes: [], all: true });
         lastNodes = seen;
+        refreshWork(id, g);
       } catch (e) { console.error(`tick: ${e.message}`); }
     }
     status();
   }
+  // What the AI is working on (svc/work.mjs): sent as `work.active` whenever it changes (and on hello).
+  function refreshWork(id, g, force = false) {
+    let p;
+    try { p = loadProject(root, id); } catch { return; }
+    const render = queue.list().find((j) => j.project === id && j.state === 'running') || null;
+    work = activeWork(root, id, { running: Boolean(p.session?.running), g, activity: activity.get(id) || [], render });
+    const key = JSON.stringify(work);
+    if (force || key !== lastWork) { lastWork = key; emit('work.active', work); }
+  }
+
   function poke(ms = 150) {
     if (closed) return;
     if (timer && ms > 0) return;
@@ -224,6 +240,8 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
     state.stage = stage ?? p.mfx?.stage ?? 0;
     lastNodes = new Map();
     lastProjectState = '';
+    lastWork = '';
+    work = null;
     poke(0);
   }
 
@@ -264,7 +282,7 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
   const handlers = {
     hello: (p) => {
       const result = { service: 'mortiflix-service', version: version(), protocol: PROTOCOL, studio: root, client: String(p?.client || ''), runner: Boolean(runner), runner_note: runnerNote || null, types: Object.keys(handlers).sort() };
-      setImmediate(() => status(true));
+      setImmediate(() => { status(true); if (projectId()) { try { refreshWork(projectId(), canvasView(root, projectId()), true); } catch { /* no canvas yet */ } } });
       return result;
     },
     'state.get': () => ({ project: state.project, stage: state.stage, stages: state.stages, line: state.line, context: state.context }),
@@ -311,7 +329,9 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
       openProject(project);
       return { project, stage: state.stage };
     },
-    'project.close': () => { state.project = null; state.stage = 0; lastNodes = new Map(); status(true); return { closed: true }; },
+    'project.close': () => { state.project = null; state.stage = 0; lastNodes = new Map(); work = null; lastWork = ''; emit('work.active', { project: null, running: false, step: null, nodes: [], current: null, doing: '', progress: null, shots_eta_min: null, before_shots: [] }); status(true); return { closed: true }; },
+    // What the AI is working on now (also the work.active event): the pieces it makes or remakes, in plain words.
+    'work.get': (p) => { const id = needProject(p); const pr = loadProject(root, id); return activeWork(root, id, { running: Boolean(pr.session?.running), g: canvasView(root, id), activity: activity.get(id) || [], render: queue.list().find((j) => j.project === id && j.state === 'running') || null }); },
     'project.start': (p) => { const r = startProject(root, needProject(p)); runner?.wake(); poke(); return { project: r }; },
     'project.pause': (p) => { const id = needProject(p); gates.pause(root, id); runner?.stopProject(id); poke(); return { paused: true }; },
     'project.resume': (p) => { gates.resume(root, needProject(p)); runner?.wake(); poke(); return { resumed: true }; },

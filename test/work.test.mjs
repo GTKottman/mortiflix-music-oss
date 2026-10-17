@@ -1,0 +1,67 @@
+// work.active (owner's first run: "It should be obvious what's being worked on"): only real state, in plain words.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { writeFileSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { tempStudio } from './helpers.mjs';
+import { createProject, update } from '../src/projects.mjs';
+import { syncCanvas, canvasView, nodeAction } from '../src/canvas.mjs';
+import { activeWork } from '../src/svc/work.mjs';
+import { createService } from '../src/service.mjs';
+
+function project(t) {
+  const root = tempStudio(t);
+  const p = createProject(root, { pipeline: 'explainer', title: 'Work', answers: { topic: 'x' } });
+  const work = join(root, 'projects', p.id);
+  mkdirSync(join(work, 'script'), { recursive: true });
+  writeFileSync(join(work, 'script', 'beats.json'), JSON.stringify({ beats: ['One.', 'Two.', 'Three.'].map((w, i) => ({ id: `b0${i + 1}`, words: w })) }));
+  syncCanvas(root, p.id);
+  return { root, id: p.id };
+}
+const steps = (root, id, done) => update(root, id, (p) => { p.state = 'queued'; for (const k of done) p.steps[k] = { state: 'approved', version: 1 }; });
+
+test('work: nothing is animated while no session runs; the steps before the shots are named', (t) => {
+  const { root, id } = project(t);
+  steps(root, id, ['brief', 'script', 'style-frames']);
+  const w = activeWork(root, id, { running: false, g: canvasView(root, id) });
+  assert.equal(w.running, false);
+  assert.deepEqual(w.nodes, []);
+  assert.ok(w.before_shots.length >= 1, JSON.stringify(w.before_shots));
+});
+
+test('work: the step the runner is on, its pieces not made yet, and the doing line with progress', (t) => {
+  const { root, id } = project(t);
+  steps(root, id, ['brief', 'script', 'style-frames']);
+  let w = activeWork(root, id, { running: true, g: canvasView(root, id) });
+  assert.equal(w.step.key, 'transitions');
+  assert.equal(w.doing, 'Making the transitions between shots: cut 1 of 2');
+  assert.deepEqual(w.progress, { done: 0, total: 2, noun: 'transitions' });
+  steps(root, id, ['transitions']);
+  w = activeWork(root, id, { running: true, g: canvasView(root, id), activity: [{ kind: 'text', text: 'Rendering S02 now' }] });
+  assert.equal(w.step.key, 'animatic');
+  assert.equal(w.doing, 'Animating shot 1 of 3');
+  assert.deepEqual(w.nodes.map((n) => [n.id, n.what, n.v]), [['s01', 'making', 1], ['s02', 'making', 1], ['s03', 'making', 1]]);
+  assert.equal(w.current, 's02', 'the activity names the piece it is on');
+  // the owner's Fix comes first
+  nodeAction(root, id, 's03', { action: 'fix', text: 'bluer' });
+  w = activeWork(root, id, { running: true, g: canvasView(root, id), render: { progress: { percent: 40 } } });
+  assert.deepEqual(w.nodes.map((n) => [n.id, n.what]), [['s03', 'making']]);
+  assert.equal(w.doing, 'Making shot 3 (your Fix) · rendering 40%');
+});
+
+test('work: the service sends work.active and the status line says what the AI does', async (t) => {
+  const { root, id } = project(t);
+  const out = [];
+  const svc = createService({ root, send: (m) => out.push(m), runner: false, tickMs: 0 });
+  t.after(() => svc.close());
+  await svc.handle({ id: 1, type: 'project.open', params: { id } });
+  steps(root, id, ['brief', 'script', 'style-frames', 'transitions']);
+  update(root, id, (p) => { p.session = { running: true, id: 'x' }; });
+  svc.poke(0);
+  await new Promise((r) => setTimeout(r, 60));
+  const ev = out.filter((m) => m.event === 'work.active').at(-1)?.data;
+  assert.equal(ev?.doing, 'Animating shot 1 of 3');
+  assert.equal(out.filter((m) => m.event === 'status').at(-1).data.line, 'Animating shot 1 of 3');
+  await svc.handle({ id: 2, type: 'work.get', params: {} });
+  assert.equal(out.find((m) => m.id === 2).result.nodes.length, 3);
+});
