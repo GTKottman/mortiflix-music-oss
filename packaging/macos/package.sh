@@ -3,8 +3,20 @@
 #
 #   $DIST/filmcraft-<version>-macos-<arch>.dmg          FilmCraft.app on a drag-to-Applications DMG
 #   $DIST/filmcraft-cli-<version>-macos-<arch>.zip      the headless CLI
+#   $DIST/filmcraft-<version>-macos-<arch>.pkg          Mortiflix FilmCraft: the app + "Mortiflix tools" choices
+#                                                       (Blender, 3D toolkits, Chrome, Strudel, transitions, uv
+#                                                       ticked; ComfyUI not), downloaded during the install.
+#                                                       Signed with MACOS_INSTALLER_IDENTITY ("Developer ID
+#                                                       Installer") when set; notarized like the DMG.
 #
-# Usage: packaging/macos/package.sh [--arch universal|aarch64|x86_64] [--skip-build]
+# Usage: packaging/macos/package.sh [--arch universal|aarch64|x86_64] [--skip-build] [--no-mortiflix]
+#
+# Mortiflix FilmCraft: FilmCraft.app also carries the Mortiflix bundle (the service, its own Node,
+# ffmpeg, the sound engine) in Contents/Resources/mortiflix, made by packaging/mortiflix/bundle.sh
+# (env: MFX_SERVICE_SRC, NODE_VERSION, FFMPEG_SHA256, ...; MFX_ENGINE_BIN = the arm64 or only
+# engine, MFX_ENGINE_BIN_X64 = the x86_64 one for a universal build). Universal: each tool is
+# lipo'd from its arm64 and x86_64 builds. Every Mach-O in it is signed with the hardened runtime
+# (Node with packaging/mortiflix/node-entitlements.plist), so it notarizes with the app.
 #
 # Signing (env):
 #   MACOS_SIGN_IDENTITY   codesign identity (name or SHA-1). Default "-" = ad-hoc (local testing;
@@ -19,11 +31,13 @@ HERE="$ROOT/packaging/macos"
 
 ARCH=universal
 SKIP_BUILD=0
+MORTIFLIX=1
 while [ $# -gt 0 ]; do
   case "$1" in
     --arch) ARCH="$2"; shift 2 ;;
     --skip-build) SKIP_BUILD=1; shift ;;
-    -h | --help) sed -n '2,16p' "$0"; exit 0 ;;
+    --no-mortiflix) MORTIFLIX=0; shift ;;
+    -h | --help) sed -n '2,24p' "$0"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -42,6 +56,7 @@ WORK="$CARGO_TARGET_DIR/macos-package"
 APP="$WORK/FilmCraft.app"
 DMG="$DIST/filmcraft-$VERSION-macos-$ARCH.dmg"
 CLI_ZIP="$DIST/filmcraft-cli-$VERSION-macos-$ARCH.zip"
+PKG="$DIST/filmcraft-$VERSION-macos-$ARCH.pkg"
 
 NOTARIZE=0
 if [ "$IDENTITY" = "-" ]; then
@@ -111,8 +126,43 @@ printf 'APPL????' >"$APP/Contents/PkgInfo"
 # licences of the embedded craft-fonts fonts (builds with CRAFT_FONTS_DIR)
 copy_font_licences "$APP/Contents/Resources"
 
+# ---- Mortiflix bundle --------------------------------------------------------------------------
+# Found by the app at ../Resources/mortiflix from Contents/MacOS (crates/mortiflix-ui/src/service.rs).
+MFX="$APP/Contents/Resources/mortiflix"
+if [ "$MORTIFLIX" = 1 ]; then
+  BUNDLE_SH="$ROOT/packaging/mortiflix/bundle.sh"
+  case "$ARCH" in
+    aarch64) "$BUNDLE_SH" --os macos --arch arm64 --out "$MFX" ;;
+    x86_64) "$BUNDLE_SH" --os macos --arch x64 --out "$MFX" ;;
+    universal)
+      "$BUNDLE_SH" --os macos --arch arm64 --out "$MFX"
+      MFX_ENGINE_BIN="${MFX_ENGINE_BIN_X64:-}" "$BUNDLE_SH" --os macos --arch x64 --out "$WORK/mortiflix-x64"
+      while IFS= read -r f; do
+        twin="$WORK/mortiflix-x64/${f#"$MFX"/}"
+        if [ -f "$twin" ] && lipo -info "$f" >/dev/null 2>&1; then
+          lipo -create -output "$f.universal" "$f" "$twin"
+          mv "$f.universal" "$f"
+          lipo -info "$f"
+        elif lipo -info "$f" >/dev/null 2>&1; then
+          warn "$(basename "$f") has no x86_64 build: it runs on Apple silicon only"
+        fi
+      done < <(find "$MFX" -type f -perm -u+x)
+      ;;
+  esac
+fi
+
 # Sign inside-out: nested code first, then the bundle itself (no --deep on the final signature).
-# Today the only nested code is the main executable; frameworks/helpers would be signed here too.
+# Nested code: the Mortiflix bundle's tools (Node needs its JIT entitlements), then the main executable.
+if [ -d "$MFX" ]; then
+  while IFS= read -r f; do
+    if file -b "$f" | grep -q 'Mach-O'; then
+      case "$f" in
+        */node/bin/node) sign --options runtime --entitlements "$ROOT/packaging/mortiflix/node-entitlements.plist" "$f" ;;
+        *) sign --options runtime "$f" ;;
+      esac
+    fi
+  done < <(find "$MFX" -type f)
+fi
 sign --options runtime --entitlements "$HERE/entitlements.plist" "$APP/Contents/MacOS/FilmCraft"
 sign --options runtime --entitlements "$HERE/entitlements.plist" "$APP"
 codesign --verify --strict --deep --verbose=2 "$APP"
@@ -151,6 +201,61 @@ if [ "$NOTARIZE" = 1 ]; then
   spctl --assess --type open --context context:primary-signature -vvv "$DMG"
 fi
 
+# ---- .pkg with the Mortiflix tools as choices ----------------------------------------------------
+# The app, plus one payload-free package per tool whose postinstall runs the bundle's own installer for it
+# (packaging/mortiflix/macos-tool-postinstall.sh) as the logged-in user. "Customize" shows the choices.
+if [ -d "$MFX" ]; then
+  echo "==> building $PKG"
+  PW="$WORK/pkg"
+  rm -rf "$PW" && mkdir -p "$PW/parts"
+  pkgbuild --component "$APP" --install-location /Applications --identifier ai.storyteller.filmcraft --version "$SHORT_VERSION" "$PW/parts/app.pkg"
+  # id|title|ticked|description
+  TOOLS=(
+    "blender|Blender (~350 MB)|true|3D shots: the newest official Blender, checked against its sha256 list (yours is reused if you have one)."
+    "blender-addons|The 3D toolkits (~15 MB)|true|MoBlend, Nova FX, Camera, Animate, Math, Circuits and Camera Flight, in the studio's own Blender profile."
+    "chrome|Headless Chrome (~100 MB)|true|Renders the music and the Remotion shots (an installed Chrome is reused)."
+    "strudel|Strudel (~20 MB)|true|The music step: it writes and renders the score."
+    "transitions|Transitions library (~5 MB)|true|Every cut: 50 designed transitions the AI picks from."
+    "uv|uv, for Python tools (~40 MB)|true|Runs the Python tools (browser-harness, ComfyUI) with their own Python."
+    "comfyui|ComfyUI + Qwen3-TTS (~10 GB)|false|Local narration. Needs an NVIDIA graphics card, so it does nothing on a Mac today: use ElevenLabs or your own voice."
+  )
+  lines="" choices="" refs=""
+  for t in "${TOOLS[@]}"; do
+    IFS='|' read -r id title on desc <<<"$t"
+    mkdir -p "$PW/scripts-$id"
+    sed "s/@TOOL_ID@/$id/" "$ROOT/packaging/mortiflix/macos-tool-postinstall.sh" >"$PW/scripts-$id/postinstall"
+    chmod 755 "$PW/scripts-$id/postinstall"
+    pkgbuild --nopayload --scripts "$PW/scripts-$id" --identifier "ai.storyteller.filmcraft.tools.$id" --version "$SHORT_VERSION" "$PW/parts/tool-$id.pkg"
+    lines="$lines<line choice=\"$id\"/>"
+    choices="$choices<choice id=\"$id\" title=\"$title\" description=\"$desc\" start_selected=\"$on\"><pkg-ref id=\"ai.storyteller.filmcraft.tools.$id\"/></choice>"
+    refs="$refs<pkg-ref id=\"ai.storyteller.filmcraft.tools.$id\" version=\"$SHORT_VERSION\">tool-$id.pkg</pkg-ref>"
+  done
+  cat >"$PW/distribution.xml" <<XML
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="2">
+  <title>Mortiflix FilmCraft</title>
+  <options customize="always" require-scripts="false" hostArchitectures="arm64,x86_64"/>
+  <choices-outline><line choice="app"/><line choice="tools">$lines</line></choices-outline>
+  <choice id="app" title="FilmCraft" enabled="false" selected="true"><pkg-ref id="ai.storyteller.filmcraft"/></choice>
+  <choice id="tools" title="Mortiflix tools (downloaded now)" description="The tools Mortiflix uses, downloaded into your own Mortiflix studio. Skip any: Mortiflix setup can install them later. Log: ~/Library/Logs/Mortiflix tools.log"/>
+  $choices
+  <pkg-ref id="ai.storyteller.filmcraft" version="$SHORT_VERSION">app.pkg</pkg-ref>
+  $refs
+</installer-gui-script>
+XML
+  rm -f "$PKG"
+  productbuild --distribution "$PW/distribution.xml" --package-path "$PW/parts" "$PW/unsigned.pkg"
+  if [ -n "${MACOS_INSTALLER_IDENTITY:-}" ]; then
+    kc=()
+    [ -n "${MACOS_KEYCHAIN:-}" ] && kc=(--keychain "$MACOS_KEYCHAIN")
+    productsign --sign "$MACOS_INSTALLER_IDENTITY" ${kc[@]+"${kc[@]}"} "$PW/unsigned.pkg" "$PKG"
+    if [ "$NOTARIZE" = 1 ]; then notarize "$PKG"; xcrun stapler staple "$PKG"; fi
+  else
+    warn "macOS: no MACOS_INSTALLER_IDENTITY; the .pkg is unsigned (Gatekeeper warns on other Macs)"
+    mv "$PW/unsigned.pkg" "$PKG"
+  fi
+fi
+
 # ---- CLI ---------------------------------------------------------------------------------------
 echo "==> building $CLI_ZIP"
 CLI_DIR="$WORK/filmcraft-cli-$VERSION-macos-$ARCH"
@@ -167,3 +272,4 @@ if [ "$NOTARIZE" = 1 ]; then notarize "$CLI_ZIP"; fi
 "$WORK/bin/filmcraft-cli" --version
 echo "==> done"
 ls -lh "$DMG" "$CLI_ZIP"
+if [ -f "$PKG" ]; then ls -lh "$PKG"; fi

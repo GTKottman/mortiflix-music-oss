@@ -5,8 +5,17 @@
     wix build filmcraft.wxs -arch x64 -d Version=1.2.3 -d BinDir=... -d IconPath=... -o out.msi
 
   Per-machine install into Program Files and a Start Menu shortcut. No file associations.
+
+  Mortiflix FilmCraft: with -d MfxDir=<folder> it also installs the Mortiflix bundle (the service,
+  its own Node, ffmpeg, the sound engine; packaging/mortiflix/bundle.sh) into INSTALLFOLDER\mortiflix,
+  harvested with WiX v5's Files element, and a "Mortiflix tools" feature tree (WixUI_FeatureTree:
+  needs -ext WixToolset.UI.wixext -ext WixToolset.Util.wixext and -d LicenseRtf=...). Each ticked tool is
+  downloaded at the end of the install by the bundle's own installers (components.cmd = the service's
+  mortiflix-components.mjs with the bundled Node), as the installing user (Impersonate: into their
+  %USERPROFILE%\Mortiflix, never SYSTEM's), checksum-checked, output in the MSI log. Return="ignore":
+  a failed or skipped tool never fails the install; Mortiflix setup can install it later.
 -->
-<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
   <Package
       Name="FilmCraft"
       Manufacturer="Learning Machines LLC"
@@ -29,13 +38,74 @@
     <Property Id="ARPHELPLINK" Value="https://discord.gg/artcraft" />
 
     <StandardDirectory Id="ProgramFiles6432Folder">
-      <Directory Id="INSTALLFOLDER" Name="FilmCraft" />
+      <Directory Id="INSTALLFOLDER" Name="FilmCraft">
+        <Directory Id="MFXFOLDER" Name="mortiflix" />
+      </Directory>
     </StandardDirectory>
     <StandardDirectory Id="ProgramMenuFolder" />
 
     <Feature Id="Main" Title="FilmCraft" Level="1">
       <ComponentGroupRef Id="FilmcraftFiles" />
+<?ifdef MfxDir?>
+      <ComponentGroupRef Id="MortiflixFiles" />
+<?endif?>
     </Feature>
+<?ifdef MfxDir?>
+
+    <!-- Mortiflix tools: everything ticked except ComfyUI (Level above INSTALLLEVEL = offered, not ticked). -->
+    <ui:WixUI Id="WixUI_FeatureTree" />
+    <WixVariable Id="WixUILicenseRtf" Value="$(var.LicenseRtf)" />
+    <Feature Id="MfxTools" Title="Mortiflix tools (downloaded now)" Level="1" AllowAbsent="yes" Display="expand"
+        Description="The tools Mortiflix uses, downloaded at the end of the install into your own Mortiflix studio. Skip any: Mortiflix setup can install them later.">
+      <Feature Id="MfxBlender" Title="Blender (~350 MB)" Level="1" AllowAbsent="yes"
+          Description="3D shots: Blender renders the scenes the AI builds. The newest official build, checked against Blender's sha256 list (your own Blender is reused if you have one).">
+        <ComponentRef Id="MfxPickBlender" />
+        <Feature Id="MfxAddons" Title="The 3D toolkits (~15 MB)" Level="1" AllowAbsent="yes"
+            Description="MoBlend, Nova FX, Camera, Animate, Math, Circuits and Camera Flight, in the studio's own Blender profile (never your own Blender setup).">
+          <ComponentRef Id="MfxPickAddons" />
+        </Feature>
+      </Feature>
+      <Feature Id="MfxChrome" Title="Headless Chrome (~100 MB)" Level="1" AllowAbsent="yes"
+          Description="Renders the music (Strudel) and the Remotion shots. An installed Chrome or Edge is reused.">
+        <ComponentRef Id="MfxPickChrome" />
+      </Feature>
+      <Feature Id="MfxStrudel" Title="Strudel (~20 MB)" Level="1" AllowAbsent="yes"
+          Description="The music step: it writes and renders the score (@strudel/web from npm).">
+        <ComponentRef Id="MfxPickStrudel" />
+      </Feature>
+      <Feature Id="MfxTransitions" Title="Transitions library (~5 MB)" Level="1" AllowAbsent="yes"
+          Description="Every cut: 50 designed transitions the AI picks from (remotion-transitions).">
+        <ComponentRef Id="MfxPickTransitions" />
+      </Feature>
+      <Feature Id="MfxUv" Title="uv, for Python tools (~40 MB)" Level="1" AllowAbsent="yes"
+          Description="Runs the Python tools (browser-harness, ComfyUI) with their own Python.">
+        <ComponentRef Id="MfxPickUv" />
+      </Feature>
+      <Feature Id="MfxComfyui" Title="ComfyUI + Qwen3-TTS (~10 GB, NVIDIA only)" Level="1000" AllowAbsent="yes"
+          Description="Local narration on your own NVIDIA graphics card (4 GB or more). ElevenLabs or your own voice work without it.">
+        <ComponentRef Id="MfxPickComfyui" />
+      </Feature>
+    </Feature>
+
+    <!-- The ticked tools, as a list for components.cmd (it puts them in install order). -->
+    <SetProperty Action="MfxIdBlender" Id="MFXIDS" Value="[MFXIDS],blender" After="CostFinalize" Sequence="execute" Condition="&amp;MfxBlender=3" />
+    <SetProperty Action="MfxIdAddons" Id="MFXIDS" Value="[MFXIDS],blender-addons" After="MfxIdBlender" Sequence="execute" Condition="&amp;MfxAddons=3" />
+    <SetProperty Action="MfxIdChrome" Id="MFXIDS" Value="[MFXIDS],chrome" After="MfxIdAddons" Sequence="execute" Condition="&amp;MfxChrome=3" />
+    <SetProperty Action="MfxIdStrudel" Id="MFXIDS" Value="[MFXIDS],strudel" After="MfxIdChrome" Sequence="execute" Condition="&amp;MfxStrudel=3" />
+    <SetProperty Action="MfxIdTransitions" Id="MFXIDS" Value="[MFXIDS],transitions" After="MfxIdStrudel" Sequence="execute" Condition="&amp;MfxTransitions=3" />
+    <SetProperty Action="MfxIdUv" Id="MFXIDS" Value="[MFXIDS],uv" After="MfxIdTransitions" Sequence="execute" Condition="&amp;MfxUv=3" />
+    <SetProperty Action="MfxIdComfyui" Id="MFXIDS" Value="[MFXIDS],comfyui" After="MfxIdUv" Sequence="execute" Condition="&amp;MfxComfyui=3" />
+    <SetProperty Id="MfxToolsRun" Value="&quot;[System64Folder]cmd.exe&quot; /d /c &quot;&quot;[MFXFOLDER]components.cmd&quot; install [MFXIDS]&quot;"
+        After="MfxIdComfyui" Sequence="execute" Condition="MFXIDS AND NOT REMOVE" />
+    <CustomAction Id="MfxToolsRun" BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORTNAME)" DllEntry="WixQuietExec"
+        Execute="deferred" Impersonate="yes" Return="ignore" />
+    <InstallExecuteSequence>
+      <Custom Action="MfxToolsRun" Before="InstallFinalize" Condition="MFXIDS AND NOT REMOVE" />
+    </InstallExecuteSequence>
+    <UI>
+      <ProgressText Action="MfxToolsRun" Message="Downloading the Mortiflix tools you picked (Blender takes a few minutes)" />
+    </UI>
+<?endif?>
   </Package>
 
   <Fragment>
@@ -55,4 +125,25 @@
       </Component>
     </ComponentGroup>
   </Fragment>
+<?ifdef MfxDir?>
+
+  <Fragment>
+    <ComponentGroup Id="MortiflixFiles" Directory="MFXFOLDER">
+      <Files Include="$(var.MfxDir)\**" />
+    </ComponentGroup>
+  </Fragment>
+
+  <!-- One small marker per tool feature (an MSI feature needs a component): which tools were picked. -->
+  <Fragment>
+    <DirectoryRef Id="MFXFOLDER">
+      <Component Id="MfxPickBlender"><RegistryValue Root="HKLM" Key="Software\Mortiflix FilmCraft\Tools" Name="blender" Value="1" Type="integer" KeyPath="yes" /></Component>
+      <Component Id="MfxPickAddons"><RegistryValue Root="HKLM" Key="Software\Mortiflix FilmCraft\Tools" Name="blender-addons" Value="1" Type="integer" KeyPath="yes" /></Component>
+      <Component Id="MfxPickChrome"><RegistryValue Root="HKLM" Key="Software\Mortiflix FilmCraft\Tools" Name="chrome" Value="1" Type="integer" KeyPath="yes" /></Component>
+      <Component Id="MfxPickStrudel"><RegistryValue Root="HKLM" Key="Software\Mortiflix FilmCraft\Tools" Name="strudel" Value="1" Type="integer" KeyPath="yes" /></Component>
+      <Component Id="MfxPickTransitions"><RegistryValue Root="HKLM" Key="Software\Mortiflix FilmCraft\Tools" Name="transitions" Value="1" Type="integer" KeyPath="yes" /></Component>
+      <Component Id="MfxPickUv"><RegistryValue Root="HKLM" Key="Software\Mortiflix FilmCraft\Tools" Name="uv" Value="1" Type="integer" KeyPath="yes" /></Component>
+      <Component Id="MfxPickComfyui"><RegistryValue Root="HKLM" Key="Software\Mortiflix FilmCraft\Tools" Name="comfyui" Value="1" Type="integer" KeyPath="yes" /></Component>
+    </DirectoryRef>
+  </Fragment>
+<?endif?>
 </Wix>

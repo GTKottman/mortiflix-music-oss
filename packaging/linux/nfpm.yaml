@@ -43,6 +43,10 @@ overrides:
       - libxrandr2
       - mesa-vulkan-drivers
       - xdg-desktop-portal
+      # the sound engine (lib/mortiflix-filmcraft/bin/mortiflix-engine)
+      - libfreetype6
+      - libfontconfig1
+      - libatomic1
   rpm:
     depends:
       # the same floor as the deb: built on glibc 2.35, so RHEL 9 (2.34) must refuse the install
@@ -59,6 +63,10 @@ overrides:
       - libXrandr
       - mesa-vulkan-drivers
       - xdg-desktop-portal
+      # the sound engine (lib/mortiflix-filmcraft/bin/mortiflix-engine)
+      - freetype
+      - fontconfig
+      - libatomic
 
 contents:
   - src: ${STAGE}/usr/bin/filmcraft
@@ -69,6 +77,10 @@ contents:
     file_info: { mode: 0755 }
   - src: ${STAGE}/usr/share/
     dst: /usr/share/
+    type: tree
+  # Mortiflix FilmCraft: the service, its Node, ffmpeg and the sound engine (packaging/mortiflix)
+  - src: ${STAGE}/usr/lib/mortiflix-filmcraft/
+    dst: /usr/lib/mortiflix-filmcraft/
     type: tree
 
 scripts:

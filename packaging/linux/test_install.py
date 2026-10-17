@@ -103,6 +103,24 @@ class InstallTests(unittest.TestCase):
         self.assertIn("extract the complete tarball", result.stderr)
         self.assertFalse(prefix.exists())
 
+    def test_mortiflix_bundle_is_installed_fresh(self):
+        # Mortiflix FilmCraft: lib/mortiflix-filmcraft is copied whole, and an update leaves no old files.
+        service = self.bundle / "lib/mortiflix-filmcraft/service/bin/mortiflix-service.mjs"
+        service.parent.mkdir(parents=True)
+        service.write_text("// first\n")
+        stale = self.bundle / "lib/mortiflix-filmcraft/service/old.mjs"
+        stale.write_text("// old\n")
+        prefix = self.root / "fresh"
+        self.assertEqual(self.install("--prefix", prefix).returncode, 0)
+        self.assertTrue((prefix / "lib/mortiflix-filmcraft/service/old.mjs").is_file())
+        stale.unlink()
+        service.write_text("// second\n")
+        result = self.install("--prefix", prefix)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        installed = prefix / "lib/mortiflix-filmcraft/service"
+        self.assertEqual((installed / "bin/mortiflix-service.mjs").read_text(), "// second\n")
+        self.assertFalse((installed / "old.mjs").exists())
+
     def test_help(self):
         self.assertEqual(self.install("--help").returncode, 0)
 
@@ -116,7 +134,7 @@ class InstallTests(unittest.TestCase):
             binary.chmod(0o755)
         dist = self.root / "dist"
         result = subprocess.run(
-            ["bash", str(HERE / "package.sh"), "--skip-build", "--formats", "tar"],
+            ["bash", str(HERE / "package.sh"), "--skip-build", "--formats", "tar", "--no-mortiflix"],
             env={**os.environ, "CARGO_TARGET_DIR": str(target), "DIST": str(dist)},
             capture_output=True, text=True, timeout=30,
         )

@@ -3,17 +3,23 @@
 set -euo pipefail
 
 usage() {
-  echo 'Usage: ./install.sh [--prefix /absolute/path]'
+  echo 'Usage: ./install.sh [--prefix /absolute/path] [--components default|all|none|id,id,...]'
   echo 'Installs FilmCraft and its desktop integration into ~/.local by default.'
   echo 'For all users: sudo ./install.sh --prefix /usr/local'
+  echo 'Then the Mortiflix tools (Blender + 3D toolkits, Chrome, Strudel, transitions, uv; ComfyUI off) are offered:'
+  echo 'asked one by one in a terminal, or chosen with --components (none = skip; install them later in setup).'
 }
 fail() { echo "error: $*" >&2; exit 1; }
 prefix="${HOME:?HOME is not set}/.local"
+components="${MORTIFLIX_COMPONENTS:-}"
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --prefix)
       [ "$#" -ge 2 ] || fail '--prefix needs an absolute path'
       prefix="$2"; shift 2 ;;
+    --components)
+      [ "$#" -ge 2 ] || fail '--components needs default, all, none or a list'
+      components="$2"; shift 2 ;;
     -h | --help) usage; exit 0 ;;
     *) usage >&2; fail "unknown argument: $1" ;;
   esac
@@ -35,6 +41,16 @@ mkdir -p -- "$prefix/bin" "$prefix/share"
 install -m755 -- "$source_dir/bin/filmcraft" "$prefix/bin/filmcraft"
 install -m755 -- "$source_dir/bin/filmcraft-cli" "$prefix/bin/filmcraft-cli"
 cp -R -- "$source_dir/share/." "$prefix/share/"
+# Mortiflix FilmCraft: the service, its Node, ffmpeg and the sound engine (found from bin/ as
+# ../lib/mortiflix-filmcraft). A fresh copy, so files from an older version never linger.
+if [ -d "$source_dir/lib/mortiflix-filmcraft" ]; then
+  rm -rf -- "$prefix/lib/mortiflix-filmcraft"
+  mkdir -p -- "$prefix/lib"
+  cp -R -- "$source_dir/lib/mortiflix-filmcraft" "$prefix/lib/mortiflix-filmcraft"
+  if [ -x "$prefix/lib/mortiflix-filmcraft/components.sh" ]; then
+    ln -sf -- "../lib/mortiflix-filmcraft/components.sh" "$prefix/bin/mortiflix-components"
+  fi
+fi
 
 # Use an absolute path so launching from the application menu does not depend on PATH.
 # Escape the Exec argument, then the desktop entry's string value (two separate layers).
@@ -64,3 +80,21 @@ case ":${PATH:-}:" in
   *":$prefix/bin:"*) ;;
   *) printf 'For terminal commands, add %s/bin to your PATH.\n' "$prefix" ;;
 esac
+
+# ---- Mortiflix components: the tools Mortiflix uses, for the user (never system-wide) ----------------
+# Downloaded now with progress, each checked; one that fails or is skipped never fails this install.
+mfx_components="$prefix/lib/mortiflix-filmcraft/components.sh"
+if [ -x "$mfx_components" ]; then
+  # Under sudo the tools belong to the user who ran it, in their own studio.
+  as_user() {
+    if [ "$(id -u)" = 0 ] && [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ]; then sudo -u "$SUDO_USER" -H -- "$@"; else "$@"; fi
+  }
+  if [ -n "$components" ]; then
+    as_user "$mfx_components" install "$components" || echo 'warning: some Mortiflix tools did not install; Mortiflix setup can install them later' >&2
+  elif [ -t 0 ] && [ -t 1 ]; then
+    printf '\nMortiflix tools\n'
+    as_user "$mfx_components" choose || echo 'warning: some Mortiflix tools did not install; Mortiflix setup can install them later' >&2
+  else
+    printf 'Mortiflix tools were not installed (no terminal to ask in). Install them in Mortiflix setup, or run:\n  %s choose\n' "$prefix/bin/mortiflix-components"
+  fi
+fi
