@@ -55,6 +55,7 @@ pub const COMMANDS: &[UiCommand] = &[
     cmd("mortiflix.showNeedsYou", "Show What Needs You", &[], None),
     // Into FilmCraft (doc 38): crate::mortiflix_into
     cmd("mortiflix.importEdit", "Bring the Video into FilmCraft", &[], None),
+    cmd("mortiflix.import.run", "Run the FilmCraft Import", &[], None),
     cmd("mortiflix.restartEdit", "Start the Edit Again from Mortiflix…", &["File"], None),
     cmd("mortiflix.useVersion", "Use This Version", &[], None),
     cmd("mortiflix.timelineEdit", "Mortiflix Timeline Edit", &[], None),

@@ -44,6 +44,7 @@ words ("trim 0.5 s off the start", "cut 12 frames from the end") is done at once
 | Id | Params | |
 |---|---|---|
 | `mortiflix.importEdit` | `{again?}` | go to stage 5 and bring the video in (again: start over) |
+| `mortiflix.import.run` | `{open_edit?: true, again?}` | the same import; `open_edit: false` = Get the video (part 07): no stage change, no toast; Export waits for the timeline |
 | `mortiflix.restartEdit` | `{}` | File menu; shows the confirm in the panel |
 | `mortiflix.useVersion` | `{node, version}` | a version already in the bin onto the timeline |
 | `mortiflix.timelineEdit` | `{label, steps: [{id, params}]}` | engine commands as one undo step "Mortiflix: …" |

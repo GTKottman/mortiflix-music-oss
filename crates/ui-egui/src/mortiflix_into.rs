@@ -7,7 +7,8 @@
 //!   `.fcproj`; after that new versions are swapped in, never rebuilt.
 //! - Each frame on stage 5 the timeline selection is handed to the panel (the clicked clip).
 //!
-//! Commands: `mortiflix.importEdit {again?}`, `mortiflix.restartEdit` (File ▸ Start the Edit Again
+//! Commands: `mortiflix.importEdit {again?}`, `mortiflix.import.run {open_edit?, again?}` (Get the
+//! video: `open_edit: false` imports without opening Edit, for Export), `mortiflix.restartEdit` (File ▸ Start the Edit Again
 //! from Mortiflix…, asks first), `mortiflix.useVersion {node, version}`,
 //! `mortiflix.timelineEdit {label, steps: [{id, params}]}` (several commands as one undo step).
 
@@ -29,6 +30,22 @@ pub fn route(app: &mut FilmcraftApp, id: &str, params: &Value) -> Option<Result<
             go_to_filmcraft(app);
             let core = &mut app.mfx.core;
             let started = mfx::into_filmcraft::start(&mut core.state, &mut core.service, again);
+            Ok(json!({"started": started, "phase": core.state.handoff.phase}))
+        }
+        // Get the video (part 07): import without opening Edit, then Export renders the timeline.
+        "mortiflix.import.run" => {
+            let open_edit = params.get("open_edit").and_then(Value::as_bool).unwrap_or(true);
+            let again = params.get("again").and_then(Value::as_bool).unwrap_or(false);
+            if open_edit {
+                go_to_filmcraft(app);
+            } else {
+                app.mfx.core.activate();
+            }
+            let core = &mut app.mfx.core;
+            let started = mfx::into_filmcraft::start(&mut core.state, &mut core.service, again);
+            if started {
+                core.state.handoff.quiet = !open_edit;
+            }
             Ok(json!({"started": started, "phase": core.state.handoff.phase}))
         }
         "mortiflix.restartEdit" => {
@@ -147,8 +164,10 @@ fn build(app: &mut FilmcraftApp, plan: &into::Plan) {
     // tell the service what came in (done once): later versions are swapped in, never rebuilt
     let core = &mut app.mfx.core;
     core.service.request("handoff.done", into::done_params(&core.state.handoff));
-    app.session.toast("Everything is placed. Click any clip to change it.");
-    app.show_panel(PanelKind::MfxStage);
+    if !app.mfx.core.state.handoff.quiet {
+        app.session.toast("Everything is placed. Click any clip to change it.");
+        app.show_panel(PanelKind::MfxStage);
+    }
 }
 
 fn swap(app: &mut FilmcraftApp, piece: &into::Piece) {
@@ -270,6 +289,12 @@ mod tests {
         // the service isn't running: the hand-off fails calmly and can be tried again
         frame(&mut app, &ctx);
         assert_eq!(app.mfx.core.state.handoff.phase, into::Phase::Failed);
+        // Get the video: the import without opening Edit (the stage stays)
+        let mut quiet = FilmcraftApp::new(filmcraft_engine::Session::default());
+        let r = crate::menus::invoke(&mut quiet, &ctx, "mortiflix.import.run", json!({"open_edit": false})).unwrap();
+        assert_eq!(r["started"], true);
+        assert!(quiet.mfx.core.state.handoff.quiet);
+        assert_eq!(quiet.mfx.core.state.stage, 0);
         let r = crate::menus::invoke(&mut app, &ctx, "mortiflix.restartEdit", json!({})).unwrap();
         assert_eq!(r["asked"], true);
         assert!(app.mfx.core.state.handoff.confirm_restart);

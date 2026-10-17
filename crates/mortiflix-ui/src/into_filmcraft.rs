@@ -408,7 +408,7 @@ pub fn frame_at(sec: f64, fps: f64) -> Option<i64> {
         return None;
     }
     let f = (sec * num as f64 / den as f64).round();
-    if f.is_finite() && f >= 0.0 && f < 1e12 { Some(f as i64) } else { None }
+    if (0.0..1e12).contains(&f) { Some(f as i64) } else { None }
 }
 
 /// The exact ticks of `frames` frames at `fps`.
@@ -620,6 +620,8 @@ pub struct Handoff {
     pub last_poll: f64,
     /// The Import summary is open (it folds away once the edit is open).
     pub show_summary: bool,
+    /// Imported for Get the video (`mortiflix.import.run {open_edit: false}`): no toast, no panel.
+    pub quiet: bool,
     /// The plan the host should build now (taken by [`take_jobs`]).
     #[serde(skip)]
     pub jobs: Vec<Job>,
