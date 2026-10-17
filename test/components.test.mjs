@@ -89,3 +89,17 @@ test('the installer entry lists the components as JSON with the bundled-style co
   assert.match(none.stdout, /No components chosen/);
   assert.equal(spawnSync(process.execPath, [bin, 'install', 'blendr'], { encoding: 'utf8' }).status, 2);
 });
+
+test('a headless Chrome folder with @puppeteer/browsers\' .metadata file is still found', async (t) => {
+  const { mkdirSync, chmodSync } = await import('node:fs');
+  const { setupStatusSync } = await import('../src/setup.mjs');
+  const root = tempStudio(t);
+  const base = join(root, 'tools', 'browsers', 'chrome-headless-shell');
+  const dir = join(base, 'linux-150.0.0.0', 'chrome-headless-shell-linux64');
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(base, '.metadata'), '{}');
+  const bin = join(dir, process.platform === 'win32' ? 'chrome-headless-shell.exe' : 'chrome-headless-shell');
+  writeFileSync(bin, '#!/bin/sh\n');
+  chmodSync(bin, 0o755);
+  assert.equal(setupStatusSync(root).chrome.path, bin);
+});

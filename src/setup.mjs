@@ -194,10 +194,10 @@ function strudelStatus(root) {
 function chromeCandidates(root) {
   const out = [];
   const headless = join(toolsDir(root), 'browsers', 'chrome-headless-shell');
-  if (existsSync(headless)) {
-    for (const ver of readdirSync(headless)) {
-      for (const d of readdirSync(join(headless, ver))) out.push(join(headless, ver, d, `chrome-headless-shell${EXE}`));
-    }
+  // Folders only: @puppeteer/browsers also keeps a `.metadata` file here.
+  const dirs = (d) => { try { return readdirSync(d, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name); } catch { return []; } };
+  for (const ver of dirs(headless)) {
+    for (const d of dirs(join(headless, ver))) out.push(join(headless, ver, d, `chrome-headless-shell${EXE}`));
   }
   if (OS === 'darwin') out.push('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/Applications/Chromium.app/Contents/MacOS/Chromium');
   else if (OS === 'win32') {
