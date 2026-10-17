@@ -14,6 +14,7 @@ import { submissions, answerQuestion } from '../gates.mjs';
 import { PARENT_SESSION_VARS } from '../backends/claude-code.mjs';
 import { credentials, DEFAULT_MODEL } from '../backends/anthropic-api.mjs';
 import { stageOf, STAGE_NAMES } from './stages.mjs';
+import { readLook } from './look.mjs';
 
 const ROLES = ['user', 'ai', 'system', 'action', 'stage'];
 const chatFile = (root, id) => join(projectPaths(root, id).state, 'chat.jsonl');
@@ -56,6 +57,13 @@ export function initChat(root, id) {
 
 const refsIn = (text) => [...new Set([...String(text).matchAll(/\b([bsmt]\d{2,3}(?:-\d+)?|sf\d{2,3})\b/gi)].map((m) => m[1].toLowerCase()))];
 
+function readFrames(root, id) {
+  try {
+    const f = JSON.parse(readFileSync(join(projectPaths(root, id).work, 'design', 'frames.json'), 'utf8'));
+    return Array.isArray(f?.frames) ? f.frames : [];
+  } catch { return []; }
+}
+
 function cardFor(root, id, step, version) {
   let g;
   try { g = canvasView(root, id); } catch { return null; }
@@ -64,7 +72,9 @@ function cardFor(root, id, step, version) {
   const cur = (n) => n.versions?.find((v) => v.v === n.current);
   const kind = step.canvas;
   if (kind === 'beat' || step.key === 'script') return { kind: 'script', step: step.key, version, beats: g.order.beats.map((b, i) => ({ id: b, no: i + 1, colour: g.nodes[b].colour, words: g.nodes[b].title, target_sec: g.nodes[b].target_sec ?? null })) };
-  if (kind === 'frame') return { kind: 'looks', step: step.key, version, frames: g.order.frames.map((f) => ({ id: f, label: g.nodes[f].label, path: abs(cur(g.nodes[f])), beat: g.nodes[f].beat })), using: g.order.frames[0] || null };
+  // a look's name: what the session called it in design/frames.json, else its label
+  const lookName = (f) => { const d = readFrames(root, id).find((x) => x?.id === f); return String(d?.name || g.nodes[f].label).slice(0, 80); };
+  if (kind === 'frame') return { kind: 'looks', step: step.key, version, frames: g.order.frames.map((f) => ({ id: f, label: g.nodes[f].label, name: lookName(f), path: abs(cur(g.nodes[f])), beat: g.nodes[f].beat })), using: (g.order.frames.includes(readLook(root, id).using) ? readLook(root, id).using : g.order.frames[0]) || null };
   if (kind === 'shot' || kind === 'transition') return { kind: kind === 'shot' ? 'shots' : 'transitions', step: step.key, version, nodes: (kind === 'shot' ? g.order.shots : g.order.transitions).map((s) => ({ id: s, label: g.nodes[s].label, title: g.nodes[s].title, colour: g.nodes[s].colour })) };
   const sub = submissions(root, id).find((s) => s.step === step.key && s.version === version);
   if (sub) return { kind: 'submission', step: step.key, version, items: (sub.items || []).map((it) => ({ label: it.label, kind: it.kind, path: it.file ? join(state, it.file) : null })), questions: sub.questions || [] };
@@ -101,7 +111,7 @@ export function translateEvents(root, id) {
           && submissions(root, id).find((x) => x.step === step.key && x.version === e.version)?.questions.every((q) => q.default !== null)) break;
         const card = cardFor(root, id, step, e.version);
         const text = card?.kind === 'script' ? `Here's the script in ${card.beats.length} beats.`
-          : card?.kind === 'looks' ? `${card.frames.length} looks from the script. I'm using ${card.frames[0]?.label || 'the first'}; pick another any time.`
+          : card?.kind === 'looks' ? `${card.frames.length} looks from the script. I'm using ${card.frames.find((f) => f.id === card.using)?.name || card.frames[0]?.name || 'the first'}; pick another any time.`
             : card?.kind === 'shots' ? `${card.nodes.length} shots are in. Walk through them: OK, Fix or Cut it on each one.`
               : `${step.name} v${e.version} is ready.`;
         say({ role: 'ai', text, card, refs: card?.nodes?.map((n) => n.id) || card?.beats?.map((b) => b.id) || [], stage: stageOf(step) });

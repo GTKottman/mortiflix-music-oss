@@ -24,6 +24,7 @@ import { addAsset, updateAsset, replaceAsset, removeAsset, useAsset, listAssets 
 import { loadTheme, saveTheme, themeSamples, setCuePlan, cleanTheme } from './svc/theme.mjs';
 import * as graph from './svc/graph.mjs';
 import { scriptView, applyScriptEdits, remakesFor, scriptActionText, scriptLogged, saveDraft } from './svc/script.mjs';
+import { lookView, useLook, moreLooks } from './svc/look.mjs';
 import { appendChat, chatHistory, translateEvents, typedMove, quickReply, applyMove, initChat, actionText } from './svc/chat.mjs';
 import { exportTarget, deliverFromApp, postPlan, postSend } from './svc/export.mjs';
 import * as setup from './svc/setup.mjs';
@@ -392,6 +393,32 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
       chatRow(id, { role: 'action', text: `Remake line ${line}: "${text.slice(0, 200)}"`, edit: r.edit.id, refs: [line] });
       runner?.wake();
       return { edit: r.edit };
+    },
+    // ---- stage 2 Look: the looks to pick from (the Look panel + the chat's looks card) ----
+    'look.get': (p) => lookView(root, needProject(p)),
+    // Picking another look asks first when shots exist (no `confirm`: nothing changes, the answer lists what would be
+    // remade); confirmed, the shots made in the old look are remade in the new one (a Fix each), one grey chat line.
+    'look.use': (p) => {
+      const id = needProject(p);
+      const r = useLook(root, id, { frame: p?.frame, confirm: p?.confirm === true });
+      if (r.changed) {
+        const name = lookView(root, id).frames.find((f) => f.id === r.using)?.name || r.using;
+        const n = r.remaking.length;
+        chatRow(id, { role: 'action', text: `Look: now ${name}${n ? ` · remaking ${n === 1 ? '1 shot' : `${n} shots`} in it` : ''}`, refs: [r.using, ...r.remaking.map((x) => x.node)].slice(0, 40) });
+        emit('look.changed', { project: id, using: r.using, from: r.from, remaking: r.remaking });
+        if (n) runner?.wake();
+        poke();
+      }
+      return r;
+    },
+    'look.more': (p) => {
+      const id = needProject(p);
+      const r = moreLooks(root, id, { count: p?.count === undefined ? 2 : Number(p.count), text: p?.text });
+      chatRow(id, { role: 'action', text: `Making ${r.making.length === 1 ? '1 more look' : `${r.making.length} more looks`} to pick from`, refs: r.making.map((x) => x.node) });
+      emit('look.changed', { project: id, making: r.making });
+      runner?.wake();
+      poke();
+      return r;
     },
     // ---- the script, line by line (Script panel + the chat's script card) ----
     'script.get': (p) => scriptView(root, needProject(p)),

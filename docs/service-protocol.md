@@ -72,6 +72,19 @@ questions and failed remakes.
 | `music.cues` | `{}` | one cue per beat: the plan before the score, the sections after (`scored`) |
 | `music.cue.set` | `{cue, feel?, energy?, text?, bars?, part?}` | before the score: `{plan}`; once scored: a Fix on that cue, `{edit}` |
 
+### Look (stage 2, doc 11 §9.3; the Look panel and the chat's looks card)
+
+| Type | Params | Result |
+|---|---|---|
+| `look.get` | `{}` | `{project, using, frames: [{id, label, name, words, path, version, versions, state, owner, pending, making, beats, palette: [hex], fonts: [names]}], shots: [{id, label, title, beat, beat_no, colour, made, cut, look, changed, changed_from, remaking}], max, can_more}`. The looks are the frame nodes (`design/frames.json`); `path` = the picture of the version in use (absolute; PNG/JPEG/WebP or SVG); `using` = the owner's pick (`state/<id>/canvas/look.json`), else the first frame; `palette` / `fonts` = what the session wrote in `frames.json`, else what an SVG frame uses; `making` = asked for with `look.more`, not made yet; a shot's `look` = the look it was made in, `changed` = being remade because the look changed |
+| `look.use` | `{frame, confirm?: true}` | without `confirm`, when shots were made in another look: `{needs_confirm: true, from, to, remake: [shot…]}` and nothing changes; otherwise (or confirmed) `{using, from, changed, remake, remaking: [{node, edit}]}`: the look is in use (mirrored as `using` in `design/frames.json` for the session) and each shot made in another look gets a Fix in this one (versions kept), plus one grey chat line ("Look: now Cold neon · remaking 4 shots in it") and a `look.changed` event. A look not made yet is refused |
+| `look.more` | `{count?: 1-3 (2), text?}` | `{making: [{node, edit}]}`: new looks to pick from, asked of the session as new frame pieces (`sfNN`, edit op `more`, same path as a new shot); at most 8 looks in all |
+
+Stage 2 Look (doc 11 §9.3, doc 37's looks card, `src/svc/look.mjs`). None of the existing messages picks the look in
+use (`node.edit ok` on a frame is an approval, not a pick), so these three are new. Ask for changes on one look is the
+chat in that frame's context (`chat.context` + `chat.send`: a Fix on it). The chat's `looks` card carries each frame's
+`name` and its `using` is the owner's pick.
+
 ### Script (stage 1, doc 11 §9.1; the Script panel and the chat's script card)
 
 | Type | Params | Result |
@@ -191,6 +204,7 @@ Cards: `script {beats}`, `looks {frames, using}`, `shots`/`transitions {nodes}`,
 | `chat.typing` | `{on}` while the AI writes a reply |
 | `chat.context` | `{context}` |
 | `script.changed` | `{project, beats, changed, added, keys, deleted, restored, renamed, remaking}`: the owner saved script edits (the `script.edit` result) |
+| `look.changed` | `{project, using?, from?, remaking?, making?}`: the look in use changed (`look.use`) or more looks were asked for (`look.more`) |
 | `node.changed` | `{project, rev, nodes: [{id, kind, current, state, owner, missing}]}` (`all: true` on the first look at a project) |
 | `activity` | `{project, t, kind: text\|tool\|todo\|info\|error, text, todos?}` |
 | `assets.progress` | `{project, asset, name, done, total}` |

@@ -18,6 +18,9 @@ export function available() {
 }
 
 const PALETTES = [['#0f172a', '#f97316'], ['#1e1b4b', '#22d3ee'], ['#052e16', '#facc15'], ['#3b0764', '#f472b6']];
+// Names for the demo's looks (each frame is one look to pick from).
+const LOOK_NAMES = ['Ember night', 'Cold neon', 'Moss and gold', 'Plum pop', 'Paper white', 'Rust and teal', 'Ink blue', 'Sun bleach'];
+const MORE_PALETTES = [['#f5f0e6', '#1f2937'], ['#1c1917', '#14b8a6'], ['#0b1d3a', '#e2e8f0'], ['#fef3c7', '#b45309']];
 
 // The demo's script: four numbered beats, so the canvas has beats, frames, shots and lines to line up.
 const BEATS = [
@@ -93,7 +96,7 @@ export async function run({ root, projectId, workdir, env, onActivity, signal, c
         writeFileSync(join(dir, `sf0${i + 1}.svg`), svg);
         const label = `SF0${i + 1} · ${['Open', 'Ideas', 'Together', 'Close'][i]}`;
         items.push({ path: `out/${step.key}-v${version}/sf0${i + 1}.svg`, label });
-        frames.push({ id: `sf0${i + 1}`, file: `out/${step.key}-v${version}/sf0${i + 1}.svg`, label, beats: [`b0${i + 1}`] });
+        frames.push({ id: `sf0${i + 1}`, file: `out/${step.key}-v${version}/sf0${i + 1}.svg`, label, beats: [`b0${i + 1}`], name: LOOK_NAMES[i % LOOK_NAMES.length], palette: [bg, fg, '#ffffff'], fonts: ['sans-serif'] });
       }
       if (step.key === 'transitions') {
         // The board's cuts: one between each pair of shots, so the canvas has transition nodes to show.
@@ -195,6 +198,19 @@ export async function run({ root, projectId, workdir, env, onActivity, signal, c
       if (r.state === 'failed') return `Demo: the render failed: ${r.output_tail}`;
       scene.file = file;
       writeFileSync(join(workdir, 'out', 'scenes.json'), JSON.stringify(sc, null, 2));
+      return true;
+    }
+    // "Make more looks" (look.more): a new frame of its own, a new look to pick from.
+    if (e.kind === 'frame' && e.op === 'more') {
+      const fr = readJ('design/frames.json');
+      if (fr.frames.some((x) => x.id === e.node)) return true;
+      const k = Number(e.node.replace(/\D/g, '')) || 1;
+      const [bg, fg] = MORE_PALETTES[k % MORE_PALETTES.length];
+      const name = LOOK_NAMES[(k - 1) % LOOK_NAMES.length];
+      const file = `edits/${e.id}/${e.node}.svg`;
+      writeFileSync(join(workdir, file), `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080"><rect width="1920" height="1080" fill="${bg}"/><rect x="${300 + k * 60}" y="260" width="560" height="560" rx="80" fill="${fg}"/><circle cx="1360" cy="540" r="220" fill="none" stroke="${fg}" stroke-width="40"/><text x="120" y="980" font-family="serif" font-size="64" fill="${fg}">${e.node.toUpperCase()} · ${escapeXml(name)}</text></svg>`);
+      fr.frames.push({ id: e.node, file, label: `${e.node.toUpperCase()} · ${name}`, name, beats: [], palette: [bg, fg], fonts: ['serif'] });
+      writeFileSync(join(workdir, 'design', 'frames.json'), JSON.stringify(fr, null, 2));
       return true;
     }
     if (e.kind === 'frame') {
