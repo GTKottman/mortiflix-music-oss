@@ -524,7 +524,7 @@ fn detail(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut AssetsUi, graph: &Value,
         }
         for b in model::beats(graph) {
             let on = places.contains(&b.id);
-            let label = format!("{} {}", b.beat_no.unwrap_or(0), b.name);
+            let label = format!("{} {}", b.beat_no.unwrap_or(0), model::short(&b.name, 22));
             if chip(ui, ctx, &format!("mfx.assets.where.{}", b.id), &label, on).clicked() {
                 if on {
                     places.retain(|p| p != &b.id);

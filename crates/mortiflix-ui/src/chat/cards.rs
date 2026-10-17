@@ -122,6 +122,8 @@ fn script(ui: &mut egui::Ui, ctx: &mut MfxCtx, msg: usize, card: &Value, open: b
     let beats = list(card, "beats");
     for b in beats.iter().take(40) {
         let id = text(b, "id");
+        let start = text(b, "start");
+        let right = if start.is_empty() { secs(b.get("target_sec")) } else { start };
         ui.allocate_ui_with_layout(vec2(ui.available_width(), 20.0), Layout::left_to_right(Align::Center), |ui| {
             ui.spacing_mut().item_spacing.x = 4.0;
             beat_of(ui, ctx, &id, b);
@@ -129,13 +131,15 @@ fn script(ui: &mut egui::Ui, ctx: &mut MfxCtx, msg: usize, card: &Value, open: b
             if !title.is_empty() {
                 ui.label(RichText::new(title).size(12.0).color(t.text).strong());
             }
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                let start = text(b, "start");
-                let right = if start.is_empty() { secs(b.get("target_sec")) } else { start };
-                ui.label(RichText::new(right).size(11.0).color(t.text_faint).monospace());
-                if !open {
+            // words left-aligned in what is left, the time on the right edge
+            let rest = (ui.available_width() - 48.0).max(20.0);
+            if !open {
+                ui.allocate_ui_with_layout(vec2(rest, 20.0), Layout::left_to_right(Align::Center), |ui| {
                     ui.add(egui::Label::new(RichText::new(text(b, "words")).size(12.0).color(t.text_dim)).truncate());
-                }
+                });
+            }
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                ui.label(RichText::new(right).size(11.0).color(t.text_faint).monospace());
             });
         });
         if open {
@@ -189,9 +193,13 @@ fn frame(ui: &mut egui::Ui, w: f32, fill: Color32, outline: Option<Color32>) -> 
 fn looks(ui: &mut egui::Ui, ctx: &mut MfxCtx, msg: usize, card: &Value, answered: &BTreeMap<String, String>, out: &mut CardOut) {
     let t = ctx.theme;
     let question = text(card, "question");
-    let looks = list(card, "looks");
-    let picked =
-        answered.get(&question).cloned().or_else(|| looks.iter().find(|l| l.get("picked").and_then(Value::as_bool) == Some(true)).map(|l| text(l, "id")));
+    let looks = if card.get("frames").is_some() { list(card, "frames") } else { list(card, "looks") };
+    let using = text(card, "using");
+    let picked = answered
+        .get(if question.is_empty() { "look" } else { &question })
+        .cloned()
+        .or_else(|| looks.iter().find(|l| l.get("picked").and_then(Value::as_bool) == Some(true)).map(|l| text(l, "id")))
+        .or_else(|| (!using.is_empty()).then_some(using));
     let n = looks.len().clamp(1, 3);
     let gap = 10.0;
     let w = ((ui.available_width() - gap * (n as f32 - 1.0)) / n as f32).max(40.0);
@@ -291,7 +299,8 @@ fn versions(ui: &mut egui::Ui, ctx: &mut MfxCtx, msg: usize, card: &Value, out: 
     });
     ui.horizontal_wrapped(|ui| {
         if !node.is_empty() && button(ui, ctx, &format!("mfx.chat.card.{msg}.play"), "▶ Play it").clicked() {
-            ctx.state.play_request = Some(node.clone());
+            let info = model::node(&ctx.state.graph, &node);
+            super::play(ctx, Some(&info));
         }
         for v in vs.iter().take(12) {
             let n = v.get("v").and_then(Value::as_u64).unwrap_or(0);
@@ -302,8 +311,7 @@ fn versions(ui: &mut egui::Ui, ctx: &mut MfxCtx, msg: usize, card: &Value, out: 
             }
             let label = format!("Use v{n}");
             if button(ui, ctx, &format!("mfx.chat.card.{msg}.use.{n}"), &label).clicked() {
-                out.action =
-                    Some(ActionButton { label, act: Act::Request { ty: "node.use".into(), params: json!({"node": node, "version": n}) }, primary: false });
+                out.action = Some(ActionButton { label, act: Act::Request { ty: "node.pick".into(), params: json!({"node": node, "v": n}) }, primary: false });
             }
         }
     });
@@ -313,7 +321,13 @@ fn play_dot(ui: &mut egui::Ui, ctx: &mut MfxCtx, id: &str, auto: &str) {
     let r =
         ui.add(egui::Button::new(RichText::new("▶").size(11.0)).min_size(vec2(22.0, 20.0)).fill(ctx.theme.hover).corner_radius(10.0)).on_hover_text("Play it");
     if r.clicked() && !id.is_empty() {
-        ctx.state.play_request = Some(id.to_string());
+        if let Some(path) = id.strip_prefix("file:") {
+            // a music theme sample: its own audio file, in the system player
+            ctx.command("mortiflix.reveal", json!({"path": path, "open": true}));
+        } else {
+            let info = model::node(&ctx.state.graph, id);
+            super::play(ctx, Some(&info));
+        }
     }
     ctx.auto(auto, &r, "Play it");
 }
@@ -528,6 +542,22 @@ fn render(ui: &mut egui::Ui, ctx: &mut MfxCtx, msg: usize, card: &Value, out: &m
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn looks_card_draws_its_frames() {
+        let mut m = crate::Mortiflix::default();
+        let card = json!({"kind": "looks", "frames": [{"id": "sf01", "label": "SF01 · Open", "beat": "b01"}, {"id": "sf02", "label": "SF02"}, {"id": "sf03", "label": "SF03"}, {"id": "sf04", "label": "SF04"}], "using": "sf01"});
+        let ectx = egui::Context::default();
+        let mut h = 0.0;
+        let mut out = ectx.run_ui(egui::RawInput { screen_rect: Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(400.0, 800.0))), ..Default::default() }, |ui| {
+            let mut ctx = m.ctx(crate::MfxTheme::default());
+            let mut o = CardOut::default();
+            let r = ui.scope(|ui| show(ui, &mut ctx, 0, &card, false, &BTreeMap::new(), None, &mut o)).response.rect;
+            h = r.height();
+        });
+        out.textures_delta.clear();
+        assert!(h > 100.0, "two rows of 16:9 frames, got {h}");
+    }
 
     #[test]
     fn seconds_read_safely() {

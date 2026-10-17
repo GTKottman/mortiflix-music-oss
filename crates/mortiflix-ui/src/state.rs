@@ -124,9 +124,6 @@ pub struct MfxState {
     pub show_setup: bool,
     /// Next asked first: something still needs you.
     pub confirm_next: Option<NextConfirm>,
-    /// Play asked for by a button outside the preview (`all` or a node id); the preview part
-    /// plays it and clears it.
-    pub play_request: Option<String>,
     /// Chosen or dropped files waiting for the part that asked (see [`FilesIn`]), oldest first.
     pub files_in: Vec<FilesIn>,
 }
@@ -148,7 +145,6 @@ impl Default for MfxState {
             show_new_project: false,
             show_setup: false,
             confirm_next: None,
-            play_request: None,
             files_in: Vec::new(),
         }
     }

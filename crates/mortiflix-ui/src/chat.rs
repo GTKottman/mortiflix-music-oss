@@ -58,6 +58,8 @@ enum Pending {
     Graph,
     /// `music.theme.samples` for a themes card.
     Samples,
+    /// `questions.list`: which questions are answered already (after a restart).
+    Questions,
     /// Anything else (answers, actions, card buttons): only errors show.
     Quiet(String),
 }
@@ -295,6 +297,17 @@ fn read_replies(ctx: &mut MfxCtx, st: &mut ChatUi, now: f64) {
                     st.graph_mine = true;
                 }
             }
+            Pending::Questions => {
+                for q in r.result.as_array().map(Vec::as_slice).unwrap_or(&[]).iter().take(500) {
+                    let id = q.get("id").and_then(Value::as_str);
+                    let answer = q.get("answer").map(|a| a.as_str().map_or_else(|| a.to_string(), str::to_string));
+                    if let (Some(id), Some(a)) = (id, answer)
+                        && q.get("answered_at").is_some_and(|t| !t.is_null())
+                    {
+                        st.answered.entry(id.chars().take(120).collect()).or_insert_with(|| a.chars().take(400).collect());
+                    }
+                }
+            }
             Pending::Samples => {
                 st.samples = Some(r.result.get("samples").and_then(Value::as_array).map(|a| a.iter().take(6).cloned().collect()).unwrap_or_default());
                 if !r.ok {
@@ -398,6 +411,8 @@ fn load_history(ctx: &mut MfxCtx, st: &mut ChatUi, now: f64) {
     st.history_for = ctx.state.project_id.clone();
     let id = ctx.service.request("chat.history", json!({"limit": crate::state::MAX_CHAT}));
     st.pending.push((id, Pending::History, now));
+    let id = ctx.service.request("questions.list", json!({}));
+    st.pending.push((id, Pending::Questions, now));
     if (ctx.state.graph.is_null() || st.graph_mine) && st.graph_for != ctx.state.project_id {
         st.graph_for = ctx.state.project_id.clone();
         let id = ctx.service.request("graph.get", json!({}));
@@ -483,8 +498,19 @@ fn run_move(ctx: &mut MfxCtx, st: &mut ChatUi, info: &NodeInfo, mv: Move, now: f
             }
             st.focus_composer = true;
         }
-        Move::Play => ctx.state.play_request = Some(info.id.clone()),
+        Move::Play => play(ctx, Some(info)),
     }
+}
+
+/// Play in the loose preview (part 04's `mortiflix.preview.play`): everything, or one node in its
+/// scope (a beat plays the beat, anything else that piece).
+pub(crate) fn play(ctx: &mut MfxCtx, node: Option<&NodeInfo>) {
+    let params = match node {
+        None => json!({"scope": "all"}),
+        Some(n) if n.kind == "beat" => json!({"node": n.id, "scope": "beat"}),
+        Some(n) => json!({"node": n.id, "scope": "shot"}),
+    };
+    ctx.command("mortiflix.preview.play", params);
 }
 
 /// Send what is in the composer. Words go to `chat.send` with the context: on a node the service
@@ -749,20 +775,25 @@ fn node_intro(ui: &mut egui::Ui, ctx: &mut MfxCtx, id: &str) {
     let t = ctx.theme;
     let n = model::node(&ctx.state.graph, id);
     ui.label(RichText::new(format!("Mortiflix · {}", n.name)).size(11.0).color(t.text_faint));
-    let mut line = String::new();
-    if !n.title.is_empty() && n.kind != "beat" {
-        line.push_str(&n.title);
-        line.push_str(". ");
-    }
-    if let Some(b) = n.beat.as_deref().filter(|_| n.kind != "beat") {
-        line.push_str(&format!("Made from beat {} {}.", n.beat_no.unwrap_or(0), model::node(&ctx.state.graph, b).name));
-    }
-    if n.versions > 1 {
-        line.push_str(&format!(" {} versions, v{} in use.", n.versions, n.current.unwrap_or(n.versions)));
-    }
+    let beat = n.beat.as_deref().filter(|_| n.kind != "beat").map(|b| model::node(&ctx.state.graph, b));
+    let mut parts: Vec<String> = Vec::new();
     if n.kind == "beat" {
-        line = format!("Everything in beat {} {}: its shots, lines and music.", n.beat_no.unwrap_or(0), n.name);
+        parts.push(format!("Everything in beat {}: its shots, lines and music.", n.beat_no.unwrap_or(0)));
+        parts.push(n.name.clone());
+    } else {
+        if !n.title.is_empty() {
+            parts.push(n.title.trim_end_matches('.').to_string() + ".");
+        }
+        if let Some(b) = &beat {
+            // part 08's beat title is its words: name it only when it says something new
+            let title = if b.name == n.title { String::new() } else { format!(" {}", model::short(&b.name, 40)) };
+            parts.push(format!("From beat {}{title}.", n.beat_no.unwrap_or(0)));
+        }
+        if n.versions > 1 {
+            parts.push(format!("v{} in use of {}.", n.current.unwrap_or(n.versions), n.versions));
+        }
     }
+    let mut line = parts.join(" ");
     if line.is_empty() {
         line = "Ask for a change, or use the buttons below.".into();
     }
@@ -1077,7 +1108,10 @@ fn details(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &ChatUi) {
     if st.todos.is_empty() {
         ui.label(RichText::new("No steps running.").size(12.0).color(t.text_faint));
     }
-    for (text, state) in st.todos.iter().take(3) {
+    // three rows around the current step (doc 37: its to-do list, the current one bright)
+    let at = st.todos.iter().position(|(_, s)| s == "doing").or_else(|| st.todos.iter().position(|(_, s)| s != "done")).unwrap_or(st.todos.len());
+    let from = at.saturating_sub(1).min(st.todos.len().saturating_sub(3));
+    for (text, state) in st.todos.iter().skip(from).take(3) {
         let (mark, col) = match state.as_str() {
             "done" => ("✓", t.text_faint),
             "doing" | "running" => ("●", t.text),
@@ -1112,7 +1146,7 @@ fn moves_row(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, info: Option<
             _ => {
                 ui.label(RichText::new("Moves").size(12.0).color(t.text_faint));
                 if small_button(ui, ctx, "mfx.chat.move.playAll", "▶ Play everything", false).clicked() {
-                    ctx.state.play_request = Some("all".into());
+                    play(ctx, None);
                 }
                 let next: &[(&str, &str, &str)] = match ctx.state.stage {
                     2 => &[("hearIt", "Hear the voice and music", "stages.voiceMusic")],
@@ -1407,7 +1441,7 @@ mod tests {
         read_replies(&mut ctx, &mut st, 6.0);
         assert_eq!(ctx.state.chat.len(), before);
         run_move(&mut ctx, &mut st, &s7, Move::Play, 7.0);
-        assert_eq!(ctx.state.play_request.as_deref(), Some("s07"));
+        assert_eq!(ctx.commands.last().map(|c| (c.0.as_str(), c.1["node"].as_str())), Some(("mortiflix.preview.play", Some("s07"))));
     }
 
     #[test]

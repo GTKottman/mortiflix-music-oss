@@ -392,6 +392,15 @@ pub fn beats(graph: &Value) -> Vec<NodeInfo> {
     v
 }
 
+/// At most `max` characters, with "…" when cut.
+pub fn short(text: &str, max: usize) -> String {
+    if text.chars().count() <= max {
+        return text.to_string();
+    }
+    let cut: String = text.chars().take(max.saturating_sub(1)).collect();
+    format!("{}…", cut.trim_end())
+}
+
 /// "Talking about" crumbs: (selection to go to, label, the node when it is one). The first is
 /// always (None, "The whole video").
 pub fn crumbs(graph: &Value, sel: Option<&str>) -> Vec<(Option<String>, String, Option<NodeInfo>)> {
@@ -402,9 +411,9 @@ pub fn crumbs(graph: &Value, sel: Option<&str>) -> Vec<(Option<String>, String, 
         && let Some(b) = info.beat.as_deref()
     {
         let bi = node(graph, b);
-        out.push((Some(b.to_string()), bi.name.clone(), Some(bi)));
+        out.push((Some(b.to_string()), short(&bi.name, 22), Some(bi)));
     }
-    out.push((Some(id.to_string()), info.name.clone(), Some(info)));
+    out.push((Some(id.to_string()), short(&info.name, 28), Some(info)));
     out
 }
 
@@ -517,16 +526,60 @@ pub fn open_questions<'a>(msgs: &'a [Msg], answered: &std::collections::BTreeMap
 
 // ---------- text ----------
 
-/// "14:04" in an ISO time → "2:04 pm". Empty when it has no time.
-pub fn clock(at: &str) -> String {
-    let Some(t) = at.split(['T', ' ']).nth(1) else { return String::new() };
-    let mut p = t.split(':');
-    let (Some(h), Some(m)) = (p.next().and_then(|h| h.parse::<u32>().ok()), p.next().and_then(|m| m.get(..2)).and_then(|m| m.parse::<u32>().ok())) else {
-        return String::new();
-    };
-    if h > 23 || m > 59 {
-        return String::new();
+static LOCAL_OFFSET: std::sync::OnceLock<fn(i64) -> i32> = std::sync::OnceLock::new();
+
+/// The desktop app gives the chat the local UTC offset (seconds at a unix time), so times read in
+/// the person's own clock. Without it times show as the service wrote them.
+pub fn set_local_offset(f: fn(i64) -> i32) {
+    let _ = LOCAL_OFFSET.set(f);
+}
+
+/// Days since 1970-01-01 for a civil date (Howard Hinnant's algorithm), with checked inputs.
+fn days_from_civil(y: i64, m: i64, d: i64) -> Option<i64> {
+    if !(1..=12).contains(&m) || !(1..=31).contains(&d) || !(1..=9999).contains(&y) {
+        return None;
     }
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let mp = (m + 9) % 12;
+    let doy = (153 * mp + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    Some(era * 146_097 + doe - 719_468)
+}
+
+/// (hour, minute) of an ISO time, moved to local time when it says UTC (`Z` or `+hh:mm`).
+fn local_hm(at: &str) -> Option<(i64, i64)> {
+    let (date, time) = at.split_once(['T', ' '])?;
+    let num = |s: Option<&str>| s.and_then(|x| x.parse::<i64>().ok());
+    let mut dp = date.split('-');
+    let (y, mo, d) = (num(dp.next()), num(dp.next()), num(dp.next()));
+    let h = num(time.get(0..2))?;
+    let mi = num(time.get(3..5))?;
+    if !(0..24).contains(&h) || !(0..60).contains(&mi) {
+        return None;
+    }
+    let tail = time.get(5..).unwrap_or("");
+    let zone = if tail.ends_with('Z') {
+        Some(0)
+    } else {
+        tail.rfind(['+', '-']).and_then(|i| {
+            let sign = if tail.get(i..=i) == Some("-") { -1 } else { 1 };
+            let z = tail.get(i + 1..)?;
+            Some(sign * (num(z.get(0..2))? * 3600 + num(z.get(3..5)).unwrap_or(0) * 60))
+        })
+    };
+    let (Some(zone), Some(f), Some(y), Some(mo), Some(d)) = (zone, LOCAL_OFFSET.get(), y, mo, d) else { return Some((h, mi)) };
+    let unix = days_from_civil(y, mo, d)? * 86_400 + h * 3600 + mi * 60 - zone;
+    let local = unix + i64::from(f(unix));
+    let sod = local.rem_euclid(86_400);
+    Some((sod / 3600, (sod % 3600) / 60))
+}
+
+/// "14:04" in an ISO time → "2:04 pm" (local time when the app gave the offset). Empty when it has
+/// no time.
+pub fn clock(at: &str) -> String {
+    let Some((h, m)) = local_hm(at) else { return String::new() };
     let (h12, ap) = match h {
         0 => (12, "am"),
         1..=11 => (h, "am"),
@@ -758,6 +811,7 @@ mod tests {
         let c = crumbs(&g, Some("s07"));
         assert_eq!(c.iter().map(|c| c.1.as_str()).collect::<Vec<_>>(), ["The whole video", "Winter", "Shot 7"]);
         assert_eq!(crumbs(&g, None).len(), 1);
+        assert_eq!(short("Three ideas, one per beat, each", 12), "Three ideas…");
         assert_eq!(hex_colour(&json!("#zzzzzz")), None);
         assert_eq!(hex_colour(&json!("#é1234")), None);
     }
@@ -813,6 +867,9 @@ mod tests {
         assert_eq!(clock("2026-10-16T00:30"), "12:30 am");
         assert_eq!(clock("nope"), "");
         assert_eq!(clock("x T99:00"), "");
+        assert_eq!(days_from_civil(1970, 1, 1), Some(0));
+        assert_eq!(days_from_civil(2026, 10, 17), Some(20_743));
+        assert_eq!(days_from_civil(2026, 13, 1), None);
         assert_eq!(press_of("OK on S01"), Some(("OK", "S01")));
         assert_eq!(press_of("Fix on S01: colder"), None);
         assert_eq!(press_of("New film order: S01 › S02"), None);
