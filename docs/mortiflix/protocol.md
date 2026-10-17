@@ -252,3 +252,21 @@ Cards: `script {beats}`, `looks {frames, using}`, `shots`/`transitions {nodes}`,
 - `backends/demo.mjs`: voice lines with clips and a quiet score (so every lane has something), new shots, line remakes.
 - Policies in the service: questions never block (a questions step whose questions all have defaults goes on with
   them; `config.mfxQuestionsBlock: true` turns that off), and a stage the owner moved on from keeps what arrives.
+## Setup additions (part 09)
+
+Part 09's Setup window uses part 08's `setup.status`, `setup.backend`, `setup.done`, `setup.claude.test` and
+`keys.set` / `keys.remove` / `keys.check`, plus these (service branch `mfx-service/setup`, `src/service-setup.mjs`):
+
+| Type | Params | Result |
+|---|---|---|
+| `setup.backend` | also `{claudeBin?}` (`claude` or an absolute path; `backend` may then be left out) | `{backend, claudeBin}` |
+| `setup.download` | `{label?, files: [{url, dest, size, sha256}]}` | `{job}`: https only, `dest` absolute; each file streams to `<dest>.part`, size + SHA-256 checked, renamed into place; files already there are skipped. Sent only after the user said yes |
+| `setup.install` | `{tool}` | `{job}`: one of setup.mjs's components (`tools.installable` ids) with its own installer, after the user said yes |
+| `setup.cancel` | `{job}` | `{cancelled}` |
+
+| Event | Data |
+|---|---|
+| `setup.progress` | `{job, kind: download\|install, label, state: running\|done\|failed\|cancelled, line, done?, total?}` |
+
+`setup.status` → `tools.engine` = `{ok, path}` (the sound engine). `MFX_FAKE_DOWNLOADS=1` (tests only): `fake:<bytes>`
+URLs, a pretend Chrome install, and the app's model packs swapped for one small fake file each.

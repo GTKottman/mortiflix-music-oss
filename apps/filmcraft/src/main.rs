@@ -256,6 +256,8 @@ fn app_creator(launch: Launch, graphics: graphics::GraphicsStart, created: Arc<A
         app.mfx.core.activate();
         filmcraft_mortiflix_ui::chat::model::set_local_offset(local_offset);
         app.mfx.core.start_service(filmcraft_mortiflix_ui::ServiceConfig::resolve(data_dir.clone().or_else(default_data_dir).as_deref()));
+        // first launch: the Welcome (setup) window, except for explicit `--demo` runs (tests)
+        filmcraft_mortiflix_ui::setup::init(&cc.egui_ctx, &mut app.mfx.core, data_dir.clone().or_else(default_data_dir), !(demo && startup_flag));
         let stage = app.mfx.core.state.stage;
         filmcraft_ui_egui::mortiflix::apply_stage(&mut app, stage);
         if let Some(rs) = cc.wgpu_render_state.clone()
