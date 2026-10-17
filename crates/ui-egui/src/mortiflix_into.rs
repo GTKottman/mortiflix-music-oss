@@ -318,6 +318,62 @@ mod tests {
         assert!(app.mfx.core.state.handoff.confirm_restart);
     }
 
+    /// Run 2: the owner saw voice and pictures out of step in Edit. Every piece lands at its plan time to the frame,
+    /// at 30 and at 24 fps (the cause was the service's shot times; this pins the app side).
+    #[test]
+    fn pieces_land_at_their_plan_times_to_the_frame_at_30_and_24_fps() {
+        for fps in [30.0_f64, 24.0] {
+            let mut app = StudioApp::new(mortiflix_engine::Session::default());
+            let dir = std::env::temp_dir().join(format!("mfx-into-fps{fps}-{}", std::process::id()));
+            std::fs::create_dir_all(&dir).unwrap();
+            let wav = |name: &str| {
+                let n: u32 = 48_000 * 2;
+                let mut b = Vec::new();
+                b.extend_from_slice(b"RIFF");
+                b.extend_from_slice(&(36 + n * 2).to_le_bytes());
+                b.extend_from_slice(b"WAVEfmt ");
+                for v in [
+                    16u32.to_le_bytes().to_vec(),
+                    1u16.to_le_bytes().to_vec(),
+                    1u16.to_le_bytes().to_vec(),
+                    48_000u32.to_le_bytes().to_vec(),
+                    96_000u32.to_le_bytes().to_vec(),
+                    2u16.to_le_bytes().to_vec(),
+                    16u16.to_le_bytes().to_vec(),
+                ] {
+                    b.extend_from_slice(&v);
+                }
+                b.extend_from_slice(b"data");
+                b.extend_from_slice(&(n * 2).to_le_bytes());
+                b.resize(b.len() + (n as usize) * 2, 0);
+                let p = dir.join(name);
+                std::fs::write(&p, b).unwrap();
+                p.to_string_lossy().into_owned()
+            };
+            let times = [0.0_f64, 3.1, 8.525, 28.45];
+            let pieces: Vec<Value> = times
+                .iter()
+                .enumerate()
+                .map(|(i, t)| json!({"node": format!("b0{}-1", i + 1), "kind": "line", "label": format!("b0{}-1", i + 1), "version": 1, "current": true, "file": wav(&format!("l{i}.wav")), "start_sec": t, "end_sec": t + 2.0, "text": "Words."}))
+                .collect();
+            let plan = into::Plan::parse(
+                &json!({"project": "p1", "title": "Timing", "fps": fps, "fcproj": dir.join("Timing.mortiflix").to_string_lossy(), "pieces": pieces}),
+            )
+            .unwrap();
+            app.mfx.core.activate();
+            build(&mut app, &plan);
+            let h = &app.mfx.core.state.handoff;
+            assert_eq!(h.phase, into::Phase::Done, "{} {:?}", h.error, h.rows);
+            let q = app.session.active_sequence().unwrap();
+            for (p, t) in h.placed.iter().zip(times) {
+                let clip = q.find_item(mortiflix_project::ClipId(p.clip)).unwrap().1;
+                let want = (t * fps).round() / fps;
+                assert!((clip.start.seconds() - want).abs() < 1e-6, "{fps} fps: {} at {} s, the plan says {t} s", clip.name, clip.start.seconds());
+            }
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+    }
+
     #[test]
     fn a_built_plan_lands_in_the_session_as_one_undo_step() {
         let mut app = StudioApp::new(mortiflix_engine::Session::default());
