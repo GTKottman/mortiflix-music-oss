@@ -775,6 +775,11 @@ pub fn done_params(h: &Handoff) -> Value {
 /// Read the service's replies and events (`node.changed` → `handoff.swaps`). Never blocks.
 /// `now` = seconds (egui time).
 pub fn poll(state: &mut MfxState, service: &mut Service, now: f64) {
+    // another project is open now (New project, project.open): its own hand-off starts from scratch
+    if !state.handoff.project.is_empty() && state.project_id.as_deref() != Some(state.handoff.project.as_str()) {
+        let seq = state.handoff.event_seq;
+        state.handoff = Handoff { event_seq: seq, ..Handoff::default() };
+    }
     let h = &mut state.handoff;
     let mut last = h.event_seq;
     let mut changed = false;
@@ -2206,5 +2211,22 @@ mod tests {
         assert!(!state.handoff.error.is_empty());
         assert!(start(&mut state, &mut svc, false), "after a failure it can try again");
         assert!(take_jobs(&mut state).is_empty());
+    }
+
+    #[test]
+    fn another_project_starts_its_own_hand_off() {
+        let mut state = MfxState { project_id: Some("p-two".into()), ..MfxState::default() };
+        state.handoff.project = "p-one".into();
+        state.handoff.phase = Phase::Done;
+        state.handoff.fcproj = "/x/One.fcproj".into();
+        let mut service = Service::default();
+        poll(&mut state, &mut service, 0.0);
+        assert_eq!(state.handoff.phase, Phase::NotYet);
+        assert!(state.handoff.project.is_empty() && state.handoff.fcproj.is_empty());
+        // the same project keeps what it has
+        state.handoff.project = "p-two".into();
+        state.handoff.phase = Phase::Done;
+        poll(&mut state, &mut service, 0.0);
+        assert_eq!(state.handoff.phase, Phase::Done);
     }
 }
