@@ -76,7 +76,7 @@ questions and failed remakes.
 
 | Type | Params | Result |
 |---|---|---|
-| `script.get` | `{}` | `{project, rev, writing, version, beats: [{id, no, name, name_auto, colour, visual, target_sec, state, lines: [{id, words, changed, changed_at, read_only, remaking: {shots, lines}, feeds: [{node, kind: line\|shot, label, state, current, made, remaking}]}]}]}`. Line ids are the voice line ids (`b01-1`), forever. `feeds` = the graph's `says` edges: the line's voice line and its beat's shots. `writing` = the AI is still writing the script; its newest line is `read_only` |
+| `script.get` | `{}` | `{project, rev, writing, version, beats: [{id, no, name, name_auto, colour, visual, target_sec, state, lines: [{id, words, changed, changed_at, read_only, remaking: {shots, lines}, feeds: [{node, kind: line\|shot, label, state, current, made, remaking}]}], deleted: [{id, words, after, changed_at}]}]}`. Line ids are the voice line ids (`b01-1`), forever. `feeds` = the graph's `says` edges: the line's voice line and its beat's shots. `writing` = the AI is still writing the script; its newest line is `read_only` |
 | `script.edit` | one edit, or `{edits: [edit…]}` (the app's Save sends every draft change at once). Edit = `{beat, beat_name}` \| `{beat, line, words}` \| `{beat, add_after: line id \| key \| null, words, key?}` \| `{beat, line, delete: true \| false}` | `{project, beats, changed[], added[], keys: {key: new id}, deleted[], restored[], renamed[], remaking: [{node, kind, edit}]}`, also sent as a `script.changed` event, plus one grey chat line ("Script: 1 line changed · remaking 1 shot and 1 voice line") |
 
 `script.edit` writes the session's own files (`script/beats.json`: the beat's `lines` and `name`, its `words` = the lines
@@ -84,7 +84,9 @@ as one paragraph; `voice/lines.json` once the voice exists), so the canvas graph
 new version). Then only the pieces that used the changed words and already exist are remade, each a Fix through the
 canvas (`node.edit fix`; versions kept, the AI runs ahead as usual): new words remake the line's voice line and its
 beat's shots; a new line records a new voice line; a deleted line is kept (hidden) and its voice line is cut;
-`delete: false` brings both back. Pieces not made yet are made from the new words anyway. A line the AI is still
+`delete: false` brings both back: the same line in its place with its words and links, the same voice line (its OK
+too, kept as `was` while deleted), nothing remade. `deleted` lists a beat's deleted lines (kept, ids are forever) with
+the line shown before each (`after`, null = first), so the app can show "deleted · Undo" after a save. Pieces not made yet are made from the new words anyway. A line the AI is still
 writing is refused.
 
 ### Voice & music stage (doc 34)

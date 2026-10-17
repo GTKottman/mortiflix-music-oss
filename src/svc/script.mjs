@@ -11,7 +11,7 @@
 // runs ahead as usual); pieces not made yet will be made from the new words anyway.
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { canvasView, canvasPaths, readBeats, CanvasError } from '../canvas.mjs';
+import { canvasView, canvasPaths, readBeats, loadOwner, CanvasError } from '../canvas.mjs';
 import { projectPaths, loadProject, projectPipeline, event } from '../projects.mjs';
 import { stepView } from '../gates.mjs';
 import { withLock } from '../studio.mjs';
@@ -49,13 +49,18 @@ function readScript(work) {
   return { version: 1, beats: readBeats(work, []) };
 }
 
+// A stored line with only the fields the script keeps: a deleted one also keeps the OK its voice line had (`was`), so
+// bringing it back puts the same voice line back as it was, OK and all, without remaking it.
+const keepLine = (l) => ({ id: l.id, words: String(l.words || ''), ...(l.deleted ? { deleted: true } : {}), ...(l.deleted && l.was ? { was: l.was } : {}),
+  ...(l.changed_at ? { changed_at: l.changed_at } : {}) });
+
 // One beat's lines: its own `lines` once the owner edited it, then any voice line of the beat it doesn't have yet;
 // before that the voice lines of the beat; before the voice exists, the beat's words as its one line.
 function linesOf(beat, voice) {
   const mine = voice.filter((l) => String(l.id || '').startsWith(`${beat.id}-`) && LINE.test(l.id))
     .map((l) => ({ id: l.id, words: String(l.script || l.text || '') }));
   if (Array.isArray(beat.lines)) {
-    const own = beat.lines.filter((l) => l && LINE.test(l.id)).map((l) => ({ id: l.id, words: String(l.words || ''), ...(l.deleted ? { deleted: true } : {}), ...(l.changed_at ? { changed_at: l.changed_at } : {}) }));
+    const own = beat.lines.filter((l) => l && LINE.test(l.id)).map(keepLine);
     return [...own, ...mine.filter((m) => !own.some((o) => o.id === m.id))];
   }
   if (mine.length) return mine;
@@ -94,14 +99,19 @@ export function scriptView(root, id) {
   const busy = writing(root, id);
   const beats = s.beats.map((b, i) => {
     const node = g.nodes[b.id];
-    const lines = linesOf(b, voice).filter((l) => !l.deleted).map((l) => {
+    const all = linesOf(b, voice);
+    // Deleted lines are kept (ids are forever): the app shows the ones it deleted with Undo, in their place (`after` =
+    // the line shown before it, null = first in the beat).
+    const deleted = all.map((l, i) => ({ l, after: all.slice(0, i).filter((x) => !x.deleted).at(-1)?.id ?? null })).filter((x) => x.l.deleted)
+      .slice(-50).map(({ l, after }) => ({ id: l.id, words: l.words, after, changed_at: l.changed_at || null }));
+    const lines = all.filter((l) => !l.deleted).map((l) => {
       const f = feeds(b.id, l.id);
       const remaking = f.filter((x) => x.remaking);
       return { id: l.id, words: l.words, feeds: f, changed: Boolean(l.changed_at), changed_at: l.changed_at || null,
         remaking: { shots: remaking.filter((x) => x.kind === 'shot').length, lines: remaking.filter((x) => x.kind === 'line').length } };
     });
     return { id: b.id, no: i + 1, name: b.name || autoName(b.words), name_auto: !b.name, colour: node?.colour || null,
-      visual: b.visual || null, target_sec: b.target_sec ?? null, state: node?.state || null, lines };
+      visual: b.visual || null, target_sec: b.target_sec ?? null, state: node?.state || null, lines, deleted };
   });
   // While the AI writes, the newest line is the one being written: read-only until it is done.
   const last = busy ? beats.at(-1)?.lines.at(-1) : null;
@@ -130,6 +140,7 @@ export function applyScriptEdits(root, id, params) {
   const cp = canvasPaths(root, id);
   mkdirSync(cp.dir, { recursive: true });
   const at = new Date().toISOString();
+  const decisions = loadOwner(root, id).decisions || {};
   return withLock(join(cp.dir, '.script.lock'), () => {
     const s = readScript(work);
     if (!s.beats.length) throw new CanvasError('there is no script yet');
@@ -177,7 +188,19 @@ export function applyScriptEdits(root, id, params) {
       const line = beat.lines.find((l) => l.id === lid);
       if (!line) throw new CanvasError(`no line ${lid.slice(0, 20) || '(none)'} in ${beat.id}`);
       if (e.delete === true || e.delete === false) {
-        if (e.delete) { line.deleted = true; out.deleted.push(lid); } else { delete line.deleted; out.restored.push(lid); }
+        if (e.delete) {
+          if (line.deleted) continue;
+          line.deleted = true;
+          if (decisions[lid]?.verdict === 'ok') line.was = 'ok';
+          out.deleted.push(lid);
+        } else {
+          if (!line.deleted) continue;
+          out.restored.push(lid);
+          // remakesFor reads `was` from this list (the file no longer has it once the line is back)
+          out.was = { ...(out.was || {}), ...(line.was ? { [lid]: line.was } : {}) };
+          delete line.deleted;
+          delete line.was;
+        }
         line.changed_at = at;
         touched.add(beat.id);
         continue;
@@ -193,7 +216,7 @@ export function applyScriptEdits(root, id, params) {
     }
     // The beat's words are its lines as one paragraph (the canvas's beat node, the chat card, the brief).
     for (const b of s.beats.filter((x) => touched.has(x.id))) {
-      b.lines = b.lines.map((l) => ({ id: l.id, words: l.words, ...(l.deleted ? { deleted: true } : {}), ...(l.changed_at ? { changed_at: l.changed_at } : {}) }));
+      b.lines = b.lines.map(keepLine);
       b.words = b.lines.filter((l) => !l.deleted).map((l) => l.words).join(' ');
     }
     mkdirSync(join(work, 'script'), { recursive: true });
@@ -230,7 +253,8 @@ export function remakesFor(root, id, done) {
   }
   for (const [node, texts] of fixes) actions.push({ node, action: 'fix', text: texts.join(' ') });
   for (const lid of done.deleted) if (g.nodes[lid]?.kind === 'line' && g.nodes[lid].owner !== 'cut') actions.push({ node: lid, action: 'cut' });
-  for (const lid of done.restored) if (g.nodes[lid]?.owner === 'cut') actions.push({ node: lid, action: 'clear' });
+  // Brought back: the same voice line as it was (its OK too), nothing remade.
+  for (const lid of done.restored) if (g.nodes[lid]?.owner === 'cut') actions.push({ node: lid, action: done.was?.[lid] === 'ok' ? 'ok' : 'clear' });
   return actions;
 }
 

@@ -111,6 +111,9 @@ test('script: get, edit a line (its shot and voice line remade, v2), add, delete
   const after = await call('script.get');
   assert.deepEqual(after.beats[0].lines[0].remaking, { shots: 0, lines: 0 });
 
+  // The voice line about to be deleted was OK'd: bringing it back keeps that OK.
+  await call('node.edit', { node: 'b03-1', action: 'ok' });
+  const s03 = (await call('graph.get')).nodes.find((x) => x.id === 's03');
   // A batch (the app's Save): rename a beat, add two lines (the second after the first, by key), delete one.
   const batch = await call('script.edit', { edits: [
     { beat: 'b02', beat_name: 'Three ideas' },
@@ -126,16 +129,29 @@ test('script: get, edit a line (its shot and voice line remade, v2), add, delete
   assert.equal(s2.beats[1].name_auto, false);
   assert.deepEqual(s2.beats[1].lines.map((l) => l.id), ['b02-1', 'b02-2', 'b02-3']);
   assert.equal(s2.beats[2].lines.length, 0);
+  assert.deepEqual(s2.beats[2].deleted.map((l) => [l.id, l.words, l.after]), [['b03-1', 'The ideas join into one picture.', null]], 'a deleted line is kept, with its words');
   const g2 = await call('graph.get');
   assert.equal(g2.nodes.find((x) => x.id === 'b03-1').owner, 'cut', 'a deleted line is not spoken');
   assert.ok(g2.nodes.find((x) => x.id === 'b02-2'), 'a new line is a voice line');
-  // Undo the delete: the line and its voice line are back.
-  await call('script.edit', { beat: 'b03', line: 'b03-1', delete: false });
-  assert.equal((await call('script.get')).beats[2].lines[0].id, 'b03-1');
-  assert.equal((await call('graph.get')).nodes.find((x) => x.id === 'b03-1').owner, null);
+  // Undo the delete (after it was saved): the same line, its words and its voice line are back, nothing remade.
+  const back = await call('script.edit', { beat: 'b03', line: 'b03-1', delete: false });
+  assert.deepEqual(back.restored, ['b03-1']);
+  assert.deepEqual(back.remaking, [], 'restoring remakes nothing');
+  const s3 = await call('script.get');
+  assert.deepEqual(s3.beats[2].lines.map((l) => [l.id, l.words]), [['b03-1', 'The ideas join into one picture.']]);
+  assert.deepEqual(s3.beats[2].deleted, []);
+  const g3 = await call('graph.get');
+  const b031 = g3.nodes.find((x) => x.id === 'b03-1');
+  assert.equal(b031.owner, 'ok', 'its OK is back too');
+  const s03after = g3.nodes.find((x) => x.id === 's03');
+  assert.equal(s03after.current, s03.current, 'its shot is the same version');
+  assert.equal(s03after.pending, null, 'and is not being remade');
+  // Bringing back a line that is there is a no-op.
+  assert.deepEqual((await call('script.edit', { beat: 'b03', line: 'b03-1', delete: false })).restored, []);
 
   // Refusals: unknown beat or line, empty words.
   await assert.rejects(call('script.edit', { beat: 'b09', line: 'b09-1', words: 'x' }), /no beat b09/);
   await assert.rejects(call('script.edit', { beat: 'b01', line: 'b01-7', words: 'x' }), /no line b01-7/);
   await assert.rejects(call('script.edit', { beat: 'b01', line: 'b01-1', words: '  ' }), /empty/);
 });
+
