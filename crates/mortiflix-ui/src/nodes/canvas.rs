@@ -591,17 +591,15 @@ pub fn play(out: &mut Out, area: &NodeArea, id: &str, scope: &str) {
 }
 
 /// A look or asset being dragged over a node: from the Bin here, or from part 02's Assets tab.
-/// MERGE NOTE (parts 02 + 03): with `crate::chat::AssetDrag` in the tree, add
-/// `|| resp.dnd_hover_payload::<crate::chat::AssetDrag>().is_some()`.
 fn hovering_input(resp: &egui::Response) -> bool {
-    resp.dnd_hover_payload::<super::panel::BinItem>().is_some()
+    resp.dnd_hover_payload::<super::panel::BinItem>().is_some() || resp.dnd_hover_payload::<crate::chat::AssetDrag>().is_some()
 }
 
 /// The look or asset id dropped on a node (`nodes.use` sends `assets.use {asset, node}` for assets).
-/// MERGE NOTE (parts 02 + 03): with `crate::chat::AssetDrag` in the tree, add
-/// `.or_else(|| resp.dnd_release_payload::<crate::chat::AssetDrag>().map(|a| a.id.clone()))`.
 fn dropped_input(resp: &egui::Response) -> Option<String> {
-    resp.dnd_release_payload::<super::panel::BinItem>().map(|i| i.0.clone())
+    resp.dnd_release_payload::<super::panel::BinItem>()
+        .map(|i| i.0.clone())
+        .or_else(|| resp.dnd_release_payload::<crate::chat::AssetDrag>().map(|a| a.id.clone()))
 }
 
 /// The rectangle of a node or a cut (by id).

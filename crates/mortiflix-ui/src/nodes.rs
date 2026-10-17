@@ -123,15 +123,17 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     flush(ctx, out);
 }
 
-/// Copy the loose preview's playhead in (part 04 keeps it in `state.preview`, on its own branch).
-/// MERGE NOTE (parts 03 + 04): once `MfxState::preview` exists, this body becomes:
-/// ```ignore
-/// state.nodes.playhead_shot.clone_from(&state.preview.shot_at_playhead);
-/// state.nodes.playing = state.preview.player.playing;
-/// state.nodes.follow_playhead = state.preview.follow_playhead;
-/// ```
+/// Copy the loose preview's playhead in (part 04 keeps it in `state.preview`): the shot under the
+/// playhead, whether it plays (blue outline) and Follow the playhead.
 fn sync_preview(state: &mut crate::MfxState) {
-    let _ = state;
+    state.nodes.playhead_shot.clone_from(&state.preview.shot_at_playhead);
+    state.nodes.playing = state.preview.player.playing;
+    state.nodes.follow_playhead = state.preview.follow_playhead;
+}
+
+/// An asset id as the service names them (`a01`, `a12`, …).
+fn is_asset_id(id: &str) -> bool {
+    id.len() <= 12 && id.strip_prefix('a').is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
 }
 
 fn flush(ctx: &mut MfxCtx, out: canvas::Out) {
@@ -561,7 +563,8 @@ pub fn command(m: &mut Mortiflix, what: &str, params: &Value) -> Result<Value, S
         "use" => {
             let id = node_param(params).ok_or("nodes.use needs `node` (a shot)")?;
             let input = params.get("input").and_then(Value::as_str).ok_or("nodes.use needs `input` (a look or asset)")?.to_string();
-            let kind = area.graph.get(&input).map(|n| n.kind);
+            // an asset dragged from the Assets tab need not be on the canvas (Show ▸ your assets off)
+            let kind = area.graph.get(&input).map(|n| n.kind).or_else(|| is_asset_id(&input).then_some(Kind::Asset));
             if area.graph.get(&id).is_none_or(|n| n.kind != Kind::Shot) || !matches!(kind, Some(Kind::Frame | Kind::Asset)) {
                 return Err("drop a look or one of your assets onto a shot".into());
             }
