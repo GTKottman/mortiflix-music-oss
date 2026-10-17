@@ -1,4 +1,4 @@
-# Contributing to FilmCraft
+# Contributing to Mortiflix Studio
 
 Thanks for helping. Before you start:
 

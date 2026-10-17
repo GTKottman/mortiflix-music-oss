@@ -4,8 +4,8 @@
 
 Containers, stills, audio files, project and interchange files, captions and presets. Codecs inside
 the containers are in [codec-parity.md](codec-parity.md). Our import list is
-`filmcraft_media::{VIDEO,AUDIO,STILL}_EXTENSIONS` plus the openers in `filmcraft_codecs::openers()`;
-our export list is `filmcraft_export::Format`. Premiere's list is from Adobe's supported-formats
+`mortiflix_media::{VIDEO,AUDIO,STILL}_EXTENSIONS` plus the openers in `mortiflix_codecs::openers()`;
+our export list is `mortiflix_export::Format`. Premiere's list is from Adobe's supported-formats
 documentation and the exporter folders in the installed bundle's `MediaIO/systempresets` (names
 only). "Tested" names the evidence.
 

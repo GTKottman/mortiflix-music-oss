@@ -1,6 +1,6 @@
 # Graphics
 
-FilmCraft's graphics work like Premiere's Essential Graphics: a **graphic clip** on a video track
+Mortiflix Studio's graphics work like Premiere's Essential Graphics: a **graphic clip** on a video track
 holds **text** and **shape** layers. Text is set by the text engine in `crates/text`
 ([README](../crates/text/README.md)): bundled OFL fonts plus system fonts, OpenType shaping with
 kerning and ligatures, bidi, line breaking, all drawn as vectors in linear light.
@@ -15,7 +15,7 @@ kerning and ligatures, bidi, line breaking, all drawn as vectors in linear light
   instances they save with the project, take keyframes on every animatable property (Source Text
   keyframes hold), appear in Effect Controls and copy with the clip. Standard effects on a graphic
   clip apply to the composed graphic; Motion and Opacity apply last.
-- `filmcraft_project::graphic::eval_layer` evaluates a layer at a time into a `LayerSpec`.
+- `mortiflix_project::graphic::eval_layer` evaluates a layer at a time into a `LayerSpec`.
 - Projects with graphics need no schema migration: everything is additive (new item kind, new
   effect ids). Builds older than this one refuse such files with a parse error.
 
@@ -151,7 +151,7 @@ underline, tracking, baseline shift or caps in the Properties panel: the change 
 selection only (`graphics.setCharStyle`). Styles are stored on the layer as runs of characters
 (`EffectInstance::layer.runs`, character offsets, sorted and non-overlapping) and follow the text
 when it is edited (typed characters take the style of the character before them). The text engine
-lays the runs out together (`filmcraft_text::layout_rich`): a run can change the font and size,
+lays the runs out together (`mortiflix_text::layout_rich`): a run can change the font and size,
 lines grow to fit the largest run, and each run can have its own fill colour.
 
 | Command | Params |
@@ -187,12 +187,12 @@ These settings are `TrackItem::graphic` (`GraphicMeta`, schema v12).
 
 ## Graphics templates (`.fcgt`)
 
-FilmCraft's equivalent of motion graphics templates is its **own** format: a `.fcgt` file is
-documented, versioned JSON (`filmcraft_project::gtemplate`):
+Mortiflix Studio's equivalent of motion graphics templates is its **own** format: a `.fcgt` file is
+documented, versioned JSON (`mortiflix_project::gtemplate`):
 
 | Field | Meaning |
 |---|---|
-| `format`, `version` | `"filmcraft.graphicsTemplate"`, `1` (newer versions are refused) |
+| `format`, `version` | `"mortiflix.graphicsTemplate"`, `1` (newer versions are refused) |
 | `id`, `name`, `category`, `description`, `author`, `license`, `tags` | library information |
 | `canvas`, `duration` | frame size it was designed for, default clip length (ticks) |
 | `layers` | the graphic's layers, exactly as in a project file, each with a `uid` |
@@ -203,9 +203,9 @@ documented, versioned JSON (`filmcraft_project::gtemplate`):
 Placing a template on a sequence of another size scales and centres its layers (pin distances
 scale too).
 
-**FilmCraft never reads or imports Adobe `.mogrt` files** (or any other application's template
+**Mortiflix Studio never reads or imports Adobe `.mogrt` files** (or any other application's template
 packages): Install refuses `.mogrt` paths without opening them, and the reader rejects ZIP
-archives. Built-in templates are original designs made for FilmCraft in code (no image, font or
+archives. Built-in templates are original designs made for Mortiflix Studio in code (no image, font or
 template files): lower thirds (Slab, Rule, Ticker crawl), titles (Centered, Boxed), end credits
 (Roll) and callouts (Pointer, Tag), with the bundled Inter font. Thumbnails are rendered by the
 engine at runtime.

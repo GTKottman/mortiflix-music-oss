@@ -1,23 +1,23 @@
 # Keyboard parity with Premiere Pro
 
-FilmCraft's **Premiere Pro Compatible** shortcut preset (Edit ▸ Keyboard Shortcuts…) follows
+Mortiflix Studio's **Premiere Pro Compatible** shortcut preset (Edit ▸ Keyboard Shortcuts…) follows
 Premiere's default keyboard (macOS). The table lives in `crates/engine/src/shortcut_presets.rs`:
 `PREMIERE` (application-wide keys and a few panel keys) and `PREMIERE_PANEL` (panel-scoped keys
-that FilmCraft Default uses as well). `presets::premiere()` is the whole preset.
+that Mortiflix Studio Default uses as well). `presets::premiere()` is the whole preset.
 
-Every entry names a FilmCraft command id. Engine commands run through `Session::execute`; UI
+Every entry names a Mortiflix Studio command id. Engine commands run through `Session::execute`; UI
 commands (frames, panels, monitor zoom, Project and Text panel navigation) run through
-`menus::invoke`. Both are reachable by id from the CLI (`filmcraft-cli exec <id>`), the control
+`menus::invoke`. Both are reachable by id from the CLI (`mortiflix-studio-cli exec <id>`), the control
 channel (`engine.execute` / `ui.menu.invoke`) and MCP (`command_run`).
 
 Tests: `crates/engine/src/keyboard_tests.rs` (no key used twice in one scope; behaviour of the
 keyboard commands, with undo) and `crates/ui-egui/tests/keyboard_ui.rs` (no dangling ids in the
-tables, no conflicts in FilmCraft Default or the Premiere preset, keys pressed in the headless app).
+tables, no conflicts in Mortiflix Studio Default or the Premiere preset, keys pressed in the headless app).
 
 ## Keyboard-only commands (M3.12)
 
-Premiere has these as keys only (most are not in a menu). Modules: `filmcraft_engine::keyboard`
-(engine) and `filmcraft_ui_egui::panels::keyboard` (UI); their module docs list each id.
+Premiere has these as keys only (most are not in a menu). Modules: `mortiflix_engine::keyboard`
+(engine) and `mortiflix_ui_egui::panels::keyboard` (UI); their module docs list each id.
 
 | Group | Commands | Keys |
 |---|---|---|
@@ -40,16 +40,16 @@ Original, Make Subclip, Audio Channels, the Graphics New Layer / Arrange / Selec
 Program monitor Show Rulers / Show Guides / Snap / Lock Guides, New Bin From Selection, Paste and
 Paste Insert in the Timeline, the Audio Track Mixer Loop).
 
-FilmCraft Default keeps its own keys where they differ (Shift+E is Clip ▸ Enable there, so Export
+Mortiflix Studio Default keeps its own keys where they differ (Shift+E is Clip ▸ Enable there, so Export
 Frame has no default key; the Premiere preset moves Shift+E to Export Frame and Enable to ⇧⌘E).
 
 ## Skipped Premiere default shortcuts
 
 | Premiere command (key, scope) | Reason |
 |---|---|
-| Generative Media Tool (⇧V) | Adobe Firefly cloud generation; not part of FilmCraft. |
-| Add to object / Subtract from object (⌘= / ⌘-) | Refine an AI object mask (Object Mask tool); FilmCraft has no AI object masks. |
-| Change Draw Mode (⌥⌘L) | Premiere's shape draw modes for the Pen/shape tools; FilmCraft's shape tools have no draw modes. |
+| Generative Media Tool (⇧V) | Adobe Firefly cloud generation; not part of Mortiflix Studio. |
+| Add to object / Subtract from object (⌘= / ⌘-) | Refine an AI object mask (Object Mask tool); Mortiflix Studio has no AI object masks. |
+| Change Draw Mode (⌥⌘L) | Premiere's shape draw modes for the Pen/shape tools; Mortiflix Studio's shape tools have no draw modes. |
 | Production panel: New Project, New Folder, Close Project, Make a Copy, Move Selection Home/End/Page Up/Page Down, Move To Trash, Open Project, Zoom In/Out (12 keys) | Productions (shared multi-project folders) are not implemented; there is no Production panel. |
 | Search panel: Open in Source Monitor (⇧O) | No separate Search panel; Open Search (⇧⌘F) focuses the Project panel search. |
 | Audio Track Mixer: Show/Hide Tracks… (⌥⌘T), Meter Input(s) Only (⌃⇧I) | The mixer has no track visibility dialog and no input metering (no hardware input recording). |
@@ -61,4 +61,4 @@ Frame has no default key; the Premiere preset moves Shift+E to Export Frame and 
 | Project panel: Next/Previous Column Field, Next/Previous Row Field (Tab, ⇧Tab, Return, ⇧Return) | The list view has no inline-editable metadata cells. |
 | Text panel: Edit Segment (Return) | No inline transcript text editing (corrections go through `transcript.set`). |
 | Text panel: Follow Active Monitor (⇧C), Show Source Transcript (⇧Z) | Only sequence transcripts exist; source clips have no transcript view. |
-| Timeline: Set Work Area Bar In/Out Point (⌥[ / ⌥]) | FilmCraft has no work area bar (Premiere hides it by default; renders use In/Out). |
+| Timeline: Set Work Area Bar In/Out Point (⌥[ / ⌥]) | Mortiflix Studio has no work area bar (Premiere hides it by default; renders use In/Out). |

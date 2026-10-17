@@ -2,7 +2,7 @@
 
 > **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** trivial (status line, revision history and roadmap link added; content checked against the crate list) · **Target:** Adobe Premiere Pro 2026 (26.5.2)
 
-FilmCraft is a Cargo workspace of small crates with strictly enforced layering. The engine is
+Mortiflix Studio is a Cargo workspace of small crates with strictly enforced layering. The engine is
 headless: every feature can be reached without a window, and the egui UI is one client among the
 CLI, the JSON control channel and the MCP server.
 
@@ -22,7 +22,7 @@ Design principles:
 ## 1. Layers
 
 ```text
- L6  apps/filmcraft · apps/filmcraft-cli · apps/filmcraft-web
+ L6  apps/mortiflix-studio · apps/mortiflix-studio-cli · apps/mortiflix-studio-web
  L5  ui-egui · mortiflix-ui · automation · platform
  L4  engine
  L3  render · gpu · export · golden (test-only)
@@ -32,8 +32,8 @@ Design principles:
      codecs/containers: isobmff · matroska · mxf · cfb · mpegts · ogg · h264 · h264enc · hevc · vp9 · av1 · mpeg2v · prores · dnx · apv · dng · aac · ac3 · mpa · opus
 ```
 
-Crates are named `filmcraft-<dir>` (`crates/time` is `filmcraft-time`). The apps are `filmcraft`
-and `filmcraft-cli`.
+Crates are named `mortiflix-<dir>` (`crates/time` is `mortiflix-time`). The apps are `mortiflix-studio`
+and `mortiflix-studio-cli`.
 
 | Crate | Layer | Purpose |
 |---|---|---|
@@ -77,12 +77,12 @@ and `filmcraft-cli`.
 | `export` | L3 | render → encode → mux pipeline, progress/cancel |
 | `engine` | L4 | `Session`, command registry, undo history, media pool, jobs, interchange glue |
 | `ui-egui` | L5 | the egui frontend: docking, panels, timeline, monitors, playback, control-channel handlers |
-| `mortiflix-ui` | L5 | Mortiflix FilmCraft: the stage bar and the Mortiflix panels (chat, nodes, preview, voice & music), and the Mortiflix service supervisor; `ui-egui` hosts it (allowed same-layer edge) |
+| `mortiflix-ui` | L5 | Mortiflix Studio: the stage bar and the Mortiflix panels (chat, nodes, preview, voice & music), and the Mortiflix service supervisor; `ui-egui` hosts it (allowed same-layer edge) |
 | `automation` | L5 | MCP server (`rmcp`, stdio), headless or bridged to the running app |
-| `platform` | L5 | OS media FFI only: hardware video decoding (VideoToolbox H.264 / HEVC on macOS; Media Foundation / Direct3D 11 H.264 / HEVC / VP9 / AV1 on Windows; VA-API H.264 / HEVC on Linux, with our own parsers and DPBs driving the stateless hardware; a no-op elsewhere) behind `codecs::VideoDecoder`, with transparent fallback to our decoders, and hardware H.264 encoding (VideoToolbox, opt-in) and H.265 encoding (VideoToolbox, the only H.265 encoder; the format exists only where a hardware encoder does) and NVIDIA NVENC H.264 (Windows and 64-bit Linux, opt-in) and H.265 (Windows, FilmCraft's only H.265 encoder there) encoding behind `export::VideoEncoder`; H.264 declines to the built-in encoder for what the hardware does not take. The one crate allowed `unsafe` ([ADR 0001](adr/0001-platform-ffi.md), [README](../crates/platform/README.md)) |
-| `filmcraft` | L6 | desktop binary: eframe/wgpu window, cpal audio output, file dialogs, native macOS menu, TCP control server |
-| `filmcraft-cli` | L6 | headless CLI: `exec`, `run`, `inspect`, `describe`, `commands`, `import`, `export`, `render`, `probe`, `mcp`; `--bridge` targets the running app |
-| `filmcraft-web` | L6 | the browser app (wasm32): eframe web runner on WebGPU/WebGL2, Blob-backed services, OPFS recovery, WebAudio, WebCodecs, `window.filmcraft` API ([web.md](web.md)) |
+| `platform` | L5 | OS media FFI only: hardware video decoding (VideoToolbox H.264 / HEVC on macOS; Media Foundation / Direct3D 11 H.264 / HEVC / VP9 / AV1 on Windows; VA-API H.264 / HEVC on Linux, with our own parsers and DPBs driving the stateless hardware; a no-op elsewhere) behind `codecs::VideoDecoder`, with transparent fallback to our decoders, and hardware H.264 encoding (VideoToolbox, opt-in) and H.265 encoding (VideoToolbox, the only H.265 encoder; the format exists only where a hardware encoder does) and NVIDIA NVENC H.264 (Windows and 64-bit Linux, opt-in) and H.265 (Windows, Mortiflix Studio's only H.265 encoder there) encoding behind `export::VideoEncoder`; H.264 declines to the built-in encoder for what the hardware does not take. The one crate allowed `unsafe` ([ADR 0001](adr/0001-platform-ffi.md), [README](../crates/platform/README.md)) |
+| `mortiflix-studio` | L6 | desktop binary: eframe/wgpu window, cpal audio output, file dialogs, native macOS menu, TCP control server |
+| `mortiflix-studio-cli` | L6 | headless CLI: `exec`, `run`, `inspect`, `describe`, `commands`, `import`, `export`, `render`, `probe`, `mcp`; `--bridge` targets the running app |
+| `mortiflix-studio-web` | L6 | the browser app (wasm32): eframe web runner on WebGPU/WebGL2, Blob-backed services, OPFS recovery, WebAudio, WebCodecs, `window.mortiflixStudio` API ([web.md](web.md)) |
 
 ### What `cargo xtask layers` enforces
 
@@ -94,8 +94,8 @@ are exempt):
 |---|---|
 | Every crate has a layer | A new crate fails the check until it is added to `LAYERS`. |
 | Only downward edges | A crate may not depend on a crate in a higher layer. |
-| Same-layer edges are listed | From L1 up, a same-layer edge must be in `SAME_LAYER`: `media→frame`, `project→media`, `project→frame`, `gpu→render`, `export→render`, `cli→filmcraft`, plus a few reserved for planned crates. |
-| L0 codecs stay standalone | L0 crates other than `time`, `geom`, `color`, `bitstream`, `testkit` may depend on no workspace crate except `filmcraft-bitstream`. External crates such as `thiserror` and `rayon` are allowed. |
+| Same-layer edges are listed | From L1 up, a same-layer edge must be in `SAME_LAYER`: `media→frame`, `project→media`, `project→frame`, `gpu→render`, `export→render`, `cli→mortiflix-studio`, plus a few reserved for planned crates. |
+| L0 codecs stay standalone | L0 crates other than `time`, `geom`, `color`, `bitstream`, `testkit` may depend on no workspace crate except `mortiflix-bitstream`. External crates such as `thiserror` and `rayon` are allowed. |
 | No UI/OS crates below L5 | `egui`, `eframe`, `egui-wgpu`, `winit`, `rfd`, `cpal`, `muda` are allowed only in L5 and L6. |
 
 `cargo xtask wasm` runs `cargo check --target wasm32-unknown-unknown` on every L0–L4 crate, the
@@ -105,7 +105,7 @@ egui UI and the web app, so everything up to the engine stays web-portable and t
 
 ## 2. Time base
 
-All time is `filmcraft_time::Tick(i64)` at `TICKS_PER_SECOND = 254_016_000_000`.
+All time is `mortiflix_time::Tick(i64)` at `TICKS_PER_SECOND = 254_016_000_000`.
 
 That number divides evenly into the frame duration of every broadcast rate (23.976, 24, 25, 29.97,
 30, 48, 50, 59.94, 60, 120…) and the sample duration of every common audio rate (8 kHz to 192 kHz,
@@ -122,7 +122,7 @@ at 29.97, and audio and video line up to the sample.
 Commands take time as `time` (ticks), `frame`, `seconds` or `timecode`; the engine converts once at
 the boundary.
 
-## 3. Data model (`filmcraft-project`)
+## 3. Data model (`mortiflix-project`)
 
 ```text
 Project
@@ -163,7 +163,7 @@ EffectInstance
 - **Project files** (`.fcproj`) are the project serialised as JSON. Saves are atomic: write a
   temporary sibling file, then rename it over the target.
 
-## 4. Command system (`filmcraft-engine`)
+## 4. Command system (`mortiflix-engine`)
 
 ```rust
 pub struct CommandSpec {
@@ -247,7 +247,7 @@ file ──► codecs (MP4/MOV, MKV, audio)        demux + decode, GOP-aware see
   `codecs::VideoDecoder`. `register_video_decoder` puts a factory in front of the built-in ones, so a
   hardware decoder can take precedence. The GOP cache never holds its lock while decoding.
 - **Hardware decoding.** The apps (desktop, CLI / headless MCP, bench) call
-  `filmcraft_platform::register()` at startup, which on macOS registers a VideoToolbox factory for
+  `mortiflix_platform::register()` at startup, which on macOS registers a VideoToolbox factory for
   `avcC` / `hvcC` streams (8 / 10-bit, 4:2:0 and 4:2:2; elsewhere it does nothing), and on Windows a
   Media Foundation one (below). The factory
   declines (our decoder is used) when Settings ▸ Playback ▸ Hardware decoding is Off
@@ -281,7 +281,7 @@ file ──► codecs (MP4/MOV, MKV, audio)        demux + decode, GOP-aware see
   frame of the same source. A request that finds the shared decoder busy decodes with a private
   decoder.
 - **Hardware encoding.** On Windows and 64-bit Linux, `platform::nvenc::export::factory` is registered with
-  `filmcraft_export::register_encoder` (`register()` does this once), in front of the software H.264
+  `mortiflix_export::register_encoder` (`register()` does this once), in front of the software H.264
   encoder. It takes an export only when Export ▸ Hardware encoding (`ExportSettings.hardwareEncoding`,
   `HardwareEncoding::Auto`) is Auto, which is off by default: hardware streams differ from ours, and
   exports are otherwise byte-identical from run to run. NVENC (`platform::nvenc`, the driver's
@@ -294,14 +294,14 @@ file ──► codecs (MP4/MOV, MKV, audio)        demux + decode, GOP-aware see
   BT.2020, limited range, from the float R'G'B' pictures through `rgbf_to_yuv420_10` into P010 input
   buffers, with the HDR10 static metadata as SEI on every IDR for PQ; the `hvcC` is built from the SPS
   the encoder wrote). An HDR sequence exports as HDR H.265 only where a registered probe says so
-  (`filmcraft_export::register_hdr_probe`, `hdr_available`; NVENC with 10-bit support), otherwise it is
+  (`mortiflix_export::register_hdr_probe`, `hdr_available`; NVENC with 10-bit support), otherwise it is
   tone-mapped to SDR as on macOS: `register()` hands `platform::nvenc::hevc_available` to
-  `filmcraft_export::register_format_probe`, so the H.265 format exists where an HEVC encoder does,
+  `mortiflix_export::register_format_probe`, so the H.265 format exists where an HEVC encoder does,
   and choosing it is the opt-in (the Hardware encoding toggle governs H.264 only). With no software
   H.265 encoder, what NVENC declines is counted and ends the export with an error that says why.
 - **Compositor.** `render` is the reference for monitors, thumbnails and export. `render::plan`
   turns a frame into GPU layers, each with its opacity and blend mode. All 27 blend modes run on the
-  GPU (`filmcraft-gpu`): Normal and Dissolve with fixed-function "over" blending, the others by
+  GPU (`mortiflix-gpu`): Normal and Dissolve with fixed-function "over" blending, the others by
   copying the accumulator under the layer into a backdrop texture and compositing in the fragment
   shader with the CPU reference's formulas. The common standard effects run on the GPU too
   (`render::gpufx`, `gpu::fx`): Brightness & Contrast, ProcAmp, Tint, Black & White, Color
@@ -319,7 +319,7 @@ file ──► codecs (MP4/MOV, MKV, audio)        demux + decode, GOP-aware see
   colour settings as its parent, nothing on the clip that changes the picture, every layer inside
   blended normally) and non-dissolve transitions are rendered on the CPU for that layer or frame
   and handed to the GPU as an image (a layer image keeps its clip's blend mode), so both paths
-  give the same picture. Setting `FILMCRAFT_CPU_COMPOSITE=1`
+  give the same picture. Setting `MFX_STUDIO_CPU_COMPOSITE=1`
   forces the CPU path in the desktop app.
 - **CPU compositor shortcuts.** The CPU compositor, which is what export runs, works on
   premultiplied linear `f32` images, 33 MB at 1080p, so what it does not allocate, convert or mix
@@ -329,7 +329,7 @@ file ──► codecs (MP4/MOV, MKV, audio)        demux + decode, GOP-aware see
   alpha plane, opacity 100 %, Normal) simply becomes the canvas; a plain media frame with an alpha
   plane (a ProRes 4444 banner) is converted and mixed only inside the rectangle where its alpha is
   not zero (`VideoFrame::alpha_region`, `to_linear_f32_region`, `blend::composite_at`), the rest
-  being transparent anyway; and working images are recycled through `filmcraft_frame::pool`
+  being transparent anyway; and working images are recycled through `mortiflix_frame::pool`
   (`take_f32_overwritten` / `recycle_f32`: the buffer comes back with its old contents, so there is
   no zero-fill) by the export pipeline once a frame is converted to 8 bits; a standalone export's
   pipeline frees the idle float images (`pool::trim_f32`) when it goes away, so a finished export
@@ -341,23 +341,23 @@ file ──► codecs (MP4/MOV, MKV, audio)        demux + decode, GOP-aware see
   decodes. It shows the exact frame when it is ready and holds the nearest cached frame meanwhile.
   Play waits for the first frames (`PREROLL_FRAMES`, at most 0.5 s) before starting the clock.
   Every refresh, `schedule_playback` asks for the next frames and drops (or cancels, through
-  `filmcraft_media::cancel`) jobs for frames the playhead has passed; a new on-screen frame
+  `mortiflix_media::cancel`) jobs for frames the playhead has passed; a new on-screen frame
   replaces the one asked for before (scrubbing); Stop cancels the prefetch. When frames cost more
   than the workers can render in real time (CPU effects), it starts only frames that can still be
   on time and spaces them evenly (`playback_plan`). When decoding is what falls behind, each job
-  tells its sources which frames are already late (`filmcraft_media::cancel::with_catch_up`: the
+  tells its sources which frames are already late (`mortiflix_media::cancel::with_catch_up`: the
   playhead's distance, two seconds for a scrubbed-to frame), and the GOP cache skips
   non-reference pictures of late frames on the way (`VideoDecoder::is_disposable`, H.264
   `nal_ref_idc` 0 and HEVC sub-layer non-reference pictures; the wanted frame decodes exactly as
   before). With Settings ▸ Playback ▸ Draft decoding (off by default), frames played at 1/2
   resolution or lower are requested as draft frames (`FrameKey::draft`,
-  `filmcraft_media::cancel::with_draft`): the H.264 decoder skips deblocking of non-reference
+  `mortiflix_media::cancel::with_draft`): the H.264 decoder skips deblocking of non-reference
   pictures (`VideoDecoder::set_draft`), the GOP cache serves those draft frames to draft
   requests only (a paused frame, render or export decodes them again exactly), and draft plans
   hand the GPU box-decimated Y'CbCr planes at the drawn size. `perf.stats` reports the counters.
-  GPU plans carry their texels already converted for upload (`filmcraft_gpu::prepare`), so the UI
+  GPU plans carry their texels already converted for upload (`mortiflix_gpu::prepare`), so the UI
   thread only copies them.
-- **Audio clock.** The desktop app passes a cpal output (`apps/filmcraft/src/audio.rs`) to the UI as
+- **Audio clock.** The desktop app passes a cpal output (`apps/mortiflix-studio/src/audio.rs`) to the UI as
   `AudioOut`. While playing, the samples played by the sound card drive the playhead and video follows.
   Without an audio device, playback falls back to the wall clock. `PlaybackMeter` counts timeline
   frames: shown when the exact picture was on screen while due, dropped otherwise (including frames
@@ -435,7 +435,7 @@ stereo / mono track ──5.1 panner───┼─► 5.1 submix / 5.1 Mix ─�
   `MixerStrip::lanes` (`pan51.x`, `pan51.y` −100…100, `pan51.center` 0…100 %, `pan51.lfe` dB): a
   lane without keyframes stores the static value, so no new project fields were needed and the
   puck is automatable like any lane.
-- **Maths** (`audio_dsp::channels`). 5.1 order is L, R, C, LFE, Ls, Rs everywhere inside FilmCraft.
+- **Maths** (`audio_dsp::channels`). 5.1 order is L, R, C, LFE, Ls, Rs everywhere inside Mortiflix Studio.
   Downmix is ITU-R BS.775 (`Lo = L + k·C + k·Ls`, `Ro = R + k·C + k·Rs`, mono
   `M = k·L + k·R + C + ½·Ls + ½·Rs`, `k = 1/√2`, LFE omitted); upmix puts mono on C and stereo on
   L/R. The panner splits a point source front/rear and left/right with the sine/cosine
@@ -460,11 +460,11 @@ stereo / mono track ──5.1 panner───┼─► 5.1 submix / 5.1 Mix ─�
 
 ### 5.1.2 Voice-over recording
 
-**Voice-over recording** (`engine::voiceover`, `audio.voiceover.*`). The record point R is the playhead, or the In point when In/Out are set (punch-in; punch-out at Out). Playback starts the pre-roll before it (C = max(0, R − pre-roll)) and the input is captured from C. When the UI's audio clock really starts, `audio.voiceover.sync` restarts the capture there. `audio.voiceover.stop` keeps the audio from R to min(stop, Out), writes a mono 32-bit float WAV `<Name> <n>.wav` (Scratch Disks ▸ Captured, else next to the project, else the data or temporary directory), imports it and overwrites it onto the record track at R as one undo step. The record track is the given one, else the record-armed one, else the first targeted one. Input goes through the `AudioInput` trait: cpal in the desktop app (`apps/filmcraft/src/audio_in.rs`, on its own thread), and `SyntheticInput` headless, which produces exactly the samples the timeline asks for so recordings land sample-accurately. Voice-Over Record Settings (Source, Input channel, Name, Countdown Sound Cues, Pre-/Post-roll) are preferences (`voiceOver`). The track header's microphone records or stops, and a right-click opens the settings dialog. Countdown beeps (1 kHz, 100 ms, each whole second of pre-roll and at R) are mixed into playback, an overlay counts down, and playback stops at Out + post-roll. A take records anywhere, also on the empty timeline past the end of the sequence: starting it never returns the playhead to the beginning, and playback keeps going past the end until the take is stopped.
+**Voice-over recording** (`engine::voiceover`, `audio.voiceover.*`). The record point R is the playhead, or the In point when In/Out are set (punch-in; punch-out at Out). Playback starts the pre-roll before it (C = max(0, R − pre-roll)) and the input is captured from C. When the UI's audio clock really starts, `audio.voiceover.sync` restarts the capture there. `audio.voiceover.stop` keeps the audio from R to min(stop, Out), writes a mono 32-bit float WAV `<Name> <n>.wav` (Scratch Disks ▸ Captured, else next to the project, else the data or temporary directory), imports it and overwrites it onto the record track at R as one undo step. The record track is the given one, else the record-armed one, else the first targeted one. Input goes through the `AudioInput` trait: cpal in the desktop app (`apps/mortiflix-studio/src/audio_in.rs`, on its own thread), and `SyntheticInput` headless, which produces exactly the samples the timeline asks for so recordings land sample-accurately. Voice-Over Record Settings (Source, Input channel, Name, Countdown Sound Cues, Pre-/Post-roll) are preferences (`voiceOver`). The track header's microphone records or stops, and a right-click opens the settings dialog. Countdown beeps (1 kHz, 100 ms, each whole second of pre-roll and at R) are mixed into playback, an overlay counts down, and playback stops at Out + post-roll. A take records anywhere, also on the empty timeline past the end of the sequence: starting it never returns the playhead to the beginning, and playback keeps going past the end until the take is stopped.
 
 ### 5.1.2a Text to Speech (narrations)
 
-**Narrations** (`engine::narration`, `tts.*`; voices in `filmcraft-tts`). The Text to Speech panel (Window ▸ Text to Speech) writes a script with pause markers (`[pause 1s]`), a voice, a vocal pitch and a pace; `tts.create` synthesizes it, writes `Narration <n>.wav` (mono 32-bit float, 24 kHz, where voice-over recordings go), imports it and places it at the playhead on the first free targeted audio track, else the first free audio track, else a new one, as one undo step. The settings are kept per generated item in `Project::narrations` (schema v14). Selecting a narration clip loads it into the panel; `tts.edit` writes a new file (beside the previous one) and swaps the clip to it, keeping the clip's start, duration and speed: longer speech is kept whole in the file but plays only to the clip's end; shorter speech is padded with silence to the clip's length. The old item and narration stay, so undo is exact. `tts.preview` synthesizes without changing the project and the UI plays `Session::tts_preview` on the audio output. Built-in voices are an original formant synthesizer (robotic, no download). The natural voices (feature `neural-voices` of the desktop app, off by default like `whisper`) are Kokoro-82M on candle (`filmcraft-tts`) fed by `filmcraft-tts-text` (normalizer, CMUdict + letter-to-sound); their 336 MB package is downloaded once after the user confirms (`tts.downloadVoices`, a job). The UI synthesizes with `tts.render` (a job filling `Session::tts_cache`) and then runs create / edit / preview, which use the cache.
+**Narrations** (`engine::narration`, `tts.*`; voices in `mortiflix-tts`). The Text to Speech panel (Window ▸ Text to Speech) writes a script with pause markers (`[pause 1s]`), a voice, a vocal pitch and a pace; `tts.create` synthesizes it, writes `Narration <n>.wav` (mono 32-bit float, 24 kHz, where voice-over recordings go), imports it and places it at the playhead on the first free targeted audio track, else the first free audio track, else a new one, as one undo step. The settings are kept per generated item in `Project::narrations` (schema v14). Selecting a narration clip loads it into the panel; `tts.edit` writes a new file (beside the previous one) and swaps the clip to it, keeping the clip's start, duration and speed: longer speech is kept whole in the file but plays only to the clip's end; shorter speech is padded with silence to the clip's length. The old item and narration stay, so undo is exact. `tts.preview` synthesizes without changing the project and the UI plays `Session::tts_preview` on the audio output. Built-in voices are an original formant synthesizer (robotic, no download). The natural voices (feature `neural-voices` of the desktop app, off by default like `whisper`) are Kokoro-82M on candle (`mortiflix-tts`) fed by `mortiflix-tts-text` (normalizer, CMUdict + letter-to-sound); their 336 MB package is downloaded once after the user confirms (`tts.downloadVoices`, a job). The UI synthesizes with `tts.render` (a job filling `Session::tts_cache`) and then runs create / edit / preview, which use the cache.
 
 ### 5.1.3 Remix
 
@@ -529,7 +529,7 @@ with different vertex counts hold). Feather, Opacity and Expansion are ordinary 
 - **Semantics.** A masked effect is `lerp(original, effected, coverage)` per premultiplied channel
   (the effect only applies inside); Opacity masks scale the clip's layer before Motion, so they
   follow the clip's transform. Adjustment-layer masks are in sequence pixels.
-- **GPU.** `filmcraft-gpu::GpuMask` evaluates the same coverage and mix in WGSL (compute), tested
+- **GPU.** `mortiflix-gpu::GpuMask` evaluates the same coverage and mix in WGSL (compute), tested
   to agree with the CPU within 3·10⁻⁶. Layers with masks are CPU-rendered images in frame plans.
 - **Editing.** `masks.*` commands (add / remove / set / moveVertex / translate / addVertex /
   removeVertex / toggleVertexSmooth / roundCorners / select / list; `masks.add` takes a
@@ -558,7 +558,7 @@ frame (Y'CbCr/RGB + metadata) ─► source colour space: Interpret Footage over
   Rec. 2100 HLG, wide gamut, auto tone map) and `Interpretation::color_space` (per media item;
   `None` = from metadata). Commands: `sequence.colorSettings`, `clip.interpretFootage`,
   `color.spaces`, `media.colorInfo`.
-- **Maths** in `filmcraft-color` (`transform`, `log`, `spaces`; formulas and sources in
+- **Maths** in `mortiflix-color` (`transform`, `log`, `spaces`; formulas and sources in
   [crates/color/README.md](../crates/color/README.md)); the renderer side is `render::colorman`.
 - **Fast path.** A Rec. 709 sequence without wide gamut and media whose metadata says Rec. 709 /
   sRGB decodes exactly as before, and its layers stay on the GPU. Log, HDR or wide-gamut media,
@@ -571,7 +571,7 @@ frame (Y'CbCr/RGB + metadata) ─► source colour space: Interpret Footage over
 - **HDR grading (Lumetri).** `FxCtx::working` carries the sequence's working space. In a PQ or HLG
   sequence Lumetri grades the working space's own signal normalised to **HDR White** (cd/m²,
   Basic Correction; the curves, wheels, looks and HSL Secondary use the Curves section's **HDR
-  Range**): `filmcraft_color::GradeSpace` (PQ: `PQ⁻¹(nits/10000) / PQ⁻¹(white/10000)`; HLG: the
+  Range**): `mortiflix_color::GradeSpace` (PQ: `PQ⁻¹(nits/10000) / PQ⁻¹(white/10000)`; HLG: the
   BT.2100 inverse OOTF of a display with that peak, then the OETF). So the sliders and curves span
   0 … HDR White like black … white in SDR, exposure is stops of light, and highlights above HDR
   White pass through (contrast leaves them alone; **HDR Specular** scales them). Rec. 709
@@ -596,7 +596,7 @@ frame (Y'CbCr/RGB + metadata) ─► source colour space: Interpret Footage over
   working-space values (waveform in cd/m² on a PQ scale, BT.2020 vectorscope).
 - **LUTs.** Lumetri Input LUT and Creative Look reference `lib:<id>` (the project's LUT library,
   `Project::luts`, embedded `.cube`/`.3dl` text) or `builtin:<id>` (code-generated camera
-  conversions and looks). `filmcraft-gpu::GpuLut` is the WGSL tetrahedral counterpart, tested for
+  conversions and looks). `mortiflix-gpu::GpuLut` is the WGSL tetrahedral counterpart, tested for
   parity.
 
 ### 5.4 Multi-camera and synchronisation
@@ -650,7 +650,7 @@ multi-camera clip = nested source + TrackItem::multicam {enabled, angle}
   recorded range are healed, so pressing the angle already showing adds no edit. Flatten replaces
   a clip by the clip(s) its angle shows (outer effects carried over; linked pairs stay linked).
 
-## 6. Export jobs (`filmcraft-export`)
+## 6. Export jobs (`mortiflix-export`)
 
 ```text
 file.exportMedia {path, preset?, settings?, format?, range?, …}     export.quick {preset?, path?}
@@ -664,12 +664,12 @@ file.exportMedia {path, preset?, settings?, format?, range?, …}     export.qui
 
 | Format | Encoder | Container |
 |---|---|---|
-| `h264` | `filmcraft-h264enc` (profile, level, CBR / VBR 1-pass / VBR 2-pass, keyframe distance) + `filmcraft-aac` | MP4 or QuickTime (`isobmff`, the Multiplexer setting) |
-| `prores` | `filmcraft-prores` (Proxy / LT / 422 / HQ) | MOV |
-| `dnxhr` | `filmcraft-dnx` (LB / SQ / HQ / HQX) | MOV (`AVdh`) |
+| `h264` | `mortiflix-h264enc` (profile, level, CBR / VBR 1-pass / VBR 2-pass, keyframe distance) + `mortiflix-aac` | MP4 or QuickTime (`isobmff`, the Multiplexer setting) |
+| `prores` | `mortiflix-prores` (Proxy / LT / 422 / HQ) | MOV |
+| `dnxhr` | `mortiflix-dnx` (LB / SQ / HQ / HQX) | MOV (`AVdh`) |
 | `mjpeg` | built in | MOV |
-| `aac` | `filmcraft-aac` (AAC-LC, the audio settings' bitrate) | audio only: MPEG-4 audio `.m4a` (`isobmff`, priming in an edit list), or raw ADTS when the path ends in `.aac` |
-| `mxf-op1a` | DNxHR (default), ProRes or H.264 (Annex B, long GOP), `mxfVideoCodec`; PCM 16/24/32-bit integer | MXF OP1a (`filmcraft-mxf` writer: frame-wrapped, index with temporal offsets, start timecode) |
+| `aac` | `mortiflix-aac` (AAC-LC, the audio settings' bitrate) | audio only: MPEG-4 audio `.m4a` (`isobmff`, priming in an edit list), or raw ADTS when the path ends in `.aac` |
+| `mxf-op1a` | DNxHR (default), ProRes or H.264 (Annex B, long GOP), `mxfVideoCodec`; PCM 16/24/32-bit integer | MXF OP1a (`mortiflix-mxf` writer: frame-wrapped, index with temporal offsets, start timecode) |
 | `mxf-opatom` | as `mxf-op1a` | Avid-style MXF OP-Atom: clip-wrapped picture at `path`, one mono PCM file per channel (`<stem>_A1.mxf` …, `Report::extra_files`) |
 | `png`, `tiff`, `bmp`, `jpg` | `image` | numbered stills `<name>000.<ext>`, `<name>001.<ext>` … |
 | `tga`, `dpx`, `exr` | built in (`raster.rs`: uncompressed Targa 24/32-bit; DPX 10-bit RGB, SMPTE ST 268; OpenEXR half-float linear RGB(A), uncompressed scan lines) | numbered stills, as above |
@@ -725,9 +725,9 @@ All of these dispatch the same command ids.
 | Surface | Where | Scope |
 |---|---|---|
 | UI | `ui-egui` menus, shortcuts, panels | `menus::invoke` → engine or UI command |
-| CLI | `filmcraft-cli` | `exec <id> key=value…`, `run script.jsonl` (one `{"id","params"}` per line), `inspect`, `import`, `export`, `render`, `probe`; `--save`, `--bridge` |
-| Control channel | `filmcraft --control <port>` | JSON lines on loopback TCP: engine commands plus synthetic input, inspection and screenshots of the live UI |
-| MCP | `filmcraft-cli mcp` | stdio MCP server: headless in-process session, or `--bridge` to the control channel |
+| CLI | `mortiflix-studio-cli` | `exec <id> key=value…`, `run script.jsonl` (one `{"id","params"}` per line), `inspect`, `import`, `export`, `render`, `probe`; `--save`, `--bridge` |
+| Control channel | `mortiflix-studio --control <port>` | JSON lines on loopback TCP: engine commands plus synthetic input, inspection and screenshots of the live UI |
+| MCP | `mortiflix-studio-cli mcp` | stdio MCP server: headless in-process session, or `--bridge` to the control channel |
 
 - **Automation ids.** Every interactive widget calls `app.auto.add(id, rect, label)` each frame
   (`crates/ui-egui/src/automation.rs`). Agents click by id, e.g. `tools.Razor`,
@@ -762,10 +762,10 @@ Protocol reference: [control-protocol.md](control-protocol.md). Agent guide: [ag
 
 The layer table reserves names for crates that don't exist yet: `riff`, `mjpeg`,
 `keyframe`, `effects`, `audio` and `playback`. (`platform` exists but holds only OS media FFI;
-other OS integration stays in `apps/filmcraft`.)
+other OS integration stays in `apps/mortiflix-studio`.)
 Until they exist, that work lives elsewhere: keyframes and effect definitions in `project`, effects
 and the audio mix in `render`, playback in `ui-egui`, and OS integration (cpal, rfd,
-native menus) in `apps/filmcraft`. [roadmap.md](roadmap.md) has the milestone status and [gaps.md](gaps.md) what is missing.
+native menus) in `apps/mortiflix-studio`. [roadmap.md](roadmap.md) has the milestone status and [gaps.md](gaps.md) what is missing.
 
 ## Revision history
 

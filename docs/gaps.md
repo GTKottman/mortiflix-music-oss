@@ -1,8 +1,8 @@
-# Where FilmCraft falls short of Premiere Pro
+# Where Mortiflix Studio falls short of Premiere Pro
 
 > **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** major (new file: ROADMAP's "Where we are lacking" re-measured against Premiere Pro 26.5.2 and the open issue list) · **Target:** Adobe Premiere Pro 2026 (26.5.2)
 
-Every known shortfall, one entry each, ranked by what most stops an editor using FilmCraft for real
+Every known shortfall, one entry each, ranked by what most stops an editor using Mortiflix Studio for real
 work. This is the work list: agents should prefer it over adding checklist items. Numbers are in
 [target-app-parity.md](target-app-parity.md); estimates are Opus 5.5 agent-hours, calibrated there.
 When you close or shrink a gap, update its entry, its parity doc and the revision history.
@@ -39,7 +39,7 @@ platforms** G4, G9, G17; **performance** G16; **ecosystem** G11; **measurement**
 
 - **Missing:** a fidelity harness. Every effect, transition, Lumetri control, blend mode, keyframe
   interpolation and audio effect counts once it exists; nothing renders the same project in
-  Premiere and FilmCraft and compares frames or samples. Effects described as approximations
+  Premiere and Mortiflix Studio and compares frames or samples. Effects described as approximations
   count the same as exact ones.
 - **Evidence:** catalogue tests check names and folders only. EffectCraft's live After Effects
   comparison (its gaps.md G1) found real bugs in features marked done on its first run.
@@ -58,7 +58,7 @@ platforms** G4, G9, G17; **performance** G16; **ecosystem** G11; **measurement**
 - **Impact:** the beta bar requires opening the target's main format; every switching editor's
   existing work is behind this.
 - **Approach:** `.prproj` is gzip-compressed XML. Clean-room from projects we author ourselves in
-  Premiere (the owner has `plan/premiere/fixtures/filmcraft_ref.prproj`): sequences, tracks, clips,
+  Premiere (the owner has `plan/premiere/fixtures/mortiflix_ref.prproj`): sequences, tracks, clips,
   in/out, speed, transitions, markers, bins, labels, then the common effect parameters (Motion,
   Opacity, Lumetri basic, Volume). Report what was not imported. Export later. **60–120 h.**
   Doc: [file-format-parity.md](file-format-parity.md).
@@ -87,7 +87,7 @@ platforms** G4, G9, G17; **performance** G16; **ecosystem** G11; **measurement**
   shows a notice with Use Default Graphics; `--graphics default|dx12|software` picks a mode by
   hand. An explicit `WGPU_BACKEND` stays in charge. On Windows, a GPU that Vulkan lists through two
   installed versions of one driver (GPUs on different driver packages) draws with the newer one
-  instead of dying inside the stale one (`filmcraft_gpu::adapter`).
+  instead of dying inside the stale one (`mortiflix_gpu::adapter`).
 - **Missing:** a launch that never fails, and CI that runs the gates.
 - **Evidence:** open issues: macOS 12 Monterey aborts on a missing VideoToolbox symbol (#468,
   #661, #655), Intel UHD graphics (`igvk64.dll`, #512), Windows 11 does not run or fails after setup
@@ -119,8 +119,8 @@ platforms** G4, G9, G17; **performance** G16; **ecosystem** G11; **measurement**
 
 ## G6. No real-world media corpus or workflow acceptance tests
 
-- **Done:** first scripted MCP workflows (#835, `apps/filmcraft-cli/tests/workflows.rs`): the
-  `filmcraft-cli mcp` binary imports ffmpeg-made phone-like VFR H.264 + AAC MP4 and long-GOP
+- **Done:** first scripted MCP workflows (#835, `apps/mortiflix-studio-cli/tests/workflows.rs`): the
+  `mortiflix-studio-cli mcp` binary imports ffmpeg-made phone-like VFR H.264 + AAC MP4 and long-GOP
   H.264 Matroska with two audio tracks (AAC, AC-3), edits (extract, audio gain, title; ripple
   trims, colour matte, cross dissolve), exports H.264 MP4, and saves a project that a new process
   exports as ProRes; ffprobe / ffmpeg check streams, frame count, duration, frame placement, A/V
@@ -144,7 +144,7 @@ platforms** G4, G9, G17; **performance** G16; **ecosystem** G11; **measurement**
   `--min` to fail below a presence threshold. Without a reference it prints our inventory only.
   `--area effects` and `--area transitions` (#831) measure the Effects panel the same way: the
   effects and transitions the engine's effect definitions list (`examples/effect_catalog.rs` in
-  `filmcraft-project`) against a reference of folder paths or bare names (default the local
+  `mortiflix-project`) against a reference of folder paths or bare names (default the local
   `plan/premiere/effects.json` / `transitions.json`), placement by folder, Presets and the other
   area out of scope.
 - **Missing:** the other areas (commands, panels, preferences, formats), fidelity tiers (exact,
@@ -170,7 +170,7 @@ platforms** G4, G9, G17; **performance** G16; **ecosystem** G11; **measurement**
 
 - **Have:** files given at launch (terminal, Open With, file associations) open whatever the case
   of `.fcproj` and are made absolute, and arguments that are not Unicode no longer stop the start;
-  `filmcraft-cli import` stores no Windows `\\?\` paths (#850).
+  `mortiflix-studio-cli import` stores no Windows `\\?\` paths (#850).
 - **Missing:** routine runtime testing off macOS. Linux playback stutter (#617), Wayland title
   bar (#433), case-sensitive extensions (#593), "Report an issue" link (#642), Windows bins cannot
   be left (#587), Sequence Settings won't open on Windows (#586, #351), old hardware (#491).

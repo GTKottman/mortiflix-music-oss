@@ -1,6 +1,6 @@
 # Transcripts and text-based editing
 
-FilmCraft's Text panel ▸ **Transcript** tab shows the dialogue of the open sequence as text. Select
+Mortiflix Studio's Text panel ▸ **Transcript** tab shows the dialogue of the open sequence as text. Select
 words to mark In/Out, then extract or lift them; remove filler words and long pauses in one step;
 turn the transcript into captions. Every action is an engine command (`transcript.*`), so the CLI,
 the control channel and MCP agents can do the same.
@@ -11,7 +11,7 @@ the control channel and MCP agents can do the same.
   schema v9). It lists **words** with media-time bounds (`Tick`s), an optional speaker index and a
   confidence, plus the speaker names and the language. Because the times are media time, the
   transcript stays valid however the clip is trimmed, moved, sped up or reused.
-- The **sequence transcript** is derived, never stored (`filmcraft_edit::transcript::sequence_words`):
+- The **sequence transcript** is derived, never stored (`mortiflix_edit::transcript::sequence_words`):
   audio tracks are read top first; a word is heard through the first enabled clip whose range
   covers the word's midpoint (duplicates of the same dialogue on lower tracks read once); disabled,
   reversed and frame-hold clips contribute nothing.
@@ -40,12 +40,12 @@ the control channel and MCP agents can do the same.
 Recognition goes through the `Transcriber` trait (`crates/speech`). The built-in recogniser is
 OpenAI's Whisper, run in pure Rust on [candle](https://github.com/huggingface/candle) on the CPU,
 with timestamp decoding, language detection and word times from cross-attention alignment (see the
-`filmcraft_speech::whisper` module docs). Speakers are labelled by clustering per-chunk MFCC
-statistics (`filmcraft_speech::diarize`); no model is involved.
+`mortiflix_speech::whisper` module docs). Speakers are labelled by clustering per-chunk MFCC
+statistics (`mortiflix_speech::diarize`); no model is involved.
 
 Both are **optional features**, off by default and never built for the web:
 
-- `whisper` (on `filmcraft-speech`, `filmcraft-engine`, and the `filmcraft` / `filmcraft-cli`
+- `whisper` (on `mortiflix-speech`, `mortiflix-engine`, and the `mortiflix-studio` / `mortiflix-studio-cli`
   apps, where it also enables downloads): candle inference.
 - `download` (`speech-download` on the engine): HTTPS downloads with rustls + RustCrypto and the
   operating system's certificate verifier.
@@ -61,7 +61,7 @@ install any recogniser in `Session::transcriber`, which enables transcription in
 ### Models
 
 Weights are **never** bundled or committed. They are downloaded on request into
-`<data dir>/models/<id>/` (see `filmcraft_engine::autosave::default_data_dir`), each file pinned to a
+`<data dir>/models/<id>/` (see `mortiflix_engine::autosave::default_data_dir`), each file pinned to a
 revision of OpenAI's Hugging Face repositories and checked against its SHA-256:
 
 | Id | Languages | Licence |
@@ -74,7 +74,7 @@ revision of OpenAI's Hugging Face repositories and checked against its SHA-256:
 
 Unit and engine tests use a fake `Transcriber` (`FixedTranscriber`), so CI needs no model. The
 end-to-end test `crates/speech/tests/whisper_model.rs` (feature `whisper`) runs only when weights are
-in `target/models/<id>/` (or `$FILMCRAFT_MODELS_DIR`) and speech samples (mono 16 kHz f32 with a
+in `target/models/<id>/` (or `$MFX_STUDIO_MODELS_DIR`) and speech samples (mono 16 kHz f32 with a
 reference `.txt`) are in `target/fixtures/speech/`; it reports the word error rate and otherwise
 prints SKIPPED. Measured on 2026-10-01: `whisper-tiny`, English, 12.2 % WER over 797 words of
 the local speech samples (LibriSpeech read speech and dialogue clips) (about 9.5 minutes for the run in a release build on an
