@@ -287,7 +287,12 @@ fn rebuild(app: &mut StudioApp) -> Result<(), String> {
     let r = build(app, &plan);
     if let Some(first) = app.session.history.undo.get(n0).map(|s| s.1.clone()) {
         app.session.history.undo.truncate(n0);
-        app.session.history.undo.push((UNDO_LABEL.to_string(), first));
+        // rebuilds one after another (the AI keeps making pieces) are one step in History, not one
+        // per new piece (run 2: History was full of "Mortiflix: Loose preview")
+        let again = n0.checked_sub(1).and_then(|i| app.session.history.undo.get(i)).is_some_and(|u| u.0 == UNDO_LABEL);
+        if !again {
+            app.session.history.undo.push((UNDO_LABEL.to_string(), first));
+        }
     }
     r
 }
@@ -612,6 +617,13 @@ mod tests {
         let q = app.session.project.sequence(seq).unwrap();
         assert_eq!(q.video_tracks[0].items.len(), 3);
         assert!((q.duration().seconds() - 7.5).abs() < 0.05);
+        // a rebuild right after a rebuild stays the one History step
+        assert_eq!(app.session.history.undo.len(), undo0 + 1);
+        app.mfx.core.state.preview.plan.shots[2].len = 5.0;
+        app.mfx.core.state.preview.plan.total = 8.5;
+        frame(&mut app, &ctx);
+        assert_eq!(app.session.history.undo.len(), undo0 + 1);
+        assert_eq!(app.session.history.undo.last().map(|u| u.0.as_str()), Some(UNDO_LABEL));
     }
 
     #[test]
