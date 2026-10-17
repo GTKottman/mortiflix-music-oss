@@ -222,6 +222,12 @@ if [ "$ENGINE" = 1 ]; then
   fi
 fi
 
+# ---- the components step -------------------------------------------------------------------------
+# The installers' tool picker (Blender, the 3D toolkits, Chrome, Strudel, transitions, uv, ComfyUI): the service's
+# own installers, run with the bundled Node. Windows runs the .mjs with node.exe directly.
+if [ "$OS" != windows ]; then install -m755 "$ROOT/packaging/mortiflix/components.sh" "$OUT/components.sh"; fi
+[ -f "$OUT/service/bin/mortiflix-components.mjs" ] || warn "this service has no bin/mortiflix-components.mjs: the installers can't offer the tools"
+
 # ---- what went in --------------------------------------------------------------------------------
 cat >"$OUT/BUNDLE.json" <<EOF
 {

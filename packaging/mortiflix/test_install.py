@@ -8,12 +8,18 @@ drives it over the control channel:
   1. the app finds the Mortiflix bundle beside itself (lib/mortiflix-filmcraft) and the bundled
      service connects (its own Node; nothing from this machine's PATH or settings),
   2. the first-run setup window is on screen (opened by the app itself on a first launch),
-  3. screenshots of both go to --shots.
+  3. screenshots of both go to --shots,
+  4. with --components: install.sh downloaded the chosen Mortiflix tools into the new user's studio, and both
+     `mortiflix-components list --json` and the running service's `components.status` see them installed.
+
+--hide-host-tools gives the new user a PATH without this machine's Blender, Chrome/Chromium and uv, so they
+really download (nothing on the machine is touched: the studio is <temp HOME>/Mortiflix).
 
 Needs a display: run it under `xvfb-run -a -s "-screen 0 1920x1080x24"` on a headless machine.
 Never installs anything outside the temporary folder, and stops only the process it started.
 
 Usage: test_install.py TARBALL [--port 19810] [--shots DIR] [--keep] [--setup-optional]
+                         [--components SPEC] [--expect-installed id,id] [--hide-host-tools]
   --setup-optional  pass when the setup window does not open by itself yet (it is then opened with
                     the mortiflix.setup command for the screenshot, and reported)
 """
@@ -73,6 +79,24 @@ class App:
         return [e.get("id", "") for e in items or [] if isinstance(e, dict)]
 
 
+HIDDEN = ("blender", "google-chrome", "chromium", "chrome", "uv", "uvx", "browser-harness")
+
+
+def hidden_path(d, path):
+    """One folder linking every program on PATH except this machine's Blender, Chrome/Chromium and uv."""
+    d.mkdir(parents=True, exist_ok=True)
+    for folder in path.split(os.pathsep):
+        if not folder or not os.path.isdir(folder):
+            continue
+        for name in os.listdir(folder):
+            if name.startswith(HIDDEN) or (d / name).exists():
+                continue
+            src = os.path.join(folder, name)
+            if os.path.isfile(src) and os.access(src, os.X_OK):
+                (d / name).symlink_to(src)
+    return str(d)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("tarball", type=Path)
@@ -80,6 +104,9 @@ def main():
     ap.add_argument("--shots", type=Path, default=None)
     ap.add_argument("--keep", action="store_true", help="keep the temporary install for a look")
     ap.add_argument("--setup-optional", action="store_true")
+    ap.add_argument("--components", default="none", help="passed to install.sh --components")
+    ap.add_argument("--expect-installed", default="", help="components that must be installed afterwards")
+    ap.add_argument("--hide-host-tools", action="store_true")
     args = ap.parse_args()
 
     tmp = Path(tempfile.mkdtemp(prefix="mortiflix-install-"))
@@ -101,9 +128,31 @@ def main():
         if "XDG_RUNTIME_DIR" in os.environ:
             env["XDG_RUNTIME_DIR"] = os.environ["XDG_RUNTIME_DIR"]
         env.pop("WAYLAND_DISPLAY", None)  # X (Xvfb) only: never a window on the user's screen
-        out = subprocess.run([str(top / "install.sh"), "--prefix", str(prefix)], env=env, check=True,
-                             capture_output=True, text=True).stdout
-        print(out.strip())
+        if args.hide_host_tools:
+            env["PATH"] = hidden_path(tmp / "hostbin", env.get("PATH", ""))
+        t0 = time.monotonic()
+        res = subprocess.run([str(top / "install.sh"), "--prefix", str(prefix), "--components", args.components],
+                             env=env, capture_output=True, text=True, stdin=subprocess.DEVNULL)
+        (shots / "install.log").write_text(res.stdout + res.stderr)
+        print("\n".join(l for l in res.stdout.splitlines() if not l.startswith("    ")))
+        print(f"install.sh exit {res.returncode} in {time.monotonic() - t0:.0f} s (full log: {shots / 'install.log'})")
+        if res.returncode != 0:
+            failures.append(f"install.sh failed ({res.returncode})")
+        expect = [c for c in args.expect_installed.split(",") if c]
+        listed = subprocess.run([str(prefix / "bin/mortiflix-components"), "list", "--json"], env=env,
+                                capture_output=True, text=True)
+        comps = {}
+        try:
+            comps = {c["id"]: c for c in json.loads(listed.stdout)["components"]}
+        except (ValueError, KeyError):
+            failures.append(f"mortiflix-components list --json: {listed.stdout[-300:]} {listed.stderr[-300:]}")
+        for cid, c in comps.items():
+            print(f"  component {cid:15} {'INSTALLED' if c['installed'] else 'not installed':14} {c['size']:>22}  {c['detail'][:90]}")
+        for cid in expect:
+            if not comps.get(cid, {}).get("installed"):
+                failures.append(f"component {cid} not installed: {comps.get(cid, {}).get('detail')}")
+            elif comps[cid].get("path") and not str(comps[cid]["path"]).startswith(str(home)):
+                failures.append(f"component {cid} found outside the new user's home: {comps[cid].get('path')}")
         bundle = prefix / "lib/mortiflix-filmcraft"
         for path in ("bin/filmcraft", "bin/filmcraft-cli", "lib/mortiflix-filmcraft/service/bin/mortiflix-service.mjs",
                      "lib/mortiflix-filmcraft/node/bin/node", "lib/mortiflix-filmcraft/bin/ffmpeg",
@@ -149,6 +198,19 @@ def main():
                 print("setup window opened with mortiflix.setup (--setup-optional)")
             else:
                 failures.append("the first-run setup window did not open on a fresh install")
+
+        if expect:
+            rid = app.command("mortiflix.request", {"type": "components.status", "params": {}})["id"]
+            reply = {"pending": True}
+            deadline = time.monotonic() + 60
+            while reply.get("pending") and time.monotonic() < deadline:
+                time.sleep(0.5)
+                reply = app.command("mortiflix.reply", {"id": rid})
+            seen = {c["id"]: c["installed"] for c in (reply.get("result") or {}).get("components", [])}
+            print("service components.status:", seen)
+            for cid in expect:
+                if not seen.get(cid):
+                    failures.append(f"the running service doesn't see {cid} installed")
 
         data = home / ".local/share"
         made = sorted(str(p.relative_to(home)) for p in data.rglob("*") if p.is_file())[:20] if data.exists() else []

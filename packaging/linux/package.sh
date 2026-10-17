@@ -125,7 +125,12 @@ if has appimage; then
   APPDIR="$WORK/FilmCraft.AppDir"
   cp -R "$STAGE" "$APPDIR"
   mv "$APPDIR/usr/share/doc" "$WORK/doc-unused"
-  ln -s usr/bin/filmcraft "$APPDIR/AppRun"
+  # Mortiflix FilmCraft: AppRun offers the Mortiflix tools on a first run from a terminal, then starts the app.
+  if [ -x "$APPDIR/usr/lib/mortiflix-filmcraft/components.sh" ]; then
+    install -m755 "$ROOT/packaging/mortiflix/AppRun" "$APPDIR/AppRun"
+  else
+    ln -s usr/bin/filmcraft "$APPDIR/AppRun"
+  fi
   cp "$HERE/$APP_ID.desktop" "$APPDIR/$APP_ID.desktop"
   cp "$ROOT/assets/app-icon/hicolor/256x256/apps/$APP_ID.png" "$APPDIR/$APP_ID.png"
   ln -s "$APP_ID.png" "$APPDIR/.DirIcon"

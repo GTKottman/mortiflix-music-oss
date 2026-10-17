@@ -1,0 +1,18 @@
+#!/bin/sh
+# Mortiflix FilmCraft AppImage entry. On the first run from a terminal it offers the Mortiflix tools
+# (packaging/mortiflix/components.sh) once; started from a desktop, the app's own first-run setup offers
+# them instead (components.status / components.install). Then it starts the app.
+here="$(dirname "$(readlink -f "$0")")"
+mfx="$here/usr/lib/mortiflix-filmcraft/components.sh"
+asked="${XDG_CONFIG_HOME:-$HOME/.config}/mortiflix-filmcraft/components-asked"
+if [ -x "$mfx" ] && [ ! -e "$asked" ]; then
+  if [ -n "${MORTIFLIX_COMPONENTS:-}" ]; then
+    mkdir -p "$(dirname "$asked")" && : >"$asked"
+    "$mfx" install "$MORTIFLIX_COMPONENTS" || true
+  elif [ -t 0 ] && [ -t 1 ]; then
+    mkdir -p "$(dirname "$asked")" && : >"$asked"
+    printf 'Mortiflix tools (first run)\n'
+    "$mfx" choose || true
+  fi
+fi
+exec "$here/usr/bin/filmcraft" "$@"

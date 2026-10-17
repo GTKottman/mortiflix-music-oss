@@ -72,8 +72,11 @@ jobs:
       - name: Flatpak
         continue-on-error: true
         run: packaging/linux/flatpak-bundle.sh
-      - name: Fresh install launches to first-run setup
-        run: xvfb-run -a -s "-screen 0 1920x1080x24" python3 packaging/mortiflix/test_install.py dist/release/filmcraft-*-linux-x86_64.tar.gz
+      - name: Fresh install with the default tools launches to first-run setup
+        run: >-
+          xvfb-run -a -s "-screen 0 1920x1080x24" python3 packaging/mortiflix/test_install.py
+          dist/release/filmcraft-*-linux-x86_64.tar.gz --hide-host-tools --components default
+          --expect-installed blender,blender-addons,chrome,strudel,transitions,uv
       - uses: actions/upload-artifact@v4
         with:
           name: mortiflix-filmcraft-linux
@@ -101,7 +104,9 @@ jobs:
         with:
           node-version: 24
       - name: WiX
-        run: dotnet tool install --global wix --version 5.0.2
+        run: |
+          dotnet tool install --global wix --version 5.0.2
+          wix extension add -g WixToolset.UI.wixext/5.0.2 WixToolset.Util.wixext/5.0.2
       - uses: ilammy/msvc-dev-cmd@v1
       - name: Sound engine
         if: ${{ inputs.build-engine }}
@@ -132,6 +137,9 @@ jobs:
           Write-Output $hello
           if ($hello -notmatch '"ok":true') { exit 1 }
           & (Join-Path $dir 'mortiflix\bin\ffmpeg.exe') -hide_banner -version | Select-Object -First 1
+          # The default tools were downloaded by the MSI (as this user): list what the studio has now.
+          cmd /d /c "`"$(Join-Path $dir 'mortiflix\components.cmd')`" list"
+          Select-String -Path msi.log -Pattern 'MfxToolsRun|ok blender|!! ' | Select-Object -Last 20
       - uses: actions/upload-artifact@v4
         with:
           name: mortiflix-filmcraft-windows

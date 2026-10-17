@@ -57,6 +57,46 @@ bundled engine unless the user set one.
   the same, and runs `test_install.py` on Linux. Signing secrets are the same as FilmCraft's; without
   them the builds are unsigned (Windows) / ad-hoc (macOS).
 
+## The Mortiflix tools (components step)
+
+Every installer also offers the tools Mortiflix uses, downloaded during the install for the user who installs
+(into their own studio, `~/Mortiflix`; never system-wide, never the user's own Blender profile):
+
+| Component | For | Size | Default |
+|---|---|---|---|
+| `blender` | 3D shots (newest official build, checked against Blender's sha256 list; an existing Blender is reused) | ~350 MB | on |
+| `blender-addons` | MoBlend, Nova FX, Camera, Animate, Math, Circuits, Camera Flight in the studio's own Blender profile | ~15 MB | on |
+| `chrome` | headless Chrome for Strudel and Remotion (an existing Chrome/Chromium is reused) | ~100 MB | on |
+| `strudel` | the music step (`@strudel/web` from npm) | ~20 MB | on |
+| `transitions` | the remotion-transitions library | ~5 MB | on |
+| `uv` | Python tools (browser-harness, ComfyUI) | ~40 MB | on |
+| `comfyui` | ComfyUI + Qwen3-TTS local voice, NVIDIA only | ~10 GB | off |
+
+No install logic lives here: each is one of the service's own installers (`src/setup.mjs`), run by
+`service/bin/mortiflix-components.mjs` (`list [--json]`, `install default|all|none|id,...`, `choose`) with the
+bundled Node; `components.sh` (Linux/macOS) and `components.cmd` (Windows) put the bundle's tools first on PATH.
+A failed or skipped tool never fails the install, and Mortiflix setup can install it later.
+
+- **Linux tarball:** `install.sh --components default|all|none|id,...` (or `MORTIFLIX_COMPONENTS`); with a
+  terminal and no flag it asks one by one; with neither it skips and says how. Under sudo the tools go to
+  `$SUDO_USER`. `bin/mortiflix-components` links to the picker.
+- **.deb/.rpm:** the post-install links `/usr/bin/mortiflix-components` and, on a fresh install from a
+  terminal under sudo, runs the picker as `$SUDO_USER`; otherwise it prints how to run it.
+- **AppImage:** `AppRun` asks once on a first run from a terminal (or installs `MORTIFLIX_COMPONENTS`); started
+  from a desktop, the app's first-run setup offers them.
+- **Windows MSI:** a "Mortiflix tools" feature tree (WixUI_FeatureTree, ComfyUI unticked); the ticked ones are
+  installed at the end by `components.cmd` through WixQuietExec, deferred and impersonated (the installing user,
+  not SYSTEM), `Return="ignore"`; output in the MSI log. Untested on Windows.
+- **macOS:** the new `.pkg` has the tools as Customize choices; each runs `macos-tool-postinstall.sh` as the
+  logged-in user (log: `~/Library/Logs/Mortiflix tools.log`). Untested on a Mac.
+- **First-run setup (app):** the service's `components.status` (each tool: name, for, size, default, needs,
+  installed, detail) and `components.install {ids}` (progress as `components.progress` events, then
+  `components.done`).
+
+Checksums: Blender against its release sha256 list; Nova FX pinned to a commit and its archive's sha256; Strudel
+through npm's registry integrity hashes; uv through astral.sh's installer. The other toolkits, transitions and
+Chrome for Testing come over HTTPS from their GitHub/Google sources without a published checksum.
+
 ## Proving a fresh install
 
 `xvfb-run -a -s "-screen 0 1920x1080x24" python3 packaging/mortiflix/test_install.py dist/release/filmcraft-<v>-linux-x86_64.tar.gz --shots DIR`

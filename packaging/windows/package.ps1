@@ -13,6 +13,7 @@
 
   Needs: Rust (MSVC toolchain + the target), the Windows SDK (rc.exe, signtool.exe),
   and WiX v5: dotnet tool install --global wix --version 5.0.2
+  (+ wix extension add -g WixToolset.UI.wixext/5.0.2 WixToolset.Util.wixext/5.0.2 for the Mortiflix tools)
 
   Mortiflix FilmCraft: both also carry the Mortiflix bundle (the service, its own Node, ffmpeg,
   the sound engine) in mortiflix\ beside filmcraft.exe, made by packaging/mortiflix/bundle.sh
@@ -108,7 +109,21 @@ if (-not $NoMortiflix) {
   Invoke-Native 'Mortiflix bundle' { & $Bash (Join-Path $Root 'packaging/mortiflix/bundle.sh') --os windows --arch $Arch --out ($MfxDir -replace '\\', '/') }
   $MfxExes = Get-ChildItem -Path $MfxDir -Recurse -Include '*.exe' | ForEach-Object { $_.FullName }
   if ($MfxExes) { & (Join-Path $PSScriptRoot 'sign.ps1') @MfxExes }
-  $WixMfx = @('-d', "MfxDir=$MfxDir")
+  # The tool picker the MSI runs (cmd: PATH with the bundled Node and ffmpeg first).
+  Set-Content -Encoding ascii -Path (Join-Path $MfxDir 'components.cmd') -Value @(
+    '@echo off',
+    'rem Mortiflix components: the tools Mortiflix uses, installed for this user into their own studio.',
+    'rem   components.cmd list [--json] ^| install default^|all^|none^|id,id ^| choose',
+    'set "HERE=%~dp0"',
+    'set "PATH=%HERE%bin;%HERE%node;%PATH%"',
+    '"%HERE%node\node.exe" "%HERE%service\bin\mortiflix-components.mjs" %*'
+  )
+  # The licence page of the feature-tree UI: FilmCraft's MIT licence, and where the bundle's licences are.
+  $LicenseRtf = Join-Path $TargetDir "windows-package\license-$Arch.rtf"
+  $mit = (Get-Content -Raw (Join-Path $Root 'LICENSE-MIT')) -replace '\\', '\\' -replace '\{', '\{' -replace '\}', '\}' -replace "`r?`n", "\par`n"
+  Set-Content -Encoding ascii -Path $LicenseRtf -Value ("{\rtf1\ansi\deff0{\fonttbl{\f0 Segoe UI;}}\f0\fs18 " + $mit +
+    "\par\par The Mortiflix tools folder (mortiflix\\) holds separate programs with their own licences: see mortiflix\\LICENSES.}")
+  $WixMfx = @('-d', "MfxDir=$MfxDir", '-d', "LicenseRtf=$LicenseRtf", '-ext', 'WixToolset.UI.wixext', '-ext', 'WixToolset.Util.wixext')
 }
 
 # ---- MSI ---------------------------------------------------------------------------------------
