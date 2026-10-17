@@ -43,30 +43,23 @@ const MOVES_H: f32 = 34.0;
 const COMPOSER_H: f32 = 52.0;
 const HINT_H: f32 = 18.0;
 const CHIPS_H: f32 = 26.0;
-const ASK_H: f32 = 58.0;
 const PILL_H: f32 = 26.0;
 
 /// What a request the panel sent was for (its reply decides what the chat shows).
 #[derive(Clone, Debug)]
 enum Pending {
-    /// `chat.send`: words about the whole video (or a beat).
-    Send { text: String, context: Option<String>, files: Vec<String>, assets: Vec<String> },
-    /// `node.edit` fix from typed words or a Fix button.
-    Fix { node: String, name: String, mv: Move, text: String },
-    /// OK / Cut it / taking one back.
+    /// `chat.send`: words about the whole video, a beat or a node (a node: the service makes it a Fix).
+    Send { text: String, context: Option<String>, confirm: bool },
+    /// OK / Cut it / taking one back (`node.edit`; the service writes the grey line).
     Decide,
     /// `chat.history`: the project's whole history.
     History,
-    /// Anything else (answers, notes, card buttons): only errors show.
+    /// `graph.get`, when nothing has loaded the graph yet (names and beat colours in the chat).
+    Graph,
+    /// `music.theme.samples` for a themes card.
+    Samples,
+    /// Anything else (answers, actions, card buttons): only errors show.
     Quiet(String),
-}
-
-/// Typed words on a node that is OK'd: asked first (doc 37 rule 4).
-#[derive(Clone, Debug, Default)]
-struct AskFirst {
-    node: String,
-    name: String,
-    text: String,
 }
 
 /// A file or asset attached to the next message.
@@ -93,13 +86,12 @@ struct ChatUi {
     pending: Vec<(u64, Pending, f64)>,
     /// Sent while the service was down: sent again when it is back.
     queued: Vec<Pending>,
-    /// Answers given here (question id → choice id or own words), until the service echoes them.
+    /// Answers given here (question id → choice or own words), until the service has them.
     answered: BTreeMap<String, String>,
     /// OK / Cut it pressed here (node → "ok" | "cut" | ""), until the graph catches up.
     decided: BTreeMap<String, String>,
     /// Custom… on this question: the next words answer it.
     custom_for: Option<String>,
-    ask_first: Option<AskFirst>,
     details_open: bool,
     history_open: bool,
     history_search: String,
@@ -108,15 +100,23 @@ struct ChatUi {
     /// Messages there were when the thread was last at the bottom.
     seen: usize,
     focus_composer: bool,
-    /// The AI was asked something (chat length then, time): "Mortiflix is replying".
-    awaiting: Option<(usize, f64)>,
+    /// The AI is writing a reply (`chat.typing`), or was just asked (time).
+    typing: bool,
+    awaiting: Option<f64>,
     /// Card folds (Read it all, All 18 lines), by message index.
     open_cards: BTreeMap<usize, bool>,
     event_seq: u64,
     todos: Vec<(String, String)>,
-    /// Render progress from status events: (done 0-1, line).
+    /// The render queue's running job: (done 0-1, line).
     render: Option<(f32, String)>,
     history_for: Option<String>,
+    graph_for: Option<String>,
+    /// This panel loaded the graph (so it reloads it on `node.changed`).
+    graph_mine: bool,
+    /// The "talking about" target last told to the service (`chat.context`).
+    context_sent: Option<Option<String>>,
+    /// Music theme samples for a themes card (`music.theme.samples`).
+    samples: Option<Vec<Value>>,
 }
 
 fn ui_id() -> egui::Id {
@@ -127,10 +127,11 @@ fn ui_id() -> egui::Id {
 pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     let mut st: ChatUi = ui.data_mut(|d| d.get_temp(ui_id())).unwrap_or_default();
     let now = ui.input(|i| i.time);
-    take_files(ctx, &mut st);
+    take_files(ctx, &mut st, now);
     read_replies(ctx, &mut st, now);
-    read_events(ctx, &mut st);
-    load_history(ctx, &mut st);
+    read_events(ctx, &mut st, now);
+    load_history(ctx, &mut st, now);
+    sync_context(ctx, &mut st, now);
     send_queued(ctx, &mut st, now);
 
     let full = ui.max_rect();
@@ -140,7 +141,7 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     let view = ctx.state.selected_node.clone();
     let info = view.as_deref().map(|v| model::node(&ctx.state.graph, v));
 
-    // bottom-up: hint, composer, attachments, ask-first, moves, now (+ details), new-messages pill
+    // bottom-up: hint, composer, attachments, moves, now (+ details), new-messages pill
     let mut y = full.max.y;
     let mut take = |h: f32| {
         let r = Rect::from_min_max(pos2(full.min.x, (y - h).max(top)), pos2(full.max.x, y));
@@ -150,7 +151,6 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     let hint_r = take(HINT_H);
     let composer_r = take(COMPOSER_H);
     let chips_r = (!st.attachments.is_empty()).then(|| take(CHIPS_H));
-    let ask_r = st.ask_first.is_some().then(|| take(ASK_H));
     let moves_r = take(MOVES_H);
     let details_r = st.details_open.then(|| take(DETAILS_H));
     let now_r = take(NOW_H);
@@ -170,9 +170,6 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
         region(ui, r, |ui| details(ui, ctx, &st));
     }
     region(ui, moves_r, |ui| moves_row(ui, ctx, &mut st, info.as_ref()));
-    if let Some(r) = ask_r {
-        region(ui, r, |ui| ask_first(ui, ctx, &mut st, now));
-    }
     if let Some(r) = chips_r {
         region(ui, r, |ui| attachment_chips(ui, ctx, &mut st));
     }
@@ -220,25 +217,31 @@ fn composer_id() -> egui::Id {
 
 // ---------- the service ----------
 
-/// Note lines the app wrote itself with the service, so the history keeps them.
-fn note(ctx: &mut MfxCtx, st: &mut ChatUi, msgs: &[ChatMessage], now: f64) {
-    let list: Vec<Value> = msgs.iter().filter_map(|m| serde_json::to_value(m).ok()).collect();
-    let id = ctx.service.request("chat.note", json!({"messages": list}));
-    st.pending.push((id, Pending::Quiet("note".into()), now));
+fn connected(ctx: &MfxCtx) -> bool {
+    ctx.service.status().is_connected()
 }
 
-/// Add a line the app writes (a press, what typing became, an error) and note it.
-fn add_line(ctx: &mut MfxCtx, st: &mut ChatUi, role: &str, text: String, context: Option<&str>, extra: Value, now: f64) {
-    let mut m = ChatMessage { role: role.into(), text, at: String::new(), ..ChatMessage::default() };
+/// A line the app writes itself into the history (`chat.action`; the service echoes it back as a
+/// `chat.message`). With the service down it shows here only.
+fn log_action(ctx: &mut MfxCtx, st: &mut ChatUi, text: String, context: Option<&str>, now: f64) {
+    if connected(ctx) && ctx.state.project_id.is_some() {
+        let id = ctx.service.request("chat.action", json!({"text": text, "context": context}));
+        st.pending.push((id, Pending::Quiet("chat.action".into()), now));
+    } else {
+        local_line(ctx, text, context, json!({}));
+    }
+}
+
+/// A line shown here only (an error the service can't know about).
+fn local_line(ctx: &mut MfxCtx, text: String, context: Option<&str>, extra: Value) {
+    let mut m = ChatMessage { role: "action".into(), text, ..ChatMessage::default() };
     if let Value::Object(o) = extra {
         m.extra = o;
     }
     if let Some(c) = context {
         m.extra.insert("context".into(), Value::String(c.into()));
     }
-    m.extra.insert("stage".into(), json!(ctx.state.stage));
-    ctx.state.push_chat(m.clone());
-    note(ctx, st, &[m], now);
+    ctx.state.push_chat(m);
 }
 
 fn error_text(r: &crate::service::Reply) -> String {
@@ -260,39 +263,21 @@ fn read_replies(ctx: &mut MfxCtx, st: &mut ChatUi, now: f64) {
         };
         match what {
             Pending::Send { .. } if !r.ok && not_running(&r) => st.queued.push(what),
-            Pending::Send { .. } if !r.ok => {
+            Pending::Send { text, context, .. } if !r.ok => {
                 st.awaiting = None;
-                add_line(ctx, st, "action", format!("Couldn't send that: {}", error_text(&r)), None, json!({"error": true}), now);
+                let retry = json!([{"label": "Try again", "type": "chat.send", "params": {"text": text, "context": context.as_deref().unwrap_or("video")}}]);
+                local_line(ctx, format!("Couldn't send that: {}", error_text(&r)), context.as_deref(), json!({"error": true, "actions": retry}));
             }
-            Pending::Send { .. } => {}
-            Pending::Fix { node, name, mv, text } => {
-                if r.ok {
-                    let edit = r.result.pointer("/edit/id").and_then(Value::as_str).map(|e| e.chars().take(20).collect::<String>());
-                    let tail = match mv {
-                        Move::NewTake => "the other lines keep going",
-                        _ => "the other shots keep going",
-                    };
-                    let text = match &edit {
-                        Some(e) => format!("Sent as {} on {} ({e}) · {tail}", mv.verb(), model::lower_name(&name)),
-                        None => format!("Sent as {} on {} · {tail}", mv.verb(), model::lower_name(&name)),
-                    };
-                    add_line(ctx, st, "action", text, Some(&node), json!({"edit": edit}), now);
-                } else {
-                    let retry = json!([{"label": "Try again", "type": "node.edit", "params": {"node": node, "action": "fix", "text": text}}]);
-                    add_line(
-                        ctx,
-                        st,
-                        "action",
-                        format!("Couldn't send the {} on {}: {}", mv.verb(), model::lower_name(&name), error_text(&r)),
-                        Some(&node),
-                        json!({"error": true, "actions": retry}),
-                        now,
-                    );
+            Pending::Send { .. } => {
+                // a move (a Fix) was made at once: no AI reply to wait for
+                if r.result.get("move").is_some_and(|m| !m.is_null()) {
+                    st.awaiting = None;
                 }
             }
             Pending::History => {
+                let list = r.result.as_array().or_else(|| r.result.get("messages").and_then(Value::as_array));
                 if r.ok
-                    && let Some(list) = r.result.get("messages").and_then(Value::as_array)
+                    && let Some(list) = list
                 {
                     ctx.state.chat.clear();
                     for m in list.iter().rev().take(crate::state::MAX_CHAT).rev() {
@@ -303,80 +288,149 @@ fn read_replies(ctx: &mut MfxCtx, st: &mut ChatUi, now: f64) {
                     st.scroll_bottom = true;
                 }
             }
-            Pending::Decide | Pending::Quiet(_) => {
-                // a note the service doesn't know yet (an older service) is fine; other errors show
-                let quiet = matches!(&what, Pending::Quiet(k) if k == "note");
-                if !r.ok && !quiet && !not_running(&r) {
-                    add_line(ctx, st, "action", format!("That didn't go through: {}", error_text(&r)), None, json!({"error": true}), now);
+            Pending::Graph => {
+                // the node area may have loaded it meanwhile: never overwrite its graph
+                if r.ok && (ctx.state.graph.is_null() || st.graph_mine) && r.result.get("nodes").is_some() {
+                    ctx.state.graph = r.result;
+                    st.graph_mine = true;
+                }
+            }
+            Pending::Samples => {
+                st.samples = Some(r.result.get("samples").and_then(Value::as_array).map(|a| a.iter().take(6).cloned().collect()).unwrap_or_default());
+                if !r.ok {
+                    local_line(ctx, format!("Couldn't get the music themes: {}", error_text(&r)), None, json!({"error": true}));
+                }
+            }
+            Pending::Decide => {
+                if !r.ok && !not_running(&r) {
+                    local_line(ctx, format!("That didn't go through: {}", error_text(&r)), None, json!({"error": true}));
+                }
+            }
+            Pending::Quiet(what) => {
+                if !r.ok && !not_running(&r) {
+                    local_line(ctx, format!("That didn't go through ({what}): {}", error_text(&r)), None, json!({"error": true}));
                 }
             }
         }
     }
 }
 
-fn read_events(ctx: &mut MfxCtx, st: &mut ChatUi) {
+/// `activity` todo rows → Details' to-do list: `{content|text, status|state}`.
+fn todos_of(list: &[Value]) -> Vec<(String, String)> {
+    list.iter()
+        .take(40)
+        .filter_map(|t| {
+            let text: String = t.get("content").or_else(|| t.get("text")).and_then(Value::as_str)?.chars().take(200).collect();
+            let state = match t.get("status").or_else(|| t.get("state")).and_then(Value::as_str).unwrap_or("") {
+                "completed" | "done" => "done",
+                "in_progress" | "doing" | "running" => "doing",
+                "failed" => "failed",
+                _ => "todo",
+            };
+            Some((text, state.to_string()))
+        })
+        .collect()
+}
+
+fn read_events(ctx: &mut MfxCtx, st: &mut ChatUi, now: f64) {
     let mut last = st.event_seq;
+    let mut graph_changed = false;
+    let mut new_context: Option<Option<String>> = None;
     for (seq, ev) in ctx.service.events_since(st.event_seq) {
         last = last.max(*seq);
-        if ev.get("event").and_then(Value::as_str) != Some("status") {
-            continue;
-        }
         let data = ev.get("data").unwrap_or(&Value::Null);
-        if let Some(todos) = data.get("todos").and_then(Value::as_array) {
-            st.todos = todos
-                .iter()
-                .take(20)
-                .filter_map(|t| {
-                    let text = t.get("text").and_then(Value::as_str)?.chars().take(200).collect();
-                    let state = t.get("state").and_then(Value::as_str).unwrap_or("todo").chars().take(20).collect();
-                    Some((text, state))
-                })
-                .collect();
-        }
-        if let Some(r) = data.get("render") {
-            st.render = if r.is_null() {
-                None
-            } else {
-                let done = r.get("done").and_then(Value::as_f64).unwrap_or(0.0).clamp(0.0, 1.0) as f32;
-                let line = r.get("line").and_then(Value::as_str).unwrap_or("").chars().take(200).collect();
-                Some((done, line))
-            };
+        match ev.get("event").and_then(Value::as_str).unwrap_or("") {
+            "chat.typing" => {
+                st.typing = data.get("on").and_then(Value::as_bool).unwrap_or(false);
+                if !st.typing {
+                    st.awaiting = None;
+                }
+            }
+            "chat.message" if data.get("role").and_then(Value::as_str) == Some("ai") => st.awaiting = None,
+            "chat.context" => {
+                let c = data.get("context").and_then(Value::as_str).filter(|c| *c != "video" && !c.is_empty() && c.len() <= 120).map(str::to_string);
+                new_context = Some(c);
+            }
+            "activity" if data.get("kind").and_then(Value::as_str) == Some("todo") => {
+                if let Some(list) = data.get("todos").and_then(Value::as_array) {
+                    st.todos = todos_of(list);
+                }
+            }
+            "render.job" => {
+                let state = data.get("state").and_then(Value::as_str).unwrap_or("");
+                if state == "running" {
+                    let p = data.get("progress");
+                    let done = p.and_then(|p| p.get("done")).and_then(Value::as_f64).unwrap_or(0.0);
+                    let total = p.and_then(|p| p.get("total")).and_then(Value::as_f64).filter(|t| *t > 0.0).unwrap_or(1.0);
+                    let label: String = data.get("label").and_then(Value::as_str).unwrap_or("Render").chars().take(80).collect();
+                    let frac = (done / total).clamp(0.0, 1.0) as f32;
+                    st.render = Some((frac, format!("{label} · {:.0}%", frac * 100.0)));
+                } else if matches!(state, "done" | "failed") {
+                    st.render = None;
+                }
+            }
+            "node.changed" => graph_changed = true,
+            _ => {}
         }
     }
     st.event_seq = last;
-    if let Some((len, _)) = st.awaiting
-        && ctx.state.chat.iter().skip(len).any(|m| Role::of(&m.role) == Role::Ai)
+    if let Some(c) = new_context
+        && c != ctx.state.selected_node
     {
+        ctx.state.selected_node = c.clone();
+        st.context_sent = Some(c);
+    }
+    if graph_changed && st.graph_mine && connected(ctx) {
+        let id = ctx.service.request("graph.get", json!({}));
+        st.pending.push((id, Pending::Graph, now));
+    }
+    if st.awaiting.is_some_and(|t| now - t > 180.0) {
         st.awaiting = None;
     }
 }
 
-/// When the service connects with a project open, ask for the project's whole history once.
-fn load_history(ctx: &mut MfxCtx, st: &mut ChatUi) {
-    if !ctx.service.status().is_connected() || ctx.state.project_id.is_none() || st.history_for == ctx.state.project_id {
+/// When the service connects with a project open: the project's whole history once, and the graph
+/// when no one has loaded it.
+fn load_history(ctx: &mut MfxCtx, st: &mut ChatUi, now: f64) {
+    if !connected(ctx) || ctx.state.project_id.is_none() || st.history_for == ctx.state.project_id {
         return;
     }
     st.history_for = ctx.state.project_id.clone();
-    let id = ctx.service.request("chat.history", json!({"project": ctx.state.project_id}));
-    st.pending.push((id, Pending::History, 0.0));
+    let id = ctx.service.request("chat.history", json!({"limit": crate::state::MAX_CHAT}));
+    st.pending.push((id, Pending::History, now));
+    if (ctx.state.graph.is_null() || st.graph_mine) && st.graph_for != ctx.state.project_id {
+        st.graph_for = ctx.state.project_id.clone();
+        let id = ctx.service.request("graph.get", json!({}));
+        st.pending.push((id, Pending::Graph, now));
+    }
+}
+
+/// Tell the service what is being talked about when the selection changes (node area, a link, a
+/// crumb, FilmCraft's clip): the AI's quick replies get it.
+fn sync_context(ctx: &mut MfxCtx, st: &mut ChatUi, now: f64) {
+    if !connected(ctx) || ctx.state.project_id.is_none() || st.context_sent.as_ref() == Some(&ctx.state.selected_node) {
+        return;
+    }
+    st.context_sent = Some(ctx.state.selected_node.clone());
+    let id = ctx.service.request("chat.context", json!({"context": ctx.state.selected_node.as_deref().unwrap_or("video")}));
+    st.pending.push((id, Pending::Quiet("chat.context".into()), now));
 }
 
 fn send_queued(ctx: &mut MfxCtx, st: &mut ChatUi, now: f64) {
-    if st.queued.is_empty() || !ctx.service.status().is_connected() {
+    if st.queued.is_empty() || !connected(ctx) {
         return;
     }
     for p in std::mem::take(&mut st.queued) {
-        if let Pending::Send { text, context, files, assets } = &p {
-            let id =
-                ctx.service.request("chat.send", json!({"text": text, "context": context.as_deref().unwrap_or("video"), "files": files, "assets": assets}));
+        if let Pending::Send { text, context, confirm } = &p {
+            let id = ctx.service.request("chat.send", json!({"text": text, "context": context.as_deref().unwrap_or("video"), "confirm": confirm}));
             st.pending.push((id, p.clone(), now));
-            st.awaiting = Some((ctx.state.chat.len(), now));
+            st.awaiting = Some(now);
         }
     }
 }
 
 /// Files chosen with + (Attach) or dropped on the window while the chat shows.
-fn take_files(ctx: &mut MfxCtx, st: &mut ChatUi) {
+fn take_files(ctx: &mut MfxCtx, st: &mut ChatUi, now: f64) {
     for f in ctx.state.take_files("chat.attach") {
         st.attachments.extend(f.paths.into_iter().map(Attachment::File));
     }
@@ -391,8 +445,9 @@ fn take_files(ctx: &mut MfxCtx, st: &mut ChatUi) {
         } else {
             // the whole video: added to the project's assets
             let n = f.paths.len();
-            ctx.service.request("assets.add", json!({"paths": f.paths}));
-            add_line(ctx, st, "action", format!("You added {n} file{} to Assets", if n == 1 { "" } else { "s" }), None, json!({}), 0.0);
+            let id = ctx.service.request("assets.add", json!({"paths": f.paths}));
+            st.pending.push((id, Pending::Quiet("assets.add".into()), now));
+            log_action(ctx, st, format!("You added {n} file{} to Assets", if n == 1 { "" } else { "s" }), None, now);
         }
     }
     st.attachments.dedup();
@@ -410,7 +465,8 @@ fn decision(st: &ChatUi, info: &NodeInfo) -> Option<String> {
     }
 }
 
-/// Run a move on a node, the same as the node's own button.
+/// Run a move on a node, the same as the node's own button (`node.edit`; the service writes the
+/// grey line into the chat, and presses in a row show as one line).
 fn run_move(ctx: &mut MfxCtx, st: &mut ChatUi, info: &NodeInfo, mv: Move, now: f64) {
     match mv {
         Move::Ok | Move::Cut => {
@@ -420,14 +476,6 @@ fn run_move(ctx: &mut MfxCtx, st: &mut ChatUi, info: &NodeInfo, mv: Move, now: f
             let id = ctx.service.request("node.edit", json!({"node": info.id, "action": action}));
             st.pending.push((id, Pending::Decide, now));
             st.decided.insert(info.id.clone(), if taking_back { String::new() } else { key.to_string() });
-            if taking_back {
-                add_line(ctx, st, "action", format!("You took back {} on {}", mv.verb(), info.name), Some(&info.id), json!({}), now);
-            } else {
-                model::merge_press(&mut ctx.state.chat, mv.verb(), &info.name);
-                if let Some(last) = ctx.state.chat.last().cloned() {
-                    note(ctx, st, &[last], now);
-                }
-            }
         }
         Move::Fix | Move::NewTake | Move::ChangeIt => {
             if ctx.state.selected_node.as_deref() != Some(&info.id) {
@@ -439,23 +487,19 @@ fn run_move(ctx: &mut MfxCtx, st: &mut ChatUi, info: &NodeInfo, mv: Move, now: f
     }
 }
 
-/// Typed words on a node become its Fix (New take, Change it), and the chat says so.
-fn send_fix(ctx: &mut MfxCtx, st: &mut ChatUi, info: &NodeInfo, text: String, files: Vec<String>, now: f64) {
-    let mv = model::typed_move(&info.kind);
-    let mut words = text.clone();
-    for f in &files {
-        words.push_str(&format!("\nUse this file here: {f}"));
-    }
-    add_line(ctx, st, "user", text.clone(), Some(&info.id), json!({"files": files}), now);
-    let id = ctx.service.request("node.edit", json!({"node": info.id, "action": "fix", "text": words}));
-    st.pending.push((id, Pending::Fix { node: info.id.clone(), name: info.name.clone(), mv, text: words }, now));
-    st.decided.remove(&info.id);
-}
-
-/// Send what is in the composer.
+/// Send what is in the composer. Words go to `chat.send` with the context: on a node the service
+/// makes them that node's Fix (and asks first when it is OK'd); about the whole video the user's
+/// Claude Code answers. Attached files are added to Assets first; an asset dragged in on a node is
+/// `assets.use` there.
 fn send(ctx: &mut MfxCtx, st: &mut ChatUi, info: Option<&NodeInfo>, now: f64) {
-    let text: String = st.draft.trim().chars().take(MAX_TEXT).collect();
+    let mut text: String = st.draft.trim().chars().take(MAX_TEXT).collect();
     if text.is_empty() && st.attachments.is_empty() {
+        return;
+    }
+    st.draft.clear();
+    st.scroll_bottom = true;
+    if let Some(q) = st.custom_for.take() {
+        answer(ctx, st, &q, &text, now);
         return;
     }
     let mut files = Vec::new();
@@ -463,50 +507,44 @@ fn send(ctx: &mut MfxCtx, st: &mut ChatUi, info: Option<&NodeInfo>, now: f64) {
     for a in std::mem::take(&mut st.attachments) {
         match a {
             Attachment::File(p) => files.push(p),
-            Attachment::Asset { id, .. } => assets.push(id),
+            Attachment::Asset { id, name } => assets.push((id, name)),
         }
     }
-    st.draft.clear();
-    st.scroll_bottom = true;
-    if let Some(q) = st.custom_for.take() {
-        let id = ctx.service.request("chat.answer", json!({"question": q, "text": text}));
-        st.pending.push((id, Pending::Quiet("answer".into()), now));
-        st.answered.insert(q, text);
+    if !files.is_empty() {
+        let names: Vec<String> = files.iter().map(|f| model::file_name(f)).collect();
+        let id = ctx.service.request("assets.add", json!({"paths": files}));
+        st.pending.push((id, Pending::Quiet("assets.add".into()), now));
+        text = format!("{text}\n(Attached, now in Assets: {})", names.join(", ")).trim().to_string();
+    }
+    let node = info.filter(|n| n.kind != "beat").map(|n| n.id.clone());
+    if let Some(node) = &node
+        && !assets.is_empty()
+    {
+        // dragged onto the message box while talking about a node: use it there (a Fix of its own)
+        for (id, _) in &assets {
+            let r = ctx.service.request("assets.use", json!({"asset": id, "node": node, "how": text}));
+            st.pending.push((r, Pending::Quiet("assets.use".into()), now));
+        }
         return;
     }
-    match info {
-        Some(n) if !model::moves(&n.kind).iter().any(|m| m.needs_words()) || text.is_empty() => {
-            // a beat (or nothing to fix): words go to the AI about it
-            send_chat(ctx, st, text, Some(n.id.clone()), files, assets, now);
-        }
-        Some(n) if decision(st, n).as_deref() == Some("ok") => {
-            let mut words = text;
-            for a in &assets {
-                words.push_str(&format!("\nUse asset {a} here"));
-            }
-            st.ask_first = Some(AskFirst { node: n.id.clone(), name: n.name.clone(), text: words });
-            st.attachments = files.into_iter().map(Attachment::File).collect();
-        }
-        Some(n) => {
-            let mut words = text;
-            for a in &assets {
-                words.push_str(&format!("\nUse asset {a} here"));
-            }
-            send_fix(ctx, st, n, words, files, now);
-        }
-        None => send_chat(ctx, st, text, None, files, assets, now),
+    for (id, name) in &assets {
+        text.push_str(&format!("\nUse my asset {id} ({name})."));
     }
+    send_chat(ctx, st, text.trim().to_string(), info.map(|n| n.id.clone()), false, now);
 }
 
-fn send_chat(ctx: &mut MfxCtx, st: &mut ChatUi, text: String, context: Option<String>, files: Vec<String>, assets: Vec<String>, now: f64) {
-    let p = Pending::Send { text: text.clone(), context: context.clone(), files: files.clone(), assets: assets.clone() };
-    if !ctx.service.status().is_connected() {
+fn send_chat(ctx: &mut MfxCtx, st: &mut ChatUi, text: String, context: Option<String>, confirm: bool, now: f64) {
+    if text.is_empty() {
+        return;
+    }
+    let p = Pending::Send { text: text.clone(), context: context.clone(), confirm };
+    if !connected(ctx) {
         st.queued.push(p);
         return;
     }
-    let id = ctx.service.request("chat.send", json!({"text": text, "context": context.as_deref().unwrap_or("video"), "files": files, "assets": assets}));
+    let id = ctx.service.request("chat.send", json!({"text": text, "context": context.as_deref().unwrap_or("video"), "confirm": confirm}));
     st.pending.push((id, p, now));
-    st.awaiting = Some((ctx.state.chat.len(), now));
+    st.awaiting = Some(now);
 }
 
 /// A button the service put on a message or card.
@@ -520,10 +558,25 @@ fn run_action(ctx: &mut MfxCtx, st: &mut ChatUi, b: &ActionButton, now: f64) {
     }
 }
 
-fn answer(ctx: &mut MfxCtx, st: &mut ChatUi, question: &str, choice: &str, now: f64) {
-    let id = ctx.service.request("chat.answer", json!({"question": question, "choice": choice}));
-    st.pending.push((id, Pending::Quiet("answer".into()), now));
-    st.answered.insert(question.to_string(), choice.to_string());
+/// Answer a question (a chip, or own words with Custom…). "OK'd. Remake it anyway?" (`remake:<node>`)
+/// is answered by sending the words again with `confirm: true`, or by keeping it.
+fn answer(ctx: &mut MfxCtx, st: &mut ChatUi, question: &str, value: &str, now: f64) {
+    st.answered.insert(question.to_string(), value.to_string());
+    if let Some(node) = question.strip_prefix("remake:") {
+        let words = ctx.state.chat.iter().rev().find_map(|m| {
+            let q = m.extra.get("question")?;
+            (q.get("id").and_then(Value::as_str) == Some(question)).then(|| q.get("text").and_then(Value::as_str).unwrap_or("").to_string())
+        });
+        let name = model::node(&ctx.state.graph, node).name;
+        if value == "Remake it" {
+            send_chat(ctx, st, words.unwrap_or_default(), Some(node.to_string()), true, now);
+        } else {
+            log_action(ctx, st, format!("Kept {name} as it is"), Some(node), now);
+        }
+        return;
+    }
+    let id = ctx.service.request("chat.answer", json!({"question": question, "value": value}));
+    st.pending.push((id, Pending::Quiet("chat.answer".into()), now));
 }
 
 // ---------- drawing ----------
@@ -580,7 +633,7 @@ fn context_bar(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, msgs: &[Msg
                 }
                 ctx.auto("mfx.chat.context.back", &x, "Back to the whole video");
             }
-            let h = ui.add(egui::Button::new(RichText::new("History ▾").size(12.0).color(t.text_dim)).frame(false));
+            let h = ui.add(egui::Button::new(RichText::new("History").size(12.0).color(t.text_dim)).frame(false));
             if h.clicked() {
                 st.history_open = !st.history_open;
             }
@@ -634,6 +687,10 @@ fn thread(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, msgs: &[Msg], vi
                     }
                 }
                 Row::Folded { node, count, said, last, .. } => folded(ui, ctx, node, *count, said, last),
+                Row::Presses { first, verb, names } => {
+                    let refs: Vec<model::Ref> = names.iter().map(|n| model::Ref { id: n.to_lowercase(), text: n.clone() }).collect();
+                    rich_text(ui, ctx, *first, &format!("You pressed {verb} on {}", names.join(", ")), &refs, 12.0, t.text_dim);
+                }
             }
         }
         for q in &st.queued {
@@ -644,9 +701,7 @@ fn thread(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, msgs: &[Msg], vi
                 });
             }
         }
-        if let Some((_, since)) = st.awaiting
-            && now - since < 180.0
-        {
+        if st.typing || st.awaiting.is_some() {
             ui.horizontal(|ui| {
                 let dots = ".".repeat(1 + ((now * 2.0) as usize % 3));
                 ui.label(RichText::new(format!("Mortiflix is replying{dots}")).size(12.0).color(t.text_faint));
@@ -734,7 +789,7 @@ fn divider(ui: &mut egui::Ui, ctx: &mut MfxCtx, row: usize, stage: u8, at: &str,
         ctx.command(&format!("stages.{}", stage_key(stage)), json!({}));
     }
     ctx.auto(&format!("mfx.chat.divider.{row}"), &resp, &label);
-    if !summary.is_empty() {
+    if !summary.is_empty() && summary != stage_name(stage) {
         ui.vertical_centered(|ui| {
             ui.label(RichText::new(summary).size(12.0).color(t.text_faint));
         });
@@ -850,7 +905,7 @@ fn message_body(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, i: usize, 
     if let Some(card) = &m.card {
         let open = st.open_cards.get(&i).copied().unwrap_or(false);
         let mut out = cards::CardOut::default();
-        cards::show(ui, ctx, i, card, open, &st.answered, &mut out);
+        cards::show(ui, ctx, i, card, open, &st.answered, st.samples.as_deref(), &mut out);
         if out.toggle {
             st.open_cards.insert(i, !open);
         }
@@ -860,6 +915,11 @@ fn message_body(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, i: usize, 
         if let Some(b) = out.action {
             run_action(ctx, st, &b, now);
         }
+        if out.samples {
+            let id = ctx.service.request("music.theme.samples", json!({}));
+            st.pending.push((id, Pending::Samples, now));
+            st.samples = Some(Vec::new());
+        }
         if out.change_words {
             ctx.state.selected_node = None;
             st.draft = "Change the words: ".into();
@@ -867,7 +927,7 @@ fn message_body(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, i: usize, 
         }
     }
     if let Some(q) = &m.question {
-        question(ui, ctx, st, q, now);
+        question(ui, ctx, st, q, &m.text, now);
     }
     if !m.actions.is_empty() {
         ui.horizontal_wrapped(|ui| {
@@ -880,10 +940,10 @@ fn message_body(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, i: usize, 
     }
 }
 
-fn question(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, q: &model::Question, now: f64) {
+fn question(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, q: &model::Question, said: &str, now: f64) {
     let t = ctx.theme;
     let picked = st.answered.get(&q.id).cloned().or_else(|| q.picked.clone());
-    if !q.text.is_empty() {
+    if !q.text.is_empty() && said.is_empty() {
         ui.label(RichText::new(&q.text).size(13.0).color(t.text).strong());
     }
     let in_use = picked.clone().or_else(|| q.default.clone());
@@ -902,7 +962,7 @@ fn question(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, q: &model::Que
             }
             ctx.auto(&format!("mfx.chat.q.{}.{}", q.id, c.id), &r, &c.label);
         }
-        if q.custom {
+        if q.custom && !q.id.starts_with("remake:") {
             let r = ui.add(egui::Button::new(RichText::new("Custom…").size(12.0).color(t.text_dim)).min_size(vec2(0.0, 24.0)).frame(false));
             if r.clicked() {
                 st.custom_for = Some(q.id.clone());
@@ -978,7 +1038,7 @@ fn now_line(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, now: f64) {
             ui.painter().circle_stroke(d.center(), 3.5, Stroke::new(1.2, t.text_faint));
         }
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            let label = if st.details_open { "Details ▴" } else { "Details ▾" };
+            let label = if st.details_open { "Hide details" } else { "Details" };
             let b = ui.add(egui::Button::new(RichText::new(label).size(12.0).color(t.text_dim)).frame(false));
             if b.clicked() {
                 st.details_open = !st.details_open;
@@ -1067,37 +1127,6 @@ fn moves_row(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, info: Option<
                     }
                 }
             }
-        }
-    });
-}
-
-fn ask_first(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, now: f64) {
-    let t = ctx.theme;
-    let Some(a) = st.ask_first.clone() else { return };
-    let r = ui.max_rect();
-    ui.painter().rect_filled(Rect::from_min_max(r.min + vec2(0.0, 4.0), pos2(r.min.x + 3.0, r.max.y - 4.0)), 1.0, t.accent);
-    ui.add_space(6.0);
-    ui.horizontal(|ui| {
-        ui.add_space(10.0);
-        ui.label(RichText::new(format!("{} is OK'd. Remake it anyway?", a.name)).size(13.0).color(t.text));
-    });
-    ui.horizontal(|ui| {
-        ui.add_space(10.0);
-        if small_button(ui, ctx, "mfx.chat.askFirst.remake", "Remake it", true).clicked() {
-            st.ask_first = None;
-            let info = model::node(&ctx.state.graph, &a.node);
-            let files = std::mem::take(&mut st.attachments)
-                .into_iter()
-                .filter_map(|x| match x {
-                    Attachment::File(p) => Some(p),
-                    Attachment::Asset { .. } => None,
-                })
-                .collect();
-            send_fix(ctx, st, &info, a.text.clone(), files, now);
-        }
-        if small_button(ui, ctx, "mfx.chat.askFirst.keep", "Keep it", false).clicked() {
-            st.ask_first = None;
-            st.draft = a.text.clone();
         }
     });
 }
@@ -1337,42 +1366,56 @@ mod tests {
     }
 
     #[test]
-    fn typed_words_on_a_node_become_its_fix_and_ok_asks_first() {
+    fn typed_words_go_to_the_service_with_their_context_and_wait_while_it_is_down() {
         let mut m = Mortiflix::default();
-        m.state.graph = json!({"nodes": {"s03": {"kind": "shot", "owner": "ok"}, "s07": {"kind": "shot"}}});
+        m.state.graph = json!({"nodes": [{"id": "s03", "kind": "shot", "owner": "ok"}, {"id": "s07", "kind": "shot"}]});
         let mut ctx = m.ctx(crate::MfxTheme::default());
         let mut st = ChatUi::default();
         let s7 = model::node(&ctx.state.graph, "s07");
         st.draft = "colder".into();
-        send(&mut ctx, &mut st, Some(&s7), 0.0);
-        assert_eq!(ctx.state.chat.last().map(|c| c.text.as_str()), Some("colder"));
-        assert!(st.pending.iter().any(|(_, p, _)| matches!(p, Pending::Fix { node, .. } if node == "s07")));
-        // the service is down: the Fix's error shows with Try again
-        read_replies(&mut ctx, &mut st, 1.0);
-        let last = ctx.state.chat.last().unwrap();
-        assert!(last.text.starts_with("Couldn't send the Fix on shot 7"));
-        assert!(last.extra.get("actions").is_some());
-        // an OK'd shot asks first
-        let s3 = model::node(&ctx.state.graph, "s03");
-        st.draft = "redo".into();
-        send(&mut ctx, &mut st, Some(&s3), 2.0);
-        assert_eq!(st.ask_first.as_ref().map(|a| a.node.as_str()), Some("s03"));
-        // whole video while offline: queued, not lost
-        st.draft = "make it shorter".into();
-        send(&mut ctx, &mut st, None, 3.0);
-        assert_eq!(st.queued.len(), 1);
-        // OK presses merge into one line
-        let before = ctx.state.chat.len();
+        st.attachments.push(Attachment::Asset { id: "a02".into(), name: "photo.jpg".into() });
+        send(&mut ctx, &mut st, None, 0.0);
+        // offline: queued with its words (the asset named in them), never lost
+        assert!(matches!(&st.queued[..], [Pending::Send { text, context: None, confirm: false }] if text.contains("a02")));
+        st.draft = "colder still".into();
+        send(&mut ctx, &mut st, Some(&s7), 1.0);
+        assert!(matches!(&st.queued[1], Pending::Send { context: Some(c), .. } if c == "s07"));
+        // an asset dragged in while talking about a node is `assets.use` there, no chat.send
+        st.attachments.push(Attachment::Asset { id: "a01".into(), name: "logo".into() });
+        send(&mut ctx, &mut st, Some(&s7), 2.0);
+        assert_eq!(st.queued.len(), 2);
+        assert!(st.pending.iter().any(|(_, p, _)| matches!(p, Pending::Quiet(k) if k == "assets.use")));
+        // Remake it on an OK'd piece sends the words again with confirm
+        ctx.state.chat.push(ChatMessage {
+            role: "ai".into(),
+            text: "S03 is OK'd. Remake it anyway?".into(),
+            extra: json!({"question": {"id": "remake:s03", "text": "redo it"}}).as_object().cloned().unwrap(),
+            ..ChatMessage::default()
+        });
+        answer(&mut ctx, &mut st, "remake:s03", "Remake it", 3.0);
+        assert!(matches!(&st.queued[2], Pending::Send { text, context: Some(c), confirm: true } if text == "redo it" && c == "s03"));
+        answer(&mut ctx, &mut st, "remake:s03", "Keep it", 3.0);
+        assert_eq!(ctx.state.chat.last().map(|c| c.text.as_str()), Some("Kept Shot 3 as it is"));
+        // OK, then OK again takes it back; Play asks the preview
         run_move(&mut ctx, &mut st, &s7, Move::Ok, 4.0);
-        let s8 = model::node(&Value::Null, "s08");
-        run_move(&mut ctx, &mut st, &s8, Move::Ok, 4.0);
-        assert_eq!(ctx.state.chat.len(), before + 1);
-        assert_eq!(ctx.state.chat.last().map(|c| c.text.as_str()), Some("You pressed OK on Shot 7, Shot 8"));
-        // pressing it again takes it back
-        run_move(&mut ctx, &mut st, &s7, Move::Ok, 5.0);
+        assert_eq!(st.decided.get("s07").map(String::as_str), Some("ok"));
+        let again = model::node(&ctx.state.graph, "s07");
+        run_move(&mut ctx, &mut st, &again, Move::Ok, 5.0);
         assert_eq!(st.decided.get("s07").map(String::as_str), Some(""));
-        run_move(&mut ctx, &mut st, &s7, Move::Play, 5.0);
+        // the down service's error for a press shows nothing (not_running is calm)
+        let before = ctx.state.chat.len();
+        read_replies(&mut ctx, &mut st, 6.0);
+        assert_eq!(ctx.state.chat.len(), before);
+        run_move(&mut ctx, &mut st, &s7, Move::Play, 7.0);
         assert_eq!(ctx.state.play_request.as_deref(), Some("s07"));
+    }
+
+    #[test]
+    fn todos_and_events_are_read_safely() {
+        assert_eq!(
+            todos_of(&[json!({"content": "Script", "status": "completed"}), json!({"text": "Shots", "state": "in_progress"}), json!(5)]),
+            vec![("Script".to_string(), "done".to_string()), ("Shots".to_string(), "doing".to_string())]
+        );
     }
 
     #[test]
@@ -1382,16 +1425,16 @@ mod tests {
         m.state.push_files("drop", vec!["/a/logo.png".into()]);
         let mut ctx = m.ctx(crate::MfxTheme::default());
         let mut st = ChatUi::default();
-        take_files(&mut ctx, &mut st);
+        take_files(&mut ctx, &mut st, 0.0);
         assert_eq!(st.attachments, vec![Attachment::File("/a/photo.jpg".into())]);
-        assert!(ctx.state.chat.last().is_some_and(|c| c.text == "You added 1 file to Assets"));
+        assert!(ctx.state.chat.last().is_some_and(|c| c.text == "You added 1 file to Assets"), "shown here while the service is down");
         ctx.state.selected_node = Some("s01".into());
         ctx.state.push_files("drop", vec!["/a/x.png".into()]);
-        take_files(&mut ctx, &mut st);
+        take_files(&mut ctx, &mut st, 0.0);
         assert_eq!(st.attachments.len(), 2);
         ctx.state.show_new_project = true;
         ctx.state.push_files("drop", vec!["/a/y.png".into()]);
-        take_files(&mut ctx, &mut st);
+        take_files(&mut ctx, &mut st, 0.0);
         assert_eq!(ctx.state.files_in.len(), 1, "the New project window takes it");
     }
 }

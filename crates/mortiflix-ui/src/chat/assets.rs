@@ -11,7 +11,8 @@ use super::model;
 use crate::MfxCtx;
 
 /// What the node area receives when an asset row is dropped on a shot (egui drag and drop
-/// payload): it becomes a Fix on that shot with "Use <name> here" (doc 32b).
+/// payload): the node area sends `assets.use {asset, node}`, which records it and asks for a Fix
+/// that puts it in (doc 32b).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AssetDrag {
     pub id: String,
@@ -63,10 +64,31 @@ fn str_of(v: &Value, key: &str, max: usize) -> String {
     v.get(key).and_then(Value::as_str).map(|s| s.chars().take(max).collect()).unwrap_or_default()
 }
 
-/// The assets from an `assets.list` result (`{assets: [...]}` or a bare list). Hostile input.
+/// "2.1 MB" from bytes.
+fn size_text(v: Option<&Value>) -> String {
+    match v.and_then(Value::as_f64).filter(|b| b.is_finite() && *b >= 0.0) {
+        Some(b) if b >= 1e9 => format!("{:.1} GB", b / 1e9),
+        Some(b) if b >= 1e6 => format!("{:.1} MB", b / 1e6),
+        Some(b) if b >= 1e3 => format!("{:.0} KB", b / 1e3),
+        Some(b) => format!("{b:.0} B"),
+        None => String::new(),
+    }
+}
+
+/// The assets from an `assets.list` result: part 08's `{yours, found, removed}`, or `{assets}` / a
+/// bare list. Hostile input.
 pub fn parse(v: &Value) -> Vec<Asset> {
-    let list = v.get("assets").and_then(Value::as_array).or_else(|| v.as_array());
-    let Some(list) = list else { return Vec::new() };
+    let mut out = Vec::new();
+    if v.get("yours").is_some() || v.get("found").is_some() {
+        out.extend(parse_list(v.get("yours"), false));
+        out.extend(parse_list(v.get("found"), true));
+        return out;
+    }
+    parse_list(v.get("assets").or(Some(v)), false)
+}
+
+fn parse_list(v: Option<&Value>, found_list: bool) -> Vec<Asset> {
+    let Some(list) = v.and_then(Value::as_array) else { return Vec::new() };
     list.iter()
         .take(2000)
         .filter_map(|a| {
@@ -81,7 +103,8 @@ pub fn parse(v: &Value) -> Vec<Asset> {
                     .unwrap_or_default()
             };
             let used_in = a
-                .get("usedIn")
+                .get("used_in")
+                .or_else(|| a.get("usedIn"))
                 .and_then(Value::as_array)
                 .map(|l| {
                     l.iter()
@@ -95,19 +118,31 @@ pub fn parse(v: &Value) -> Vec<Asset> {
                 .unwrap_or_default();
             let name = Some(str_of(a, "name", 200)).filter(|n| !n.is_empty()).unwrap_or_else(|| model::file_name(&str_of(a, "path", 4000)));
             let usage = str_of(a, "use", 20);
+            let kind = str_of(a, "kind", 20);
+            let mut facts = str_of(a, "facts", 200);
+            if facts.is_empty() {
+                let size = size_text(a.get("size"));
+                let k = kind.get(..1).map(|f| f.to_uppercase() + kind.get(1..).unwrap_or("")).unwrap_or_default();
+                facts = [k, size].into_iter().filter(|x| !x.is_empty()).collect::<Vec<_>>().join(" · ");
+            }
+            let from = str_of(a, "from", 80);
             Some(Asset {
                 name,
-                kind: str_of(a, "kind", 20),
+                kind,
                 usage: if USES.iter().any(|(k, _)| *k == usage) { usage } else { "fits".into() },
                 places: strings("where"),
                 note: str_of(a, "note", 2000),
                 version: a.get("version").and_then(Value::as_u64).and_then(|v| u32::try_from(v).ok()).unwrap_or(1).max(1),
                 path: str_of(a, "path", 4000),
-                facts: str_of(a, "facts", 200),
+                facts,
                 used_in,
                 planned: strings("planned"),
-                found: a.get("found").and_then(Value::as_bool).unwrap_or(false),
-                source: str_of(a, "source", 200),
+                found: found_list || a.get("found").and_then(Value::as_bool).unwrap_or(false),
+                source: Some(str_of(a, "source", 200)).filter(|s| !s.is_empty()).unwrap_or(if from == "mortiflix" {
+                    "Found by Mortiflix".into()
+                } else {
+                    from
+                }),
                 missing: a.get("missing").and_then(Value::as_bool).unwrap_or(false),
                 copying: a.get("copying").and_then(Value::as_f64).filter(|c| c.is_finite()).map(|c| c.clamp(0.0, 1.0) as f32),
                 id,
@@ -221,8 +256,35 @@ fn poll(ctx: &mut MfxCtx, st: &mut AssetsUi) {
     let mut last = st.event_seq;
     for (seq, ev) in ctx.service.events_since(st.event_seq) {
         last = last.max(*seq);
-        if ev.get("event").and_then(Value::as_str) == Some("assets.changed") {
-            changed = true;
+        let data = ev.get("data").unwrap_or(&Value::Null);
+        match ev.get("event").and_then(Value::as_str).unwrap_or("") {
+            "assets.changed" | "assets.added" | "node.changed" => changed = true,
+            "assets.failed" => {
+                changed = true;
+                st.error = format!("Couldn't add a file: {}", data.get("message").and_then(Value::as_str).unwrap_or("").chars().take(200).collect::<String>());
+            }
+            "assets.progress" => {
+                let id = data.get("asset").and_then(Value::as_str).unwrap_or("");
+                let done = data.get("done").and_then(Value::as_f64).unwrap_or(0.0);
+                let total = data.get("total").and_then(Value::as_f64).filter(|t| *t > 0.0).unwrap_or(1.0);
+                let frac = (done / total).clamp(0.0, 1.0) as f32;
+                match st.list.iter_mut().find(|a| a.id == id) {
+                    Some(a) => a.copying = (frac < 1.0).then_some(frac),
+                    None if !id.is_empty() && frac < 1.0 => {
+                        let name = data.get("name").and_then(Value::as_str).unwrap_or(id).chars().take(200).collect();
+                        st.list.push(Asset {
+                            id: id.chars().take(80).collect(),
+                            name,
+                            copying: Some(frac),
+                            version: 1,
+                            usage: "fits".into(),
+                            ..Asset::default()
+                        });
+                    }
+                    None => {}
+                }
+            }
+            _ => {}
         }
     }
     st.event_seq = last;
@@ -237,7 +299,7 @@ fn poll(ctx: &mut MfxCtx, st: &mut AssetsUi) {
         let id = f.purpose.split_once(':').map(|(_, id)| id.to_string()).unwrap_or_default();
         if let (Some(path), Some(a)) = (f.paths.first(), st.list.iter().find(|a| a.id == id)) {
             st.replaced = Some((a.id.clone(), model::file_name(path), a.version.saturating_add(1), a.used_in.iter().map(|u| u.node.clone()).collect()));
-            mutate(ctx, st, "assets.replace", json!({"id": id, "path": path}));
+            mutate(ctx, st, "assets.replace", json!({"asset": id, "path": path}));
         }
     }
     if !ctx.state.show_new_project {
@@ -417,6 +479,21 @@ fn detail(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut AssetsUi, graph: &Value,
             }
         });
     });
+    if a.found {
+        ui.label(
+            RichText::new(format!(
+                "{} · used in {} shot{}",
+                if a.source.is_empty() { "Found by Mortiflix" } else { &a.source },
+                a.used_in.len(),
+                if a.used_in.len() == 1 { "" } else { "s" }
+            ))
+            .size(12.0)
+            .color(t.text_dim),
+        );
+        used_in(ui, ctx, graph, a);
+        reveal(ui, ctx, a);
+        return;
+    }
     if a.missing {
         ui.label(RichText::new("The project's copy of this file is gone. Replace it; shots keep their made versions.").size(12.0).color(t.warn));
     }
@@ -431,7 +508,7 @@ fn detail(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut AssetsUi, graph: &Value,
         });
         ctx.auto("mfx.assets.use", &c.response, "How to use it");
         if usage != a.usage {
-            mutate(ctx, st, "assets.update", json!({"id": a.id, "use": usage}));
+            mutate(ctx, st, "assets.update", json!({"asset": a.id, "use": usage}));
             if let Some(x) = st.list.iter_mut().find(|x| x.id == a.id) {
                 x.usage = usage;
             }
@@ -457,7 +534,7 @@ fn detail(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut AssetsUi, graph: &Value,
             }
         }
         if places != a.places {
-            mutate(ctx, st, "assets.update", json!({"id": a.id, "where": places}));
+            mutate(ctx, st, "assets.update", json!({"asset": a.id, "where": places}));
             if let Some(x) = st.list.iter_mut().find(|x| x.id == a.id) {
                 x.places = places;
             }
@@ -473,7 +550,7 @@ fn detail(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut AssetsUi, graph: &Value,
             ctx.auto("mfx.assets.note", &r, "Note");
             if r.lost_focus() && *words != a.note {
                 let words = words.clone();
-                mutate(ctx, st, "assets.update", json!({"id": a.id, "note": words}));
+                mutate(ctx, st, "assets.update", json!({"asset": a.id, "note": words}));
                 if let Some(x) = st.list.iter_mut().find(|x| x.id == a.id) {
                     x.note = words;
                 }
@@ -503,6 +580,28 @@ fn detail(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut AssetsUi, graph: &Value,
         });
         let _ = id;
     }
+    used_in(ui, ctx, graph, a);
+    ui.add_space(8.0);
+    ui.horizontal(|ui| {
+        reveal(ui, ctx, a);
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            let r = ui.add(egui::Button::new(RichText::new("Remove from project").size(12.0).color(t.text_dim)).frame(false));
+            if r.clicked() {
+                if a.used_in.is_empty() {
+                    mutate(ctx, st, "assets.remove", json!({"asset": a.id}));
+                    st.list.retain(|x| x.id != a.id);
+                    st.selected = None;
+                } else {
+                    st.confirm_remove = Some(a.id.clone());
+                }
+            }
+            ctx.auto("mfx.assets.remove", &r, "Remove from project");
+        });
+    });
+}
+
+fn used_in(ui: &mut egui::Ui, ctx: &mut MfxCtx, graph: &Value, a: &Asset) {
+    let t = ctx.theme;
     ui.add_space(6.0);
     ui.label(RichText::new("Used in").size(12.0).color(t.text_faint));
     if a.used_in.is_empty() {
@@ -529,29 +628,17 @@ fn detail(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut AssetsUi, graph: &Value,
             });
         });
     }
-    ui.add_space(8.0);
-    ui.horizontal(|ui| {
-        if !a.path.is_empty() {
-            let r = ui.add(egui::Label::new(RichText::new("Show in folder").size(12.0).color(super::LINK).underline()).sense(Sense::click()));
-            if r.clicked() {
-                ctx.command("mortiflix.reveal", json!({"path": a.path}));
-            }
-            ctx.auto("mfx.assets.reveal", &r, "Show in folder");
-        }
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            let r = ui.add(egui::Button::new(RichText::new("Remove from project").size(12.0).color(t.text_dim)).frame(false));
-            if r.clicked() {
-                if a.used_in.is_empty() {
-                    mutate(ctx, st, "assets.remove", json!({"id": a.id}));
-                    st.list.retain(|x| x.id != a.id);
-                    st.selected = None;
-                } else {
-                    st.confirm_remove = Some(a.id.clone());
-                }
-            }
-            ctx.auto("mfx.assets.remove", &r, "Remove from project");
-        });
-    });
+}
+
+fn reveal(ui: &mut egui::Ui, ctx: &mut MfxCtx, a: &Asset) {
+    if a.path.is_empty() {
+        return;
+    }
+    let r = ui.add(egui::Label::new(RichText::new("Show in folder").size(12.0).color(super::LINK).underline()).sense(Sense::click()));
+    if r.clicked() {
+        ctx.command("mortiflix.reveal", json!({"path": a.path}));
+    }
+    ctx.auto("mfx.assets.reveal", &r, "Show in folder");
 }
 
 fn join(names: &[String]) -> String {
@@ -597,7 +684,15 @@ fn confirm_remove(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut AssetsUi) {
             );
             ctx.auto("mfx.assets.remove.confirm", &go, "Remove and remake");
             if go.clicked() {
-                mutate(ctx, st, "assets.remove", json!({"id": a.id, "remake": true}));
+                mutate(ctx, st, "assets.remove", json!({"asset": a.id}));
+                for u in &a.used_in {
+                    mutate(
+                        ctx,
+                        st,
+                        "node.edit",
+                        json!({"node": u.node, "action": "fix", "text": format!("Don't use {} here any more (it was removed from the project).", a.name)}),
+                    );
+                }
                 st.list.retain(|x| x.id != a.id);
                 st.selected = None;
                 st.confirm_remove = None;
@@ -641,6 +736,14 @@ mod tests {
         assert_eq!(usage_line(&g, &list[3]), ("Not used yet".into(), true));
         assert_eq!(usage_line(&g, &list[4]), ("Copying… 64%".into(), false));
         assert!(parse(&json!("x")).is_empty());
+        let p8 = parse(
+            &json!({"yours": [{"id": "a01", "name": "logo.svg", "kind": "logo", "size": 14200, "use": "must", "where": null, "used_in": [{"node": "s14", "how": "corner"}]}],
+            "found": [{"id": "found:x.jpg", "name": "x.jpg", "kind": "image", "from": "mortiflix", "path": "/p/x.jpg"}], "removed": []}),
+        );
+        assert_eq!(p8.len(), 2);
+        assert_eq!((p8[0].facts.as_str(), p8[0].used_in.len(), p8[0].places.len()), ("Logo · 14 KB", 1, 0));
+        assert!(p8[1].found);
+        assert_eq!(p8[1].source, "Found by Mortiflix");
         assert_eq!(parse(&json!([{"id": "z"}])).len(), 1);
         assert_eq!(join(&["shot 1".into(), "shot 2".into(), "shot 3".into()]), "shot 1, shot 2 and shot 3");
     }

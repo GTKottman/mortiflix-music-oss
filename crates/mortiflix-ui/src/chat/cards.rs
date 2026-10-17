@@ -21,6 +21,8 @@ pub struct CardOut {
     pub action: Option<ActionButton>,
     /// Change the words (Script): the composer, about the whole video.
     pub change_words: bool,
+    /// Hear the music themes: ask the service for its samples (`music.theme.samples`).
+    pub samples: bool,
 }
 
 fn text(v: &Value, key: &str) -> String {
@@ -45,9 +47,22 @@ fn button(ui: &mut egui::Ui, ctx: &mut MfxCtx, id: &str, label: &str) -> egui::R
 }
 
 /// Draw one card under message `msg`.
-pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx, msg: usize, card: &Value, open: bool, answered: &BTreeMap<String, String>, out: &mut CardOut) {
+pub fn show(
+    ui: &mut egui::Ui,
+    ctx: &mut MfxCtx,
+    msg: usize,
+    card: &Value,
+    open: bool,
+    answered: &BTreeMap<String, String>,
+    samples: Option<&[Value]>,
+    out: &mut CardOut,
+) {
     let t = ctx.theme;
     let kind = text(card, "kind");
+    // a question card repeats the message's own question (drawn as chips under it)
+    if matches!(kind.as_str(), "question" | "confirm") {
+        return;
+    }
     let width = ui.available_width().min(460.0);
     egui::Frame::new().fill(t.field_bg).corner_radius(6.0).inner_margin(10.0).show(ui, |ui| {
         ui.set_width(width - 20.0);
@@ -60,8 +75,11 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx, msg: usize, card: &Value, open:
             "script" => script(ui, ctx, msg, card, open, out),
             "looks" => looks(ui, ctx, msg, card, answered, out),
             "versions" => versions(ui, ctx, msg, card, out),
+            "shots" | "transitions" => node_list(ui, ctx, msg, card, open, out),
             "voice" => voice(ui, ctx, msg, card, open, out),
             "music" => music(ui, ctx, msg, card, answered, out),
+            "themes" => themes(ui, ctx, msg, card, samples, out),
+            "defaults" | "submission" => defaults(ui, ctx, msg, card, answered, out),
             "render" => render(ui, ctx, msg, card, out),
             _ => {}
         }
@@ -76,6 +94,18 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx, msg: usize, card: &Value, open:
             });
         }
     });
+}
+
+/// The beat square + number from a card row's own `no` / `colour` (else the graph's).
+fn beat_of(ui: &mut egui::Ui, ctx: &MfxCtx, id: &str, row: &Value) {
+    let mut info = model::node(&ctx.state.graph, id);
+    if let Some(n) = row.get("no").and_then(Value::as_u64).and_then(|n| u32::try_from(n).ok()) {
+        info.beat_no = Some(n);
+    }
+    if let Some(c) = row.get("colour").and_then(model::hex_colour) {
+        info.colour = Some(c);
+    }
+    super::beat_mark(ui, ctx, &info);
 }
 
 /// The beat square + number for a beat id (graph colour, else the fallback hue).
@@ -94,10 +124,15 @@ fn script(ui: &mut egui::Ui, ctx: &mut MfxCtx, msg: usize, card: &Value, open: b
         let id = text(b, "id");
         ui.allocate_ui_with_layout(vec2(ui.available_width(), 20.0), Layout::left_to_right(Align::Center), |ui| {
             ui.spacing_mut().item_spacing.x = 4.0;
-            beat(ui, ctx, &id);
-            ui.label(RichText::new(text(b, "title")).size(12.0).color(t.text).strong());
+            beat_of(ui, ctx, &id, b);
+            let title = text(b, "title");
+            if !title.is_empty() {
+                ui.label(RichText::new(title).size(12.0).color(t.text).strong());
+            }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                ui.label(RichText::new(text(b, "start")).size(11.0).color(t.text_faint).monospace());
+                let start = text(b, "start");
+                let right = if start.is_empty() { secs(b.get("target_sec")) } else { start };
+                ui.label(RichText::new(right).size(11.0).color(t.text_faint).monospace());
                 if !open {
                     ui.add(egui::Label::new(RichText::new(text(b, "words")).size(12.0).color(t.text_dim)).truncate());
                 }
@@ -116,8 +151,18 @@ fn script(ui: &mut egui::Ui, ctx: &mut MfxCtx, msg: usize, card: &Value, open: b
         if button(ui, ctx, &format!("mfx.chat.card.{msg}.changeWords"), "Change the words").clicked() {
             out.change_words = true;
         }
-        let words = card.get("words").and_then(Value::as_u64);
-        let length = secs(card.get("seconds"));
+        let words = card.get("words").and_then(Value::as_u64).or_else(|| {
+            let n: usize = beats.iter().map(|b| text(b, "words").split_whitespace().count()).sum();
+            u64::try_from(n).ok().filter(|n| *n > 0)
+        });
+        let total: f64 = beats.iter().filter_map(|b| b.get("target_sec").and_then(Value::as_f64)).filter(|x| x.is_finite() && *x >= 0.0).sum();
+        let length = if card.get("seconds").is_some() {
+            secs(card.get("seconds"))
+        } else if total > 0.0 {
+            secs(Some(&json!(total)))
+        } else {
+            String::new()
+        };
         let facts = match (words, length.is_empty()) {
             (Some(w), false) => format!("{w} words · {length}"),
             (Some(w), true) => format!("{w} words"),
@@ -155,15 +200,25 @@ fn looks(ui: &mut egui::Ui, ctx: &mut MfxCtx, msg: usize, card: &Value, answered
             ui.spacing_mut().item_spacing.x = gap;
             for l in row {
                 let id = text(l, "id");
-                let name = text(l, "name");
+                let name = Some(text(l, "name")).filter(|n| !n.is_empty()).unwrap_or_else(|| text(l, "label"));
                 let on = picked.as_deref() == Some(id.as_str());
                 ui.vertical(|ui| {
                     ui.set_width(w);
-                    let fill = l.get("colour").and_then(model::hex_colour).unwrap_or(t.hover);
+                    let beat_colour = model::node(&ctx.state.graph, &text(l, "beat")).colour.map(|c| c.gamma_multiply(0.5));
+                    let fill = l.get("colour").and_then(model::hex_colour).or(beat_colour).unwrap_or(t.hover);
                     let r = frame(ui, w, fill, on.then_some(t.text));
                     let r = r.on_hover_text(format!("Use {name}"));
                     if r.clicked() && !on {
-                        out.answer = Some((if question.is_empty() { "look".into() } else { question.clone() }, id.clone()));
+                        if question.is_empty() {
+                            // part 08: picking a look is OK on that look's piece
+                            out.action = Some(ActionButton {
+                                label: name.clone(),
+                                act: Act::Request { ty: "node.edit".into(), params: json!({"node": id, "action": "ok"}) },
+                                primary: false,
+                            });
+                        } else {
+                            out.answer = Some((question.clone(), id.clone()));
+                        }
                     }
                     ctx.auto(&format!("mfx.chat.card.{msg}.look.{id}"), &r, &name);
                     let label = if on { format!("✓ {name}") } else { name.clone() };
@@ -176,8 +231,33 @@ fn looks(ui: &mut egui::Ui, ctx: &mut MfxCtx, msg: usize, card: &Value, answered
 
 fn versions(ui: &mut egui::Ui, ctx: &mut MfxCtx, msg: usize, card: &Value, out: &mut CardOut) {
     let t = ctx.theme;
-    let node = text(card, "node");
-    let vs = list(card, "versions");
+    let mut node = text(card, "node");
+    if node.is_empty() {
+        node = list(card, "refs").iter().find_map(|r| r.as_str().map(str::to_string)).unwrap_or_default();
+    }
+    // part 08's card names the piece; its versions are in the graph
+    let from_graph: Vec<Value>;
+    let vs: &[Value] = if card.get("versions").is_some() {
+        list(card, "versions")
+    } else {
+        let raw = model::raw_node(&ctx.state.graph, &node);
+        let plays = raw.and_then(|r| r.get("plays").or_else(|| r.get("current"))).and_then(Value::as_u64);
+        from_graph = raw
+            .and_then(|r| r.get("versions"))
+            .and_then(Value::as_array)
+            .map(|a| {
+                a.iter()
+                    .take(12)
+                    .filter_map(|v| v.get("v").and_then(Value::as_u64).or_else(|| v.as_u64()))
+                    .map(|v| json!({"v": v, "inUse": Some(v) == plays}))
+                    .collect()
+            })
+            .unwrap_or_default();
+        &from_graph
+    };
+    if vs.is_empty() && !node.is_empty() {
+        ui.label(RichText::new(format!("A new version of {} is in.", model::node(&ctx.state.graph, &node).name)).size(12.0).color(t.text_dim));
+    }
     let w = 84.0;
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 10.0;
@@ -314,6 +394,104 @@ fn music(ui: &mut egui::Ui, ctx: &mut MfxCtx, msg: usize, card: &Value, answered
     }
 }
 
+/// Shots or transitions that came in: one row each, a link to the piece.
+fn node_list(ui: &mut egui::Ui, ctx: &mut MfxCtx, msg: usize, card: &Value, open: bool, out: &mut CardOut) {
+    let t = ctx.theme;
+    let nodes = list(card, "nodes");
+    let shown = if open { nodes.len().min(200) } else { nodes.len().min(5) };
+    for (k, n) in nodes.iter().take(shown).enumerate() {
+        let id = text(n, "id");
+        let info = model::node(&ctx.state.graph, &id);
+        ui.allocate_ui_with_layout(vec2(ui.available_width(), 20.0), Layout::left_to_right(Align::Center), |ui| {
+            ui.spacing_mut().item_spacing.x = 4.0;
+            beat(ui, ctx, info.beat.as_deref().unwrap_or(""));
+            let r = ui.add(egui::Label::new(RichText::new(&info.name).size(12.0).color(super::LINK).underline()).sense(Sense::click()));
+            if r.clicked() {
+                ctx.state.selected_node = Some(id.clone());
+            }
+            ctx.auto(&format!("mfx.chat.card.{msg}.node.{k}"), &r, &info.name);
+            ui.add(egui::Label::new(RichText::new(text(n, "title")).size(12.0).color(t.text_dim)).truncate());
+        });
+    }
+    if nodes.len() > 5 {
+        let label = if open { "Fewer".to_string() } else { format!("All {}", nodes.len()) };
+        if button(ui, ctx, &format!("mfx.chat.card.{msg}.all"), &label).clicked() {
+            out.toggle = true;
+        }
+    }
+}
+
+/// The music theme was set: hear the three sample themes and pick one (doc 33).
+fn themes(ui: &mut egui::Ui, ctx: &mut MfxCtx, msg: usize, card: &Value, samples: Option<&[Value]>, out: &mut CardOut) {
+    let t = ctx.theme;
+    if card.get("themes").is_some() {
+        return music(ui, ctx, msg, card, &BTreeMap::new(), out);
+    }
+    match samples {
+        None => {
+            if button(ui, ctx, &format!("mfx.chat.card.{msg}.hearThemes"), "Hear the music themes").clicked() {
+                out.samples = true;
+            }
+        }
+        Some([]) => {
+            ui.label(RichText::new("Getting the themes…").size(12.0).color(t.text_faint));
+        }
+        Some(list) => {
+            for (k, sm) in list.iter().enumerate() {
+                let id = text(sm, "id");
+                ui.allocate_ui_with_layout(vec2(ui.available_width(), 24.0), Layout::left_to_right(Align::Center), |ui| {
+                    ui.spacing_mut().item_spacing.x = 6.0;
+                    play_dot(ui, ctx, &format!("file:{}", text(sm, "wav")), &format!("mfx.chat.card.{msg}.sample.{k}.play"));
+                    ui.label(RichText::new(text(sm, "name")).size(12.0).color(t.text));
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        let label = format!("Use {}", text(sm, "name"));
+                        if button(ui, ctx, &format!("mfx.chat.card.{msg}.sample.{k}.use"), "Use it").clicked() {
+                            out.action =
+                                Some(ActionButton { label, act: Act::Request { ty: "music.theme.use".into(), params: json!({"sample": id}) }, primary: false });
+                        }
+                        if let Some(bpm) = sm.get("bpm").and_then(Value::as_u64) {
+                            ui.label(RichText::new(format!("{bpm} bpm")).size(11.0).color(t.text_faint));
+                        }
+                    });
+                });
+            }
+        }
+    }
+}
+
+/// Questions that went on with their defaults (or a submission's questions): each one's chips, the
+/// default ticked; a press changes the answer (`chat.answer`).
+fn defaults(ui: &mut egui::Ui, ctx: &mut MfxCtx, msg: usize, card: &Value, answered: &BTreeMap<String, String>, out: &mut CardOut) {
+    let t = ctx.theme;
+    for item in list(card, "items").iter().take(12) {
+        ui.label(RichText::new(format!("· {}", text(item, "label"))).size(12.0).color(t.text_dim));
+    }
+    for q in list(card, "questions").iter().take(12) {
+        let Some(q) = model::question_of(q) else { continue };
+        if !q.text.is_empty() {
+            ui.label(RichText::new(&q.text).size(12.0).color(t.text));
+        }
+        let using = answered.get(&q.id).cloned().or(q.picked.clone()).or(q.default.clone());
+        ui.horizontal_wrapped(|ui| {
+            for c in &q.choices {
+                let on = using.as_deref() == Some(c.id.as_str());
+                let label = if on { format!("✓ {}", c.label) } else { c.label.clone() };
+                let r = ui.add(
+                    egui::Button::new(RichText::new(&label).size(12.0).color(if on { t.text } else { t.text_dim }))
+                        .min_size(vec2(0.0, 22.0))
+                        .fill(if on { t.hover } else { t.panel_bg })
+                        .stroke(Stroke::new(1.0, if on { t.text_dim } else { t.separator.gamma_multiply(2.0) }))
+                        .corner_radius(11.0),
+                );
+                if r.clicked() && !on {
+                    out.answer = Some((q.id.clone(), c.id.clone()));
+                }
+                ctx.auto(&format!("mfx.chat.card.{msg}.q.{}.{}", q.id, c.id), &r, &c.label);
+            }
+        });
+    }
+}
+
 fn render(ui: &mut egui::Ui, ctx: &mut MfxCtx, msg: usize, card: &Value, out: &mut CardOut) {
     let t = ctx.theme;
     let finished = card.get("finished").and_then(Value::as_bool).unwrap_or(false);
@@ -341,7 +519,7 @@ fn render(ui: &mut egui::Ui, ctx: &mut MfxCtx, msg: usize, card: &Value, out: &m
     if button(ui, ctx, &format!("mfx.chat.card.{msg}.stop"), "Stop the render").clicked() {
         out.action = Some(ActionButton {
             label: "Stop the render".into(),
-            act: Act::Request { ty: "render.stop".into(), params: json!({"job": card.get("job")}) },
+            act: Act::Request { ty: "render.cancel".into(), params: json!({"id": card.get("job")}) },
             primary: false,
         });
     }

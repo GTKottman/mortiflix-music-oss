@@ -258,7 +258,7 @@ pub fn invoke(app: &mut FilmcraftApp, ctx: &egui::Context, id: &str, mut params:
         app.show_panel(p);
         return Ok(Value::Null);
     }
-    if let Some(r) = crate::mortiflix::route(app, id, &params) {
+    if let Some(r) = crate::mortiflix::route(app, ctx, id, &params) {
         return r;
     }
     if let Some(r) = crate::panels::workspaces::route(app, id, &params) {
