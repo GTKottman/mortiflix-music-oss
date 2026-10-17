@@ -197,7 +197,19 @@ fn status_icon(p: &egui::Painter, c: Pos2, st: &StageStatus, t: &crate::MfxTheme
 
 /// "2 still need you" (doc 30): Next asked first. Show them closes; Go on anyway moves on.
 fn confirm_popup(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
-    let Some(c) = ctx.state.confirm_next.clone() else { return };
+    let Some(mut c) = ctx.state.confirm_next.clone() else { return };
+    let now = ui.input(|i| i.time);
+    if c.opened_at.is_none() {
+        c.opened_at = Some(now);
+        if let Some(open) = ctx.state.confirm_next.as_mut() {
+            open.opened_at = Some(now);
+        }
+    }
+    // the click that opened it (or one landing with it) never closes it: only a later click outside does
+    let settled = c.opened_at.is_some_and(|t| now - t > 0.35);
+    if !settled {
+        ui.ctx().request_repaint_after(std::time::Duration::from_millis(120));
+    }
     let what = if c.need == 1 { "1 piece still needs you".to_string() } else { format!("{} pieces still need you", c.need) };
     let modal = egui::Modal::new(egui::Id::new("mfx-confirm-next")).show(ui.ctx(), |ui| {
         ui.set_width(380.0);
@@ -219,7 +231,7 @@ fn confirm_popup(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
             }
         });
     });
-    if modal.should_close() {
+    if modal.should_close() && settled {
         ctx.state.confirm_next = None;
     }
 }

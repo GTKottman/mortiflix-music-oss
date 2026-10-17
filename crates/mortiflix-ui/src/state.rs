@@ -96,6 +96,9 @@ pub struct NextConfirm {
     pub need: u32,
     /// Go to Render (Get the video) rather than the next stage.
     pub to_render: bool,
+    /// When the pop-up first showed (egui time): a click outside it right then never closes it.
+    #[serde(skip)]
+    pub opened_at: Option<f64>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

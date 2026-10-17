@@ -192,10 +192,13 @@ impl Mortiflix {
         }
         let ask = |s: &mut MfxState, to_render: bool| -> bool {
             let st = s.status(stage);
-            if force || st.kind != StatusKind::NeedsYou {
+            // Anything still needing you asks first, whatever else the stage is doing: a stage that is
+            // also making (or stopped) with pieces waiting went straight on (owner's first run: the first
+            // Next skipped the pop-up).
+            if force || (st.kind != StatusKind::NeedsYou && st.need == 0) {
                 return false;
             }
-            s.confirm_next = Some(state::NextConfirm { stage, need: st.need, to_render });
+            s.confirm_next = Some(state::NextConfirm { stage, need: st.need.max(1), to_render, opened_at: None });
             true
         };
         let moved = |m: &mut Self, to: u8, done: bool| m.go_to(to, done).map_or(Nav::Stay, |from| Nav::Moved { from, to });
@@ -314,5 +317,14 @@ mod tests {
         assert_eq!(m.navigate("next", false), Some(Nav::Stay));
         assert_eq!(m.navigate("back", false), Some(Nav::Moved { from: 5, to: 4 }));
         assert_eq!(m.navigate("nonsense", false), None);
+        // making (or stopped) while pieces wait for you: still asks on the first click
+        let mut m = Mortiflix::default();
+        m.state.stage = 1;
+        m.state.statuses[1] = StageStatus { kind: StatusKind::Making, need: 4, ..StageStatus::default() };
+        assert_eq!(m.navigate("next", false), Some(Nav::Asked));
+        m.state.statuses[1] = StageStatus { kind: StatusKind::Stopped, need: 4, ..StageStatus::default() };
+        m.state.confirm_next = None;
+        assert_eq!(m.navigate("next", false), Some(Nav::Asked));
+        assert!(m.state.confirm_next.as_ref().is_some_and(|c| c.need == 4 && c.stage == 1));
     }
 }
