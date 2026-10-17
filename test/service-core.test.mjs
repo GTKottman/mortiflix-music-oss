@@ -117,7 +117,7 @@ test('service core: new project from preset + idea + assets + theme, the whole f
   assert.equal(st.length, 6);
   assert.equal(st[0].key, 'script');
   assert.equal(st[0].kind, 'needsYou', 'four beats wait for an OK');
-  assert.equal(st[2].total, 7, '4 shots + 3 transitions');
+  assert.equal(st[2].total, 4, '4 shots: the 3 transitions never count as shots');
   assert.ok(events('status').at(-1).stages);
 
   // Preview plan: every shot plays its own piece of the animatic, voice at its time, the score.

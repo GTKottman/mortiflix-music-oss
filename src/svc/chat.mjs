@@ -114,7 +114,7 @@ export function translateEvents(root, id) {
           && submissions(root, id).find((x) => x.step === step.key && x.version === e.version)?.questions.every((q) => q.default !== null)) break;
         const card = cardFor(root, id, step, e.version);
         const text = card?.kind === 'script' ? `Here's the script in ${card.beats.length} beats.`
-          : card?.kind === 'looks' ? `${card.frames.length} looks from the script. I'm using ${card.frames.find((f) => f.id === card.using)?.name || card.frames[0]?.name || 'the first'}; pick another any time.`
+          : card?.kind === 'looks' ? `${card.frames.length} looks from the script: style samples (colours, characters, type), not the shots. I'm using ${card.frames.find((f) => f.id === card.using)?.name || card.frames[0]?.name || 'the first'}; pick another any time.`
             : card?.kind === 'shots' ? `${card.nodes.length} shots are in. Walk through them: OK, Fix or Cut it on each one.`
               : `${step.name} v${e.version} is ready.`;
         say({ role: 'ai', text, card, refs: card?.nodes?.map((n) => n.id) || card?.beats?.map((b) => b.id) || [], stage: stageOf(step) });

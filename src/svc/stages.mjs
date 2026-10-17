@@ -18,9 +18,12 @@ const BY_KEY = {
   build: 4,
   final: 5,
 };
-// The canvas pieces each stage shows (doc 35): the node kinds counted for its "made / total".
-const KINDS = [['beat'], ['frame'], ['shot', 'transition'], ['line', 'cue'], [], []];
-const NOUN = ['beats', 'looks', 'shots', 'lines and cues', '', ''];
+// The canvas pieces each stage shows (doc 35): the node kinds counted for its "made / total" (shots only on stage 3:
+// the transition board never inflates the shot count, owner's first run "0/8" → "3/11"), and the kinds whose pieces
+// can wait for the owner there.
+const KINDS = [['beat'], ['frame'], ['shot'], ['line', 'cue'], [], []];
+const REVIEW_KINDS = [['beat'], ['frame'], ['shot', 'transition'], ['line', 'cue'], [], []];
+const NOUN = ['beats', 'looks', 'shots', 'voice lines and cues', '', ''];
 
 export function stageOf(step) {
   if (step.stage && STAGES.includes(step.stage)) return STAGES.indexOf(step.stage);
@@ -51,12 +54,13 @@ export function stageStatuses(root, id, { running = false, graph = null } = {}) 
     const present = steps.length > 0 || i >= 4;
     const pieces = nodes.filter((n) => KINDS[i].includes(n.kind));
     const live = pieces.filter((n) => n.state !== 'cut');
+    const reviewable = nodes.filter((n) => REVIEW_KINDS[i].includes(n.kind) && n.state !== 'cut');
     const made = live.filter((n) => !n.planned && n.versions?.length);
     const questions = project.questions.filter((q) => !q.answered_at && steps.some((s) => s.key === q.step)).length;
     // Pieces waiting for the owner: a failed remake, or a piece of a step in review that has no OK / Cut yet.
     const reviewKinds = steps.filter((s) => s.state === 'in_review' && s.canvas).map((s) => s.canvas);
-    const undecided = live.filter((n) => reviewKinds.includes(n.kind) && !n.owner && !n.planned && n.state !== 'generating').length;
-    const failed = live.filter((n) => n.state === 'needs you').length;
+    const undecided = reviewable.filter((n) => reviewKinds.includes(n.kind) && !n.owner && !n.planned && n.state !== 'generating').length;
+    const failed = reviewable.filter((n) => n.state === 'needs you').length;
     const docsInReview = steps.filter((s) => s.state === 'in_review' && !s.canvas).length;
     const need = questions + failed + (done[key] ? 0 : undecided + docsInReview);
     const making = steps.some((s) => ['working', 'changes'].includes(s.state) || (s.state === 'ready' && project.state === 'queued'))
@@ -71,11 +75,14 @@ export function stageStatuses(root, id, { running = false, graph = null } = {}) 
     else if (need > 0) kind = 'needsYou';
     else if (done[key] || allDone) kind = 'done';
     else if (reviewedOrDone) kind = 'ready';
+    // its pieces are all made and nothing waits: ready to check, never "not started" (owner's run: "not started 17/17")
+    const allMade = live.length > 0 && made.length === live.length;
+    if (kind === 'notStarted' && present && allMade) kind = 'ready';
     const total = pieces.length ? live.length : steps.length;
     const doneCount = pieces.length ? made.length : steps.filter((s) => DONE.includes(s.state) || s.state === 'in_review').length;
     const text = !present ? 'not in this preset'
       : need ? `${need} need${need === 1 ? 's' : ''} you`
-        : pieces.length ? `${made.length}/${live.length} ${NOUN[i]}` : '';
+        : pieces.length ? `${made.length}/${live.length} ${NOUN[i]}${allMade && kind === 'ready' ? ' ready' : ''}` : '';
     return { kind, done: doneCount, total, need, text, key, present, steps: steps.map((s) => ({ key: s.key, name: s.name, state: s.state, version: s.version })) };
   });
 }

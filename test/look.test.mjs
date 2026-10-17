@@ -70,7 +70,7 @@ test('look: the looks to pick from, pick another (asks first, remakes only the s
   assert.ok(v.can_more);
   // the chat's looks card: the pictures, the names, the one in use
   const card = (await call('chat.history', { limit: 200 })).find((r) => r.card?.kind === 'looks');
-  assert.match(card.text, /4 looks from the script\. I'm using Ember night/);
+  assert.match(card.text, /4 looks from the script: style samples \(colours, characters, type\), not the shots\. I'm using Ember night/);
   assert.deepEqual(card.card.frames.map((f) => f.name), ['Ember night', 'Cold neon', 'Moss and gold', 'Plum pop']);
   assert.ok(card.card.frames.every((f) => existsSync(f.path)));
   assert.equal(card.card.using, 'sf01');

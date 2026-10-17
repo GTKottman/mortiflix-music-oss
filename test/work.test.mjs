@@ -65,3 +65,22 @@ test('work: the service sends work.active and the status line says what the AI d
   await svc.handle({ id: 2, type: 'work.get', params: {} });
   assert.equal(out.find((m) => m.id === 2).result.nodes.length, 3);
 });
+
+test('stage statuses: shots count only shots (never the transition board), and all made is ready, never "not started"', async (t) => {
+  const { root, id } = project(t);
+  const work = join(root, 'projects', id);
+  mkdirSync(join(work, 'transitions'), { recursive: true });
+  writeFileSync(join(work, 'transitions', 'board.json'), JSON.stringify({ cuts: [{ from_scene: 's01', to_scene: 's02', transition: 'Crossfade' }, { from_scene: 's02', to_scene: 's03', transition: 'Wipe' }] }));
+  mkdirSync(join(work, 'voice', 'clips'), { recursive: true });
+  const wav = Buffer.alloc(64);
+  writeFileSync(join(work, 'voice', 'clips', 'b01-1.wav'), wav);
+  writeFileSync(join(work, 'voice', 'clips', 'b02-1.wav'), wav);
+  writeFileSync(join(work, 'voice', 'lines.json'), JSON.stringify([{ id: 'b01-1', text: 'One.' }, { id: 'b02-1', text: 'Two.' }]));
+  syncCanvas(root, id);
+  const { stageStatuses } = await import('../src/svc/stages.mjs');
+  const st = stageStatuses(root, id);
+  assert.equal(st[2].total, 3, 'three shots, the two transitions not counted');
+  assert.equal(st[2].text, '0/3 shots');
+  assert.equal(st[3].kind, 'ready');
+  assert.equal(st[3].text, '2/2 voice lines and cues ready');
+});
