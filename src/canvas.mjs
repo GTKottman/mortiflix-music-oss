@@ -141,6 +141,25 @@ export function syncCanvas(root, id) {
           put(sc.key, 'shot', fields, { sha: `${src.sha}:${sc.from_frame}:${sc.frames}`, file: src.file, from_sec: from, to_sec: to });
         });
       }
+      // A beat with no scene yet (one shot made alone, before the animatic): its planned shot stays in the film, and
+      // the shots go in beat order (run 2: S08 remade first left out/scenes.json with only s08, and the film was "1/1")
+      const keys = new Set(scenes.scenes.map((sc) => sc.key));
+      const covered = new Set(scenes.scenes.map((sc) => sc.beat).filter(Boolean));
+      const gaps = beats.filter((b) => !covered.has(b.id) && !keys.has(`s${b.id.slice(1)}`));
+      if (gaps.length) {
+        for (const b of gaps) {
+          const look = frames.find((f) => (f.beats || []).includes(b.id));
+          const sid = `s${b.id.slice(1)}`;
+          seen.add(sid);
+          if (nodes[sid]?.versions?.some((v) => v.file)) continue;
+          nodes[sid] = { ...(nodes[sid] || {}), id: sid, kind: 'shot', label: sid.toUpperCase(), title: b.words, beat: b.id, look: look?.id || null, colour: colourOf(b.id), planned: true, versions: [], current: null };
+        }
+        const beatAt = new Map(beats.map((b, i) => [b.id, i]));
+        const sceneAt = new Map(scenes.scenes.map((sc, i) => [sc.key, i]));
+        [...seen].filter((id) => nodes[id]?.kind === 'shot')
+          .sort((a, b) => (beatAt.get(nodes[a].beat) ?? 1e9) - (beatAt.get(nodes[b].beat) ?? 1e9) || (sceneAt.get(a) ?? -1) - (sceneAt.get(b) ?? -1))
+          .forEach((id, i) => { nodes[id].order = i; });
+      }
     } else {
       // Before the animatic: one planned shot per beat, its style frame as the still.
       beats.forEach((b, i) => {

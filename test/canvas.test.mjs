@@ -42,6 +42,23 @@ test('canvas: beats, frames and planned shots from the files, one colour per bea
   assert.equal(g.nodes.b02.colour.label, BEAT_COLOURS[1].label, 'a beat keeps its colour for life');
 });
 
+test('canvas: one shot made alone before the animatic keeps the other planned shots in the film, in beat order', (t) => {
+  const root = tempStudio(t);
+  const p = createProject(root, { pipeline: 'explainer', title: 'Bees', answers: { topic: 'honey' } });
+  const work = projectPaths(root, p.id).work;
+  write(work, 'script/beats.json', { beats: [{ id: 'b01', words: 'One.' }, { id: 'b02', words: 'Two.' }, { id: 'b03', words: 'Three.' }] });
+  let g = syncCanvas(root, p.id);
+  assert.deepEqual(g.order.shots, ['s01', 's02', 's03']);
+  // run 2: a Fix made S03 first; out/scenes.json then had only s03, and the film became "1/1"
+  write(work, 'out/shots/s03.mp4', 'mp4');
+  write(work, 'out/scenes.json', { made_from: 'out/shots/s03.mp4', fps: 30, scenes: [{ key: 's03', from_frame: 0, frames: 60, beat: 'b03', file: 'out/shots/s03.mp4' }] });
+  g = syncCanvas(root, p.id);
+  assert.deepEqual(g.order.shots, ['s01', 's02', 's03']);
+  assert.equal(g.nodes.s01.planned, true);
+  assert.equal(g.nodes.s03.versions.length, 1);
+  assert.equal(g.nodes.s01.missing, undefined);
+});
+
 test('canvas: a file outside the working folder is never copied in', (t) => {
   const root = tempStudio(t);
   const p = createProject(root, { pipeline: 'explainer', title: 'Escape', answers: { topic: 'x' } });
