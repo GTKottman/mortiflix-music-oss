@@ -19,6 +19,7 @@ pub mod look;
 pub mod new_project;
 pub mod nodes;
 pub mod preview;
+pub mod resume;
 pub mod script;
 pub mod service;
 pub mod setup;
@@ -171,6 +172,7 @@ impl Mortiflix {
         }
         script::tick(&mut self.state, &mut self.service);
         look::tick(&mut self.state, &mut self.service);
+        resume::tick(&mut self.state, &mut self.service);
     }
     /// Go to a stage (0-5). `done`: the stage being left was finished with Next. Tells the service.
     /// Returns the stage it was on, or None when `to` is out of range.

@@ -137,12 +137,35 @@ pub fn show(ui: &mut egui::Ui, rect: Rect, ctx: &mut MfxCtx) {
         }
     }
 
-    // Hint between the stages and Next, when there is room.
-    let hint_rect = Rect::from_min_max(pos2(x + 12.0, rect.min.y), pos2(right.min.x - 8.0, rect.max.y));
+    // Hint between the stages and Next, when there is room; the AI stopped: Resume (or Link Claude
+    // Code) at its end
+    let mut hint_rect = Rect::from_min_max(pos2(x + 12.0, rect.min.y), pos2(right.min.x - 8.0, rect.max.y));
+    if ctx.state.stop.is_some() && hint_rect.width() >= MIN_HINT_W + 120.0 {
+        let w = if ctx.state.stop.as_ref().is_some_and(|s| s.login) { 230.0 } else { 90.0 };
+        let br = Rect::from_min_max(pos2(hint_rect.max.x - w, rect.min.y + 7.0), pos2(hint_rect.max.x, rect.max.y - 7.0));
+        hint_rect.max.x = br.min.x - 8.0;
+        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(br).layout(egui::Layout::left_to_right(egui::Align::Center)));
+        crate::resume::bar(&mut child, ctx, "stagebar", true);
+    }
     if hint_rect.width() >= MIN_HINT_W {
-        let text = if ctx.state.ai_line.is_empty() || ctx.state.looking_back() { hint(ctx) } else { format!("{} · {}", hint(ctx), ctx.state.ai_line) };
+        let text = if let Some(stop) = &ctx.state.stop {
+            // stopped: short here, the whole story in the chat
+            if stop.login {
+                "The AI stopped: Claude Code is signed out (its login expired).".to_string()
+            } else {
+                "The AI stopped and needs you: press Resume.".to_string()
+            }
+        } else if ctx.state.ai_line.is_empty() || ctx.state.looking_back() {
+            hint(ctx)
+        } else {
+            format!("{} · {}", hint(ctx), ctx.state.ai_line)
+        };
         let hp = p.with_clip_rect(hint_rect);
-        let g = hp.layout(text, FontId::proportional(12.0), t.text_dim, hint_rect.width());
+        // at most two lines in the 44 px bar, never cut off at the top
+        let mut job = egui::text::LayoutJob::simple(text, FontId::proportional(12.0), t.text_dim, hint_rect.width());
+        job.wrap.max_rows = 2;
+        job.wrap.overflow_character = Some('…');
+        let g = hp.layout_job(job);
         let y = hint_rect.center().y - g.size().y / 2.0;
         hp.galley(pos2(hint_rect.min.x, y), g, t.text_dim);
     }

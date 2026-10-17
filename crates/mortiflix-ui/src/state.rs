@@ -146,6 +146,13 @@ pub struct MfxState {
     pub focus_chat: bool,
     /// What the AI is working on now (`work.active`): the pieces every part animates.
     pub work: crate::work::Work,
+    /// The AI stopped and needs you (paused with `needs_you`): Resume / Link Claude Code.
+    pub stop: Option<crate::resume::Stop>,
+    /// Waiting to resume after Link Claude Code.
+    #[serde(skip)]
+    pub resume: crate::resume::ResumeState,
+    /// The Setup page to open on (`mortiflix.setup {step}`), taken by the Setup window.
+    pub setup_page: Option<String>,
 }
 
 impl Default for MfxState {
@@ -174,6 +181,9 @@ impl Default for MfxState {
             look: Default::default(),
             focus_chat: false,
             work: crate::work::Work::default(),
+            stop: None,
+            resume: crate::resume::ResumeState::default(),
+            setup_page: None,
         }
     }
 }
@@ -250,6 +260,10 @@ impl MfxState {
                 }
                 if let Some(p) = data.get("project").and_then(Value::as_str) {
                     self.project_id = Some(p.chars().take(200).collect());
+                }
+                // stopped by the AI (Resume), only for a status that says the project's state
+                if data.get("state").is_some() {
+                    self.stop = crate::resume::stop_of(data);
                 }
                 // the project's title (window title, export names)
                 if let Some(t) = data.get("title").and_then(Value::as_str).map(str::trim).filter(|t| !t.is_empty()) {

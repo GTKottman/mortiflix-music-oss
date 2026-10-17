@@ -447,6 +447,14 @@ pub fn route(app: &mut FilmcraftApp, ctx: &egui::Context, id: &str, params: &Val
         }
         "mortiflix.setup" => {
             core.state.show_setup = true;
+            // {step: 1 | "claude" | "keys" | "tools"}: open on that step (Link Claude Code is step 1)
+            core.state.setup_page = match params.get("step") {
+                Some(Value::Number(n)) => {
+                    n.as_u64().and_then(|n| ["claude", "keys", "tools"].get(usize::try_from(n.saturating_sub(1)).ok()?)).map(|s| (*s).to_string())
+                }
+                Some(Value::String(s)) => Some(s.chars().take(20).collect()),
+                _ => None,
+            };
             Ok(json!({"dialog": "setup"}))
         }
         "mortiflix.request" => {

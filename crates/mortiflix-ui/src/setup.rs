@@ -993,6 +993,14 @@ fn field_label(ui: &mut egui::Ui, theme: &MfxTheme, text: &str) {
 pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     let shared = model(ui.ctx());
     let mut m = shared.lock().unwrap_or_else(PoisonError::into_inner);
+    // opened on a step (Link Claude Code: step 1)
+    if let Some(page) = ctx.state.setup_page.take() {
+        m.page = match page.as_str() {
+            "keys" => Page::Keys,
+            "tools" => Page::Tools,
+            _ => Page::Claude,
+        };
+    }
     let egui_ctx = ui.ctx().clone();
     m.tick(&egui_ctx, ctx);
     draw(&mut m, ui, ctx);

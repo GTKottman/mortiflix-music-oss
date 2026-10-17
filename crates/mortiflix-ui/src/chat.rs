@@ -38,6 +38,8 @@ const PENDING_TIMEOUT: f64 = 300.0;
 
 const BAR_H: f32 = 34.0;
 const NOW_H: f32 = 28.0;
+/// The AI stopped: what happened and Resume / Link Claude Code.
+const STOP_H: f32 = 70.0;
 const DETAILS_H: f32 = 132.0;
 const MOVES_H: f32 = 34.0;
 const COMPOSER_H: f32 = 52.0;
@@ -161,6 +163,7 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     let chips_r = (!st.attachments.is_empty()).then(|| take(CHIPS_H));
     let moves_r = take(MOVES_H);
     let details_r = st.details_open.then(|| take(DETAILS_H));
+    let stop_r = ctx.state.stop.is_some().then(|| take(STOP_H));
     let now_r = take(NOW_H);
     let new_count = msgs.len().saturating_sub(st.seen);
     let pill_r = (new_count > 0 && !st.scroll_bottom).then(|| take(PILL_H));
@@ -172,6 +175,11 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     region(ui, thread_r, |ui| thread(ui, ctx, &mut st, &msgs, view.as_deref(), now));
     if let Some(r) = pill_r {
         region(ui, r, |ui| new_pill(ui, ctx, &mut st, new_count));
+    }
+    if let Some(r) = stop_r {
+        region(ui, r, |ui| {
+            crate::resume::bar(ui, ctx, "chat", false);
+        });
     }
     region(ui, now_r, |ui| now_line(ui, ctx, &mut st, now));
     if let Some(r) = details_r {
@@ -637,10 +645,11 @@ fn context_bar(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, msgs: &[Msg
     ui.painter().line_segment([pos2(r.min.x, r.max.y - 0.5), pos2(r.max.x, r.max.y - 0.5)], Stroke::new(1.0, t.separator));
     let mut crumbs = model::crumbs(&ctx.state.graph, ctx.state.selected_node.as_deref());
     // the working sign needs room beside the last crumb: the beat's name gives way
-    if crumbs.len() > 2 && crumbs.last().and_then(|c| c.0.as_deref()).is_some_and(|id| ctx.state.work.on(id).is_some()) {
-        if let Some(b) = crumbs.get_mut(1) {
-            b.1 = model::short(&b.1, 12);
-        }
+    if crumbs.len() > 2
+        && crumbs.last().and_then(|c| c.0.as_deref()).is_some_and(|id| ctx.state.work.on(id).is_some())
+        && let Some(b) = crumbs.get_mut(1)
+    {
+        b.1 = model::short(&b.1, 12);
     }
     let deep = crumbs.len() > 1;
     ui.allocate_ui_with_layout(vec2(r.width(), BAR_H), Layout::left_to_right(Align::Center), |ui| {
