@@ -23,6 +23,7 @@ import { listPresets, getPreset, savePresetFull, deletePreset } from './svc/pres
 import { addAsset, updateAsset, replaceAsset, removeAsset, useAsset, listAssets } from './svc/assets.mjs';
 import { loadTheme, saveTheme, themeSamples, setCuePlan, cleanTheme } from './svc/theme.mjs';
 import * as graph from './svc/graph.mjs';
+import { scriptView, applyScriptEdits, remakesFor, scriptActionText, scriptLogged } from './svc/script.mjs';
 import { appendChat, chatHistory, translateEvents, typedMove, quickReply, applyMove, initChat, actionText } from './svc/chat.mjs';
 import { exportTarget, deliverFromApp, postPlan, postSend } from './svc/export.mjs';
 import * as setup from './svc/setup.mjs';
@@ -391,6 +392,29 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
       chatRow(id, { role: 'action', text: `Remake line ${line}: "${text.slice(0, 200)}"`, edit: r.edit.id, refs: [line] });
       runner?.wake();
       return { edit: r.edit };
+    },
+    // ---- the script, line by line (Script panel + the chat's script card) ----
+    'script.get': (p) => scriptView(root, needProject(p)),
+    // Saves the owner's edits into the script (and the voice lines), then remakes only the pieces that used the
+    // changed words: a Fix on each (the canvas's own path; versions kept). One grey chat line, one script.changed.
+    'script.edit': (p) => {
+      const id = needProject(p);
+      const done = applyScriptEdits(root, id, p);
+      const remade = [];
+      for (const a of remakesFor(root, id, done)) {
+        try {
+          const r = nodeAction(root, id, a.node, { action: a.action, text: a.text });
+          if (r.edit) remade.push({ node: a.node, kind: r.edit.kind, edit: r.edit.id });
+        } catch (e) { console.error(`script.edit ${a.node}: ${e.message}`); }
+      }
+      const text = scriptActionText(done, remade);
+      scriptLogged(root, id, text);
+      chatRow(id, { role: 'action', text, refs: [...done.changed, ...done.added, ...remade.map((r) => r.node)].filter((x, i, l) => l.indexOf(x) === i).slice(0, 40) });
+      const data = { project: id, beats: done.beats, changed: done.changed, added: done.added, keys: done.keys, deleted: done.deleted, restored: done.restored, renamed: done.renamed, remaking: remade };
+      emit('script.changed', data);
+      if (remade.length) runner?.wake();
+      poke();
+      return data;
     },
     'voice.line.take': (p) => {
       const id = needProject(p);

@@ -72,6 +72,21 @@ questions and failed remakes.
 | `music.cues` | `{}` | one cue per beat: the plan before the score, the sections after (`scored`) |
 | `music.cue.set` | `{cue, feel?, energy?, text?, bars?, part?}` | before the score: `{plan}`; once scored: a Fix on that cue, `{edit}` |
 
+### Script (stage 1, doc 11 §9.1; the Script panel and the chat's script card)
+
+| Type | Params | Result |
+|---|---|---|
+| `script.get` | `{}` | `{project, rev, writing, version, beats: [{id, no, name, name_auto, colour, visual, target_sec, state, lines: [{id, words, changed, changed_at, read_only, remaking: {shots, lines}, feeds: [{node, kind: line\|shot, label, state, current, made, remaking}]}]}]}`. Line ids are the voice line ids (`b01-1`), forever. `feeds` = the graph's `says` edges: the line's voice line and its beat's shots. `writing` = the AI is still writing the script; its newest line is `read_only` |
+| `script.edit` | one edit, or `{edits: [edit…]}` (the app's Save sends every draft change at once). Edit = `{beat, beat_name}` \| `{beat, line, words}` \| `{beat, add_after: line id \| key \| null, words, key?}` \| `{beat, line, delete: true \| false}` | `{project, beats, changed[], added[], keys: {key: new id}, deleted[], restored[], renamed[], remaking: [{node, kind, edit}]}`, also sent as a `script.changed` event, plus one grey chat line ("Script: 1 line changed · remaking 1 shot and 1 voice line") |
+
+`script.edit` writes the session's own files (`script/beats.json`: the beat's `lines` and `name`, its `words` = the lines
+as one paragraph; `voice/lines.json` once the voice exists), so the canvas graph picks it up as usual (the beat gets a
+new version). Then only the pieces that used the changed words and already exist are remade, each a Fix through the
+canvas (`node.edit fix`; versions kept, the AI runs ahead as usual): new words remake the line's voice line and its
+beat's shots; a new line records a new voice line; a deleted line is kept (hidden) and its voice line is cut;
+`delete: false` brings both back. Pieces not made yet are made from the new words anyway. A line the AI is still
+writing is refused.
+
 ### Voice & music stage (doc 34)
 
 | Type | Params | Result |
@@ -172,6 +187,7 @@ Cards: `script {beats}`, `looks {frames, using}`, `shots`/`transitions {nodes}`,
 | `chat.message` | a chat row (see `chat.history`) |
 | `chat.typing` | `{on}` while the AI writes a reply |
 | `chat.context` | `{context}` |
+| `script.changed` | `{project, beats, changed, added, keys, deleted, restored, renamed, remaking}`: the owner saved script edits (the `script.edit` result) |
 | `node.changed` | `{project, rev, nodes: [{id, kind, current, state, owner, missing}]}` (`all: true` on the first look at a project) |
 | `activity` | `{project, t, kind: text\|tool\|todo\|info\|error, text, todos?}` |
 | `assets.progress` | `{project, asset, name, done, total}` |
