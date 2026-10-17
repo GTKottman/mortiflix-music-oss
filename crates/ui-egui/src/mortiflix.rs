@@ -53,6 +53,7 @@ pub const COMMANDS: &[UiCommand] = &[
     cmd("mortiflix.reply", "Mortiflix Service Reply", &[], None),
     cmd("mortiflix.renderVideo", "Render the Video", &[], None),
     cmd("mortiflix.showNeedsYou", "Show What Needs You", &[], None),
+    cmd("mortiflix.pickFile", "Mortiflix Pick File", &[], None),
 ];
 
 /// The Mortiflix panels.
@@ -225,9 +226,38 @@ pub fn route(app: &mut FilmcraftApp, id: &str, params: &Value) -> Option<Result<
             Ok(Value::Null)
         }
         "mortiflix.showNeedsYou" => Ok(Value::Null),
+        "mortiflix.pickFile" => return Some(pick_file(app, params)),
         _ => return None,
     };
     Some(r)
+}
+
+/// `mortiflix.pickFile {filter, exts, request: {type, params}, field}`: the OS file dialog (without
+/// stopping the frame loop), then the service request with the chosen path in `params[field]`. A
+/// part's Import… / Browse… button (Voice & music: Import a recording). Cancel sends nothing.
+fn pick_file(app: &mut FilmcraftApp, params: &Value) -> Result<Value, String> {
+    let ty = params
+        .pointer("/request/type")
+        .and_then(Value::as_str)
+        .filter(|t| !t.is_empty() && t.len() <= 100)
+        .ok_or("mortiflix.pickFile needs request.type")?
+        .to_string();
+    let mut req = params.pointer("/request/params").cloned().filter(Value::is_object).unwrap_or_else(|| json!({}));
+    let field = params.get("field").and_then(Value::as_str).filter(|f| !f.is_empty() && f.len() <= 40).unwrap_or("file").to_string();
+    let filter = params.get("filter").and_then(Value::as_str).unwrap_or("Files").chars().take(60).collect::<String>();
+    let exts: Vec<String> = params
+        .get("exts")
+        .and_then(Value::as_array)
+        .map(|a| a.iter().filter_map(Value::as_str).take(32).map(|e| e.chars().take(10).collect()).collect())
+        .unwrap_or_default();
+    let exts: Vec<&str> = exts.iter().map(String::as_str).collect();
+    app.pick_ui(crate::native_dialogs::FileDialog::open_file(&filter, &exts), move |app, paths| {
+        if let Some(path) = paths.into_iter().next() {
+            req[field.as_str()] = json!(path);
+            app.mfx.core.service.request(&ty, req);
+        }
+    });
+    Ok(json!({"dialog": "open"}))
 }
 
 fn stage_command(app: &mut FilmcraftApp, what: &str, params: &Value) -> Result<Value, String> {
