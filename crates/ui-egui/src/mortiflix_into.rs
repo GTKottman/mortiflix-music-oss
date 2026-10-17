@@ -404,6 +404,56 @@ mod tests {
         }
     }
 
+    /// Run 2 (and the demo): the music ran 1.2 s past the last picture. The import ends it at the last picture
+    /// frame, with a fade.
+    #[test]
+    fn the_music_ends_with_the_last_picture_and_fades() {
+        let mut app = StudioApp::new(mortiflix_engine::Session::default());
+        let dir = std::env::temp_dir().join(format!("mfx-into-music-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let n: u32 = 48_000 * 6;
+        let mut b = Vec::new();
+        b.extend_from_slice(b"RIFF");
+        b.extend_from_slice(&(36 + n * 2).to_le_bytes());
+        b.extend_from_slice(b"WAVEfmt ");
+        for v in [
+            16u32.to_le_bytes().to_vec(),
+            1u16.to_le_bytes().to_vec(),
+            1u16.to_le_bytes().to_vec(),
+            48_000u32.to_le_bytes().to_vec(),
+            96_000u32.to_le_bytes().to_vec(),
+            2u16.to_le_bytes().to_vec(),
+            16u16.to_le_bytes().to_vec(),
+        ] {
+            b.extend_from_slice(&v);
+        }
+        b.extend_from_slice(b"data");
+        b.extend_from_slice(&(n * 2).to_le_bytes());
+        b.resize(b.len() + (n as usize) * 2, 0);
+        let music = dir.join("music.wav");
+        std::fs::write(&music, b).unwrap();
+        let plan = into::Plan::parse(&json!({
+            "project": "p1", "title": "Ends", "fps": 30, "fcproj": dir.join("Ends.mortiflix").to_string_lossy(),
+            "pieces": [
+                {"node": "s01", "kind": "shot", "label": "S01", "version": 1, "current": true, "media": "card", "start_sec": 0, "end_sec": 2.5, "text": "One"},
+                {"node": "s02", "kind": "shot", "label": "S02", "version": 1, "current": true, "media": "card", "start_sec": 2.5, "end_sec": 4.0, "text": "Two"},
+                {"node": "music", "kind": "music", "label": "Music", "version": 1, "current": true, "file": music.to_string_lossy(), "start_sec": 0}
+            ],
+            "cues": [{"node": "m01", "name": "M01", "start_sec": 0, "end_sec": 2}, {"node": "m02", "name": "M02", "start_sec": 2, "end_sec": 6}]
+        }))
+        .unwrap();
+        app.mfx.core.activate();
+        build(&mut app, &plan);
+        let h = &app.mfx.core.state.handoff;
+        assert_eq!(h.phase, into::Phase::Done, "{} {:?}", h.error, h.rows);
+        let q = app.session.active_sequence().unwrap();
+        let music = q.audio_tracks.iter().find(|t| t.name == "Music").unwrap();
+        let end = music.items.iter().map(|i| i.end().seconds()).fold(0.0_f64, f64::max);
+        assert!((end - 4.0).abs() < 1e-6, "the music ends with the last picture (4 s), not at {end} s");
+        assert!(!music.transitions.is_empty(), "and fades out");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn a_built_plan_lands_in_the_session_as_one_undo_step() {
         let mut app = StudioApp::new(mortiflix_engine::Session::default());

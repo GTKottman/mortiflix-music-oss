@@ -1176,6 +1176,14 @@ pub fn build(h: &mut Handoff, plan: &Plan, exec: &mut Exec) {
     // The music: one clip per cue, cut at section changes (the last cue runs to the end of the
     // music); without timed cues, the whole music once.
     let mut music_clips = 0u32;
+    // the last picture frame: the music never runs past it (run 2 and the demo: the score ran 1.2 s on over black)
+    let picture_end = plan
+        .pieces
+        .iter()
+        .filter(|p| p.kind == "shot" && on_timeline(p))
+        .filter_map(|p| p.end_sec.or_else(|| p.start_sec.zip(p.seconds).map(|(a, d)| a + d)).and_then(|e| frame_at(e, fps)))
+        .max();
+    let mut last_music: Option<u64> = None;
     if let (Some(track), Some(m)) = (audio_track.get("music").cloned(), plan.pieces.iter().find(|p| p.kind == "music" && on_timeline(p))) {
         let timed: Vec<&Cue> = plan.cues.iter().filter(|c| c.start_sec.is_some()).collect();
         let mut done_cues = false;
@@ -1186,7 +1194,19 @@ pub fn build(h: &mut Handoff, plan: &Plan, exec: &mut Exec) {
                 let Some(source_in) = ticks_of_frames(start, fps) else { continue };
                 let mut extra = json!({"sourceIn": source_in});
                 let last = i + 1 == timed.len();
-                if !last && let Some(end) = c.end_sec.and_then(|e| frame_at(e, fps)).filter(|e| *e > start) {
+                if picture_end.is_some_and(|pe| start >= pe) {
+                    continue;
+                }
+                let mut end = if last { None } else { c.end_sec.and_then(|e| frame_at(e, fps)).filter(|e| *e > start) };
+                // the cue (or the music's own end) stops at the last picture frame
+                let music_end = m.seconds.and_then(|d| frame_at(d, fps));
+                let natural = end.or(music_end);
+                if let Some(pe) = picture_end
+                    && natural.is_none_or(|e| e > pe)
+                {
+                    end = Some(pe);
+                }
+                if let Some(end) = end.filter(|e| *e > start) {
                     extra["duration"] = json!(ticks_of_frames(end - start, fps));
                 }
                 let mut piece = (*m).clone();
@@ -1203,6 +1223,7 @@ pub fn build(h: &mut Handoff, plan: &Plan, exec: &mut Exec) {
                         }
                         placed.push(pl);
                         music_clips += 1;
+                        last_music = Some(clip);
                     }
                     None => {
                         done_cues = false;
@@ -1217,12 +1238,25 @@ pub fn build(h: &mut Handoff, plan: &Plan, exec: &mut Exec) {
                 r.failed.clear();
                 r.state = RowState::Working;
             }
-            if let Some(clip) = place(h, m, &track, false, json!({})) {
+            let start = m.start_sec.and_then(|s| frame_at(s, fps)).unwrap_or(0);
+            let mut extra = json!({});
+            if let Some(pe) = picture_end.filter(|pe| *pe > start)
+                && m.seconds.and_then(|d| frame_at(d, fps)).is_none_or(|e| start + e > pe)
+            {
+                extra["duration"] = json!(ticks_of_frames(pe - start, fps));
+            }
+            if let Some(clip) = place(h, m, &track, false, extra) {
                 let item = item_of.get(&(m.node.clone(), m.version)).copied().unwrap_or(0);
                 placed.push(mk(m, item, clip, &track, clip_name(m)));
                 music_clips = 1;
+                last_music = Some(clip);
             }
         }
+    }
+    // a short fade at the music's end (Constant Power, 1 s), so it ends with the picture, not with a click
+    if let Some(clip) = last_music {
+        let frames = fps.round().max(1.0) as i64;
+        let _ = exec("sequence.applyAudioTransition", json!({"clip": clip, "edge": "out", "frames": frames}));
     }
     for pl in &placed {
         let _ = exec("clip.rename", json!({"clip": pl.clip, "name": pl.name}));
