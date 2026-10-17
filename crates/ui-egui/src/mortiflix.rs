@@ -548,6 +548,15 @@ fn choose_file_and_send(app: &mut StudioApp, params: &Value) -> Result<Value, St
         .map(|a| a.iter().filter_map(Value::as_str).take(32).map(|e| e.chars().take(10).collect()).collect())
         .unwrap_or_default();
     let exts: Vec<&str> = exts.iter().map(String::as_str).collect();
+    // with `paths` (agents, tests; like mortiflix.chooseFiles) no dialog opens: the first path is
+    // sent as if chosen
+    if let Some(path) =
+        params.get("paths").and_then(Value::as_array).and_then(|a| a.iter().filter_map(Value::as_str).find(|p| !p.is_empty() && p.len() <= 4096))
+    {
+        req[field.as_str()] = json!(path);
+        let id = app.mfx.core.service.request(&ty, req);
+        return Ok(json!({"sent": id}));
+    }
     app.pick_ui(crate::native_dialogs::FileDialog::open_file(&filter, &exts), move |app, paths| {
         if let Some(path) = paths.into_iter().next() {
             req[field.as_str()] = json!(path);

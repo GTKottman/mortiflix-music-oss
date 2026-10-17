@@ -359,7 +359,7 @@ URLs, a pretend Chrome install, and the app's model packs swapped for one small 
 Not service messages, but how the parts reach the host: `mortiflix.request {type, params}` / `mortiflix.reply {id}`
 (any message above), `mortiflix.chooseFiles {purpose, exts?, folder?, multiple?, paths?}` (OS dialog; files wait in
 `state.files_in` under `purpose`; dropped files on stages 1-4 or on New project come as purpose `drop`),
-`mortiflix.chooseFileAndSend {request: {type, params}, field, filter?, exts?}` (one file, then that request with the
+`mortiflix.chooseFileAndSend {request: {type, params}, field, filter?, exts?, paths?}` (one file, or the first of `paths` with no dialog, then that request with the
 path in `params[field]`), `mortiflix.reveal {path, open?}`, `mortiflix.preview.*` (doc 36), `nodes.*` (doc 35),
 `mortiflix.importEdit` / `mortiflix.import.run {open_edit?}` (doc 38; Get the video runs `import.run {open_edit:
 false}` before rendering), `mortiflix.renderVideo` (doc 39).

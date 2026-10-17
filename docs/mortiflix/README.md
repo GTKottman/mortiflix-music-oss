@@ -21,8 +21,8 @@ Design Docs › Mortiflix Studio). The binary is `mortiflix-studio`; the window 
   File dialogs are one pair: `mortiflix.chooseFiles {purpose, exts?, folder?, multiple?, paths?}` (an OS
   file/folder dialog; the paths wait in `state.files_in` under `purpose`, taken with
   `ctx.state.take_files(purpose)` / `take_paths(purpose)`; with `paths` no dialog opens: agents, tests) and
-  `mortiflix.chooseFileAndSend {request: {type, params}, field, filter?, exts?}` (one file, then that service
-  request with the path in `params[field]`). Files dropped on stages 1-4 (or on the New project window) wait
+  `mortiflix.chooseFileAndSend {request: {type, params}, field, filter?, exts?, paths?}` (one file, then that service
+  request with the path in `params[field]`; with `paths` no dialog opens). Files dropped on stages 1-4 (or on the New project window) wait
   under purpose `drop`.
 - **Service:** the app runs `node <mortiflix-oss>/bin/mortiflix-service.mjs` (JSON lines, no port), see
   [protocol.md](protocol.md). Path: `MFX_SERVICE` (file or the mortiflix-oss folder) or `servicePath` in
