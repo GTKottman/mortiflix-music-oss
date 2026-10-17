@@ -108,6 +108,12 @@ pub const COMMANDS: &[UiCommand] = &[
     cmd("nodes.tidy", "Put Nodes Back in Film Order", &[], None),
     cmd("nodes.refresh", "Reload the Nodes", &[], None),
     cmd("nodes.state", "Node Area State", &[], None),
+    // Into FilmCraft (doc 38): crate::mortiflix_into
+    cmd("mortiflix.importEdit", "Bring the Video into FilmCraft", &[], None),
+    cmd("mortiflix.import.run", "Run the FilmCraft Import", &[], None),
+    cmd("mortiflix.restartEdit", "Start the Edit Again from Mortiflix…", &["File"], None),
+    cmd("mortiflix.useVersion", "Use This Version", &[], None),
+    cmd("mortiflix.timelineEdit", "Mortiflix Timeline Edit", &[], None),
 ];
 
 /// What `mortiflix.chooseFiles` offers: the kinds of files a project's assets can be (doc 32a).
@@ -155,6 +161,7 @@ pub fn frame_begin(app: &mut FilmcraftApp, ctx: &egui::Context) {
     app.mfx.core.service.set_waker(ctx);
     app.mfx.core.poll();
     crate::mortiflix_preview::frame(app, ctx);
+    crate::mortiflix_into::frame(app, ctx);
     let s = &app.mfx.core.state;
     if !s.active {
         return;
@@ -290,6 +297,9 @@ pub fn route(app: &mut FilmcraftApp, ctx: &egui::Context, id: &str, params: &Val
     }
     if let Some(what) = id.strip_prefix("nodes.") {
         return Some(mfx::nodes::command(&mut app.mfx.core, what, params));
+    }
+    if let Some(r) = crate::mortiflix_into::route(app, id, params) {
+        return Some(r);
     }
     let core = &mut app.mfx.core;
     let r = match id {
@@ -472,6 +482,7 @@ pub fn apply_stage(app: &mut FilmcraftApp, stage: u8) {
         }
     }
     app.ui.mode = if stage >= mfx::STAGE_RENDER { Mode::Export } else { Mode::Edit };
+    crate::mortiflix_into::on_stage(app, stage);
 }
 
 #[cfg(test)]

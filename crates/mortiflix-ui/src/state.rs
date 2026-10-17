@@ -130,6 +130,8 @@ pub struct MfxState {
     pub nodes: crate::nodes::NodeArea,
     /// The loose preview (doc 36): its plan, scope, loop and the player as the host saw it.
     pub preview: crate::preview::PreviewState,
+    /// Into FilmCraft (doc 38): the hand-off and the stage-5 Mortiflix panel.
+    pub handoff: crate::into_filmcraft::Handoff,
 }
 
 impl Default for MfxState {
@@ -152,6 +154,7 @@ impl Default for MfxState {
             files_in: Vec::new(),
             nodes: crate::nodes::NodeArea::default(),
             preview: Default::default(),
+            handoff: Default::default(),
         }
     }
 }

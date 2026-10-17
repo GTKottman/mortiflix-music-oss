@@ -48,6 +48,7 @@ pub mod links;
 pub mod menus;
 pub mod mortiflix;
 pub mod mortiflix_preview;
+pub mod mortiflix_into;
 pub mod native_dialogs;
 pub mod panels;
 pub mod perf;
