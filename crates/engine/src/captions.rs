@@ -359,7 +359,7 @@ pub fn commands() -> Vec<CommandSpec> {
             "Add Caption at Playhead",
             &["Sequence", "Captions"],
             Some("Cmd+Alt+C"),
-            r#"{"track":id|"C1"?,"text":str?,"time":ticks?,"seconds":f64?,"durationSeconds":f64=3}"#,
+            r#"{"track":id|"C1"?,"text":str?,"time":ticks?,"seconds":f64?,"durationSeconds":f64=3,"settings":str?}"#,
             has_seq,
             |s, p| {
                 // a caption track is created when the sequence has none
@@ -372,9 +372,16 @@ pub fn commands() -> Vec<CommandSpec> {
                 let dur = Tick::from_seconds_f64(f64_p(p, "durationSeconds").unwrap_or(edit::captions::DEFAULT_SECONDS as f64));
                 let dur = rate.snap_nearest(dur).max(rate.frame_duration());
                 let text = str_p(p, "text").unwrap_or("New caption").to_string();
+                // WebVTT cue settings (`line:1%`: where this caption sits), kept verbatim; bounded
+                let settings: String = str_p(p, "settings").unwrap_or("").chars().take(200).collect();
                 let t = rate.snap(t);
                 let id = s.edit_sequence("Add Caption", |q, ctx, st| {
                     let id = edit::captions::add_caption(q, tid, t, dur, &text, ctx)?;
+                    if !settings.is_empty()
+                        && let Some(c) = q.caption_track_mut(tid).and_then(|tr| tr.captions.iter_mut().find(|c| c.id == id))
+                    {
+                        c.settings = settings.clone();
+                    }
                     st.caption_selection = vec![id];
                     st.selection.clear();
                     Ok(id)

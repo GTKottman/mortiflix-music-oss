@@ -63,6 +63,8 @@ pub struct Plan {
     pub transitions: Vec<PlanTransition>,
     pub cues: Vec<Cue>,
     pub notes: String,
+    /// The subtitles' size and bottom margin (`caption_style`: {size, margin}); None = the track's own style.
+    pub caption_style: Option<(f64, f64)>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -124,6 +126,9 @@ pub struct Subtitle {
     pub text: String,
     pub start_sec: Option<f64>,
     pub end_sec: Option<f64>,
+    /// Where it sits when not in the track's place (WebVTT `line:1%`): the service moves a subtitle off the picture's
+    /// own words.
+    pub settings: String,
 }
 
 /// Subtitles a voice line may carry (a 25 min line of narration is a few dozen at most).
@@ -184,6 +189,10 @@ impl Plan {
             seconds: f(&seq, "length_sec").unwrap_or(0.0),
             fcproj: s(v, "fcproj"),
             notes: s(v, "notes"),
+            caption_style: v.get("caption_style").and_then(|c| {
+                let (size, margin) = (c.get("size").and_then(Value::as_f64)?, c.get("margin").and_then(Value::as_f64)?);
+                (size.is_finite() && margin.is_finite() && (8.0..=200.0).contains(&size) && (0.0..=0.45).contains(&margin)).then_some((size, margin))
+            }),
             ..Plan::default()
         };
         // beats: the chapter markers ("3 Winter" at the beat's first shot)
@@ -256,7 +265,7 @@ impl Plan {
                         .collect();
                     if parts.len() > 1 {
                         piece.subtitles =
-                            parts.iter().take(MAX_SUBTITLES).map(|c| Subtitle { text: s(c, "text"), start_sec: f(c, "start_sec"), end_sec: f(c, "end_sec") }).collect();
+                            parts.iter().take(MAX_SUBTITLES).map(|c| Subtitle { text: s(c, "text"), start_sec: f(c, "start_sec"), end_sec: f(c, "end_sec"), settings: s(c, "settings") }).collect();
                         piece.text = piece.subtitles.iter().map(|x| x.text.replace('\n', " ")).collect::<Vec<_>>().join(" ");
                         piece.end_sec = piece.subtitles.last().and_then(|x| x.end_sec);
                     } else if let Some((text, end)) = caption(&piece.node) {
@@ -372,6 +381,7 @@ impl Plan {
             x.subtitles.truncate(MAX_SUBTITLES);
             for sub in &mut x.subtitles {
                 sub.text = short(&sub.text, 200);
+                sub.settings = short(&sub.settings, 60);
                 sub.start_sec = clean_sec(sub.start_sec);
                 sub.end_sec = clean_sec(sub.end_sec);
             }
@@ -1380,7 +1390,11 @@ pub fn build(h: &mut Handoff, plan: &Plan, exec: &mut Exec) {
                     continue;
                 }
                 let secs = ((until - time) as f64 / TICKS_PER_SECOND as f64).min(30.0);
-                match exec("captions.add", json!({"text": sub.text, "time": time, "durationSeconds": secs})) {
+                let mut params = json!({"text": sub.text, "time": time, "durationSeconds": secs});
+                if !sub.settings.is_empty() {
+                    params["settings"] = json!(sub.settings);
+                }
+                match exec("captions.add", params) {
                     Ok(_) => captions += 1,
                     Err(e) => h.fail("captions", &p.node, &p.label, e),
                 }
@@ -1392,6 +1406,14 @@ pub fn build(h: &mut Handoff, plan: &Plan, exec: &mut Exec) {
             Ok(_) => captions += 1,
             Err(e) => h.fail("captions", &p.node, &p.label, e),
         }
+    }
+
+    // the subtitles' style: small, at the frame's edge (the service places each one off the picture's own words)
+    if captions > 0
+        && let Some((size, margin)) = plan.caption_style
+        && let Err(e) = exec("captions.setStyle", json!({"track": "C1", "size": size, "margin": margin}))
+    {
+        h.fail("captions", "style", "Captions", e);
     }
 
     // 8. The notes: which Mortiflix project and graph revision.
@@ -2327,6 +2349,20 @@ mod tests {
         assert!((caps[0]["durationSeconds"].as_f64().unwrap() - 86.0 / 30.0).abs() < 1e-9);
         let end0 = caps[0]["time"].as_i64().unwrap() + (caps[0]["durationSeconds"].as_f64().unwrap() * TICKS_PER_SECOND as f64).round() as i64;
         assert_eq!(end0, caps[1]["time"].as_i64().unwrap());
+        // a subtitle moved off the picture's words keeps its place; the track gets the subtitles' style
+        let mut v2 = v.clone();
+        v2["captions"][1]["settings"] = json!("line:1%");
+        v2["caption_style"] = json!({"size": 38, "margin": 0.008});
+        let p2 = Plan::from_handoff(&v2).unwrap();
+        let mut f2 = Fake { calls: Vec::new(), next: 0, fail: Vec::new() };
+        let mut h2 = Handoff::default();
+        build(&mut h2, &p2, &mut |id, v| f2.exec(id, v));
+        let caps2: Vec<&Value> = f2.calls.iter().filter(|c| c.0 == "captions.add").map(|c| &c.1).collect();
+        assert!(caps2[0].get("settings").is_none());
+        assert_eq!(caps2[1]["settings"], "line:1%");
+        let style: Vec<&Value> = f2.calls.iter().filter(|c| c.0 == "captions.setStyle").map(|c| &c.1).collect();
+        assert_eq!(style.len(), 1);
+        assert_eq!((style[0]["size"].as_f64(), style[0]["margin"].as_f64()), (Some(38.0), Some(0.008)));
     }
 
     #[test]

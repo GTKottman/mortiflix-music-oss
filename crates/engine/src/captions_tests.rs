@@ -158,3 +158,12 @@ fn caption_list_track_filter_never_falls_back_to_every_track() {
         assert!(s.execute("captions.list", json!({"track": sel})).is_err(), "{sel} names no caption track");
     }
 }
+
+#[test]
+fn a_caption_added_with_cue_settings_keeps_its_place() {
+    let mut s = demo();
+    s.execute("captions.add", json!({"seconds": 1.0, "durationSeconds": 1.0, "text": "Up top", "settings": "line:1%"})).unwrap();
+    s.execute("captions.add", json!({"seconds": 3.0, "durationSeconds": 1.0, "text": "Usual place"})).unwrap();
+    let caps = &s.active_sequence().unwrap().caption_tracks[0].captions;
+    assert_eq!(caps.iter().map(|c| (c.text.as_str(), c.settings.as_str())).collect::<Vec<_>>(), [("Up top", "line:1%"), ("Usual place", "")]);
+}
