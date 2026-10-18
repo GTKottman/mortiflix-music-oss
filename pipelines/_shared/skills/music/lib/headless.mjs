@@ -3,9 +3,39 @@
 // renderer (renderPatternAudio, the REPL's Export). Setup installs Strudel (MFX_STRUDEL) and finds Chrome (MFX_CHROME).
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
-import { existsSync, readFileSync, mkdtempSync, readdirSync, rmSync, renameSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdtempSync, mkdirSync, readdirSync, rmSync, renameSync, copyFileSync, unlinkSync } from 'node:fs';
 import { join, extname } from 'node:path';
-import { tmpdir } from 'node:os';
+import { homedir } from 'node:os';
+
+// Chrome's profile (and the rendered WAV, downloaded into it) lives on disk, not in /tmp: /tmp is often RAM (tmpfs), and a
+// 26 min render is a 300 MB WAV plus Chrome's caches. Each profile records its Chrome and the node process that owns it,
+// so one left behind by a killed run (SIGKILL, `timeout`) is closed by the next start.
+const PROFILES = process.env.MFX_STRUDEL_PROFILES || join(process.env.XDG_CACHE_HOME || join(homedir(), '.cache'), 'mortiflix', 'strudel');
+const alive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } };
+
+export function sweepProfiles(dir = PROFILES) {
+  let closed = 0;
+  let names = [];
+  try { names = readdirSync(dir).filter((n) => n.startsWith('mfx-strudel-')); } catch { return closed; }
+  for (const n of names) {
+    const own = join(dir, n, 'owner.json');
+    let o = null;
+    try { o = JSON.parse(readFileSync(own, 'utf8')); } catch { /* no record yet */ }
+    if (!o || alive(o.node)) continue;
+    if (o.chrome && alive(o.chrome)) { try { process.kill(-o.chrome, 'SIGKILL'); } catch { try { process.kill(o.chrome, 'SIGKILL'); } catch { /* gone */ } } }
+    try { rmSync(join(dir, n), { recursive: true, force: true }); closed++; } catch { /* next time */ }
+  }
+  return closed;
+}
+
+// Rename, or copy when the WAV and its place are on different disks (EXDEV).
+function moveFile(from, to) {
+  try { renameSync(from, to); } catch (e) {
+    if (e.code !== 'EXDEV') throw e;
+    copyFileSync(from, to);
+    unlinkSync(from);
+  }
+}
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -63,10 +93,19 @@ export class HeadlessStrudel {
       res.end(readFileSync(file));
     });
     await new Promise((ok) => this.server.listen(0, '127.0.0.1', ok));
-    this.profile = mkdtempSync(join(tmpdir(), 'mfx-strudel-'));
+    mkdirSync(PROFILES, { recursive: true });
+    sweepProfiles();
+    this.profile = mkdtempSync(join(PROFILES, 'mfx-strudel-'));
     this.downloads = join(this.profile, 'downloads');
+    // However this process ends (process.exit in die(), an error, Ctrl+C, the render queue's SIGTERM), Chrome goes
+    // with it and so does its profile.
+    this.exitHook = () => this.closeNow();
+    this.signalHook = (sig) => { this.closeNow(); process.exit(sig === 'SIGINT' ? 130 : 143); };
+    process.once('exit', this.exitHook);
+    for (const sig of ['SIGTERM', 'SIGINT', 'SIGHUP']) process.once(sig, this.signalHook);
     this.chrome = spawn(this.chromePath, ['--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check', `--user-data-dir=${this.profile}`,
-      '--remote-debugging-port=0', '--autoplay-policy=no-user-gesture-required', 'about:blank'], { stdio: 'ignore' });
+      '--remote-debugging-port=0', '--autoplay-policy=no-user-gesture-required', 'about:blank'], { stdio: 'ignore', detached: true });
+    try { writeFileSync(join(this.profile, 'owner.json'), JSON.stringify({ node: process.pid, chrome: this.chrome.pid })); } catch { /* sweep skips it */ }
     let port = null;
     for (let i = 0; i < 100 && !port; i++) {
       await sleep(100);
@@ -124,7 +163,7 @@ export class HeadlessStrudel {
     catch (e) { throw new Error(scoreError(e, this.errors)); }
     const want = join(this.downloads, `${name}.wav`);
     for (let i = 0; i < 1200; i++) {
-      if (existsSync(want) && !readdirSync(this.downloads).some((f) => f.endsWith('.crdownload'))) { renameSync(want, out); return out; }
+      if (existsSync(want) && !readdirSync(this.downloads).some((f) => f.endsWith('.crdownload'))) { moveFile(want, out); return out; }
       await sleep(100);
     }
     throw new Error('the render finished but no audio file arrived');
@@ -132,10 +171,17 @@ export class HeadlessStrudel {
 
   async close() {
     try { this.page?.close(); this.browser?.close(); } catch { /* gone */ }
-    this.chrome?.kill();
     this.server?.close();
     await sleep(200);
-    if (this.profile) rmSync(this.profile, { recursive: true, force: true });
+    this.closeNow();
+  }
+
+  // Synchronous, so it also runs from process.on('exit'): kill Chrome, remove the profile, drop the hooks.
+  closeNow() {
+    if (this.chrome && this.chrome.exitCode === null && this.chrome.signalCode === null) { try { process.kill(-this.chrome.pid, 'SIGKILL'); } catch { try { this.chrome.kill('SIGKILL'); } catch { /* gone */ } } }
+    if (this.profile) { try { rmSync(this.profile, { recursive: true, force: true }); } catch { /* swept next start */ } this.profile = null; }
+    if (this.exitHook) { process.removeListener('exit', this.exitHook); this.exitHook = null; }
+    if (this.signalHook) { for (const sig of ['SIGTERM', 'SIGINT', 'SIGHUP']) process.removeListener(sig, this.signalHook); this.signalHook = null; }
   }
 }
 
