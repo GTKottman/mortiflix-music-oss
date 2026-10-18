@@ -9,7 +9,8 @@
 //   node strudel.mjs instruments                 the sound of every channel (music/instruments.json), checked against
 //                                                the MIDI; with no file yet, lists the sounds and each channel's range
 //   node strudel.mjs audition                    every instrument plays its part's lowest, middle and highest note
-//   node strudel.mjs render [--stems] [--out f]  score + instruments → out/music/score.wav (+ out/music/stems/)
+//   node strudel.mjs render [--stems] [--out f] [--section-sec 90]  score + instruments → out/music/score.wav (+ stems);
+//                                               a long score renders in ~90 s sections, stitched sample-exact
 //   node strudel.mjs master                      render + stems + loudness → out/music/master.wav, master.mp3 (songs)
 //   node strudel.mjs own-master                  the owner's own master (imported from their DAW): is it there, does it fit
 //   node strudel.mjs midi                        out/music/midi/ again, with CUE-SHEET.md
@@ -24,7 +25,7 @@ import { checkHarmony, noteName } from './lib/harmony.mjs';
 import { writeMidi } from './lib/midi.mjs';
 import { profileProblems, profileMarkdown, signatureProblems, fmtSec } from './lib/genre.mjs';
 import { SYNTHS, checkInstruments, instrumentCode, auditionCode, auditionNotes, registers, registerLine } from './lib/instruments.mjs';
-import { readWav, levelOf, mixBalance } from './lib/wav.mjs';
+import { readWav, levelOf, mixBalance, stitchWav } from './lib/wav.mjs';
 import { masterTo, TARGET } from './lib/master.mjs';
 import { zip, dirEntries } from './lib/zip.mjs';
 import { partsProblems, varietyProblems } from './lib/variety.mjs';
@@ -42,6 +43,7 @@ const videoSec = Number(opt('video-sec', 0)) || null;
 const fps = Number(opt('fps', 30));
 const stems = Boolean(opt('stems', false));
 const tailBars = Number(opt('tail-bars', 1));
+const sectionSec = Number(opt('section-sec', 90));
 const scorePath = args[0] || 'music/score.strudel.js';
 const COMMANDS = ['genre', 'plan', 'check', 'instruments', 'audition', 'render', 'master', 'own-master', 'midi', 'sheet'];
 
@@ -190,11 +192,43 @@ try {
     if (problems.length) fail(problems, 'in the audition'); else console.log('\n✔ Every instrument sounds across its whole range. Listen to the files to judge the sounds themselves.');
   }
 
+  // A long piece renders in sections of about --section-sec (default 90 s), one after another: one offline render of
+  // a whole 26 min score ran an hour on one thread with no sign of progress. Each section renders only the notes that
+  // start in it, plus a few bars of ring-out (reverb, releases) that are added into the next; the sections are put
+  // back sample-exact at their bars. Progress is a line per section ("Rendered 3/18 sections").
+  const renderLong = async (src, cycles, file, { channel = 0 } = {}) => {
+    const secPerBar = bpb * 60 / bp.bpm;
+    if (!(sectionSec > 0) || cycles * secPerBar <= sectionSec * 1.5) return strudel.render(src, cycles, file, { channel });
+    const rate = 48000;
+    const per = Math.max(1, Math.round(sectionSec / secPerBar));
+    const ring = Math.max(2, tailBars);
+    const frameOf = (bar) => Math.round(bar * secPerBar * rate);
+    const tmp = join(dirname(file), `.sections-${slug(file.split('/').pop())}`);
+    rmSync(tmp, { recursive: true, force: true }); mkdirSync(tmp, { recursive: true });
+    const bounds = []; for (let a = 0; a < cycles; a += per) bounds.push([a, Math.min(a + per, cycles)]);
+    const parts = [];
+    try {
+      for (let i = 0; i < bounds.length; i++) {
+        const [a, b] = bounds[i]; const last = i === bounds.length - 1;
+        const f = join(tmp, `${String(i + 1).padStart(3, '0')}.wav`);
+        const t0 = Date.now();
+        await strudel.render(src, last ? cycles : Math.min(b + ring, cycles), f, { channel, from: a, onsetsBefore: last ? null : b });
+        parts.push({ file: f, at: frameOf(a) });
+        console.log(`Rendered ${i + 1}/${bounds.length} sections (bars ${a + 1}-${b}) in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+      }
+      const r = stitchWav(parts, file, { frames: frameOf(cycles), rate });
+      if (r.clipped) console.log(`! ${r.clipped} samples went over full scale where sections overlap (peak ${r.peak}): lower the loudest parts`);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+    return file;
+  };
+
   if (cmd === 'render' || cmd === 'master') {
     const file = cmd === 'master' ? 'out/music/mix.wav' : out || 'out/music/score.wav';
     mkdirSync(dirname(file), { recursive: true });
     const cycles = bp.bars + Math.max(0, tailBars);
-    await strudel.render(playable(), cycles, file);
+    await renderLong(playable(), cycles, file);
     console.log(`✔ ${file} (${bp.bars} bars + ${tailBars} bar tail${inst ? ', with music/instruments.json' : ', with the sounds written in the score'})`);
     const stemReport = [];
     if (stems || cmd === 'master') {
@@ -203,7 +237,7 @@ try {
       const dir = join(dirname(file), 'stems'); mkdirSync(dir, { recursive: true });
       for (const [ch, name] of chans) {
         const f = join(dir, `${String(ch).padStart(2, '0')}-${slug(name)}.wav`);
-        await strudel.render(playable(), cycles, f, { channel: ch });
+        await renderLong(playable(), cycles, f, { channel: ch });
         const lv = levelOf(readWav(f)); stemReport.push({ channel: ch, name, file: f, ...lv });
         console.log(`  ✔ ${f}  (rms ${lv.rms_db} dB, peak ${lv.peak_db} dBFS)`);
       }

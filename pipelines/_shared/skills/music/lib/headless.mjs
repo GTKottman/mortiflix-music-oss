@@ -63,10 +63,12 @@ window.mfxHaps = async (code, cycles) => {
   }));
   return { cps, haps };
 };
-window.mfxRender = async (code, cycles, sampleRate, name, channel) => {
+window.mfxRender = async (code, cycles, sampleRate, name, channel, from = 0, onsetsBefore = null) => {
   let pat = await load(code);
   if (channel) pat = pat.filterValues((v) => v && v.midichan === channel);
-  await renderPatternAudio(pat, repl.scheduler.cps, 0, cycles, sampleRate, 512, false, name);
+  // A section of a long score: only the notes that start before its end; the rest of the window is their ring-out.
+  if (onsetsBefore !== null) pat = pat.filterHaps((h) => h.whole && h.whole.begin.valueOf() < onsetsBefore);
+  await renderPatternAudio(pat, repl.scheduler.cps, from, cycles, sampleRate, 512, false, name);
   return { cps: repl.scheduler.cps };
 };
 window.mfxReady = true;
@@ -154,12 +156,14 @@ export class HeadlessStrudel {
   }
 
   // Renders [0, cycles) to a 16-bit WAV at `out`. `channel` renders one part (its .midichan).
-  async render(code, cycles, out, { sampleRate = 48000, channel = 0 } = {}) {
+  // `from`/`onsetsBefore` (cycles): render [from, cycles) with only the notes that start before `onsetsBefore`.
+  async render(code, cycles, out, { sampleRate = 48000, channel = 0, from = 0, onsetsBefore = null } = {}) {
     if (this.rendered) await this.load();
     this.rendered = true;
     this.errors = [];
     const name = `r${Date.now()}`;
-    try { await this.eval(`mfxRender(${JSON.stringify(code)}, ${Number(cycles)}, ${Number(sampleRate)}, ${JSON.stringify(name)}, ${Number(channel) || 0})`); }
+    const before = onsetsBefore === null ? 'null' : Number(onsetsBefore);
+    try { await this.eval(`mfxRender(${JSON.stringify(code)}, ${Number(cycles)}, ${Number(sampleRate)}, ${JSON.stringify(name)}, ${Number(channel) || 0}, ${Number(from) || 0}, ${before})`); }
     catch (e) { throw new Error(scoreError(e, this.errors)); }
     const want = join(this.downloads, `${name}.wav`);
     for (let i = 0; i < 1200; i++) {

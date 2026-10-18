@@ -233,6 +233,10 @@ mix. Fix and audition again until it passes.
   `instruments.json` (levels, pans, filters), then master again.
 - **A video's stand-in**: `node $M render [--stems]` writes `out/music/score.wav` with the instruments, for the
   review against the picture.
+- **Long pieces** render in sections by themselves (about 90 s each, `--section-sec` to change it), one after another,
+  each with a few bars of ring-out added into the next, stitched sample-exact; a line per section shows progress. Run it
+  through `mfx render` and wait with `mfx render-wait`; never split the score by hand, and stop a render only with
+  `mfx render-stop <id>`.
 
 You can't hear the render. Look at it: `ffmpeg -i out/music/master.wav -lavfi showspectrumpic=s=1600x400
 music/spectrum.png` (each section's density and register should be visible where the blueprint put them). Say in the
