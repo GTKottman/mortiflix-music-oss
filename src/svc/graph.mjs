@@ -479,7 +479,8 @@ export function subtitles(l, t) {
   const wrap = (ws) => {
     if (len(ws) <= SUB_LINE) return ws.join(' ');
     let best = null;
-    for (let i = 1; i < ws.length; i++) { const m = Math.max(len(ws.slice(0, i)), len(ws.slice(i))); if (len(ws.slice(0, i)) <= SUB_LINE && len(ws.slice(i)) <= SUB_LINE && (!best || m < best[1])) best = [i, m]; }
+    // even lines, but a break after a sentence or clause wins when it's nearly as even
+    for (let i = 1; i < ws.length; i++) { const m = Math.max(len(ws.slice(0, i)), len(ws.slice(i))) + (/[.?!]["”’)]?$/.test(ws[i - 1]) ? 0 : /[,;:—)]$/.test(ws[i - 1]) ? 4 : 10); if (len(ws.slice(0, i)) <= SUB_LINE && len(ws.slice(i)) <= SUB_LINE && (!best || m < best[1])) best = [i, m]; }
     return best ? `${ws.slice(0, best[0]).join(' ')}\n${ws.slice(best[0]).join(' ')}` : ws.join(' ');
   };
   const out = chunks.map((c, i) => ({ node: l.node, part: i + 1, text: wrap(c), start_sec: i === 0 ? start : timeOf(firsts[i]), end_sec: end }));

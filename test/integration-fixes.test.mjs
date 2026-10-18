@@ -164,3 +164,11 @@ test('run 3: a voice line becomes short subtitles (two lines of 42 at most), eac
   const plain = subtitles(l, null);
   assert.equal(plain.length, subs.length);
 });
+
+test('run 3: a two-line subtitle breaks between its sentences when that is nearly as even', async () => {
+  const { subtitles } = await import('../src/svc/graph.mjs');
+  const [s] = subtitles({ node: 'b69-2', words: 'Not a ghost behind the eyes. Not one special cell.', start_sec: 0, dur_sec: 4 }, null);
+  assert.equal(s.text, 'Not a ghost behind the eyes.\nNot one special cell.');
+  const [c] = subtitles({ node: 'b01-1', words: 'Each one holds a pencil, and each one is drawing the other.', start_sec: 0, dur_sec: 4 }, null);
+  assert.equal(c.text, 'Each one holds a pencil,\nand each one is drawing the other.');
+});
