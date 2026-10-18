@@ -42,7 +42,7 @@ pub fn install(app: &StudioApp, ctx: egui::Context) -> (Receiver<String>, MenuUp
     // About and Discord repeat Help menu commands: same translated labels, updated with them
     let label = |id: &str, english: &str| items.iter().find(|i| i.id == id).map_or_else(|| english.to_string(), |i| i.label.clone());
     let about = MenuItem::with_id("app.about", label("app.about", "About Mortiflix Studio"), true, None);
-    let discord = MenuItem::with_id("help.discord", label("help.discord", "Join the ArtCraft Discord…"), true, None);
+    let discord = MenuItem::with_id("help.discord", label("help.discord", "Join the Mortiflix Discord…"), true, None);
     for (id, mi) in [("app.about", &about), ("help.discord", &discord)] {
         if let Some(it) = items.iter().find(|i| i.id == id) {
             // recorded as built (enabled, no shortcut), so the first update applies the real state

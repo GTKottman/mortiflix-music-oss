@@ -27,7 +27,7 @@
 </p>
 
 <p align="center">
-  <a href="https://discord.gg/artcraft"><img alt="Join the ArtCraft community on Discord" src="https://img.shields.io/badge/Join%20us%20on%20Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" height="40"></a>
+  <a href="https://discord.gg/5xCB666rYk"><img alt="Join the Mortiflix community on Discord" src="https://img.shields.io/badge/Join%20us%20on%20Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" height="40"></a>
 </p>
 
 <p align="center">
@@ -46,7 +46,7 @@
 
 > [!NOTE]
 > **ArtCraft is a community of artists from all walks of life.** Digital, generative, music,
-> games &mdash; if you make things, you're one of us. **[Come say hi on Discord](https://discord.gg/artcraft).**
+> games &mdash; if you make things, you're one of us. **[Come say hi on Discord](https://discord.gg/5xCB666rYk).**
 
 <p align="center">
   <a href="#edit">Edit</a> ·
@@ -262,7 +262,7 @@ git clone https://github.com/storytold/craft-fonts ../craft-fonts
 CRAFT_FONTS_DIR="$PWD/../craft-fonts" cargo run --release -p mortiflix-studio
 ```
 
-The control protocol is documented in [docs/control-protocol.md](docs/control-protocol.md). Stuck, or want to show what you made? Ask in [Discord](https://discord.gg/artcraft).
+The control protocol is documented in [docs/control-protocol.md](docs/control-protocol.md). Stuck, or want to show what you made? Ask in [Discord](https://discord.gg/5xCB666rYk).
 
 ## Documentation
 
@@ -298,7 +298,7 @@ The biggest gaps today:
 - **Real-world media and platforms.** Our decoders are bit-exact on conformance streams, but camera and phone files in the wild are less tested. Windows and Linux get far less testing than macOS.
 - **AI features.** Few so far; speech to text is optional and off by default.
 
-Bug reports with real footage are the most useful thing you can send us: [open an issue](https://mortiflix.com) or tell us in [Discord](https://discord.gg/artcraft).
+Bug reports with real footage are the most useful thing you can send us: [open an issue](https://mortiflix.com) or tell us in [Discord](https://discord.gg/5xCB666rYk).
 
 ## Architecture
 
@@ -421,7 +421,7 @@ And [**ArtCraft**](https://getartcraft.com/) itself, our AI image and video stud
 <br>
 
 <p align="center">
-  <a href="https://discord.gg/artcraft"><img alt="Join the ArtCraft community on Discord" src="https://img.shields.io/badge/Join%20us%20on%20Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" height="40"></a>
+  <a href="https://discord.gg/5xCB666rYk"><img alt="Join the Mortiflix community on Discord" src="https://img.shields.io/badge/Join%20us%20on%20Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" height="40"></a>
 </p>
 
 <h3 align="center">Come make things with us</h3>
@@ -434,7 +434,7 @@ And [**ArtCraft**](https://getartcraft.com/) itself, our AI image and video stud
 </p>
 
 <p align="center">
-  <a href="https://discord.gg/artcraft"><b>discord.gg/artcraft</b></a> ·
+  <a href="https://discord.gg/5xCB666rYk"><b>discord.gg/artcraft</b></a> ·
   <a href="https://getartcraft.com/">getartcraft.com</a> ·
   <a href="https://getartcraft.com/apps">The Crafting Apps</a> ·
   <a href="https://mortiflix.com">Mortiflix Studio</a>

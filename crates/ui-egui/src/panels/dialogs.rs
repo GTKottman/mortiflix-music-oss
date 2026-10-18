@@ -444,7 +444,7 @@ fn about(app: &mut StudioApp, ui: &mut egui::Ui) {
     }
 }
 
-/// About ▸ About: version, licence and the ArtCraft community links. Joining the Discord is the
+/// About ▸ About: version, licence and the Mortiflix community links. Joining the Discord is the
 /// first, accented button.
 ///
 /// Automation ids: `about.discord`, `about.website`, `about.appPage`, `about.github`,
@@ -489,7 +489,7 @@ fn about_tab(app: &mut StudioApp, ui: &mut egui::Ui) {
             links::open(app, ui.ctx(), url);
         }
     };
-    link(ui, "discord", Icon::Chat, tl!("Join the ArtCraft Discord"), links::DISCORD, true);
+    link(ui, "discord", Icon::Chat, tl!("Join the Mortiflix Discord"), links::DISCORD, true);
     ui.add_space(6.0);
     link(ui, "website", Icon::Globe, "getartcraft.com", links::WEBSITE, false);
     link(ui, "appPage", Icon::Globe, tl!("Mortiflix Studio on mortiflix.com"), links::APP_PAGE, false);

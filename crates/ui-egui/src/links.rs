@@ -1,10 +1,10 @@
 //! Community and project links (Help menu, About dialog, header Discord button, Home screen).
 //!
-//! The community links are the ArtCraft Discord and website (the family of the editor this app is built
-//! on); the app's own page, and where to report an issue, is mortiflix.com.
+//! The Discord button and Help item go to the Mortiflix Discord server; the website link is ArtCraft's (the
+//! family of the editor this app is built on); the app's own page, and where to report an issue, is mortiflix.com.
 
-/// The ArtCraft community Discord.
-pub const DISCORD: &str = "https://discord.gg/artcraft";
+/// The Mortiflix community Discord.
+pub const DISCORD: &str = "https://discord.gg/5xCB666rYk";
 /// The ArtCraft website.
 pub const WEBSITE: &str = "https://getartcraft.com";
 /// Mortiflix Studio's own page.
@@ -14,7 +14,7 @@ pub const ISSUES: &str = "https://mortiflix.com";
 
 /// (command id, label, url) for every link, in menu order.
 pub const ALL: [(&str, &str, &str); 4] = [
-    ("help.discord", "Join the ArtCraft Discord…", DISCORD),
+    ("help.discord", "Join the Mortiflix Discord…", DISCORD),
     ("help.website", "ArtCraft Website", WEBSITE),
     ("help.appPage", "Mortiflix Studio on mortiflix.com", APP_PAGE),
     ("help.reportIssue", "Report an Issue…", ISSUES),
