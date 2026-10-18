@@ -77,7 +77,10 @@ sed -e "s/@VERSION@/$VERSION/g" -e "s/@DATE@/$MFX_STUDIO_BUILD_DATE/g" \
 mkdir -p "$STAGE/usr/share/icons"
 cp -R "$ROOT/assets/app-icon/hicolor" "$STAGE/usr/share/icons/"
 # the icons keep Mortiflix Studio's file names in the repo; installed under this app's id
-find "$STAGE/usr/share/icons/hicolor" -name 'com.mortiflix.studio.*' | while read -r f; do mv "$f" "${f%/*}/$APP_ID.${f##*.}"; done
+find "$STAGE/usr/share/icons/hicolor" -name 'com.mortiflix.studio.*' | while read -r f; do
+  to="${f%/*}/$APP_ID.${f##*.}"
+  [ "$f" = "$to" ] || mv "$f" "$to" # already named for the app id since the rename
+done
 mkdir -p "$STAGE/usr/share/doc/mortiflix-studio"
 copy_docs "$STAGE/usr/share/doc/mortiflix-studio"
 
