@@ -404,7 +404,9 @@ export function voiceMusicView(root, id) {
   try { booth = boothStatus(root, id); } catch { /* no lines yet */ }
   const voice = sound.voice.map((l) => ({ ...l, takes: (booth.takes || []).filter((t) => t.line_id === l.node).map((t) => ({ take: t.take_no, kept: t.kept, seconds: t.duration_ms / 1000, flags: t.flags, source: t.source })) }));
   const scored = new Map(sound.cues.map((c) => [c.node, c]));
-  const plan = cuePlan(root, id, gv).map((c) => (scored.has(c.id) ? { ...c, ...scored.get(c.id), state: gv.nodes.find((n) => n.id === c.id)?.state || 'ready', scored: true } : { ...c, node: c.id, scored: false, state: 'planned' }));
+  // Once the score exists its sections are the cues: the one-cue-per-beat plan's unscored entries go (a 26 min score in
+  // 28 sections showed 42 more "planned" cues over the music, and the lanes said 70 cues where the stage said 28).
+  const plan = cuePlan(root, id, gv).filter((c) => !scored.size || scored.has(c.id)).map((c) => (scored.has(c.id) ? { ...c, ...scored.get(c.id), state: gv.nodes.find((n) => n.id === c.id)?.state || 'ready', scored: true } : { ...c, node: c.id, scored: false, state: 'planned' }));
   const extra = sound.cues.filter((c) => !plan.some((p) => p.node === c.node)).map((c) => ({ ...c, id: c.node, scored: true }));
   return { rev: gv.rev, length_sec, shots, voice, cues: [...plan, ...extra], music: sound.music, bpm: sound.bpm, beats_per_bar: sound.beats_per_bar };
 }
