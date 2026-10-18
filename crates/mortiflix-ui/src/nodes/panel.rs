@@ -15,6 +15,10 @@ use crate::MfxTheme;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BinItem(pub String);
 
+/// What the Bin's Transitions folder hands to the canvas when you drag one onto a cut: kind, length.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TransitionItem(pub String, pub f32);
+
 /// The transition library (today's `drawTransition` list): kind, default length, a picture.
 pub const TRANSITIONS: [(&str, f32); 8] =
     [("Cut", 0.0), ("Crossfade", 0.5), ("Dip to black", 0.6), ("Dip to white", 0.6), ("Wipe", 0.5), ("Push", 0.5), ("Slide", 0.5), ("Zoom", 0.4)];
@@ -348,7 +352,41 @@ pub fn bin(ui: &mut egui::Ui, area: &mut NodeArea, rect: Rect, t: &MfxTheme, out
         }
         ui.add_space(6.0);
         ui.label(RichText::new("(drag onto a shot)").small().color(t.text_faint));
+        ui.add_space(6.0);
+        transitions_folder(ui, area, t, out);
     });
+}
+
+/// The Transitions folder (owner, 2026-10-18): every transition with its picture. Drag one onto a cut,
+/// or click it while a cut is selected; the cut's pill then shows it.
+fn transitions_folder(ui: &mut egui::Ui, area: &mut NodeArea, t: &MfxTheme, out: &mut Out) {
+    let cut = area.primary().filter(|s| area.graph.cuts.iter().any(|c| c.id == *s)).map(str::to_string);
+    let head = egui::CollapsingHeader::new(RichText::new(format!("Transitions ({})", TRANSITIONS.len())).color(t.text_dim))
+        .id_salt("mfx-nodes-bin-transitions")
+        .default_open(true)
+        .show(ui, |ui| {
+            for (k, len) in TRANSITIONS {
+                let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::click_and_drag());
+                let resp = resp.on_hover_text(if cut.is_some() { "Click to use it on the selected cut, or drag it onto a cut" } else { "Drag it onto a cut" });
+                let sec = if k == "Cut" { 0.0 } else { len };
+                resp.dnd_set_drag_payload(TransitionItem(k.to_string(), sec));
+                let p = ui.painter();
+                if resp.hovered() {
+                    p.rect_filled(r, 3.0, t.hover);
+                }
+                let pic = Rect::from_min_size(r.min + vec2(2.0, 4.0), vec2(32.0, 18.0));
+                draw_transition(p, pic, k, t);
+                p.text(pos2(pic.max.x + 6.0, r.center().y), Align2::LEFT_CENTER, k, FontId::proportional(12.5), t.text);
+                out.auto.push((format!("mfx.nodes.bin.transition.{}", k.replace(' ', "")), resp.clone(), k.to_string()));
+                if resp.clicked()
+                    && let Some(c) = &cut
+                {
+                    out.cmds.push(("nodes.pickTransition".into(), json!({"cut": c, "kind": k, "sec": sec})));
+                }
+            }
+            ui.label(RichText::new("(drag onto a cut)").small().color(t.text_faint));
+        });
+    out.auto.push(("mfx.nodes.bin.transitions".into(), head.header_response, "Transitions".into()));
 }
 
 /// The inspector (340 px, right): what is selected, with one filled button per view.
@@ -736,7 +774,7 @@ fn transition(ui: &mut egui::Ui, area: &mut NodeArea, cut: &super::model::Cut, t
 }
 
 /// A small drawn picture of a transition (no glyphs needed).
-fn draw_transition(p: &egui::Painter, r: Rect, kind: &str, t: &MfxTheme) {
+pub fn draw_transition(p: &egui::Painter, r: Rect, kind: &str, t: &MfxTheme) {
     let a = Color32::from_rgb(70, 90, 140);
     let b = Color32::from_rgb(150, 110, 60);
     let half = Rect::from_min_max(r.min, pos2(r.center().x, r.max.y));

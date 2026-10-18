@@ -19,6 +19,8 @@ use crate::MfxTheme;
 pub const SELECTED: Color32 = Color32::from_rgb(0xeb, 0xeb, 0xeb);
 /// The shot under the playhead (`#5895ec`, part 36).
 pub const PLAYHEAD: Color32 = Color32::from_rgb(0x58, 0x95, 0xec);
+/// Egui passes a still is kept after its node went off screen (about two seconds of panning).
+const STILL_KEEP_PASSES: u64 = 120;
 /// Distance (screen px) at which a dragged shot "lands on" a noodle.
 const NOODLE_HIT: f32 = 14.0;
 
@@ -264,7 +266,9 @@ pub fn show(parent: &mut egui::Ui, area: &mut NodeArea, t: &MfxTheme, rect: Rect
 
     let z = area.zoom;
     let lod = Lod::of(z);
-    let view = area.view_world().expand(400.0);
+    // only what is on screen is drawn (owner, 2026-10-18): the margin is just the outlines, sockets and
+    // beat labels that sit outside a node's rectangle
+    let view = area.view_world().expand(40.0 / z.max(ZOOM_MIN));
     let found = area.found();
     let starts = starts(area);
     let selected: std::collections::HashSet<String> = area.selection.iter().cloned().collect();
@@ -323,6 +327,9 @@ pub fn show(parent: &mut egui::Ui, area: &mut NodeArea, t: &MfxTheme, rect: Rect
     for cut in &cuts {
         let (Some(a), Some(b)) = (area.node_rect(&cut.from), area.node_rect(&cut.to)) else { continue };
         let pill = area.cut_rect(cut);
+        if !view.intersects(a.union(b).union(pill)) {
+            continue;
+        }
         let (sa, sb) = (area.to_screen(area.socket_out(a)), area.to_screen(area.socket_in(b)));
         let (pl, pr) = (area.to_screen(pos2(pill.min.x, pill.center().y)), area.to_screen(pos2(pill.max.x, pill.center().y)));
         let ok = area.graph.get(&cut.from).is_some_and(|n| n.state == NodeState::Ok);
@@ -340,6 +347,9 @@ pub fn show(parent: &mut egui::Ui, area: &mut NodeArea, t: &MfxTheme, rect: Rect
         for n in area.graph.nodes.iter().filter(|n| n.kind == Kind::Line && !n.missing) {
             let (Some(shot), Some(lr)) = (area.graph.line_shot(n), area.node_rect(&n.id)) else { continue };
             let Some(sr) = area.node_rect(&shot) else { continue };
+            if !view.intersects(lr.union(sr)) {
+                continue;
+            }
             let a = area.to_screen(pos2(lr.center().x, lr.min.y));
             let b = area.to_screen(pos2(sr.center().x, sr.max.y + 6.0));
             let pts = noodle_v(a, b);
@@ -446,26 +456,52 @@ pub fn show(parent: &mut egui::Ui, area: &mut NodeArea, t: &MfxTheme, rect: Rect
         } else if r.width() >= 44.0 && r.height() >= 13.0 {
             // far out the pill is too small for words: its kind shows on hover and in the inspector
             let size = text_size(z, 11.5);
-            let g = line(
-                &p,
-                &text,
-                size,
-                fade(
-                    if pick {
-                        t.error
-                    } else if planned {
-                        t.text_faint
-                    } else {
-                        t.text_dim
-                    },
-                    dim,
-                ),
-                r.width() - 8.0,
+            // the transition's picture (from the Bin's Transitions folder) beside its name when it fits
+            let col = fade(
+                if pick {
+                    t.error
+                } else if planned {
+                    t.text_faint
+                } else {
+                    t.text_dim
+                },
+                dim,
             );
-            p.galley(r.center() - g.size() / 2.0, g, t.text);
+            if !pick && !planned && r.width() >= 90.0 && r.height() >= 20.0 {
+                let ph = r.height() - 12.0;
+                let pic = Rect::from_min_size(pos2(r.min.x + r.height() * 0.25, r.center().y - ph / 2.0), vec2(ph * 1.2, ph));
+                super::panel::draw_transition(&p, pic, &kind, t);
+                if dim {
+                    p.rect_filled(pic, 2.0, t.header_bg.gamma_multiply(0.65));
+                }
+                let words = Rect::from_min_max(pos2(pic.max.x + 5.0, r.min.y), pos2(r.max.x - 6.0, r.max.y));
+                // the name on top and its length under it, so the name is never cut short
+                let len = sec.filter(|_| working.is_none() && kind != "Cut" && r.height() >= 30.0);
+                let g = line(&p, &kind, size, col, words.width());
+                match len {
+                    Some(s) => {
+                        let l = line(&p, &format!("{s:.1} s"), (size - 2.0).max(11.0), fade(t.text_faint, dim), words.width());
+                        let top = r.center().y - (g.size().y + l.size().y) / 2.0;
+                        p.galley(pos2(words.min.x, top + g.size().y), l, t.text);
+                        p.galley(pos2(words.min.x, top), g, t.text);
+                    }
+                    None => p.galley(pos2(words.min.x, r.center().y - g.size().y / 2.0), line(&p, &text, size, col, words.width()), t.text),
+                }
+            } else {
+                let g = line(&p, &text, size, col, r.width() - 8.0);
+                p.galley(r.center() - g.size() / 2.0, g, t.text);
+            }
         }
         let resp = ui.interact(r, egui::Id::new(("mfx-cut", &cut.id)), Sense::click_and_drag());
         out.auto(format!("mfx.nodes.cut.{}", cut.id), &resp, &text);
+        // a transition dragged from the Bin's Transitions folder: "Use it on this cut"
+        if let Some(item) = resp.dnd_hover_payload::<super::panel::TransitionItem>() {
+            p.rect_stroke(r.expand(3.0), radius, Stroke::new(2.0, t.accent_hover), StrokeKind::Outside);
+            p.text(r.center_top() - vec2(0.0, 8.0), Align2::CENTER_BOTTOM, format!("Use {} here", item.0), FontId::proportional(12.0), t.text);
+        }
+        if let Some(item) = resp.dnd_release_payload::<super::panel::TransitionItem>() {
+            out.cmd("nodes.pickTransition", json!({"cut": cut.id, "kind": item.0, "sec": item.1}));
+        }
         if resp.clicked() {
             if mods.command {
                 area.toggle_select(&cut.id);
@@ -542,6 +578,9 @@ pub fn show(parent: &mut egui::Ui, area: &mut NodeArea, t: &MfxTheme, rect: Rect
         follow_drag(area, &resp, &mut drag, pointer_world, out, mods.alt);
         resp.context_menu(|ui| node_menu(ui, area, &n, out));
     }
+
+    // stills of nodes off screen for a while are let go; they show a wireframe while they load back in
+    stills.forget_unseen(STILL_KEEP_PASSES);
 
     // ---- what the drop will do, over everything
     if let Some((pp, text)) = &hint {
@@ -846,6 +885,10 @@ fn shot_node(
         return;
     }
     let radius = 5.0;
+    if lod >= Lod::Middle && still_pending(area, n, stills) {
+        wireframe(p, n, r, z, true, sel, t);
+        return;
+    }
     p.rect_filled(r, radius, fade(body, dim));
     let head_h = (24.0 * z).max(text_size(z, 12.0) + 6.0).min(r.height());
     let head = Rect::from_min_size(r.min, vec2(r.width(), head_h));
@@ -925,6 +968,10 @@ fn shot_node(
             } else {
                 crate::work::badge(p, still, w, t.accent_hover, text_size(z, 13.0), time);
             }
+        }
+        // ▶ on the picture plays the shot (owner, 2026-10-18); a plan has nothing to play yet
+        if !n.versions.is_empty() && still.height() > 24.0 {
+            play_button(ui, p, n, still, z, dim, out, area);
         }
         y = still.max.y;
         if lod == Lod::Near {
@@ -1030,6 +1077,61 @@ fn shot_node(
     }
 }
 
+/// True while the picture a shot shows (its own still, or its look's) is loading (back) in.
+fn still_pending(area: &NodeArea, n: &Node, stills: &Stills) -> bool {
+    let own = n.still().and_then(|f| resolve(f, &area.graph.base, &area.studio, area.project.as_deref()));
+    let path = own.or_else(|| {
+        let look = n.look.as_deref().and_then(|l| area.graph.get(l))?;
+        resolve(look.still()?, &area.graph.base, &area.studio, area.project.as_deref())
+    });
+    path.is_some_and(|path| {
+        // asking starts the decode
+        stills.get(&path).is_none() && stills.pending(&path)
+    })
+}
+
+/// A node as lines only while its picture loads back in (owner, 2026-10-18): the outline, the header
+/// and picture frames with a cross, and its name.
+fn wireframe(p: &Painter, n: &Node, r: Rect, z: f32, shot: bool, sel: bool, t: &MfxTheme) {
+    let col = t.text_faint;
+    let s = Stroke::new(1.0, col);
+    p.rect_stroke(r, 5.0, s, StrokeKind::Inside);
+    let size = text_size(z, 12.0);
+    let head = Rect::from_min_size(r.min, vec2(r.width(), (24.0 * z).max(size + 6.0).min(r.height())));
+    p.line_segment([head.left_bottom(), head.right_bottom()], s);
+    let g = line(p, &n.display_name(), size, col, (head.width() - 12.0).max(10.0));
+    p.galley(pos2(head.min.x + 6.0, head.center().y - g.size().y / 2.0), g, col);
+    let still_h = if shot { STILL_H * z } else { r.max.y - head.max.y };
+    let still = Rect::from_min_size(pos2(r.min.x, head.max.y), vec2(r.width(), still_h.min(r.max.y - head.max.y).max(0.0)));
+    if still.height() > 4.0 {
+        p.rect_stroke(still, 0.0, s, StrokeKind::Inside);
+        p.line_segment([still.left_top(), still.right_bottom()], s);
+        p.line_segment([still.right_top(), still.left_bottom()], s);
+    }
+    if sel {
+        p.rect_stroke(r.expand(2.0), 6.0, Stroke::new(2.0, SELECTED), StrokeKind::Outside);
+    }
+}
+
+/// The ▶ in the middle of a shot's picture: a drawn triangle on a dark disc (no glyph needed).
+#[allow(clippy::too_many_arguments)]
+fn play_button(ui: &mut egui::Ui, p: &Painter, n: &Node, still: Rect, z: f32, dim: bool, out: &mut Out, area: &NodeArea) {
+    let rad = (22.0 * z).clamp(10.0, still.height() * 0.3);
+    let c = still.center();
+    let resp = ui.interact(Rect::from_center_size(c, Vec2::splat(rad * 2.0)), egui::Id::new(("mfx-node-play", &n.id)), Sense::click());
+    let resp = resp.on_hover_text("Play this shot");
+    let disc = if resp.hovered() { Color32::from_black_alpha(220) } else { Color32::from_black_alpha(150) };
+    p.circle_filled(c, rad, fade(disc, dim));
+    p.circle_stroke(c, rad, Stroke::new(1.5, fade(Color32::from_white_alpha(if resp.hovered() { 255 } else { 170 }), dim)));
+    let s = rad * 0.45;
+    let tri = vec![pos2(c.x - s * 0.7, c.y - s), pos2(c.x + s, c.y), pos2(c.x - s * 0.7, c.y + s)];
+    p.add(Shape::convex_polygon(tri, fade(Color32::WHITE, dim), Stroke::NONE));
+    out.auto(format!("mfx.nodes.node.{}.play", n.id), &resp, "Play");
+    if resp.clicked() {
+        play(out, area, &n.id, "shot");
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 /// A shot not made yet: its words in the frame (up to three lines) and, when the AI isn't on it,
 /// "Planned · waiting" under them.
@@ -1108,6 +1210,15 @@ fn cue_node(p: &Painter, area: &NodeArea, n: &Node, r: Rect, dim: bool, sel: boo
 #[allow(clippy::too_many_arguments)]
 fn input_node(p: &Painter, area: &NodeArea, n: &Node, r: Rect, lod: Lod, dim: bool, sel: bool, stills: &Stills, t: &MfxTheme) {
     let z = area.zoom;
+    if lod > Lod::Far
+        && n.still().and_then(|f| resolve(f, &area.graph.base, &area.studio, area.project.as_deref())).is_some_and(|path| {
+            let _ = stills.get(&path);
+            stills.pending(&path)
+        })
+    {
+        wireframe(p, n, r, z, false, sel, t);
+        return;
+    }
     p.rect_filled(r, 4.0, fade(t.header_bg, dim));
     let size = text_size(z, 11.5);
     let head = Rect::from_min_size(r.min, vec2(r.width(), (22.0 * z).max(size + 4.0).min(r.height())));

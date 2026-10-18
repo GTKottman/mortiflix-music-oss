@@ -1,6 +1,7 @@
 //! Stills on the nodes: pictures decoded off the UI thread (pure Rust `image`), shrunk to a small
-//! texture once and kept. Only what is on screen asks for a still; a missing or broken file leaves the
-//! node's empty frame, never an error.
+//! texture once and kept while it is on screen. Only what is on screen asks for a still, and a still
+//! nobody drew for [`Stills::forget_unseen`]'s passes is let go (its node shows a wireframe while it
+//! loads back in); a missing or broken file leaves the node's empty frame, never an error.
 //!
 //! The same cache draws the style frames of the Look stage and the chat's looks card: SVG frames are
 //! rasterised in pure Rust (`resvg`, text in the system's fonts), and each picture's main colours are
@@ -45,6 +46,9 @@ struct Inner {
     loading: usize,
     /// Width the pictures are shrunk to.
     width: u32,
+    /// The current egui pass (set by [`Stills::poll`]) and the pass each picture was last drawn in.
+    pass: u64,
+    seen: HashMap<PathBuf, u64>,
 }
 
 /// The still cache, kept in egui's memory for the node area.
@@ -60,7 +64,7 @@ impl Default for Stills {
 impl Stills {
     fn with_width(width: u32) -> Self {
         let (tx, rx) = channel();
-        Self(Arc::new(Mutex::new(Inner { map: HashMap::new(), tx, rx, loading: 0, width })))
+        Self(Arc::new(Mutex::new(Inner { map: HashMap::new(), tx, rx, loading: 0, width, pass: 0, seen: HashMap::new() })))
     }
 
     /// The cache for this egui context.
@@ -85,6 +89,7 @@ impl Stills {
     /// Take decoded pictures in as textures (call once per frame).
     pub fn poll(&self, ctx: &egui::Context) {
         let mut g = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+        g.pass = ctx.cumulative_pass_nr();
         let mut arrived = Vec::new();
         while let Ok(x) = g.rx.try_recv() {
             arrived.push(x);
@@ -108,8 +113,13 @@ impl Stills {
     /// The texture for a picture file, starting its decode when it isn't known yet.
     pub fn get(&self, path: &Path) -> Option<egui::TextureHandle> {
         let mut g = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+        let pass = g.pass;
         match g.map.get(path) {
-            Some(Entry::Ready(t, _)) => return Some(t.clone()),
+            Some(Entry::Ready(t, _)) => {
+                let t = t.clone();
+                g.seen.insert(path.to_path_buf(), pass);
+                return Some(t);
+            }
             Some(Entry::Loading | Entry::Failed) => return None,
             None => {}
         }
@@ -118,6 +128,7 @@ impl Stills {
         }
         if g.map.len() >= MAX_KEPT {
             g.map.retain(|_, e| matches!(e, Entry::Loading));
+            g.seen.clear();
         }
         g.map.insert(path.to_path_buf(), Entry::Loading);
         g.loading += 1;
@@ -133,6 +144,28 @@ impl Stills {
             g.map.insert(path.to_path_buf(), Entry::Failed);
         }
         None
+    }
+}
+
+impl Stills {
+    /// True while a picture is on its way (decoding, or waiting for a free decoder): its node draws a
+    /// wireframe until then. A picture that failed is not pending.
+    pub fn pending(&self, path: &Path) -> bool {
+        let g = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+        !matches!(g.map.get(path), Some(Entry::Ready(..) | Entry::Failed))
+    }
+
+    /// Let go of the pictures nobody drew in the last `passes` egui passes (scrolled off screen): their
+    /// textures are freed and they load again when they come back.
+    pub fn forget_unseen(&self, passes: u64) {
+        let mut g = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+        let cutoff = g.pass.saturating_sub(passes);
+        let old: Vec<PathBuf> =
+            g.map.iter().filter(|(p, e)| matches!(e, Entry::Ready(..)) && g.seen.get(*p).copied().unwrap_or(0) < cutoff).map(|(p, _)| p.clone()).collect();
+        for p in old {
+            g.map.remove(&p);
+            g.seen.remove(&p);
+        }
     }
 }
 
@@ -310,6 +343,50 @@ mod tests {
         assert!(decode(&junk).is_err());
         assert!(decode(&dir.join("missing.png")).is_err());
         assert!(decode(&dir).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Owner, 2026-10-18: stills scrolled off screen are let go, and are pending (wireframe) while they load back in.
+    #[test]
+    fn forgets_stills_nobody_drew_and_they_load_back_in() {
+        let dir = std::env::temp_dir().join(format!("mfx-stills-forget-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let png = dir.join("a.png");
+        image::RgbaImage::from_pixel(64, 36, image::Rgba([20, 30, 200, 255])).save(&png).unwrap();
+        let ctx = egui::Context::default();
+        let stills = Stills::default();
+        let pass = |ctx: &egui::Context| {
+            ctx.run_ui(egui::RawInput::default(), |_| {}).textures_delta.clear();
+            stills.poll(ctx);
+        };
+        let load = |ctx: &egui::Context| {
+            for _ in 0..500 {
+                pass(ctx);
+                if stills.get(&png).is_some() {
+                    return true;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            false
+        };
+        assert!(stills.get(&png).is_none());
+        assert!(stills.pending(&png));
+        assert!(load(&ctx));
+        assert!(!stills.pending(&png));
+        // drawn every pass: kept
+        for _ in 0..10 {
+            pass(&ctx);
+            assert!(stills.get(&png).is_some());
+        }
+        stills.forget_unseen(5);
+        assert!(!stills.pending(&png));
+        // off screen for longer than that: let go, then pending again until it loads back in
+        for _ in 0..10 {
+            pass(&ctx);
+        }
+        stills.forget_unseen(5);
+        assert!(stills.pending(&png));
+        assert!(load(&ctx));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

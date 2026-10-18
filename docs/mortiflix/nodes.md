@@ -24,6 +24,8 @@ State: `MfxState.nodes` (serde: `mortiflix.state` shows view, selection, positio
 | Move nodes | drag (all selected move together); dropped = saved (`node.move`) |
 | Change the film order | pull a noodle from a shot's out socket to another shot (that shot comes next), or from its in socket; or drop a shot onto a noodle ("Drop to put it here", Alt = just place it); or right-click › Move earlier / later |
 | Move a beat | drag its band (the 3 px line over its shots): its shots, lines and cue move together |
+| Play a shot | ▶ in the middle of its picture (shows once the shot is made) |
+| Pick a transition | Bin › Transitions: drag one onto a cut, or click one while a cut is selected; the cut's pill shows its picture, name and length |
 | OK / Fix / Cut it | buttons on the node (near zoom), the inspector, Enter (OK and on), Shift + Enter (Fix box), Delete / Backspace |
 | Walk the film | ← / → previous / next node (shots and the cuts between), ↑ / ↓ shot ↔ voice line ↔ music cue |
 | Frame | F selected, `\` all, 1-9 a beat, double-click a beat band; the overview strip under the canvas jumps |
@@ -33,6 +35,10 @@ State: `MfxState.nodes` (serde: `mortiflix.state` shows view, selection, positio
 
 The keys are panel-scoped (engine `MFX_STUDIO_PANEL`, scope "Mortiflix Nodes"): with the node area focused
 ← / → walk nodes; anywhere else they stay Mortiflix Studio's one-frame steps.
+
+Only what is on screen is drawn (nodes, noodles, beat bands; owner, 2026-10-18). A node's picture nobody drew
+for 120 passes (about two seconds of panning) is let go, and the node shows as a wireframe (outline, header and
+a crossed picture frame) while its picture loads back in.
 
 ## Talking to the studio (part 08's protocol)
 
