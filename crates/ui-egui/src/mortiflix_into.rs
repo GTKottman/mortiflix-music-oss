@@ -90,6 +90,15 @@ pub fn frame(app: &mut StudioApp, ctx: &egui::Context) {
 /// After the stage changed (`mortiflix::apply_stage`): on stage 5 the Mortiflix panel sits beside
 /// the chat, and the first visit brings the video in.
 pub fn on_stage(app: &mut StudioApp, stage: u8) {
+    // A project reopened on Render: Export renders the edit's timeline, so bring the video in quietly first (it showed
+    // and would have rendered the app's demo sequence, 0:27, instead of the 26 min film).
+    if stage == mfx::STAGE_RENDER {
+        let core = &mut app.mfx.core;
+        if core.state.handoff.phase == into::Phase::NotYet && core.state.project_id.is_some() && into::start(&mut core.state, &mut core.service, false) {
+            core.state.handoff.quiet = true;
+        }
+        return;
+    }
     if stage != mfx::STAGE_EDIT {
         return;
     }
@@ -309,6 +318,18 @@ mod tests {
         let before = app.session.undo_mark();
         assert!(crate::menus::invoke(&mut app, &ctx, "mortiflix.timelineEdit", json!({"steps": [{"id": "markers.add", "params": {"frame": 0}}]})).is_err());
         assert!(app.session.undo_mark() == before);
+    }
+
+    #[test]
+    fn a_project_reopened_on_render_brings_its_edit_in_quietly() {
+        let mut app = StudioApp::new(mortiflix_engine::Session::default());
+        on_stage(&mut app, mfx::STAGE_RENDER);
+        assert_eq!(app.mfx.core.state.handoff.phase, into::Phase::NotYet, "no project: nothing to bring in");
+        app.mfx.core.state.project_id = Some("p1".into());
+        on_stage(&mut app, mfx::STAGE_RENDER);
+        assert_eq!(app.mfx.core.state.handoff.phase, into::Phase::Preparing, "Export must render the film, not the demo sequence");
+        assert!(app.mfx.core.state.handoff.quiet, "without opening Edit");
+        assert!(!app.ui.dock.contains(PanelKind::MfxStage) || app.mfx.core.state.stage != mfx::STAGE_EDIT);
     }
 
     #[test]
