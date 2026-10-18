@@ -1369,8 +1369,18 @@ pub fn build(h: &mut Handoff, plan: &Plan, exec: &mut Exec) {
             // the line as short subtitles, each at its own words
             for sub in &p.subtitles {
                 let (Some(a), Some(b)) = (sub.start_sec, sub.end_sec) else { continue };
-                let (Some(time), true) = (frame_at(a, fps).and_then(|fr| ticks_of_frames(fr, fps)), b > a) else { continue };
-                match exec("captions.add", json!({"text": sub.text, "time": time, "durationSeconds": (b - a).min(30.0)})) {
+                // both ends on whole frames: back-to-back subtitles meet exactly (a start rounded down left the one
+                // before running a moment into it, and the caption track refused the next one)
+                let (Some(time), Some(until)) =
+                    (frame_at(a, fps).and_then(|fr| ticks_of_frames(fr, fps)), frame_at(b, fps).and_then(|fr| ticks_of_frames(fr, fps)))
+                else {
+                    continue;
+                };
+                if until <= time {
+                    continue;
+                }
+                let secs = ((until - time) as f64 / TICKS_PER_SECOND as f64).min(30.0);
+                match exec("captions.add", json!({"text": sub.text, "time": time, "durationSeconds": secs})) {
                     Ok(_) => captions += 1,
                     Err(e) => h.fail("captions", &p.node, &p.label, e),
                 }
@@ -2306,7 +2316,10 @@ mod tests {
         assert_eq!(caps.len(), 2, "one caption per subtitle, not one paragraph per line");
         assert_eq!(caps[1]["text"], "Each one holds a pencil, and\neach one is drawing the other.");
         assert_eq!(caps[1]["time"].as_i64(), Some(TICKS_PER_SECOND * 3 + TICKS_PER_SECOND * 26 / 30), "at its frame (3.88 s → frame 116)");
-        assert!((caps[0]["durationSeconds"].as_f64().unwrap() - 2.88).abs() < 1e-9);
+        // 1 s → frame 30, 3.88 s → frame 116: 86 frames, so it ends exactly where the next begins
+        assert!((caps[0]["durationSeconds"].as_f64().unwrap() - 86.0 / 30.0).abs() < 1e-9);
+        let end0 = caps[0]["time"].as_i64().unwrap() + (caps[0]["durationSeconds"].as_f64().unwrap() * TICKS_PER_SECOND as f64).round() as i64;
+        assert_eq!(end0, caps[1]["time"].as_i64().unwrap());
     }
 
     #[test]
