@@ -28,6 +28,8 @@ export const BEAT_COLOURS = [
 const sha = (buf) => createHash('sha256').update(buf).digest('hex');
 // A video still being written (a render streams the animatic out): versioned on a later sync, once whole.
 const BUSY = Symbol('busy');
+// Media hashes by file: { size, mtimeMs, sha }, so an unchanged file is never read again.
+const HASHED = new Map();
 // An MP4/MOV is whole when its top-level boxes tile the file and one is the movie box (encoders write it last, or
 // move it to the front when they finish). Only box headers are read.
 export function mp4Unfinished(file) {
@@ -162,8 +164,16 @@ export function syncCanvas(root, id) {
       // A video still being written: copying it made a version per sync, each a cut-off video (run 2: 13 broken
       // versions of every shot in 5 s while the animatic rendered)
       if (mediaUnfinished(f)) return BUSY;
-      const buf = readFileSync(f);
-      const h = sha(buf);
+      // Hash a file only when it changed (size or time): every sync hashed every clip and the whole score again
+      // (a 26 min project: ~1 s per request, and the requests queued up behind each other).
+      const st = statSync(f);
+      const known = HASHED.get(f);
+      let h;
+      if (known && known.size === st.size && known.mtimeMs === st.mtimeMs) h = known.sha;
+      else {
+        h = sha(readFileSync(f));
+        HASHED.set(f, { size: st.size, mtimeMs: st.mtimeMs, sha: h });
+      }
       const name = `${h.slice(0, 16)}${extname(f).toLowerCase()}`;
       const dest = join(cp.media, nid, name);
       if (!existsSync(dest)) { mkdirSync(dirname(dest), { recursive: true }); copyFileSync(f, dest); }
