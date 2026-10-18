@@ -1414,7 +1414,14 @@ pub fn build(h: &mut Handoff, plan: &Plan, exec: &mut Exec) {
         shot_line.push_str(&format!(" · {} preview{}: the render in Export makes them full quality", h.previews, plural(h.previews)));
     }
     h.set_row("shots", shots, shot_line);
-    h.set_row("transitions", transitions, "Mortiflix Studio's own, changeable in Effect Controls".into());
+    // The AI's own transitions (not a Cut or Cross Dissolve) are drawn into the shots' picture by the animatic: they
+    // play, they just aren't Mortiflix Studio effects (a 70-shot film said "Transitions 0" over its 4 kinds).
+    let baked = plan.transitions.iter().filter(|t| t.effect.is_none()).count();
+    let mut trans_line = "Mortiflix Studio's own, changeable in Effect Controls".to_string();
+    if baked > 0 {
+        trans_line.push_str(&format!(" · {baked} of the AI's own are drawn into the shots' picture"));
+    }
+    h.set_row("transitions", transitions, trans_line);
     let a = |k: &str| audio_track.get(k).cloned().unwrap_or_default();
     h.set_row("voice", lines, format!("one clip per line on {} Voice, at its time", a("line")));
     let stems = n_items("stem");
