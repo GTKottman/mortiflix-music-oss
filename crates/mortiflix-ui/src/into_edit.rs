@@ -263,7 +263,8 @@ impl Plan {
                         .into_iter()
                         .filter(|c| c.get("node").and_then(Value::as_str) == Some(piece.node.as_str()) && c.get("start_sec").is_some())
                         .collect();
-                    if parts.len() > 1 {
+                    // every caption with its own time is a subtitle (one alone too: it may carry a place)
+                    if !parts.is_empty() {
                         piece.subtitles =
                             parts.iter().take(MAX_SUBTITLES).map(|c| Subtitle { text: s(c, "text"), start_sec: f(c, "start_sec"), end_sec: f(c, "end_sec"), settings: s(c, "settings") }).collect();
                         piece.text = piece.subtitles.iter().map(|x| x.text.replace('\n', " ")).collect::<Vec<_>>().join(" ");
@@ -2352,6 +2353,8 @@ mod tests {
         // a subtitle moved off the picture's words keeps its place; the track gets the subtitles' style
         let mut v2 = v.clone();
         v2["captions"][1]["settings"] = json!("line:1%");
+        v2["clips"].as_array_mut().unwrap().push(json!({"node": "b02-1", "kind": "line", "track": "A1", "bin": "Voice", "name": "B02-1", "version": 1, "start_sec": 9.2, "dur_sec": 0.7, "media": {"kind": "audio", "path": "/m/l2.wav"}}));
+        v2["captions"].as_array_mut().unwrap().push(json!({"node": "b02-1", "part": 1, "text": "Let's go.", "start_sec": 9.2, "end_sec": 9.9, "settings": "line:1%"}));
         v2["caption_style"] = json!({"size": 38, "margin": 0.008});
         let p2 = Plan::from_handoff(&v2).unwrap();
         let mut f2 = Fake { calls: Vec::new(), next: 0, fail: Vec::new() };
@@ -2360,6 +2363,8 @@ mod tests {
         let caps2: Vec<&Value> = f2.calls.iter().filter(|c| c.0 == "captions.add").map(|c| &c.1).collect();
         assert!(caps2[0].get("settings").is_none());
         assert_eq!(caps2[1]["settings"], "line:1%");
+        assert_eq!(caps2.len(), 3);
+        assert_eq!(caps2[2]["settings"], "line:1%", "a line with one subtitle keeps its place too");
         let style: Vec<&Value> = f2.calls.iter().filter(|c| c.0 == "captions.setStyle").map(|c| &c.1).collect();
         assert_eq!(style.len(), 1);
         assert_eq!((style[0]["size"].as_f64(), style[0]["margin"].as_f64()), (Some(38.0), Some(0.008)));
