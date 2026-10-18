@@ -13,7 +13,7 @@ import { REPO, studioRoot, ensureStudio, loadConfig, paths, UserError } from './
 import { createProject, loadProject, projectPaths, listProjects, startProject, readEvents, projectPipeline, update as updateProject, event as projectEvent } from './projects.mjs';
 import { Runner } from './runner.mjs';
 import { findPipeline } from './pipelines.mjs';
-import { canvasView, nodeAction } from './canvas.mjs';
+import { canvasView, nodeAction, canvasPaths } from './canvas.mjs';
 import * as gates from './gates.mjs';
 import { RenderQueue } from './renderq.mjs';
 import { voiceOverview, saveVoice } from './voice/index.mjs';
@@ -23,6 +23,7 @@ import { listPresets, getPreset, savePresetFull, deletePreset } from './svc/pres
 import { addAsset, updateAsset, replaceAsset, removeAsset, useAsset, listAssets } from './svc/assets.mjs';
 import { loadTheme, saveTheme, themeSamples, setCuePlan, cleanTheme } from './svc/theme.mjs';
 import * as graph from './svc/graph.mjs';
+import { placeSubtitles } from './svc/subplace.mjs';
 import { scriptView, applyScriptEdits, remakesFor, scriptActionText, scriptLogged, saveDraft } from './svc/script.mjs';
 import { lookView, useLook, moreLooks } from './svc/look.mjs';
 import { appendChat, chatHistory, translateEvents, typedMove, quickReply, applyMove, initChat, actionText, askAI } from './svc/chat.mjs';
@@ -579,7 +580,14 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
     'preview.plan': (p) => graph.previewPlan(root, needProject(p), { scope: ['all', 'from', 'shot', 'beat'].includes(p?.scope) ? p.scope : 'all', node: p?.node ? String(p.node) : null }),
 
     // ---- into Edit (doc 38) ----
-    'handoff.plan': (p) => graph.handoffPlan(root, needProject(p)),
+    'handoff.plan': async (p) => {
+      const id = needProject(p);
+      const plan = graph.handoffPlan(root, id);
+      // subtitles that would cover the picture's own words go to the top (the first time reads the shots' video)
+      const shots = plan.clips.filter((c) => c.kind === 'shot');
+      try { plan.subtitles_moved = await placeSubtitles({ captions: plan.captions, shots, cacheDir: join(canvasPaths(root, id).dir, 'ink') }); } catch { /* placed at the bottom as before */ }
+      return plan;
+    },
     'handoff.done': (p) => { const id = needProject(p); const r = graph.saveHandoff(root, id, p?.map || p); chatRow(id, { role: 'stage', text: STAGE_NAMES[4], stage: 4 }); poke(); return r; },
     'handoff.get': (p) => ({ map: graph.loadHandoff(root, needProject(p)) }),
     'handoff.swaps': (p) => graph.handoffSwaps(root, needProject(p)),

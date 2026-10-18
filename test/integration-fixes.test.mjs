@@ -139,36 +139,43 @@ test('captions never overlap when a voice line is moved over the next one', asyn
   assert.ok(caps.every((c) => c.end_sec > c.start_sec));
 });
 
-test('run 3: a voice line becomes short subtitles (two lines of 42 at most), each at its words, back to back', async () => {
-  const { subtitles, SUB_LINE } = await import('../src/svc/graph.mjs');
+test('run 3: a voice line becomes short one-line subtitles, each at its words, back to back', async () => {
+  const { subtitles, SUB_LINE, SUB_LINES } = await import('../src/svc/graph.mjs');
+  assert.equal(SUB_LINES, 1);
   const text = 'In 1979, Douglas Hofstadter wrote a whole book about loops like this one. It\'s called Gödel, Escher, Bach: an Eternal Golden Braid, and in 1980 it won the Pulitzer Prize for General Nonfiction. Let\'s go.';
   const ws = text.split(' ');
   const t = { start: 100, words: ws.map((w, i) => ({ text: w, start: 100 + i * 0.4, end: 100 + i * 0.4 + 0.3 })) };
   const l = { node: 'b01-2', words: `[warm] ${text}`, start_sec: 15, dur_sec: ws.length * 0.4 };
   const subs = subtitles(l, t);
-  assert.ok(subs.length >= 3, JSON.stringify(subs));
+  assert.ok(subs.length >= 4, JSON.stringify(subs));
   for (const s of subs) {
-    const lines = s.text.split('\n');
-    assert.ok(lines.length <= 2 && lines.every((x) => x.length <= SUB_LINE), s.text);
+    assert.ok(!s.text.includes('\n') && s.text.length <= SUB_LINE, s.text);
     assert.ok(!/\[/.test(s.text));
   }
   assert.equal(subs[0].start_sec, 15);
   for (let i = 0; i + 1 < subs.length; i++) assert.equal(subs[i].end_sec, subs[i + 1].start_sec, 'back to back');
   assert.equal(subs.at(-1).end_sec, 15 + ws.length * 0.4);
-  // each caption starts at its first word's time
-  const second = subs[1].text.replace('\n', ' ').split(' ')[0];
-  assert.equal(subs[1].start_sec, Math.round((15 + ws.indexOf(second) * 0.4) * 1000) / 1000);
-  assert.ok(subs.some((s) => s.text.endsWith("Let's go.")), 'a two-word sentence joins its neighbour');
-  assert.ok(!subs.some((s) => s.text === "Let's go."));
-  // no word timings: still short captions, timed by characters
-  const plain = subtitles(l, null);
-  assert.equal(plain.length, subs.length);
+  const second = subs[1].text.split(' ')[0];
+  assert.equal(subs[1].start_sec, Math.round((15 + ws.indexOf(second) * 0.4) * 1000) / 1000, 'at its first word');
+  assert.ok(subs.some((s) => s.text.endsWith("Let's go.")) && !subs.some((s) => s.text === "Let's go."), 'a two-word sentence joins its neighbour');
+  assert.equal(subtitles(l, null).length, subs.length, 'no word timings: the same captions, timed by characters');
 });
 
-test('run 3: a two-line subtitle breaks between its sentences when that is nearly as even', async () => {
-  const { subtitles } = await import('../src/svc/graph.mjs');
-  const [s] = subtitles({ node: 'b69-2', words: 'Not a ghost behind the eyes. Not one special cell.', start_sec: 0, dur_sec: 4 }, null);
-  assert.equal(s.text, 'Not a ghost behind the eyes.\nNot one special cell.');
-  const [c] = subtitles({ node: 'b01-1', words: 'Each one holds a pencil, and each one is drawing the other.', start_sec: 0, dur_sec: 4 }, null);
-  assert.equal(c.text, 'Each one holds a pencil,\nand each one is drawing the other.');
+test('run 3: a subtitle that would cover something in the picture moves to a clear place (the top edge)', async (t) => {
+  const { placeSubtitles } = await import('../src/svc/subplace.mjs');
+  const { spawnSync } = await import('node:child_process');
+  const { mkdtempSync, rmSync, existsSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { tmpdir } = await import('node:os');
+  const dir = mkdtempSync(join(tmpdir(), 'mfx-sub-')); t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const video = join(dir, 'shot.mp4');
+  // dark paper, and from 2 s a bright label right where the bottom subtitle goes
+  const r = spawnSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'color=c=0x1e1a15:s=1920x1080:d=4:r=30', '-vf', "drawbox=x=760:y=1030:w=400:h=36:color=white:t=fill:enable='gte(t,2)'", '-pix_fmt', 'yuv420p', video]);
+  if (r.status !== 0 || !existsSync(video)) return t.skip('no ffmpeg');
+  const shots = [{ kind: 'shot', start_sec: 0, dur_sec: 4, media: { kind: 'video', path: video, from_sec: 0 } }];
+  const captions = [{ node: 'b01-1', text: 'Nothing under this one.', start_sec: 0.2, end_sec: 1.8 }, { node: 'b01-1', text: 'A label under this one.', start_sec: 2.2, end_sec: 3.8 }];
+  // no OCR here (no tesseract named): any ink counts
+  const out = await placeSubtitles({ captions, shots, cacheDir: join(dir, 'ink'), tesseract: join(dir, 'no-tesseract') });
+  assert.deepEqual([captions[0].settings, captions[1].settings], [undefined, 'line:1%']);
+  assert.deepEqual([out.moved, out.clashes, out.read], [1, 0, false], 'read: false (no OCR to tell words from drawings)');
 });

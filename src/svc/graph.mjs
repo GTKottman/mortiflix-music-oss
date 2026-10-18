@@ -419,7 +419,12 @@ export function voiceMusicView(root, id) {
 // a sentence or clause where one fits, each starting at its first word and ending at the next caption (or the line's
 // end). `t`: the line's entry in voice/timing.json ({ start, words: [{ text, start, end }] } in voice-track time);
 // without word times (or when the counts differ) times are shared by characters.
-export const SUB_LINE = 42;
+export const SUB_LINE = 52;
+// One line each, small, at the very bottom edge (SUB_STYLE): the animatic keeps its own words 5 % inside the frame
+// (the text-safe check), so the strip below is almost always free (run 3: two-line subtitles in the usual place
+// covered credits, MIU strings and equations in a third of the film).
+export const SUB_LINES = 1;
+export const SUB_STYLE = { size: 38, margin: 0.008 };
 export function subtitles(l, t) {
   const text = spoken(l.words);
   const words = text.split(/\s+/).filter(Boolean);
@@ -428,7 +433,7 @@ export function subtitles(l, t) {
   const fits = (ws) => { // two lines at most, filled greedily
     let lines = 1; let len = 0;
     for (const w of ws) { if (w.length > SUB_LINE && len === 0) continue; if (len && len + 1 + w.length > SUB_LINE) { lines++; len = w.length; } else len += (len ? 1 : 0) + w.length; }
-    return lines <= 2;
+    return lines <= SUB_LINES;
   };
   // sentences first; a sentence too long for one caption is cut into the fewest parts that fit, of even length,
   // at a comma where one is near; then a short sentence joins its neighbour when they fit together
@@ -439,7 +444,7 @@ export function subtitles(l, t) {
   const len = (ws) => ws.join(' ').length;
   const split = (ws) => {
     if (fits(ws)) return [ws];
-    for (let parts = Math.max(2, Math.ceil(len(ws) / (2 * SUB_LINE))); parts <= ws.length; parts++) {
+    for (let parts = Math.max(2, Math.ceil(len(ws) / (SUB_LINES * SUB_LINE))); parts <= ws.length; parts++) {
       const cuts = [];
       let at = 0; const ends = ws.map((w) => (at += w.length + 1) - 1);
       for (let k = 1; k < parts; k++) {
@@ -477,7 +482,7 @@ export function subtitles(l, t) {
   };
   // two even lines when it doesn't fit on one
   const wrap = (ws) => {
-    if (len(ws) <= SUB_LINE) return ws.join(' ');
+    if (len(ws) <= SUB_LINE || SUB_LINES < 2) return ws.join(' ');
     let best = null;
     // even lines, but a break after a sentence or clause wins when it's nearly as even
     for (let i = 1; i < ws.length; i++) { const m = Math.max(len(ws.slice(0, i)), len(ws.slice(i))) + (/[.?!]["”’)]?$/.test(ws[i - 1]) ? 0 : /[,;:—)]$/.test(ws[i - 1]) ? 4 : 10); if (len(ws.slice(0, i)) <= SUB_LINE && len(ws.slice(i)) <= SUB_LINE && (!best || m < best[1])) best = [i, m]; }
@@ -536,7 +541,7 @@ export function handoffPlan(root, id) {
     format: 'mortiflix.handoff', version: 1, project: id, title: project.title, rev: gv.rev, fcproj: handoffFcproj(root, id, project.title),
     sequence: { name: project.title, width, height, fps: gv.fps || 30, length_sec },
     tracks, bins: ['Shots', ...new Set(clips.filter((c) => c.bin?.startsWith('Shots/')).map((c) => c.bin)), 'Transitions', 'Voice', 'Music', 'Music stems', 'Sounds', 'Your assets', 'Older versions', 'Cut on the board'],
-    clips, markers, captions,
+    clips, markers, captions, caption_style: SUB_STYLE,
     your_assets: assets.map((a) => ({ id: a.id, name: a.name, kind: a.kind, path: a.path, bin: `Your assets/${a.kind}`, used_in: a.used_in })),
     older_versions: older, cut_on_board: cut,
     notes: `Mortiflix project ${id}, graph rev ${gv.rev}. Click a clip, then ask in the Mortiflix panel.`,
