@@ -292,3 +292,15 @@ test('edit: the render out of Mortiflix Studio is delivered only while the final
   assert.equal(pr.steps.final.delivered_from, 'edit');
   assert.equal(pr.deliverables[0].file, 'reviews/final/edited-1.mp4');
 });
+
+test('canvas: a media file still being written (empty, or a WAV shorter than its header says) is not a version yet', async (t) => {
+  const { mediaUnfinished } = await import('../src/canvas.mjs');
+  const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { tmpdir } = await import('node:os');
+  const dir = mkdtempSync(join(tmpdir(), 'mfx-media-')); t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const wav = (frames, claim = frames) => { const b = Buffer.alloc(44 + frames * 2); b.write('RIFF', 0, 'latin1'); b.writeUInt32LE(36 + claim * 2, 4); b.write('WAVE', 8, 'latin1'); return b; };
+  writeFileSync(join(dir, 'empty.wav'), ''); writeFileSync(join(dir, 'half.wav'), wav(100, 1000)); writeFileSync(join(dir, 'whole.wav'), wav(100));
+  writeFileSync(join(dir, 'empty.mp3'), ''); writeFileSync(join(dir, 'take.mp3'), Buffer.from('ID3....'));
+  assert.deepEqual(['empty.wav', 'half.wav', 'whole.wav', 'empty.mp3', 'take.mp3'].map((f) => mediaUnfinished(join(dir, f))), [true, true, false, true, false]);
+});

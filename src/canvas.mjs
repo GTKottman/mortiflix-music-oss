@@ -57,6 +57,27 @@ export function mp4Unfinished(file) {
   }
 }
 
+// Any media file still being written: empty (just created), a WAV whose header promises more than is there yet, or an
+// unfinished MP4 (run 3: a voice line remade by a Fix got an empty version, then the real one a moment later).
+export function mediaUnfinished(file) {
+  try {
+    const size = statSync(file).size;
+    if (size === 0) return true;
+    if (/\.wav$/i.test(file)) {
+      if (size < 12) return true;
+      const fd = openSync(file, 'r');
+      try {
+        const h = Buffer.alloc(12);
+        readSync(fd, h, 0, 12, 0);
+        if (h.toString('latin1', 0, 4) === 'RIFF' && h.readUInt32LE(4) !== 0xffffffff && h.readUInt32LE(4) + 8 > size) return true;
+      } finally { closeSync(fd); }
+    }
+  } catch {
+    return false;
+  }
+  return mp4Unfinished(file);
+}
+
 export function canvasPaths(root, id) {
   const dir = join(projectPaths(root, id).state, 'canvas');
   return { dir, graph: join(dir, 'graph.json'), media: join(dir, 'media'), lock: join(dir, '.lock'), owner: join(dir, 'owner.json'), edits: join(dir, 'edits.json') };
@@ -140,7 +161,7 @@ export function syncCanvas(root, id) {
       if (!f) { problems.push({ file: rel, text: `doesn't exist (${nid})` }); return null; }
       // A video still being written: copying it made a version per sync, each a cut-off video (run 2: 13 broken
       // versions of every shot in 5 s while the animatic rendered)
-      if (mp4Unfinished(f)) return BUSY;
+      if (mediaUnfinished(f)) return BUSY;
       const buf = readFileSync(f);
       const h = sha(buf);
       const name = `${h.slice(0, 16)}${extname(f).toLowerCase()}`;
