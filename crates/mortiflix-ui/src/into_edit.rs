@@ -100,6 +100,9 @@ pub struct Piece {
     pub end_sec: Option<f64>,
     /// A voice line's words (the caption).
     pub text: String,
+    /// A voice line's subtitles (the service cuts a line into short captions, each at its words' time). Empty: one
+    /// caption with `text` over the whole line.
+    pub subtitles: Vec<Subtitle>,
     /// Still a preview render (the Export render makes it full quality).
     pub preview: bool,
     /// Where in the media file the piece starts (a shot cut from the animatic).
@@ -113,6 +116,18 @@ pub struct Piece {
     /// A card's colour (#rrggbb).
     pub card_hex: Option<String>,
 }
+
+/// One subtitle of a voice line: its words (up to two lines) and when they show.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Subtitle {
+    pub text: String,
+    pub start_sec: Option<f64>,
+    pub end_sec: Option<f64>,
+}
+
+/// Subtitles a voice line may carry (a 25 min line of narration is a few dozen at most).
+const MAX_SUBTITLES: usize = 64;
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -235,7 +250,16 @@ impl Plan {
                     continue;
                 }
                 "line" => {
-                    if let Some((text, end)) = caption(&piece.node) {
+                    let parts: Vec<&Value> = list("captions")
+                        .into_iter()
+                        .filter(|c| c.get("node").and_then(Value::as_str) == Some(piece.node.as_str()) && c.get("start_sec").is_some())
+                        .collect();
+                    if parts.len() > 1 {
+                        piece.subtitles =
+                            parts.iter().take(MAX_SUBTITLES).map(|c| Subtitle { text: s(c, "text"), start_sec: f(c, "start_sec"), end_sec: f(c, "end_sec") }).collect();
+                        piece.text = piece.subtitles.iter().map(|x| x.text.replace('\n', " ")).collect::<Vec<_>>().join(" ");
+                        piece.end_sec = piece.subtitles.last().and_then(|x| x.end_sec);
+                    } else if let Some((text, end)) = caption(&piece.node) {
                         piece.text = text;
                         piece.end_sec = end;
                     }
@@ -345,6 +369,13 @@ impl Plan {
             x.label = short(&x.label, 80);
             x.title = short(&x.title, 200);
             x.text = short(&x.text, 500);
+            x.subtitles.truncate(MAX_SUBTITLES);
+            for sub in &mut x.subtitles {
+                sub.text = short(&sub.text, 200);
+                sub.start_sec = clean_sec(sub.start_sec);
+                sub.end_sec = clean_sec(sub.end_sec);
+            }
+            x.subtitles.retain(|sub| !sub.text.trim().is_empty() && sub.start_sec.zip(sub.end_sec).is_some_and(|(a, b)| b > a));
             x.start_sec = clean_sec(x.start_sec);
             x.end_sec = clean_sec(x.end_sec);
             x.seconds = clean_sec(x.seconds);
@@ -1334,6 +1365,18 @@ pub fn build(h: &mut Handoff, plan: &Plan, exec: &mut Exec) {
         }
         let (Some(start), Some(frame)) = (p.start_sec, p.start_sec.and_then(|s| frame_at(s, fps))) else { continue };
         let Some(time) = ticks_of_frames(frame, fps) else { continue };
+        if !p.subtitles.is_empty() {
+            // the line as short subtitles, each at its own words
+            for sub in &p.subtitles {
+                let (Some(a), Some(b)) = (sub.start_sec, sub.end_sec) else { continue };
+                let (Some(time), true) = (frame_at(a, fps).and_then(|fr| ticks_of_frames(fr, fps)), b > a) else { continue };
+                match exec("captions.add", json!({"text": sub.text, "time": time, "durationSeconds": (b - a).min(30.0)})) {
+                    Ok(_) => captions += 1,
+                    Err(e) => h.fail("captions", &p.node, &p.label, e),
+                }
+            }
+            continue;
+        }
         let len = p.end_sec.map(|e| e - start).or(p.seconds).filter(|l| *l > 0.05).unwrap_or(3.0).min(30.0);
         match exec("captions.add", json!({"text": p.text, "time": time, "durationSeconds": len})) {
             Ok(_) => captions += 1,
@@ -1369,7 +1412,7 @@ pub fn build(h: &mut Handoff, plan: &Plan, exec: &mut Exec) {
     h.set_row("sounds", sounds, format!("on {} Sounds", a("sound")));
     let assets = n_items("asset");
     h.set_row("assets", assets, "in the Your assets bin".into());
-    h.set_row("captions", captions, "a caption clip per voice line".into());
+    h.set_row("captions", captions, "short subtitles, each at its words".into());
     h.set_row("beats", chapters, format!("a Chapter marker per beat · {cue_markers} music cue marker{}", plural(cue_markers)));
     h.placed = placed;
     h.phase = Phase::Done;
@@ -2240,6 +2283,30 @@ mod tests {
         assert_eq!(h.previews, 1);
         assert!(Plan::from_handoff(&json!([1, 2])).is_err());
         assert!(Plan::from_handoff(&json!({"clips": "x", "sequence": {"fps": "fast"}})).is_ok_and(|p| p.fps == 30.0));
+    }
+
+    #[test]
+    fn a_voice_line_becomes_short_subtitles_each_at_its_words() {
+        let v = json!({
+            "sequence": {"name": "S", "width": 1920, "height": 1080, "fps": 30, "length_sec": 10},
+            "clips": [{"node": "b01-1", "kind": "line", "track": "A1", "bin": "Voice", "name": "B01-1", "version": 1, "start_sec": 1, "dur_sec": 8, "media": {"kind": "audio", "path": "/m/l1.wav"}}],
+            "captions": [
+                {"node": "b01-1", "part": 1, "text": "Picture two hands on a sheet of paper.", "start_sec": 1, "end_sec": 3.88},
+                {"node": "b01-1", "part": 2, "text": "Each one holds a pencil, and\neach one is drawing the other.", "start_sec": 3.88, "end_sec": 9}
+            ]
+        });
+        let p = Plan::from_handoff(&v).unwrap();
+        let line = p.pieces.iter().find(|x| x.kind == "line").unwrap();
+        assert_eq!(line.subtitles.len(), 2);
+        assert_eq!(line.end_sec, Some(9.0));
+        let mut f = Fake { calls: Vec::new(), next: 0, fail: Vec::new() };
+        let mut h = Handoff::default();
+        build(&mut h, &p, &mut |id, v| f.exec(id, v));
+        let caps: Vec<&Value> = f.calls.iter().filter(|c| c.0 == "captions.add").map(|c| &c.1).collect();
+        assert_eq!(caps.len(), 2, "one caption per subtitle, not one paragraph per line");
+        assert_eq!(caps[1]["text"], "Each one holds a pencil, and\neach one is drawing the other.");
+        assert_eq!(caps[1]["time"].as_i64(), Some(TICKS_PER_SECOND * 3 + TICKS_PER_SECOND * 26 / 30), "at its frame (3.88 s → frame 116)");
+        assert!((caps[0]["durationSeconds"].as_f64().unwrap() - 2.88).abs() < 1e-9);
     }
 
     #[test]
