@@ -1175,7 +1175,9 @@ fn now_line(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, now: f64) {
     let t = ctx.theme;
     let r = ui.max_rect();
     ui.painter().line_segment([pos2(r.min.x, r.min.y + 0.5), pos2(r.max.x, r.min.y + 0.5)], Stroke::new(1.0, t.separator));
-    let busy = making(ctx) || !ctx.state.ai_line.is_empty();
+    // the dot pulses (a redraw 10 times a second) only while something is being made: a finished
+    // line like "Done: the video is delivered." kept an idle app at ~80 % of a core
+    let busy = making(ctx) || ctx.state.work.running;
     let line = if ctx.state.ai_line.is_empty() {
         if making(ctx) { "Working…".to_string() } else { "Waiting for you · nothing is being made".to_string() }
     } else {
@@ -1187,6 +1189,9 @@ fn now_line(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, now: f64) {
             let pulse = (0.55 + 0.45 * (now * 3.0).sin()) as f32;
             ui.painter().circle_filled(d.center(), 3.5, t.ok.gamma_multiply(pulse));
             ui.ctx().request_repaint_after(std::time::Duration::from_millis(100));
+        } else if !ctx.state.ai_line.is_empty() {
+            // a line from the AI with nothing being made ("Done: …"): a steady dot, no redraws
+            ui.painter().circle_filled(d.center(), 3.5, t.ok);
         } else {
             ui.painter().circle_stroke(d.center(), 3.5, Stroke::new(1.2, t.text_faint));
         }

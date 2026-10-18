@@ -175,6 +175,8 @@ pub fn show(parent: &mut egui::Ui, area: &mut NodeArea, t: &MfxTheme, rect: Rect
     child.set_clip_rect(rect.intersect(parent.clip_rect()));
     let ui = &mut child;
     area.canvas = [rect.min.x, rect.min.y, rect.width(), rect.height()];
+    // node places are worked out once for this pass (see `area::Memo`)
+    area.memo_on();
     let ctx = ui.ctx().clone();
     let was_following = area.follow_playhead;
     let stills = Stills::of(&ctx);
@@ -345,15 +347,20 @@ pub fn show(parent: &mut egui::Ui, area: &mut NodeArea, t: &MfxTheme, rect: Rect
     }
     if area.show.voice {
         for n in area.graph.nodes.iter().filter(|n| n.kind == Kind::Line && !n.missing) {
-            let (Some(shot), Some(lr)) = (area.graph.line_shot(n), area.node_rect(&n.id)) else { continue };
+            let (Some(shot), Some(lr)) = (area.line_shot(n), area.node_rect(&n.id)) else { continue };
             let Some(sr) = area.node_rect(&shot) else { continue };
             if !view.intersects(lr.union(sr)) {
                 continue;
             }
             let a = area.to_screen(pos2(lr.center().x, lr.min.y));
             let b = area.to_screen(pos2(sr.center().x, sr.max.y + 6.0));
-            let pts = noodle_v(a, b);
             let dim = area.dimmed(n, &found);
+            if lod == Lod::Far {
+                // far out the curve and dashes don't show: one thin line (owner: draw less zoomed out)
+                p.line_segment([a, b], Stroke::new(1.0, fade(t.text_faint.gamma_multiply(0.7), dim)));
+                continue;
+            }
+            let pts = noodle_v(a, b);
             p.extend(Shape::dashed_line(&pts, Stroke::new((1.5 * z).clamp(1.0, 2.0), fade(t.text_faint, dim)), 6.0, 4.0));
         }
     }
@@ -658,6 +665,8 @@ pub fn show(parent: &mut egui::Ui, area: &mut NodeArea, t: &MfxTheme, rect: Rect
     if was_following && !area.follow_playhead {
         out.cmd("mortiflix.preview.follow", json!({"on": false}));
     }
+
+    area.memo_off();
 
     // ---- empty states
     if area.loaded && area.graph.film.is_empty() {

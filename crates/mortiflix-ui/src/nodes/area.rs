@@ -197,6 +197,32 @@ pub struct PlayRequest {
     pub scope: String,
 }
 
+/// Node rectangles and line → shot answers worked out once per canvas pass (a voice line's place
+/// scans every node: asked for each of 136 lines several times a frame it cost ~90 ms a frame on a
+/// 70-shot film). Only on while the canvas draws ([`NodeArea::memo_on`]), so commands that move
+/// nodes always see fresh places; never saved, never compared.
+#[derive(Debug, Default)]
+pub struct Memo(std::cell::RefCell<Option<MemoData>>);
+
+#[derive(Debug)]
+pub struct MemoData {
+    lod: Lod,
+    rects: std::collections::HashMap<String, Option<Rect>>,
+    shots: std::collections::HashMap<String, Option<String>>,
+}
+
+impl Clone for Memo {
+    fn clone(&self) -> Self {
+        Self::default()
+    }
+}
+
+impl PartialEq for Memo {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
 /// The node area's state.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -243,6 +269,8 @@ pub struct NodeArea {
     pub outbox: Vec<(String, Value)>,
     #[serde(skip)]
     pub graph: Graph,
+    #[serde(skip)]
+    pub memo: Memo,
     #[serde(skip)]
     pub loaded: bool,
     #[serde(skip)]
@@ -324,6 +352,7 @@ impl Default for NodeArea {
             canvas: [0.0, 0.0, 800.0, 400.0],
             outbox: Vec::new(),
             graph: Graph::default(),
+            memo: Memo::default(),
             loaded: false,
             project: None,
             studio: String::new(),
@@ -428,8 +457,54 @@ impl NodeArea {
         }
     }
 
+    /// Start remembering node places for this canvas pass (cleared first: the graph, places or
+    /// zoom may have changed since the last one).
+    pub fn memo_on(&self) {
+        *self.memo.0.borrow_mut() = Some(MemoData { lod: Lod::of(self.zoom), rects: Default::default(), shots: Default::default() });
+    }
+
+    /// Stop remembering (the end of the canvas pass).
+    pub fn memo_off(&self) {
+        *self.memo.0.borrow_mut() = None;
+    }
+
+    /// The shot a voice line is said over ([`Graph::line_shot`]), remembered during a canvas pass.
+    pub fn line_shot(&self, line: &Node) -> Option<String> {
+        if let Ok(m) = self.memo.0.try_borrow()
+            && let Some(m) = m.as_ref()
+            && let Some(s) = m.shots.get(&line.id)
+        {
+            return s.clone();
+        }
+        let s = self.graph.line_shot(line);
+        if let Ok(mut m) = self.memo.0.try_borrow_mut()
+            && let Some(m) = m.as_mut()
+        {
+            m.shots.insert(line.id.clone(), s.clone());
+        }
+        s
+    }
+
     /// [`Self::node_rect`] without the drag in progress.
     pub fn node_rect_still(&self, id: &str) -> Option<Rect> {
+        let lod = Lod::of(self.zoom);
+        if let Ok(m) = self.memo.0.try_borrow()
+            && let Some(m) = m.as_ref().filter(|m| m.lod == lod)
+            && let Some(r) = m.rects.get(id)
+        {
+            return *r;
+        }
+        let r = self.place(id);
+        if let Ok(mut m) = self.memo.0.try_borrow_mut()
+            && let Some(m) = m.as_mut().filter(|m| m.lod == lod)
+        {
+            m.rects.insert(id.to_string(), r);
+        }
+        r
+    }
+
+    /// Work out a node's place (see [`Self::node_rect`]).
+    fn place(&self, id: &str) -> Option<Rect> {
         let n = self.graph.get(id)?;
         let lod = Lod::of(self.zoom);
         let size = node_size(n, lod);
@@ -450,14 +525,10 @@ impl NodeArea {
                 Some(self.cut_rect_auto(&cut.from, &cut.to))
             }
             Kind::Line => {
-                let shot = self.graph.line_shot(n)?;
+                let shot = self.line_shot(n)?;
                 let sr = self.node_rect(&shot)?;
-                let mut lines: Vec<&Node> = self
-                    .graph
-                    .nodes
-                    .iter()
-                    .filter(|l| l.kind == Kind::Line && !l.missing && self.graph.line_shot(l).as_deref() == Some(shot.as_str()))
-                    .collect();
+                let mut lines: Vec<&Node> =
+                    self.graph.nodes.iter().filter(|l| l.kind == Kind::Line && !l.missing && self.line_shot(l).as_deref() == Some(shot.as_str())).collect();
                 lines.sort_by(|a, b| a.order.cmp(&b.order).then_with(|| a.id.cmp(&b.id)));
                 let k = lines.iter().position(|l| l.id == id).unwrap_or(0);
                 #[allow(clippy::cast_precision_loss)]
@@ -990,6 +1061,14 @@ impl NodeArea {
         Ok(())
     }
 
+    /// Seconds until [`Self::tick`] next asks for the graph: the panel sleeps until then instead of
+    /// waking every second.
+    pub fn next_poll_in(&self, now: f64) -> f64 {
+        let every = if self.graph.nodes.iter().any(|n| n.state.making()) { 2.0 } else { 6.0 };
+        let wait = if self.fetch_soon { 0.3 } else { every - (now - self.last_fetch) };
+        if wait.is_finite() { wait.clamp(0.1, every) } else { 0.1 }
+    }
+
     /// Ask the studio for something that has no local effect (add, duplicate, use version, note).
     pub fn ask(&mut self, svc: &mut Service, ty: &str, params: Value) {
         self.send(svc, ty, params, Sent::Other(ty.to_string()));
@@ -1023,6 +1102,30 @@ mod tests {
 
     fn area() -> NodeArea {
         NodeArea { graph: Graph::from_json(&sample()), loaded: true, canvas: [0.0, 0.0, 1000.0, 500.0], ..NodeArea::default() }
+    }
+
+    /// Owner, 2026-10-18 (lag): node places remembered for one canvas pass are the same as fresh
+    /// ones, follow a zoom change, and are never used outside the pass.
+    #[test]
+    fn remembered_places_match_and_never_go_stale() {
+        let mut a = area();
+        let ids: Vec<String> = a.graph.nodes.iter().map(|n| n.id.clone()).collect();
+        let fresh: Vec<Option<Rect>> = ids.iter().map(|id| a.node_rect(id)).collect();
+        a.memo_on();
+        let remembered: Vec<Option<Rect>> = ids.iter().map(|id| a.node_rect(id)).collect();
+        assert_eq!(fresh, remembered);
+        assert_eq!(ids.iter().map(|id| a.node_rect(id)).collect::<Vec<_>>(), fresh);
+        // a zoom into another level of detail inside the pass: sizes follow it
+        let z = a.zoom;
+        a.zoom = 0.2;
+        let far: Vec<Option<Rect>> = ids.iter().map(|id| a.node_rect(id)).collect();
+        a.memo_off();
+        assert_eq!(far, ids.iter().map(|id| a.node_rect(id)).collect::<Vec<_>>());
+        a.zoom = z;
+        // moved after the pass: the new place shows at once
+        let shot = a.graph.film.first().cloned().unwrap();
+        a.positions.insert(shot.clone(), [5000.0, 7000.0]);
+        assert_eq!(a.node_rect(&shot).map(|r| r.min), Some(pos2(5000.0, 7000.0)));
     }
 
     /// Run 2: the node area added up each version's whole file ("0:43" for a 0:36 film); with the service's

@@ -73,7 +73,8 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
         area.synced_selection = sel;
     }
     if connected && ctx.state.project_id.is_some() {
-        ui.ctx().request_repaint_after(std::time::Duration::from_millis(1000));
+        // wake when the next graph poll is due (2 s while something is made, else 6 s), not every second
+        ui.ctx().request_repaint_after(std::time::Duration::from_secs_f64(ctx.state.nodes.next_poll_in(now)));
     }
 
     let mut out = canvas::Out::default();
