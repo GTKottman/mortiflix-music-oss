@@ -30,3 +30,20 @@ test('render queue: a render keeps its temp files on disk beside the logs (not a
   assert.match(readFileSync(join(dir, `render-${job.id}.log`), 'utf8'), new RegExp(`tmp=${join(dir, 'tmp', String(job.id))}`));
   assert.equal(existsSync(join(dir, 'tmp', String(job.id))), false);
 });
+
+test('render queue: render-stop ends a running render and its children by its process group, and a waiting one never starts', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'mfx-rq-')); t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const q = new RenderQueue({ logDir: dir });
+  const a = q.add({ projectId: 'p1', sessionId: 's', label: 'Long', argv: ['sh', '-c', 'sleep 30 & echo "child $!"; wait'], cwd: dir, env: process.env });
+  const b = q.add({ projectId: 'p1', sessionId: 's', label: 'Next', argv: ['sh', '-c', 'echo never'], cwd: dir, env: process.env });
+  await new Promise((ok) => setTimeout(ok, 300));
+  const { readFileSync } = await import('node:fs');
+  const child = Number(readFileSync(join(dir, `render-${a.id}.log`), 'utf8').match(/child (\d+)/)[1]);
+  assert.equal(q.stop(b.id, 'p1').state, 'failed', 'the waiting one is dropped');
+  q.stop(a.id, 'p1', 500);
+  const end = await q.wait(a.id, 'p1', 5);
+  assert.equal(end.state, 'failed');
+  await new Promise((ok) => setTimeout(ok, 200));
+  assert.throws(() => process.kill(child, 0), /ESRCH/, 'the render\'s own child is gone too');
+  assert.throws(() => q.stop(a.id, 'other'), /no render/);
+});

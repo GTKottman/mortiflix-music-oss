@@ -19,6 +19,7 @@ const USAGE = `mfx: talk to the Mortiflix studio from inside a session
   mfx feedback [step]                   everything the owner said
   mfx render --label "..." -- <cmd...>  queue a heavy render (returns an id at once)
   mfx render-wait <id> [seconds]        wait for it (default 100 s)
+  mfx render-stop <id>                  stop it (its whole process group; never pkill/killall by name)
   mfx handoff "what I did, what's next" required before you stop
   mfx taste "a lasting preference"      remembered for every future project
   mfx log EVENT "details"               add a line to the project log
@@ -103,6 +104,7 @@ export async function main(argv, env = process.env, cwd = process.cwd()) {
     });
     case 'feedback': return call('feedback', { step: f._[0] || null });
     case 'render': return call('render', { label: typeof f.label === 'string' ? f.label : null, argv: need(f['--']?.length ? f['--'] : undefined, '-- <command>'), cwd });
+    case 'render-stop': return call('render-stop', { id: Number(need(f._[0], '<id>')) });
     case 'render-wait': return call('render-wait', { id: Number(need(f._[0], '<id>')), seconds: Number(f._[1] || 100) });
     case 'handoff': return call('handoff', { text: need(f._.join(' '), '"text"') });
     case 'taste': return call('taste', { text: need(f._.join(' '), '"text"') });

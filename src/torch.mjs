@@ -249,9 +249,16 @@ ${readJournal(root, id) || '(first session on this project)'}
 - \`mfx submit <step> submission.json\`: send a step for review (then hand off and stop)
 - \`mfx ask <step> "question" --default "…"\`: one question, then hand off and stop
 - \`mfx feedback [step]\`: everything the owner said
-- \`mfx render --label "…" -- <command>\` · \`mfx render-wait <id> [seconds]\`: heavy renders, one at a time
+- \`mfx render --label "…" -- <command>\` · \`mfx render-wait <id> [seconds]\`: heavy renders, one at a time ·
+  \`mfx render-stop <id>\`: stop one (its whole process group)
 - \`mfx handoff "…"\`: required before you stop · \`mfx taste "…"\`: a lasting preference of the owner
 - \`mfx log EVENT "details"\` · \`mfx needs-you "…"\` (only when nothing else can move) · \`mfx propose-check …\`
+
+## Stopping things
+
+Never \`pkill\`, \`killall\`, or \`pgrep … | xargs kill\` by name or pattern: a pattern also hits the owner's own programs
+and other sessions' work. Stop a render with \`mfx render-stop <id>\`; otherwise kill only a PID your own command
+started and saved (\`$!\`).
 
 ## Before you stop
 

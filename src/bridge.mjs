@@ -55,6 +55,11 @@ export async function openBridge({ root, projectId, sessionId, workdir, renders,
       markRendering(root, projectId, renders);
       return job;
     },
+    'render-stop': ({ id }) => {
+      const v = renders.stop(Number(id), projectId);
+      markRendering(root, projectId, renders);
+      return v;
+    },
     'render-wait': async ({ id, seconds }) => {
       const v = await renders.wait(id, projectId, Number(seconds) || 100);
       markRendering(root, projectId, renders);

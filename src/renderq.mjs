@@ -131,6 +131,25 @@ export class RenderQueue {
     });
   }
 
+  // Stop one render by its id (`mfx render-stop`): a waiting one never starts; a running one gets SIGTERM on its whole
+  // process group (Chrome, ffmpeg and all), then SIGKILL after `graceMs`. Never by name: only the group this queue started.
+  stop(id, projectId, graceMs = 5000) {
+    const job = this.get(id, projectId);
+    if (job.state === 'waiting') {
+      job.state = 'failed'; job.exitCode = -1; job.stopped = true;
+      for (const w of job.waiters.splice(0)) w();
+      this.onChange(job);
+      this.pump();
+    } else if (job.state === 'running' && job.proc) {
+      job.stopped = true;
+      const pid = job.proc.pid;
+      try { process.kill(-pid, 'SIGTERM'); } catch { /* already gone */ }
+      const t = setTimeout(() => { if (job.state === 'running') { try { process.kill(-pid, 'SIGKILL'); } catch { /* gone */ } } }, graceMs);
+      t.unref?.();
+    }
+    return this.view(job);
+  }
+
   pump() {
     if ([...this.jobs.values()].some((j) => j.state === 'running')) return;
     const id = this.order.find((i) => this.jobs.get(i).state === 'waiting');
