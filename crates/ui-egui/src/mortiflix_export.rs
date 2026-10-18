@@ -328,6 +328,7 @@ fn view(app: &StudioApp) -> TabView {
         v.in_out_seconds = mortiflix_engine::export::export_range(&app.session.project, seq, &ExportSettings::default()).ok().map(|r| r.duration.seconds());
     }
     v.audio_tracks = q.audio_tracks.iter().map(|t| (t.name.clone(), Stem::of_track(&t.name))).collect();
+    v.has_captions = q.caption_tracks.iter().any(|t| t.enabled && !t.captions.is_empty());
     let dur = match app.mfx.export.ui.choices.how_much {
         ex::HowMuch::InOut => {
             mortiflix_engine::export::export_range(&app.session.project, seq, &ExportSettings::default()).map(|r| r.duration).unwrap_or(whole)

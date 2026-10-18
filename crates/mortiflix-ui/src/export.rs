@@ -783,6 +783,8 @@ pub struct ExportState {
     pub post: PostForm,
     /// The last thing that went wrong, shown under Render.
     pub note: String,
+    /// The person picked Captions (Advanced) themselves; until then a timeline with subtitles burns them in.
+    pub captions_chosen: bool,
     /// Requests in flight: (service request id, what for).
     #[serde(skip)]
     pub pending: Vec<(u64, Pending)>,
@@ -1007,6 +1009,8 @@ pub struct TabView {
     pub audio_tracks: Vec<(String, Stem)>,
     /// Media the timeline uses that is offline ("Shot 9's file is missing").
     pub offline: Vec<String>,
+    /// The timeline has subtitles on a caption track that shows (the Preview draws them).
+    pub has_captions: bool,
 }
 
 /// What the page asks the host to do.
@@ -1064,9 +1068,18 @@ const RIGHT_W: f32 = 420.0;
 const QUEUE_H: f32 = 232.0;
 const GAP: f32 = 4.0;
 
+/// The Preview shows the timeline's subtitles, so the video gets them too unless the person picked Captions themselves
+/// (run 3: the Preview showed them and the 26 min render came out without any: Captions was Off by default).
+pub fn follow_captions(st: &mut ExportState, v: &TabView) {
+    if v.has_captions && !st.captions_chosen && st.choices.captions == Captions::Off {
+        st.choices.captions = Captions::Burned;
+    }
+}
+
 /// The Mortiflix Export tab in `rect` (39a, or 39b when a render finished).
 pub fn show_tab(ui: &mut egui::Ui, rect: Rect, ctx: &mut MfxCtx, st: &mut ExportState, v: &TabView) -> TabOut {
     let mut out = TabOut::default();
+    follow_captions(st, v);
     let t = ctx.theme;
     ui.painter().rect_filled(rect, 0.0, t.app_bg);
     if st.page == Page::Rendered && st.renders.get(st.shown).is_some() {
@@ -1535,6 +1548,7 @@ fn settings_panel(ui: &mut egui::Ui, r: Rect, ctx: &mut MfxCtx, st: &mut ExportS
                 };
                 if let Some(i) = seg(ui, ctx, "mfx.export.advanced.captions", &[("off", "Off"), ("burned", "Burned in"), ("srt", "Separate file (.srt)")], on) {
                     st.choices.captions = [Captions::Off, Captions::Burned, Captions::Srt].get(i).copied().unwrap_or_default();
+                    st.captions_chosen = true;
                 }
                 field_label(ui, &t, "Hardware encoding");
                 if let Some(i) =
@@ -2078,6 +2092,22 @@ mod tests {
         assert_eq!(Stem::of_track("Sound"), Stem::Effects);
         assert_eq!(Stem::of_track("Audio 3"), Stem::Effects);
         assert_eq!(Stem::of_track("Volume"), Stem::Effects);
+    }
+
+    #[test]
+    fn a_timeline_with_subtitles_burns_them_in_unless_the_person_picked() {
+        let mut st = ExportState::default();
+        let mut v = TabView::default();
+        follow_captions(&mut st, &v);
+        assert_eq!(st.choices.captions, Captions::Off, "no subtitles: nothing changes");
+        v.has_captions = true;
+        follow_captions(&mut st, &v);
+        assert_eq!(st.choices.captions, Captions::Burned);
+        assert!(recipe(&st.choices).burn_captions);
+        st.choices.captions = Captions::Off;
+        st.captions_chosen = true;
+        follow_captions(&mut st, &v);
+        assert_eq!(st.choices.captions, Captions::Off, "the person's Off stays");
     }
 
     #[test]
