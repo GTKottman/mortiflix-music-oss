@@ -9,7 +9,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync, rmSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
-import { canvasView, canvasPaths, loadGraph, nodeAction, requestNewPiece, CanvasError, readBeats, mp4Unfinished } from '../canvas.mjs';
+import { canvasView, canvasPaths, loadGraph, nodeAction, requestNewPiece, CanvasError, readBeats, mediaUnfinished } from '../canvas.mjs';
 import { beatNames } from './beatnames.mjs';
 import { projectPaths, loadProject, event } from '../projects.mjs';
 import { withLock } from '../studio.mjs';
@@ -17,14 +17,16 @@ import { listAssets } from './assets.mjs';
 import { cuePlan } from './theme.mjs';
 import { boothStatus } from '../booth.mjs';
 
-// Older versions handed to Edit per piece (the newest ones).
-const OLDER_KEPT = 3;
-// Version files are named by their content, so whether one is a cut-off video never changes: asked once.
+// Older versions handed to Edit per piece (the newest ones): two of a shot, one of a voice line or the music (a 26 min
+// film put 494 in the bin: three per shot plus each line's take as MP3 and again as WAV).
+const OLDER_KEPT = { shot: 2, line: 1, music: 1, cue: 1, transition: 1 };
+// Version files are named by their content, so whether one is cut off (a video stopped mid-write, an empty or
+// half-written WAV) never changes: asked once. Such a version is left out everywhere (graph, Edit's older versions).
 const unfinishedSeen = new Map();
 function unfinished(path) {
   if (!unfinishedSeen.has(path)) {
     if (unfinishedSeen.size > 20000) unfinishedSeen.clear();
-    unfinishedSeen.set(path, mp4Unfinished(path));
+    unfinishedSeen.set(path, mediaUnfinished(path));
   }
   return unfinishedSeen.get(path);
 }
@@ -413,6 +415,78 @@ export function voiceMusicView(root, id) {
 
 // ------------------------------------------------------------------------------------------ into Edit
 
+// A voice line as subtitles: its spoken words cut into captions of at most two lines of SUB_LINE characters, ending at
+// a sentence or clause where one fits, each starting at its first word and ending at the next caption (or the line's
+// end). `t`: the line's entry in voice/timing.json ({ start, words: [{ text, start, end }] } in voice-track time);
+// without word times (or when the counts differ) times are shared by characters.
+export const SUB_LINE = 42;
+export function subtitles(l, t) {
+  const text = spoken(l.words);
+  const words = text.split(/\s+/).filter(Boolean);
+  const start = l.start_sec; const end = round3(l.start_sec + l.dur_sec);
+  if (!words.length) return [];
+  const fits = (ws) => { // two lines at most, filled greedily
+    let lines = 1; let len = 0;
+    for (const w of ws) { if (w.length > SUB_LINE && len === 0) continue; if (len && len + 1 + w.length > SUB_LINE) { lines++; len = w.length; } else len += (len ? 1 : 0) + w.length; }
+    return lines <= 2;
+  };
+  // sentences first; a sentence too long for one caption is cut into the fewest parts that fit, of even length,
+  // at a comma where one is near; then a short sentence joins its neighbour when they fit together
+  const sentences = [];
+  let cur = [];
+  for (const w of words) { cur.push(w); if (/[.?!]["”’)]?$/.test(w)) { sentences.push(cur); cur = []; } }
+  if (cur.length) sentences.push(cur);
+  const len = (ws) => ws.join(' ').length;
+  const split = (ws) => {
+    if (fits(ws)) return [ws];
+    for (let parts = Math.max(2, Math.ceil(len(ws) / (2 * SUB_LINE))); parts <= ws.length; parts++) {
+      const cuts = [];
+      let at = 0; const ends = ws.map((w) => (at += w.length + 1) - 1);
+      for (let k = 1; k < parts; k++) {
+        const target = len(ws) * k / parts;
+        let best = null;
+        for (let i = 1; i < ws.length; i++) {
+          if (cuts.length && i <= cuts.at(-1)) continue;
+          const score = Math.abs(ends[i - 1] - target) - (/[,;:—)]$/.test(ws[i - 1]) ? 12 : 0);
+          if (best === null || score < best[1]) best = [i, score];
+        }
+        if (best) cuts.push(best[0]);
+      }
+      const out = []; let from = 0;
+      for (const c of [...cuts, ws.length]) { out.push(ws.slice(from, c)); from = c; }
+      if (out.every((x) => x.length && fits(x))) return out;
+    }
+    return ws.map((w) => [w]);
+  };
+  const chunks = [];
+  for (const sen of sentences.flatMap(split)) {
+    const prev = chunks.at(-1);
+    if (prev && (len(sen) < 24 || len(prev) < 24) && fits([...prev, ...sen])) prev.push(...sen); else chunks.push([...sen]);
+  }
+  // each caption's first word: its index in the line, then its time
+  const firsts = []; let n = 0;
+  for (const c of chunks) { firsts.push(n); n += c.length; }
+  const tw = Array.isArray(t?.words) ? t.words : [];
+  const exact = tw.length === words.length && Number.isFinite(t?.start);
+  const total = text.length;
+  const timeOf = (wi) => {
+    if (exact && Number.isFinite(tw[wi]?.start)) return round3(start + (tw[wi].start - t.start));
+    const chars = words.slice(0, wi).join(' ').length + (wi ? 1 : 0);
+    if (tw.length && Number.isFinite(t?.start)) { const j = Math.min(tw.length - 1, Math.round(wi * tw.length / words.length)); if (Number.isFinite(tw[j]?.start)) return round3(start + (tw[j].start - t.start)); }
+    return round3(start + (end - start) * chars / total);
+  };
+  // two even lines when it doesn't fit on one
+  const wrap = (ws) => {
+    if (len(ws) <= SUB_LINE) return ws.join(' ');
+    let best = null;
+    for (let i = 1; i < ws.length; i++) { const m = Math.max(len(ws.slice(0, i)), len(ws.slice(i))); if (len(ws.slice(0, i)) <= SUB_LINE && len(ws.slice(i)) <= SUB_LINE && (!best || m < best[1])) best = [i, m]; }
+    return best ? `${ws.slice(0, best[0]).join(' ')}\n${ws.slice(best[0]).join(' ')}` : ws.join(' ');
+  };
+  const out = chunks.map((c, i) => ({ node: l.node, part: i + 1, text: wrap(c), start_sec: i === 0 ? start : timeOf(firsts[i]), end_sec: end }));
+  for (let i = 0; i + 1 < out.length; i++) out[i].end_sec = out[i + 1].start_sec;
+  return out.filter((c) => c.end_sec > c.start_sec);
+}
+
 const SIZES = { '16:9': [1920, 1080], '9:16': [1080, 1920], '1:1': [1080, 1080], '4:5': [1080, 1350] };
 
 // Everything the app needs to build the Mortiflix Studio project once, in-process (doc 38 §1): the sequence, bins, tracks,
@@ -442,14 +516,17 @@ export function handoffPlan(root, id) {
   if (sound.music) clips.push({ node: 'music', kind: 'music', track: 'A2', bin: 'Music', name: 'Music', label: null, version: sound.music.version, start_sec: 0, dur_sec: null, media: { kind: 'audio', path: sound.music.path }, cues: sound.cues.map((c) => ({ node: c.node, start_sec: c.start_sec, end_sec: c.end_sec, gain_db: c.gain_db, duck_db: c.duck_db, label: label(c) })) });
   const assets = listAssets(root, id).yours;
   // the newest few older versions of each piece (run 2: 240 of them, every one a whole animatic, went into Edit)
-  const older = gv.nodes.flatMap((n) => n.versions.filter((v) => v.path && v.v !== n.plays).slice(-OLDER_KEPT).map((v) => ({ node: n.id, version: v.v, name: `${n.label} v${v.v}`, label: label(n), path: v.path, from_sec: v.from_sec ?? null, to_sec: v.to_sec ?? null })));
+  const older = gv.nodes.flatMap((n) => n.versions.filter((v) => v.path && v.v !== n.plays).slice(-(OLDER_KEPT[n.kind] ?? 1)).map((v) => ({ node: n.id, version: v.v, name: `${n.label} v${v.v}`, label: label(n), path: v.path, from_sec: v.from_sec ?? null, to_sec: v.to_sec ?? null })));
   const cut = gv.nodes.filter((n) => n.kind === 'shot' && n.state === 'cut').map((n) => { const v = n.versions.find((x) => x.v === n.plays); return v?.path ? { node: n.id, version: v.v, name: `${n.label} · ${n.title || ''}`.slice(0, 80), label: label(n), path: v.path, from_sec: v.from_sec ?? null, to_sec: v.to_sec ?? null } : null; }).filter(Boolean);
   const markers = [];
   for (const b of gv.beats) { const s = shots.find((x) => x.beat === b.id); if (s) markers.push({ kind: 'chapter', node: b.id, time_sec: s.start_sec, name: `${b.no} ${String(b.name || b.title).slice(0, 60)}`, label: b.colour?.label || null, comment: b.title }); }
   for (const c of sound.cues) if (c.start_sec !== null) markers.push({ kind: 'comment', node: c.node, time_sec: c.start_sec, name: `${c.label} · ${c.title || ''}`.trim(), label: label(c) });
-  // One caption per voice line; a line moved over the next one ends its caption where the next begins (a caption
-  // track holds one caption at a time).
-  const captions = sound.voice.filter((l) => l.dur_sec).map((l) => ({ node: l.node, text: spoken(l.words), start_sec: l.start_sec, end_sec: round3(l.start_sec + l.dur_sec) }))
+  // Subtitles: each voice line split into short captions (two lines of at most 42 characters), each timed by the
+  // line's word timings (run 3: one caption per line put a whole paragraph over the picture). A line moved over the
+  // next one ends its last caption where the next begins (a caption track holds one caption at a time).
+  const timing = readOr(join(projectPaths(root, id).work, 'voice', 'timing.json'), { lines: [] });
+  const timed = Object.fromEntries((Array.isArray(timing?.lines) ? timing.lines : []).filter((t) => t?.id).map((t) => [t.id, t]));
+  const captions = sound.voice.filter((l) => l.dur_sec).flatMap((l) => subtitles(l, timed[l.node]))
     .sort((a, b) => a.start_sec - b.start_sec);
   for (let i = 0; i + 1 < captions.length; i++) if (captions[i].end_sec > captions[i + 1].start_sec) captions[i].end_sec = captions[i + 1].start_sec;
   for (let i = captions.length - 1; i >= 0; i--) if (!(captions[i].end_sec > captions[i].start_sec)) captions.splice(i, 1);

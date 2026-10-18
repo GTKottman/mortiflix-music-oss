@@ -138,3 +138,29 @@ test('captions never overlap when a voice line is moved over the next one', asyn
   for (let i = 0; i + 1 < caps.length; i++) assert.ok(caps[i].end_sec <= caps[i + 1].start_sec, JSON.stringify(caps.slice(i, i + 2)));
   assert.ok(caps.every((c) => c.end_sec > c.start_sec));
 });
+
+test('run 3: a voice line becomes short subtitles (two lines of 42 at most), each at its words, back to back', async () => {
+  const { subtitles, SUB_LINE } = await import('../src/svc/graph.mjs');
+  const text = 'In 1979, Douglas Hofstadter wrote a whole book about loops like this one. It\'s called Gödel, Escher, Bach: an Eternal Golden Braid, and in 1980 it won the Pulitzer Prize for General Nonfiction. Let\'s go.';
+  const ws = text.split(' ');
+  const t = { start: 100, words: ws.map((w, i) => ({ text: w, start: 100 + i * 0.4, end: 100 + i * 0.4 + 0.3 })) };
+  const l = { node: 'b01-2', words: `[warm] ${text}`, start_sec: 15, dur_sec: ws.length * 0.4 };
+  const subs = subtitles(l, t);
+  assert.ok(subs.length >= 3, JSON.stringify(subs));
+  for (const s of subs) {
+    const lines = s.text.split('\n');
+    assert.ok(lines.length <= 2 && lines.every((x) => x.length <= SUB_LINE), s.text);
+    assert.ok(!/\[/.test(s.text));
+  }
+  assert.equal(subs[0].start_sec, 15);
+  for (let i = 0; i + 1 < subs.length; i++) assert.equal(subs[i].end_sec, subs[i + 1].start_sec, 'back to back');
+  assert.equal(subs.at(-1).end_sec, 15 + ws.length * 0.4);
+  // each caption starts at its first word's time
+  const second = subs[1].text.replace('\n', ' ').split(' ')[0];
+  assert.equal(subs[1].start_sec, Math.round((15 + ws.indexOf(second) * 0.4) * 1000) / 1000);
+  assert.ok(subs.some((s) => s.text.endsWith("Let's go.")), 'a two-word sentence joins its neighbour');
+  assert.ok(!subs.some((s) => s.text === "Let's go."));
+  // no word timings: still short captions, timed by characters
+  const plain = subtitles(l, null);
+  assert.equal(plain.length, subs.length);
+});
