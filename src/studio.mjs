@@ -27,6 +27,7 @@ export const DEFAULT_CONFIG = {
   claudeArgs: ['--permission-mode', 'acceptEdits', '--allowedTools', 'Bash Read Write Edit Glob Grep WebFetch WebSearch Skill TodoWrite'],
   webTools: true,                   // anthropic-api: give sessions web search + web fetch
   fallbacks: true,                  // anthropic-api: server-side refusal fallbacks
+  leanSessions: true,               // claude-code: sessions skip your own MCP servers, plugins, skills and global CLAUDE.md
   sandbox: false,                   // claude-code on Linux: run each session inside bubblewrap
   maxSessionMinutes: 240,
   renderPrefix: [],                 // wraps every `mfx render` command, e.g. a machine-wide queue: ["render-queue", "-l", "{label}", "--"]

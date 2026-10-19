@@ -22,7 +22,7 @@ export const PARENT_SESSION_VARS = ['CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT', 'CLA
   'CLAUDE_CODE_EXECPATH', 'CLAUDE_PID'];
 
 export async function run({ root, workdir, prompt, env, transcript, onActivity, signal, config }) {
-  const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose', ...withCraft(config.claudeArgs || [], workdir)];
+  const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose', ...leanArgs(withCraft(config.claudeArgs || [], workdir), config)];
   if (config.model) args.push('--model', config.model);
   // Sessions use the studio browser through browser-harness; Claude in Chrome would drive the owner's own Chrome.
   if (!args.includes('--disallowedTools')) args.push('--disallowedTools', 'mcp__claude-in-chrome__*');
@@ -97,6 +97,28 @@ export function withCraft(claudeArgs, workdir) {
   if (i >= 0 && i + 1 < out.length) out[i + 1] = `${out[i + 1]} ${allow}`;
   else out.push('--allowedTools', allow);
   return [...out, '--mcp-config', file];
+}
+
+// The tools a lean session has: the built-in ones the allow list names, plus Task (sessions hand big jobs to helpers).
+export const SESSION_TOOLS = ['Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep', 'WebFetch', 'WebSearch', 'Skill', 'TodoWrite', 'Task'];
+
+// A session is a Mortiflix worker, not your own Claude Code: without these it starts with every MCP server, plugin,
+// skill and global CLAUDE.md you have (about 38k tokens before its first word, re-read on every step). Lean, it gets
+// only the project's own CLAUDE.md and .claude/skills, the studio's Craft servers (--mcp-config) and the tools above
+// (about 20k). Your login and plan still apply. config.leanSessions: false gives sessions your whole setup again;
+// a flag already in claudeArgs is left as you set it.
+export function leanArgs(args, config = {}) {
+  if (config.leanSessions === false) return args;
+  const out = [...args];
+  const has = (f) => out.includes(f);
+  if (!has('--strict-mcp-config')) out.push('--strict-mcp-config');
+  if (!has('--setting-sources')) out.push('--setting-sources', 'project,local');
+  if (!has('--tools')) out.push('--tools', SESSION_TOOLS.join(' '));
+  if (!has('--settings')) {
+    const userMd = join(process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'), 'CLAUDE.md');
+    out.push('--settings', JSON.stringify({ claudeMdExcludes: [userMd] }));
+  }
+  return out;
 }
 
 export function describeTool(name, input = {}) {

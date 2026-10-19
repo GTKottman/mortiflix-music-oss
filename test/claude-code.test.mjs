@@ -156,3 +156,18 @@ test('a claude-code session doesn\'t inherit the Claude Code conversation that s
   for (const k of claudeCode.PARENT_SESSION_VARS) assert.doesNotMatch(env, new RegExp(`^${k}=`, 'm'));
   assert.match(env, /^MFX_TOKEN=t$/m);
 });
+
+test('sessions start lean: no owner MCP servers, plugins, skills or global CLAUDE.md, unless turned off', () => {
+  const base = ['--permission-mode', 'acceptEdits', '--allowedTools', 'Bash Read'];
+  const lean = claudeCode.leanArgs(base, {});
+  assert.deepEqual(lean.slice(0, 4), base);
+  assert.ok(lean.includes('--strict-mcp-config'));
+  assert.equal(lean[lean.indexOf('--setting-sources') + 1], 'project,local');
+  assert.equal(lean[lean.indexOf('--tools') + 1], claudeCode.SESSION_TOOLS.join(' '));
+  assert.match(JSON.parse(lean[lean.indexOf('--settings') + 1]).claudeMdExcludes[0], /\.claude[\\/]CLAUDE\.md$/);
+  assert.deepEqual(claudeCode.leanArgs(base, { leanSessions: false }), base);
+  // a flag the owner set themselves stays theirs
+  const own = claudeCode.leanArgs([...base, '--tools', 'Bash'], {});
+  assert.equal(own.filter((a) => a === '--tools').length, 1);
+  assert.equal(own[own.indexOf('--tools') + 1], 'Bash');
+});
