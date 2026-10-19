@@ -29,9 +29,11 @@ fn gate_of(stage: u8) -> Option<Gate> {
         STAGE_STYLE_FRAMES => {
             Gate { kind: Kind::Frame, noun: "style frames", next: "Every cut between the scenes gets its transition, drawn in the look you checked off." }
         }
-        STAGE_TRANSITIONS => {
-            Gate { kind: Kind::Transition, noun: "transitions", next: "The animatic: every scene timed to the voice, in the look, cut with these transitions." }
-        }
+        STAGE_TRANSITIONS => Gate {
+            kind: Kind::Transition,
+            noun: "transitions",
+            next: "You pick the motion (a motion pack and rule packs), then the animatic: every scene timed to the voice, in the look, cut with these transitions.",
+        },
         STAGE_ANIMATIC => {
             Gate { kind: Kind::Shot, noun: "shots", next: "The music is written to the animatic's timing in Strudel, its MIDI under the animatic." }
         }
@@ -50,6 +52,26 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     ui.label(RichText::new(format!("{} gate", stage_name(stage))).size(15.0).color(t.text).strong());
     ui.add_space(2.0);
     ui.label(RichText::new(format!("Nothing after {} is made until this passes.", stage_name(stage))).size(12.0).color(t.text_dim));
+    if stage == STAGE_ANIMATIC {
+        // the motion and rule packs picked before animating (owner, 2026-10-18)
+        let m = &ctx.state.motion;
+        let picked = m.motions.iter().find(|p| p.id == m.motion).map_or("the AI decides".to_string(), |p| p.name.clone());
+        let rules = m.rules.iter().filter(|p| m.picked_rules.contains(&p.id)).map(|p| p.name.clone()).collect::<Vec<_>>();
+        let words = if m.saved {
+            format!("Motion: {picked}{}", if rules.is_empty() { String::new() } else { format!(" · rules: {}", rules.join(", ")) })
+        } else {
+            "Motion: not picked yet".to_string()
+        };
+        ui.add_space(4.0);
+        ui.horizontal_top(|ui| {
+            ui.add(egui::Label::new(RichText::new(words).size(12.0).color(t.text_dim)).wrap());
+        });
+        let b = ui.button("Motion menu…");
+        ctx.auto("mfx.gate.motionMenu", &b, "Motion menu…");
+        if b.clicked() {
+            ctx.state.motion.show = true;
+        }
+    }
     ui.add_space(10.0);
     if crate::service_notice(ui, ctx) && !ctx.state.nodes.loaded {
         return;

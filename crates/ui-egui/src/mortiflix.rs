@@ -289,7 +289,7 @@ pub fn stage_bar(app: &mut StudioApp, ui: &mut egui::Ui, rect: egui::Rect) {
 pub fn panel(app: &mut StudioApp, ui: &mut egui::Ui, p: PanelKind, rect: egui::Rect) {
     let theme = theme(&app.tokens);
     // Script, Voice and Style frames have no video yet: their own work is centre stage (owner, 2026-10-18)
-    let own = mfx::own_centre(app.mfx.core.state.stage);
+    let own = mfx::own_centre(&app.mfx.core.state);
     if p == PanelKind::MfxPreview && !own {
         crate::mortiflix_preview::picture(app, ui, rect);
     }
@@ -319,7 +319,7 @@ pub fn tab_titles(app: &StudioApp) -> Vec<(PanelKind, String)> {
     }
     let name = mfx::stage_name(s.stage);
     let mut titles = vec![(PanelKind::MfxStage, format!("{name} gate"))];
-    if mfx::own_centre(s.stage) {
+    if mfx::own_centre(s) {
         titles.push((PanelKind::MfxPreview, format!("Mortiflix {name}")));
     }
     titles

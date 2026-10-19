@@ -19,6 +19,7 @@ pub mod gates;
 pub mod into_edit;
 pub mod look;
 pub mod look_menu;
+pub mod motion_menu;
 pub mod new_project;
 pub mod nodes;
 pub mod preview;
@@ -195,6 +196,7 @@ impl Mortiflix {
         look::tick(&mut self.state, &mut self.service);
         resume::tick(&mut self.state, &mut self.service);
         score::tick(&mut self.state, &mut self.service);
+        motion_menu::tick(&mut self.state, &mut self.service);
     }
     /// Go to a stage (0-7). `done`: the stage being left was finished with Next. Tells the service.
     /// Returns the stage it was on, or None when `to` is out of range.
@@ -290,6 +292,7 @@ pub fn show_centre(ui: &mut egui::Ui, ctx: &mut MfxCtx) -> bool {
         0 => script::show(ui, ctx),
         STAGE_VOICE => voice_music::show(ui, ctx),
         STAGE_STYLE_FRAMES => look::show(ui, ctx),
+        STAGE_ANIMATIC if motion_menu::wanted(ctx.state) => motion_menu::show(ui, ctx),
         _ => {
             preview::show(ui, ctx);
             return false;
@@ -298,9 +301,10 @@ pub fn show_centre(ui: &mut egui::Ui, ctx: &mut MfxCtx) -> bool {
     true
 }
 
-/// The stage has its own centre panel instead of the video preview.
-pub fn own_centre(stage: u8) -> bool {
-    matches!(stage, 0 | STAGE_VOICE | STAGE_STYLE_FRAMES)
+/// The stage has its own centre panel instead of the video preview (the Animatic while its motion
+/// menu shows).
+pub fn own_centre(state: &MfxState) -> bool {
+    matches!(state.stage, 0 | STAGE_VOICE | STAGE_STYLE_FRAMES) || (state.stage == STAGE_ANIMATIC && motion_menu::wanted(state))
 }
 
 /// The calm placeholder every part stub draws: the part's name and the doc that specifies it.
