@@ -258,7 +258,8 @@ export async function quickFrames({ root, id, view, run, runArgs, config, onActi
   if (!state.checks) return give(`still not passing after ${MAX_REVIEW} checks: ${(state.problems || []).join('; ').slice(0, 300)}`);
 
   // design/frames.json (the canvas) and the submission
-  const frames = state.frames.map((f, i) => ({ id: `sf${String(i + 1).padStart(2, '0')}`, file: `out/frames/sf${String(i + 1).padStart(2, '0')}.png`, label: f.label, beats: f.beats }));
+  // `composition`: the export in src/scenes/frames.tsx (the transition board and the animatic draw the frame from it)
+  const frames = state.frames.map((f, i) => ({ id: `sf${String(i + 1).padStart(2, '0')}`, file: `out/frames/sf${String(i + 1).padStart(2, '0')}.png`, label: f.label, beats: f.beats, composition: f.id }));
   writeFileSync(join(c.work, 'design', 'frames.json'), JSON.stringify({ frames }, null, 2));
   const version = view.version + 1;
   const pairs = state.contrast.map((p) => `${p.frame} ${p.fg} on ${p.bg} (${p.px}px) ${p.ratio}:1`).join('; ');
