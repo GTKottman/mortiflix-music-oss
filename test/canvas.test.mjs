@@ -9,6 +9,7 @@ import { respond } from '../src/gates.mjs';
 import { Runner } from '../src/runner.mjs';
 import { syncCanvas, BEAT_COLOURS } from '../src/canvas.mjs';
 import { setBrief } from '../src/svc/lookbrief.mjs';
+import { setMotionBrief } from '../src/svc/motionbrief.mjs';
 
 const write = (dir, rel, data) => { mkdirSync(join(dir, rel, '..'), { recursive: true }); writeFileSync(join(dir, rel), typeof data === 'string' || Buffer.isBuffer(data) ? data : JSON.stringify(data)); };
 
@@ -147,6 +148,7 @@ test('canvas: OK, Cut it and Fix; a fix starts a session that remakes only that 
   const p = createProject(root, { pipeline: 'explainer', title: 'Fixes', answers: { topic: 'tides' } });
   startProject(root, p.id);
   setBrief(root, p.id, { vibe: 'calm', font: 'Inter' }); // the owner picks a look before the style frames
+  setMotionBrief(root, p.id, {}); // and leaves the motion to the AI before the animatic
   const runner = new Runner(root);
   runner.acquire();
   t.after(() => runner.release());
@@ -212,6 +214,7 @@ test('canvas: nothing runs ahead of a gate; each step starts only when every ste
   const p = createProject(root, { pipeline: 'explainer', title: 'Gated', answers: { topic: 'tides' } });
   startProject(root, p.id);
   setBrief(root, p.id, { vibe: 'calm', font: 'Inter' }); // the owner picks a look before the style frames
+  setMotionBrief(root, p.id, {}); // and leaves the motion to the AI before the animatic
   const runner = new Runner(root);
   runner.acquire();
   t.after(() => runner.release());
@@ -270,6 +273,7 @@ test('edit: the final as a Mortiflix Studio project, every shot its own named cl
   const p = createProject(root, { pipeline: 'explainer', title: 'Hand off', answers: { topic: 'tides' } });
   startProject(root, p.id);
   setBrief(root, p.id, { vibe: 'calm', font: 'Inter' }); // the owner picks a look before the style frames
+  setMotionBrief(root, p.id, {}); // and leaves the motion to the AI before the animatic
   const runner = new Runner(root);
   runner.acquire();
   t.after(() => runner.release());
@@ -348,4 +352,46 @@ test('look: the style frames wait for the look the owner picks; a style pack or 
   assert.equal(b.vibe.length, 200);
   assert.ok(existsSync(join(projectPaths(root, p.id).work, 'design', 'look-brief.json')));
   assert.equal(state('style-frames'), 'ready');
+});
+
+test('packs: every kind in packs/<kind>/, the older style-packs/ too; the animatic waits for the motion and rule packs', async (t) => {
+  const { loadProject, projectPipeline } = await import('../src/projects.mjs');
+  const { stepView } = await import('../src/gates.mjs');
+  const { listAllPacks, packKinds } = await import('../src/svc/packs.mjs');
+  const { serviceBrief } = await import('../src/svc/brief.mjs');
+  const root = tempStudio(t);
+  const put = (kind, id, def, extra = {}) => {
+    const d = join(root, 'packs', kind, id);
+    mkdirSync(d, { recursive: true });
+    writeFileSync(join(d, 'pack.json'), JSON.stringify({ format: 'mortiflix.pack', version: 1, kind, ...def }));
+    for (const [f, txt] of Object.entries(extra)) writeFileSync(join(d, f), txt);
+  };
+  put('motion', 'snappy', { name: 'Snappy', moves: ['whip pan', 'pop in'], easing: 'back out', pace: 'fast' });
+  put('rule', 'safe-text', { name: 'Safe text', rules: ['Text 8% inside the edges'] }, { 'RULES.md': 'never' });
+  put('rule', 'no-red', { name: 'No red' }, { 'RULES.md': 'Never use red.' });
+  put('lottie', 'odd', { name: 'A kind from mortiflix.com' });
+  mkdirSync(join(root, 'style-packs', 'old'), { recursive: true });
+  const all = listAllPacks(root);
+  assert.deepEqual(all.map((p) => `${p.kind}/${p.id}`).sort(), ['lottie/odd', 'motion/snappy', 'rule/no-red', 'rule/safe-text', 'style/old']);
+  assert.equal(all.find((p) => p.id === 'no-red').words, 'Never use red.', 'RULES.md when pack.json has no words');
+  assert.ok(packKinds(root).some((k) => k.kind === 'lottie' && k.count === 1));
+  const p = createProject(root, { pipeline: 'explainer', title: 'Motion first', answers: { topic: 'tides' } });
+  startProject(root, p.id);
+  setBrief(root, p.id, { vibe: 'calm' });
+  const runner = new Runner(root);
+  runner.acquire();
+  t.after(() => runner.release());
+  const state = (k) => stepView(loadProject(root, p.id), projectPipeline(root, p.id)).find((s) => s.key === k).state;
+  await runner.loop();
+  for (const step of ['brief', 'script', 'voice', 'style-frames', 'transitions']) { respond(root, p.id, step, 1, { verdict: 'approve' }); await runner.loop(); }
+  assert.equal(state('animatic'), 'blocked', 'no motion picked: nothing animated');
+  assert.throws(() => setMotionBrief(root, p.id, { motion_pack: 'nope' }), /no motion pack/);
+  assert.throws(() => setMotionBrief(root, p.id, { rule_packs: ['snappy'] }), /no rule pack/);
+  setMotionBrief(root, p.id, { motion_pack: 'snappy', rule_packs: ['safe-text', 'no-red'], words: 'keep it tight' });
+  assert.equal(state('animatic'), 'ready');
+  const brief = serviceBrief(root, p.id);
+  assert.match(brief, /Motion pack "Snappy"/);
+  assert.match(brief, /- move: whip pan/);
+  assert.match(brief, /Never use red\./);
+  assert.ok(existsSync(join(projectPaths(root, p.id).work, 'design', 'motion-brief.json')));
 });

@@ -53,6 +53,7 @@ test('look: the looks to pick from, pick another (asks first, remakes only the s
   const made = await call('project.new', { preset: 'explainer', title: 'Bikes', idea: 'Why bike lanes pay off', backend: 'demo' });
   const id = made.project.id;
   await call('look.brief.set', { vibe: 'calm', font: 'Inter' }); // the owner picks a look before the style frames
+  await call('motion.brief.set', {}); // and leaves the motion to the AI before the animatic
   await until(() => loadProject(root, id).state === 'queued');
   await run();
   await run();

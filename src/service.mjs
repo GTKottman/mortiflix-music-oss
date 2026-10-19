@@ -20,6 +20,8 @@ import { voiceOverview, saveVoice } from './voice/index.mjs';
 import { boothStatus, addTake, keepTake } from './booth.mjs';
 import { musicScore } from './svc/score.mjs';
 import { listPacks, listFonts, getBrief, setBrief } from './svc/lookbrief.mjs';
+import { listAllPacks, packKinds } from './svc/packs.mjs';
+import { getMotionBrief, setMotionBrief } from './svc/motionbrief.mjs';
 import { STAGES, STAGE_NAMES, stageIndex, stageStatuses, stageDone, handOverToApp, remakesIf, reopenStage, saveLastStage, stageOf, mfxView, STAGE_MUSIC, STAGE_EDIT, STAGE_RENDER } from './svc/stages.mjs';
 import { listPresets, getPreset, savePresetFull, deletePreset } from './svc/presets.mjs';
 import { addAsset, updateAsset, replaceAsset, removeAsset, useAsset, listAssets } from './svc/assets.mjs';
@@ -490,6 +492,10 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
     },
     // ---- stage 2 Look: the looks to pick from (the Look panel + the chat's looks card) ----
     'look.get': (p) => lookView(root, needProject(p)),
+    'packs.list': (p) => listAllPacks(root, p?.kind ? String(p.kind).slice(0, 40) : null),
+    'packs.kinds': () => packKinds(root),
+    'motion.brief.get': (p) => getMotionBrief(root, needProject(p)),
+    'motion.brief.set': (p) => { const r = setMotionBrief(root, needProject(p), p || {}); runner?.wake(); poke(); return r; },
     'look.packs': () => listPacks(root),
     'look.fonts': () => listFonts(),
     'look.brief.get': (p) => getBrief(root, needProject(p)),

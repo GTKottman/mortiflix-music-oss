@@ -3,39 +3,24 @@
 // Kept in project.json `mfx.look_brief` and written to design/look-brief.json for the session; the style frames step
 // stays blocked until it exists (gates.mjs).
 //
-// A style pack is a folder in the studio, style-packs/<name>/, with a pack.json ({name, fonts, palette, vibe, look,
-// words}) and any pictures beside it; a preset's saved look (its words and pictures) is offered as a pack too.
-import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import { join, extname } from 'node:path';
+// A style pack is a pack of kind "style" (packs.mjs: packs/style/<id>/pack.json); a preset's saved look (its words and
+// pictures) is offered as a pack too.
+import { writeFileSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { listAllPacks } from './packs.mjs';
 import { spawnSync } from 'node:child_process';
 import { loadProject, projectPaths, update, event, now } from '../projects.mjs';
 import { listPipelines } from '../pipelines.mjs';
 import { UserError } from '../studio.mjs';
 
 const HEX = /^#[0-9a-f]{6}$/i;
-const PICTURE = new Set(['.png', '.jpg', '.jpeg', '.webp', '.svg', '.gif']);
 const str = (v, n) => String(v ?? '').trim().slice(0, n);
 const strs = (v, n, each) => (Array.isArray(v) ? v.map((x) => str(x, each)).filter(Boolean).slice(0, n) : []);
 
-export const packsDir = (root) => join(root, 'style-packs');
-
-function readPack(dir, id) {
-  let def = {};
-  try { def = JSON.parse(readFileSync(join(dir, 'pack.json'), 'utf8')); } catch { /* a folder of pictures is a pack too */ }
-  const pictures = readdirSync(dir).filter((f) => PICTURE.has(extname(f).toLowerCase())).slice(0, 24).map((f) => join(dir, f));
-  return { id, name: str(def.name, 80) || id, fonts: strs(def.fonts, 4, 60), palette: strs(def.palette, 8, 7).filter((c) => HEX.test(c)),
-    vibe: str(def.vibe, 200), look: str(def.look, 200), words: str(def.words, 2000), pictures, source: 'pack' };
-}
-
-// look.packs: the owner's style packs (studio folder first, then presets with a saved look).
+// look.packs: the owner's style packs (packs/style/, the older style-packs/), then presets with a saved look.
 export function listPacks(root) {
-  const out = [];
-  const dir = packsDir(root);
-  if (existsSync(dir)) {
-    for (const name of readdirSync(dir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name).sort().slice(0, 200)) {
-      try { out.push(readPack(join(dir, name), name)); } catch { /* an unreadable folder is skipped */ }
-    }
-  }
+  const out = listAllPacks(root, 'style').map((p) => ({ id: p.id, name: p.name, fonts: p.fonts, palette: p.palette, vibe: p.vibe, look: p.look, words: p.words,
+    pictures: p.pictures, source: 'pack', description: p.description }));
   for (const p of listPipelines(root)) {
     if (p.source === 'built-in' || !p.look || !(p.look.words || p.look.pictures?.length)) continue;
     out.push({ id: `preset:${p.slug}`, name: `${p.name} (preset)`, fonts: [], palette: [], vibe: '', look: '', words: str(p.look.words, 2000),
