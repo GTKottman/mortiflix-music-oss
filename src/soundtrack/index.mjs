@@ -37,8 +37,12 @@ function moments(c, timing) {
   scenes.forEach((x, i) => { x.start_sec = i ? Math.max(0, x.s - LEAD) : 0; });
   scenes.forEach((x, i) => { x.end_sec = scenes[i + 1]?.start_sec ?? timing.seconds + END_HOLD; delete x.s; });
   const cuts = (c.board.cuts || []).map((x, i) => {
-    const n = Number(String(x.lands_on || '').match(/beat (\d+)/)?.[1]) || i + 2;
-    const t = first(beats[n - 1]?.id);
+    // where the cut lands: the scene the board names ("(b03, 14.16 s)" or "beat 3"), at its first word on this voice;
+    // else the time the board wrote; else the next scene in order
+    const on = String(x.lands_on || '');
+    const bid = on.match(/\b(b\d{2,3})\b/)?.[1] || (on.match(/beat (\d+)/) ? beats[Number(on.match(/beat (\d+)/)[1]) - 1]?.id : null);
+    const written = Number(on.match(/(\d+(?:\.\d+)?)\s*s\)/)?.[1]);
+    const t = (bid && first(bid)) ?? (Number.isFinite(written) ? written : first(beats[i + 1]?.id));
     const what = `${typeof x.transition === 'string' ? x.transition : x.transition?.new || 'cut'} into ${x.to}`;
     return t === null ? null : { cut: i + 1, t_sec: t, frames: x.frames || 0, what };
   }).filter(Boolean);

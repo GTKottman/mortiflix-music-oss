@@ -30,7 +30,8 @@ export function planEffects({ pack, cuts, fps = 30, lastBeatStart = null }) {
     const moment = c.t_sec - (c.frames || 0) / fps / 2; // the middle of the transition
     out.push({ file: join(pack.dir, s.file), sound: s.id, at: +Math.max(0, moment - s.hit_sec).toFixed(3), moment: +moment.toFixed(3), strength: 'medium', label: `${s.id} on cut ${c.cut}`, why: `${c.what}: ${s.use_for}` });
   }
-  if (lastBeatStart !== null) {
+  // the call to action's chime, unless a cut's sound already lands there (two sounds at once muddy both)
+  if (lastBeatStart !== null && !out.some((e) => Math.abs(e.moment - lastBeatStart) < 1.5)) {
     const s = find('chime', 'soft');
     if (s) out.push({ file: join(pack.dir, s.file), sound: s.id, at: +Math.max(0, lastBeatStart - s.hit_sec).toFixed(3), moment: lastBeatStart, strength: 'soft', label: `${s.id} on the call to action`, why: s.use_for });
   }
