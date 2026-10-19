@@ -993,9 +993,22 @@ pub fn editor(ui: &mut egui::Ui, ctx: &mut MfxCtx, scope: &str, compact: bool, o
     let script = ctx.state.script.script.clone();
     if script.beats.is_empty() {
         if !compact {
-            let words = if script.writing || !script.loaded { "The script appears here as it's written." } else { "No script yet." };
+            // the AI writing it (the script step is running, or its first beat is on its way): a turning
+            // spinner, so the empty box never looks stuck (owner, 2026-10-18)
+            let busy = script.writing || ctx.state.work.stage() == Some(0);
             ui.add_space(24.0);
-            ui.vertical_centered(|ui| ui.label(RichText::new(words).size(13.0).color(t.text_faint)));
+            if busy {
+                ui.vertical_centered(|ui| {
+                    let (r, _) = ui.allocate_exact_size(vec2(28.0, 28.0), Sense::hover());
+                    crate::work::spinner(ui.painter(), r.center(), 10.0, t.accent_hover, ui.input(|i| i.time));
+                    ui.add_space(8.0);
+                    ui.label(RichText::new("Writing the script…").size(13.0).color(t.text_dim));
+                });
+                ui.ctx().request_repaint_after(crate::work::FRAME);
+            } else {
+                let words = if script.loaded { "No script yet." } else { "The script appears here as it's written." };
+                ui.vertical_centered(|ui| ui.label(RichText::new(words).size(13.0).color(t.text_faint)));
+            }
         }
         return false;
     }
