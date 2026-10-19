@@ -14,6 +14,7 @@ import { loadTheme } from './svc/theme.mjs';
 import { openBridge } from './bridge.mjs';
 import { quickScriptStep, quickScript, quickBriefStep, quickBrief } from './quickscript.mjs';
 import { quickVoiceStep, quickVoice } from './quickvoice.mjs';
+import { quickFramesStep, quickFrames } from './quickframes.mjs';
 import { RenderQueue } from './renderq.mjs';
 import * as claudeCode from './backends/claude-code.mjs';
 import * as anthropicApi from './backends/anthropic-api.mjs';
@@ -212,10 +213,13 @@ export class Runner extends EventEmitter {
       const briefView = quick && !scriptView ? quickBriefStep(root, projectId, config) : null;
       // The voice is the studio's own work (quickvoice.mjs): no session, an AI call only to re-spell a failing line.
       const voiceView = quick && !scriptView && !briefView ? quickVoiceStep(root, projectId, config) : null;
+      // The style frames, driven by the studio: fresh small calls, the studio renders and shows one contact sheet.
+      const framesView = quick && !scriptView && !briefView && !voiceView ? quickFramesStep(root, projectId, config) : null;
       const q = { root, id: projectId, run: backend.run, runArgs, config, onActivity: runArgs.onActivity, fallback: () => backend.run(runArgs) };
       result = scriptView ? await quickScript({ ...q, view: scriptView })
         : briefView ? await quickBrief({ ...q, view: briefView })
           : voiceView ? await quickVoice({ ...q, view: voiceView })
+            : framesView ? await quickFrames({ ...q, view: framesView, renders: this.renders, sessionId })
           : await backend.run(runArgs);
     } catch (e) {
       result = { ok: false, error: e.message };

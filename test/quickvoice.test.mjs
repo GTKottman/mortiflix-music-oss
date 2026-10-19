@@ -32,3 +32,11 @@ test('the voice check hears "29" and "twenty-nine" as the same words', () => {
   assert.deepEqual(words('in 1979'), words('in nineteen seventy-nine'));
   assert.deepEqual(words('3.5 percent of 1,200'), words('three point five percent of one thousand two hundred'));
 });
+
+test('style frames: the studio measures text contrast the WCAG way', async () => {
+  const { contrast } = await import('../src/quickframes.mjs');
+  assert.equal(contrast('#ffffff', '#000000'), 21);
+  assert.equal(contrast('#f0ebef', '#1b121a'), 15.53);
+  assert.equal(contrast('#777777', '#777777'), 1);
+  assert.equal(contrast('red', '#000'), null);
+});
