@@ -80,8 +80,9 @@ export function stageStatuses(root, id, { running = false, graph = null } = {}) 
   const stopped = ['paused', 'cancelled'].includes(project.state) && !(project.state === 'paused' && project.needs_you && !project.needs_you.by_you);
   return STAGES.map((key, i) => {
     const steps = view.filter((s) => stageOf(s) === i);
-    const present = steps.length > 0 || i >= STAGE_EDIT;
     const pieces = nodes.filter((n) => KINDS[i].includes(n.kind));
+    // a project made before its pipeline had this stage's own step (voice lines from the animatic) still has the stage
+    const present = steps.length > 0 || i >= STAGE_EDIT || pieces.length > 0;
     const live = pieces.filter((n) => n.state !== 'cut');
     const reviewable = nodes.filter((n) => REVIEW_KINDS[i].includes(n.kind) && n.state !== 'cut');
     const made = live.filter((n) => !n.planned && n.versions?.length);
