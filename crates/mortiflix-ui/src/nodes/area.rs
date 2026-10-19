@@ -267,6 +267,10 @@ pub struct NodeArea {
     pub canvas: [f32; 4],
     /// Edits waiting for the studio: (type, params).
     pub outbox: Vec<(String, Value)>,
+    /// The stage on screen: a node shows what is made only from the stage that makes it on (owner,
+    /// 2026-10-18: on the Script stage "these nodes should all be empty", no videos yet).
+    #[serde(skip)]
+    pub stage: u8,
     #[serde(skip)]
     pub graph: Graph,
     #[serde(skip)]
@@ -321,6 +325,23 @@ pub enum Frame {
     Reveal(String),
 }
 
+impl NodeArea {
+    /// Shots show their own pictures and play from the Animatic on, voice lines from Voice on.
+    pub fn shows_shots(&self) -> bool {
+        self.stage >= crate::STAGE_ANIMATIC
+    }
+    /// Shots show their look's still from Style frames on.
+    pub fn shows_looks(&self) -> bool {
+        self.stage >= crate::STAGE_STYLE_FRAMES
+    }
+    pub fn shows_lines(&self) -> bool {
+        self.stage >= crate::STAGE_VOICE
+    }
+    pub fn shows_transitions(&self) -> bool {
+        self.stage >= crate::STAGE_TRANSITIONS
+    }
+}
+
 impl Default for NodeArea {
     fn default() -> Self {
         Self {
@@ -351,6 +372,7 @@ impl Default for NodeArea {
             redo: Vec::new(),
             canvas: [0.0, 0.0, 800.0, 400.0],
             outbox: Vec::new(),
+            stage: 0,
             graph: Graph::default(),
             memo: Memo::default(),
             loaded: false,

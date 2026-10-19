@@ -66,11 +66,13 @@ pub const COMMANDS: &[UiCommand] = &[
     cmd("stages.back", "Back", &["Stages"], Some("Cmd+Alt+PageUp")),
     cmd("stages.next", "Next", &["Stages"], Some("Cmd+Alt+PageDown")),
     cmd("stages.script", "Script", &["Stages"], Some("Cmd+Alt+1")),
-    cmd("stages.look", "Look", &["Stages"], Some("Cmd+Alt+2")),
-    cmd("stages.shots", "Shots", &["Stages"], Some("Cmd+Alt+3")),
-    cmd("stages.voiceMusic", "Voice & music", &["Stages"], Some("Cmd+Alt+4")),
-    cmd("stages.edit", "Edit", &["Stages"], Some("Cmd+Alt+5")),
-    cmd("stages.render", "Render", &["Stages"], Some("Cmd+Alt+6")),
+    cmd("stages.voice", "Voice", &["Stages"], Some("Cmd+Alt+2")),
+    cmd("stages.styleFrames", "Style frames", &["Stages"], Some("Cmd+Alt+3")),
+    cmd("stages.transitions", "Transitions", &["Stages"], Some("Cmd+Alt+4")),
+    cmd("stages.animatic", "Animatic", &["Stages"], Some("Cmd+Alt+5")),
+    cmd("stages.music", "Music", &["Stages"], Some("Cmd+Alt+6")),
+    cmd("stages.edit", "Edit", &["Stages"], Some("Cmd+Alt+7")),
+    cmd("stages.render", "Render", &["Stages"], Some("Cmd+Alt+8")),
     cmd("stages.getVideo", "Get the video", &[], None),
     cmd("stages.editVideo", "Edit the video", &[], None),
     cmd("stages.set", "Go to Stage", &[], None),
@@ -286,7 +288,9 @@ pub fn stage_bar(app: &mut StudioApp, ui: &mut egui::Ui, rect: egui::Rect) {
 /// Draw a Mortiflix dock panel.
 pub fn panel(app: &mut StudioApp, ui: &mut egui::Ui, p: PanelKind, rect: egui::Rect) {
     let theme = theme(&app.tokens);
-    if p == PanelKind::MfxPreview {
+    // the Script stage has no video yet: the script is centre stage (owner, 2026-10-18)
+    let script = app.mfx.core.state.stage == 0;
+    if p == PanelKind::MfxPreview && !script {
         crate::mortiflix_preview::picture(app, ui, rect);
     }
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(rect.shrink(8.0)).layout(egui::Layout::top_down(egui::Align::Min)));
@@ -296,12 +300,27 @@ pub fn panel(app: &mut StudioApp, ui: &mut egui::Ui, p: PanelKind, rect: egui::R
         PanelKind::MfxChat => mfx::chat::show(&mut child, &mut c),
         PanelKind::MfxAssets => mfx::chat::show_assets(&mut child, &mut c),
         PanelKind::MfxTokens => mfx::tokens::show(&mut child, &mut c),
+        PanelKind::MfxPreview if script => mfx::script::show(&mut child, &mut c),
         PanelKind::MfxPreview => mfx::preview::show(&mut child, &mut c),
         PanelKind::MfxNodes => mfx::nodes::show(&mut child, &mut c),
+        _ if script => mfx::script::gate(&mut child, &mut c),
         _ => mfx::show_stage(&mut child, &mut c),
     }
     let (cmds, autos) = (std::mem::take(&mut c.commands), std::mem::take(&mut c.auto));
     finish(app, ui.ctx(), cmds, autos);
+}
+
+/// The Mortiflix panels' tab names follow what they show on the stage: on Script the centre panel is
+/// the script and the stage panel its gate; on the other stages the stage panel carries the stage's name.
+pub fn tab_titles(app: &StudioApp) -> Vec<(PanelKind, String)> {
+    let s = &app.mfx.core.state;
+    if !s.active || s.stage >= mfx::STAGE_EDIT {
+        return Vec::new();
+    }
+    if s.stage == 0 {
+        return vec![(PanelKind::MfxPreview, "Mortiflix Script".into()), (PanelKind::MfxStage, "Script gate".into())];
+    }
+    vec![(PanelKind::MfxStage, format!("Mortiflix {}", mfx::stage_name(s.stage)))]
 }
 
 /// Whisper (captions) and Kokoro (natural voices), from Mortiflix Studio's own catalogues, for the Setup
@@ -683,7 +702,7 @@ mod tests {
         // off until a stage command (or the desktop app) turns it on: Mortiflix Studio alone is untouched
         assert_eq!(bar_height(&app), 0.0);
         assert!(!hides_mode_tabs(&app));
-        crate::menus::invoke(&mut app, &ctx, "stages.shots", json!({})).unwrap();
+        crate::menus::invoke(&mut app, &ctx, "stages.animatic", json!({})).unwrap();
         assert!(app.mfx.core.state.active);
         assert_eq!(app.ui.workspace, WORKSPACE);
         assert!(app.ui.dock.contains(PanelKind::MfxNodes) && app.ui.dock.contains(PanelKind::MfxChat));

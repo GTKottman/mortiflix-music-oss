@@ -601,6 +601,9 @@ fn layout_inner(
 pub struct SeqTabs {
     pub open: Vec<(u64, String)>,
     pub active: Option<u64>,
+    /// Tab names that follow what a panel shows now (Mortiflix's centre panel is the script on the
+    /// Script stage), in place of the panel's fixed title.
+    pub titles: Vec<(PanelKind, String)>,
 }
 
 pub fn draw_group_chrome(
@@ -663,7 +666,8 @@ pub fn draw_group_chrome_details(ui: &mut egui::Ui, g: &Group, seqs: &SeqTabs, t
                 let name = seqs.open.iter().find(|(id, _)| seqs.active == Some(*id)).map(|(_, n)| n.clone());
                 tabs.push(Tab { panel: *p, seq: None, title: name.unwrap_or_else(|| tl!("Timeline: (no sequences)").into()), active });
             } else {
-                tabs.push(Tab { panel: *p, seq: None, title: crate::i18n::t(p.title()).to_string(), active });
+                let title = seqs.titles.iter().find(|(k, _)| k == p).map_or_else(|| crate::i18n::t(p.title()).to_string(), |(_, s)| s.clone());
+                tabs.push(Tab { panel: *p, seq: None, title, active });
             }
         }
         let activate = |tab: &Tab, actions: &mut Vec<DockAction>| match tab.seq {

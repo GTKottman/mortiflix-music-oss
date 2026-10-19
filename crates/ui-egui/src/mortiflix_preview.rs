@@ -93,6 +93,10 @@ pub fn frame(app: &mut StudioApp, ctx: &egui::Context) {
     {
         app.ui.status = e;
     }
+    // the Script stage plays no video (owner, 2026-10-18: "Genuinely, there should be no videos yet")
+    if app.mfx.core.state.stage == 0 && app.playback.playing && loose_active(app) {
+        app.stop();
+    }
     let core = &mut app.mfx.core;
     let now = ctx.input(|i| i.time);
     pv::poll(&mut core.state, &mut core.service, now);
@@ -589,7 +593,7 @@ mod tests {
     fn app_with_plan() -> (StudioApp, egui::Context) {
         let mut app = StudioApp::new(mortiflix_engine::Session::default());
         let ctx = egui::Context::default();
-        crate::menus::invoke(&mut app, &ctx, "stages.shots", json!({})).unwrap();
+        crate::menus::invoke(&mut app, &ctx, "stages.animatic", json!({})).unwrap();
         let shot = |id: &str, beat: &str, start: f64, len: f64, colour: &str| PlanShot {
             id: id.into(),
             label: format!("Shot {}", &id[1..]),

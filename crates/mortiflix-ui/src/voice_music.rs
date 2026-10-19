@@ -29,7 +29,7 @@ use egui::{Color32, RichText, Sense, Stroke, vec2};
 use serde_json::{Value, json};
 
 use crate::state::{StageStatus, StatusKind};
-use crate::{MfxCtx, STAGE_VOICE_MUSIC};
+use crate::{MfxCtx, STAGE_MUSIC};
 use model::{Fit, Kind, Piece, PieceState, Timeline, fmt_db, fmt_secs, fmt_time};
 
 pub use theme::{show_cue_plan, show_theme_card};
@@ -1079,10 +1079,10 @@ fn keys(ui: &egui::Ui, ctx: &mut MfxCtx, vm: &mut Vm) {
     }
 }
 
-/// When the service reports nothing for Voice & music, the stage bar shows this stage's own count
+/// When the service reports nothing for Music, the stage bar shows this stage's own count
 /// (making / needs you / ready) so Get the video asks first only when something failed.
 fn stage_status(ctx: &mut MfxCtx, vm: &mut Vm) {
-    let i = usize::from(STAGE_VOICE_MUSIC);
+    let i = usize::from(STAGE_MUSIC);
     let Some(current) = ctx.state.statuses.get(i).cloned() else { return };
     let ours = vm.status_set.as_ref() == Some(&current);
     if !(current.kind == StatusKind::NotStarted || ours) || (vm.tl.lines.is_empty() && vm.tl.cues.is_empty()) {
@@ -1129,7 +1129,7 @@ mod tests {
     #[test]
     fn draws_calmly_without_a_service_and_asks_for_nothing_it_cannot_send() {
         let mut m = Mortiflix::default();
-        m.state.stage = STAGE_VOICE_MUSIC;
+        m.state.stage = STAGE_MUSIC;
         let ids = frames(&mut m, 3);
         assert!(ids.iter().any(|i| i == "mfx.service.setup"), "service not running: the Setup link shows");
         assert!(ids.iter().any(|i| i == "mfx.vm.playAll"));
@@ -1165,15 +1165,15 @@ mod tests {
             ..Vm::default()
         };
         stage_status(&mut c, &mut vm);
-        assert_eq!(c.state.status(STAGE_VOICE_MUSIC).line(), "1 of 2 OK");
+        assert_eq!(c.state.status(STAGE_MUSIC).line(), "1 of 2 OK");
         // ours: it keeps following
         vm.tl.lines[1].state = PieceState::Failed;
         stage_status(&mut c, &mut vm);
-        assert_eq!(c.state.status(STAGE_VOICE_MUSIC).kind, StatusKind::NeedsYou);
+        assert_eq!(c.state.status(STAGE_MUSIC).kind, StatusKind::NeedsYou);
         // the service said something: it stays
-        c.state.statuses[usize::from(STAGE_VOICE_MUSIC)] = StageStatus::of(StatusKind::Done);
+        c.state.statuses[usize::from(STAGE_MUSIC)] = StageStatus::of(StatusKind::Done);
         stage_status(&mut c, &mut vm);
-        assert_eq!(c.state.status(STAGE_VOICE_MUSIC).kind, StatusKind::Done);
+        assert_eq!(c.state.status(STAGE_MUSIC).kind, StatusKind::Done);
     }
 
     #[test]

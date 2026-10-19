@@ -27,7 +27,7 @@ pub use assets::{AssetDrag, show_assets};
 use model::{Act, ActionButton, Move, Msg, NodeInfo, Role, Row};
 
 use crate::state::{ChatMessage, StatusKind};
-use crate::{MfxCtx, STAGE_EDIT, STAGE_RENDER, STAGE_VOICE_MUSIC, stage_key, stage_name};
+use crate::{MfxCtx, STAGE_ANIMATIC, STAGE_EDIT, STAGE_MUSIC, STAGE_RENDER, stage_key, stage_name};
 
 /// Links are blue and underlined (the owner's standard, doc 37).
 pub const LINK: Color32 = Color32::from_rgb(0x57, 0x94, 0xec);
@@ -1280,8 +1280,8 @@ fn moves_row(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, info: Option<
                     play(ctx, None);
                 }
                 let next: &[(&str, &str, &str)] = match ctx.state.stage {
-                    2 => &[("hearIt", "Hear the voice and music", "stages.voiceMusic")],
-                    STAGE_VOICE_MUSIC => &[("editVideo", "Edit the video", "stages.editVideo"), ("getVideo", "Get the video", "stages.getVideo")],
+                    STAGE_ANIMATIC => &[("hearIt", "Go to the music", "stages.music")],
+                    STAGE_MUSIC => &[("editVideo", "Edit the video", "stages.editVideo"), ("getVideo", "Get the video", "stages.getVideo")],
                     STAGE_EDIT => &[("export", "Go to Export", "stages.render")],
                     s if s >= STAGE_RENDER => &[],
                     _ => &[],

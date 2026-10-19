@@ -1618,8 +1618,8 @@ fn from_mortiflix(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     ui.add_space(4.0);
     let missing = if ctx.state.project_id.is_none() {
         Some("Make or open a Mortiflix project first.")
-    } else if ctx.state.status(crate::STAGE_VOICE_MUSIC).kind != crate::StatusKind::Done {
-        Some("Voice & music isn't done yet: what is made so far comes in.")
+    } else if ctx.state.status(crate::STAGE_MUSIC).kind != crate::StatusKind::Done {
+        Some("Music isn't done yet: what is made so far comes in.")
     } else {
         None
     };
@@ -1756,7 +1756,7 @@ fn summary(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
         ctx.auto("mfx.into.goToEdit", &r, label);
         let back = ui.link("Back to Mortiflix");
         if back.clicked() {
-            ctx.command("stages.voiceMusic", json!({}));
+            ctx.command("stages.music", json!({}));
         }
         ctx.auto("mfx.into.back", &back, "Back to Mortiflix");
     });
@@ -1961,7 +1961,12 @@ fn ask_box(ui: &mut egui::Ui, ctx: &mut MfxCtx, p: Option<&Placed>, s: &Selected
             let r = ui.small_button("Show it in Mortiflix");
             if r.clicked() {
                 ctx.state.selected_node = Some(p.node.clone());
-                let stage = if matches!(p.kind.as_str(), "line" | "music" | "sound") { "stages.voiceMusic" } else { "stages.shots" };
+                let stage = match p.kind.as_str() {
+                    "line" => "stages.voice",
+                    "music" | "sound" | "cue" => "stages.music",
+                    "transition" => "stages.transitions",
+                    _ => "stages.animatic",
+                };
                 ctx.command(stage, json!({}));
             }
             ctx.auto("mfx.into.chip.show", &r, "Show it in Mortiflix");

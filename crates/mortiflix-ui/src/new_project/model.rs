@@ -54,7 +54,7 @@ pub struct Step {
     pub delivers: bool,
     /// Brief, Script and the final: can't be turned off.
     pub always: bool,
-    /// The stage it belongs to (`script`, `look`, `shots`, `voiceMusic`, …).
+    /// The stage it belongs to (`script`, `voice`, `styleFrames`, `animatic`, …).
     pub stage: String,
     /// `"music"`: runs only when the video has music.
     pub when: String,
