@@ -112,11 +112,11 @@ pub struct MfxState {
     pub seen_connects: u64,
     pub project_id: Option<String>,
     pub project_title: String,
-    /// The stage on screen, 0-5 (see [`crate::STAGES`]).
+    /// The stage on screen, 0-7 (see [`crate::STAGES`]).
     pub stage: u8,
     /// The furthest stage reached; looking at an earlier one shows the "looking back" hint.
     pub furthest: u8,
-    pub statuses: [StageStatus; 6],
+    pub statuses: [StageStatus; 8],
     /// What the AI is doing now ("Making shot 9 of 14 · about 4 min left"), from status events.
     pub ai_line: String,
     pub selected_node: Option<String>,
@@ -136,6 +136,15 @@ pub struct MfxState {
     pub nodes: crate::nodes::NodeArea,
     /// The loose preview (doc 36): its plan, scope, loop and the player as the host saw it.
     pub preview: crate::preview::PreviewState,
+    /// The Music stage's score: its Strudel and its MIDI under the animatic.
+    #[serde(skip)]
+    pub score: crate::score::Score,
+    /// The Animatic's motion menu: the motion and rule packs, the owner's picks.
+    #[serde(skip)]
+    pub motion: crate::motion_menu::MotionState,
+    /// The Transitions stage: the transition pack picked and the board's Fix box.
+    #[serde(skip)]
+    pub cuts: crate::transitions::CutsState,
     /// Into Edit (doc 38): the hand-off and the stage-5 Mortiflix panel.
     pub handoff: crate::into_edit::Handoff,
     /// The script, line by line, and the owner's unsaved draft (Script panel + chat card).
@@ -179,6 +188,9 @@ impl Default for MfxState {
             files_in: Vec::new(),
             nodes: crate::nodes::NodeArea::default(),
             preview: Default::default(),
+            score: crate::score::Score::default(),
+            motion: crate::motion_menu::MotionState::default(),
+            cuts: crate::transitions::CutsState::default(),
             handoff: Default::default(),
             script: Default::default(),
             look: Default::default(),
@@ -199,7 +211,7 @@ impl MfxState {
     pub fn looking_back(&self) -> bool {
         self.stage < self.furthest
     }
-    /// Move to `to` (0-5); `done` marks the stage being left as done (Next). Returns the old stage.
+    /// Move to `to` (0-7); `done` marks the stage being left as done (Next). Returns the old stage.
     pub fn go_to(&mut self, to: u8, done: bool) -> Option<u8> {
         if usize::from(to) >= crate::STAGES.len() {
             return None;

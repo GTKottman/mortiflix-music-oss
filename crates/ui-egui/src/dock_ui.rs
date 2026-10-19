@@ -208,6 +208,7 @@ impl StudioApp {
                 })
                 .collect(),
             active: self.session.state.active_sequence.map(|id| id.0),
+            titles: crate::mortiflix::tab_titles(self),
         };
         let mut actions = vec![];
         let mut targets = vec![];

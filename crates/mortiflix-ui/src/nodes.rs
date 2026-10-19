@@ -40,6 +40,7 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     let full = ui.max_rect();
     let t = ctx.theme;
     let connected = ctx.service.status().is_connected();
+    ctx.state.nodes.stage = ctx.state.stage;
     {
         let project = ctx.state.project_id.clone();
         let area = &mut ctx.state.nodes;

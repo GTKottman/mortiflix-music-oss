@@ -204,6 +204,8 @@ pub struct Timeline {
     pub has_music: bool,
     /// `voicemusic.view` answered (else times are estimated and levels, timing and takes are read-only).
     pub has_view: bool,
+    /// The Voice stage: only the voice lines (the music is made after the animatic's gate).
+    pub voice_only: bool,
 }
 
 impl Default for Timeline {
@@ -220,6 +222,7 @@ impl Default for Timeline {
             theme: None,
             has_music: false,
             has_view: false,
+            voice_only: false,
         }
     }
 }

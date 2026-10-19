@@ -1,16 +1,16 @@
 //! The stage bar (doc 30, mockup `UI Layout/30b Stage bar.html`): one 44 px row under Mortiflix Studio's
-//! header on every project screen. `‹ Back: <stage>` · six stages with their status · one hint ·
-//! `Next: <stage> ›`. On 4 Voice & music the Next slot holds Edit the video + Get the video (owner
+//! header on every project screen. `‹ Back: <stage>` · eight stages with their status · one hint ·
+//! `Next: <stage> ›`. On 6 Music the Next slot holds Edit the video + Get the video (owner
 //! answer 1). Every click is a command (`stages.*`), so menus, shortcuts and agents do the same.
 
 use egui::{Align2, Color32, FontId, Pos2, Rect, Sense, Stroke, pos2, vec2};
 use serde_json::json;
 
 use crate::state::{StageStatus, StatusKind};
-use crate::{MfxCtx, STAGE_RENDER, STAGE_VOICE_MUSIC, STAGES, stage_name};
+use crate::{MfxCtx, STAGE_MUSIC, STAGE_RENDER, STAGES, stage_name};
 
 const BACK_W: f32 = 176.0;
-const STAGE_W: f32 = 168.0;
+const STAGE_W: f32 = 150.0;
 const NEXT_W: f32 = 232.0;
 const PAIR_W: f32 = 300.0;
 const MIN_HINT_W: f32 = 140.0;
@@ -21,11 +21,13 @@ pub fn hint(ctx: &MfxCtx) -> String {
         return "You're looking back. A change here only remakes what it touches.".into();
     }
     match ctx.state.stage {
-        0 => "Click any line to change it, Save, then press Next.",
-        1 => "Pick the look you like, then press Next.",
-        2 => "Check each shot: OK, Fix or Cut it.",
-        3 => "Listen with the shots. Get the video, or edit it in Edit first.",
-        4 => "Make any final edits, then press Next.",
+        0 => "Write and change the script. Nothing is made until you press Next.",
+        1 => "Listen to each scene's voice: OK, Fix or change the voice.",
+        2 => "Check off the look and each style frame, then press Next.",
+        3 => "Check each cut: OK, Fix or pick another transition.",
+        4 => "Check each shot of the animatic: OK, Fix or Cut it.",
+        5 => "Listen with the animatic. Get the video, or edit it in Edit first.",
+        6 => "Make any final edits, then press Next.",
         _ => "Pick where the video goes and render it.",
     }
     .into()
@@ -44,11 +46,11 @@ pub fn show(ui: &mut egui::Ui, rect: Rect, ctx: &mut MfxCtx) {
     p.rect_filled(rect, 0.0, t.header_bg);
     p.line_segment([rect.left_bottom(), rect.right_bottom()], Stroke::new(1.0, Color32::BLACK));
     let stage = ctx.state.stage;
-    let pair = stage == STAGE_VOICE_MUSIC;
+    let pair = stage == STAGE_MUSIC;
     // Widths: stages never change width with their status (nothing shifts); narrow windows scale
     // everything down together and drop the hint first.
     let right_w = if pair { PAIR_W } else { NEXT_W };
-    let full = BACK_W + STAGE_W * 6.0 + right_w;
+    let full = BACK_W + STAGE_W * STAGES.len() as f32 + right_w;
     let scale = if rect.width() < full { (rect.width() / full).max(0.3) } else { 1.0 };
     let (back_w, stage_w, right_w) = (BACK_W * scale, STAGE_W * scale, right_w * scale);
 
@@ -72,7 +74,7 @@ pub fn show(ui: &mut egui::Ui, rect: Rect, ctx: &mut MfxCtx) {
     }
     ctx.auto("mfx.stagebar.back", &r, &back_label);
 
-    // The six stages
+    // The eight stages
     let mut x = back.max.x;
     for (i, (name, key)) in STAGES.iter().enumerate() {
         let Ok(i) = u8::try_from(i) else { break };

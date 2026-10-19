@@ -93,6 +93,10 @@ pub fn frame(app: &mut StudioApp, ctx: &egui::Context) {
     {
         app.ui.status = e;
     }
+    // the Script stage plays no video (owner, 2026-10-18: "Genuinely, there should be no videos yet")
+    if app.mfx.core.state.stage == 0 && app.playback.playing && loose_active(app) {
+        app.stop();
+    }
     let core = &mut app.mfx.core;
     let now = ctx.input(|i| i.time);
     pv::poll(&mut core.state, &mut core.service, now);
@@ -160,7 +164,7 @@ pub fn frame(app: &mut StudioApp, ctx: &egui::Context) {
 
 /// Draw the Program monitor's picture where the panel's layout puts it (before the controls).
 pub fn picture(app: &mut StudioApp, ui: &mut egui::Ui, rect: egui::Rect) {
-    let l = pv::layout(rect.shrink(8.0));
+    let l = pv::layout(rect.shrink(8.0), app.mfx.core.state.stage == mfx::STAGE_MUSIC);
     let p = &app.mfx.core.state.preview;
     if !p.player.ready || p.plan.shots.is_empty() || l.picture.height() < 8.0 || !loose_active(app) {
         return;
@@ -589,7 +593,7 @@ mod tests {
     fn app_with_plan() -> (StudioApp, egui::Context) {
         let mut app = StudioApp::new(mortiflix_engine::Session::default());
         let ctx = egui::Context::default();
-        crate::menus::invoke(&mut app, &ctx, "stages.shots", json!({})).unwrap();
+        crate::menus::invoke(&mut app, &ctx, "stages.animatic", json!({})).unwrap();
         let shot = |id: &str, beat: &str, start: f64, len: f64, colour: &str| PlanShot {
             id: id.into(),
             label: format!("Shot {}", &id[1..]),

@@ -1,4 +1,5 @@
-//! The Voice & music stage: hear it all before Mortiflix Studio, per line / per cue (docs 34, 33b).
+//! The Voice stage and the Music stage: hear it all before Mortiflix Studio, per line / per cue (docs 34, 33b).
+//! On Voice (owner, 2026-10-18) only the voice lines show: the music is made after the animatic's gate.
 //!
 //! Stage 4's main panel (PanelKind::MfxStage on stage 4), mockup `UI Layout/34a Voice and music
 //! stage.html`:
@@ -29,7 +30,7 @@ use egui::{Color32, RichText, Sense, Stroke, vec2};
 use serde_json::{Value, json};
 
 use crate::state::{StageStatus, StatusKind};
-use crate::{MfxCtx, STAGE_VOICE_MUSIC};
+use crate::{MfxCtx, STAGE_MUSIC, STAGE_VOICE};
 use model::{Fit, Kind, Piece, PieceState, Timeline, fmt_db, fmt_secs, fmt_time};
 
 pub use theme::{show_cue_plan, show_theme_card};
@@ -83,6 +84,8 @@ struct Vm {
     plan: Option<(String, String, u8)>,
     /// The stage-bar status this stage last filled in (it never overrides the service's own).
     status_set: Option<StageStatus>,
+    /// Drawn on the Voice stage: the voice lines only.
+    voice_only: bool,
 }
 
 fn key() -> egui::Id {
@@ -95,6 +98,11 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     // everything here fits the panel's width (nothing below may widen it)
     let width = ui.available_width();
     ui.set_max_width(width);
+    let voice_only = ctx.state.stage == STAGE_VOICE;
+    if vm.voice_only != voice_only {
+        vm.voice_only = voice_only;
+        rebuild(&mut vm);
+    }
     sync(ui, ctx, &mut vm);
     if crate::service_notice(ui, ctx) {
         ui.add_space(4.0);
@@ -134,7 +142,9 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
 
     booth(ui, ctx, &mut vm);
     keys(ui, ctx, &mut vm);
-    stage_status(ctx, &mut vm);
+    if !vm.voice_only {
+        stage_status(ctx, &mut vm);
+    }
     store(ui, vm);
 }
 
@@ -202,14 +212,7 @@ fn sync(ui: &egui::Ui, ctx: &mut MfxCtx, vm: &mut Vm) {
         vm.sel = None;
     }
     if rebuild {
-        vm.tl = model::build(&vm.graph, vm.view.as_ref());
-        model::apply_voices(&mut vm.tl, &vm.voices);
-        model::apply_theme(&mut vm.tl, &vm.theme);
-        if let Some((k, id)) = &vm.sel
-            && vm.tl.find(*k, id).is_none()
-        {
-            vm.sel = None;
-        }
+        self::rebuild(vm);
     }
     let every = if vm.tl.busy() > 0 { REFRESH_BUSY_SEC } else { REFRESH_IDLE_SEC };
     let stale = vm.fetched_at.is_none_or(|t| now - t > every);
@@ -222,6 +225,23 @@ fn sync(ui: &egui::Ui, ctx: &mut MfxCtx, vm: &mut Vm) {
         && let Some(p) = vm.tl.find_any(&id)
     {
         vm.sel = Some((p.kind, p.id.clone()));
+    }
+}
+
+/// The pieces from what the service sent (on Voice: the voice lines only).
+fn rebuild(vm: &mut Vm) {
+    vm.tl = model::build(&vm.graph, vm.view.as_ref());
+    model::apply_voices(&mut vm.tl, &vm.voices);
+    model::apply_theme(&mut vm.tl, &vm.theme);
+    if vm.voice_only {
+        vm.tl.voice_only = true;
+        vm.tl.cues.clear();
+        vm.tl.has_music = false;
+    }
+    if let Some((k, id)) = &vm.sel
+        && vm.tl.find(*k, id).is_none()
+    {
+        vm.sel = None;
     }
 }
 
@@ -840,7 +860,11 @@ fn shot_panel(ui: &mut egui::Ui, ctx: &mut MfxCtx, vm: &mut Vm, p: &Piece) {
 fn summary(ui: &mut egui::Ui, ctx: &mut MfxCtx, vm: &mut Vm) {
     let t = ctx.theme;
     ui.label(RichText::new("The whole video").color(t.text).strong());
-    ui.colored_label(t.text_dim, "Click a line or a cue on the lanes below to hear it, change it, and OK it. Double-click plays it.");
+    if vm.voice_only {
+        ui.colored_label(t.text_dim, "Click a line on the Voice lane below to hear it, change its words or its voice, and OK it. Double-click plays it.");
+    } else {
+        ui.colored_label(t.text_dim, "Click a line or a cue on the lanes below to hear it, change it, and OK it. Double-click plays it.");
+    }
     if vm.tl.no_narration() {
         ui.horizontal(|ui| {
             ui.colored_label(t.text_dim, "No narration in this video ·");
@@ -851,7 +875,7 @@ fn summary(ui: &mut egui::Ui, ctx: &mut MfxCtx, vm: &mut Vm) {
             }
         });
     }
-    if vm.tl.cues.is_empty() {
+    if vm.tl.cues.is_empty() && !vm.voice_only {
         ui.colored_label(t.text_dim, "No music cues in this video yet.");
     }
     let failed: Vec<(Kind, String, String)> =
@@ -872,7 +896,12 @@ fn summary(ui: &mut egui::Ui, ctx: &mut MfxCtx, vm: &mut Vm) {
     let not_ok = vm.tl.not_ok();
     ui.add_space(4.0);
     if not_ok.is_empty() && !(vm.tl.lines.is_empty() && vm.tl.cues.is_empty()) {
-        ui.colored_label(t.ok, "✓ Everything has an OK. Get the video, or edit it in Edit first.");
+        let done = if vm.voice_only {
+            "✓ Every line has an OK. Press Next: Style frames."
+        } else {
+            "✓ Everything has an OK. Get the video, or edit it in Edit first."
+        };
+        ui.colored_label(t.ok, done);
     } else if !not_ok.is_empty() {
         let shown: Vec<String> = not_ok.iter().take(24).cloned().collect();
         let more = if not_ok.len() > shown.len() { format!(" and {} more", not_ok.len() - shown.len()) } else { String::new() };
@@ -1079,10 +1108,10 @@ fn keys(ui: &egui::Ui, ctx: &mut MfxCtx, vm: &mut Vm) {
     }
 }
 
-/// When the service reports nothing for Voice & music, the stage bar shows this stage's own count
+/// When the service reports nothing for Music, the stage bar shows this stage's own count
 /// (making / needs you / ready) so Get the video asks first only when something failed.
 fn stage_status(ctx: &mut MfxCtx, vm: &mut Vm) {
-    let i = usize::from(STAGE_VOICE_MUSIC);
+    let i = usize::from(STAGE_MUSIC);
     let Some(current) = ctx.state.statuses.get(i).cloned() else { return };
     let ours = vm.status_set.as_ref() == Some(&current);
     if !(current.kind == StatusKind::NotStarted || ours) || (vm.tl.lines.is_empty() && vm.tl.cues.is_empty()) {
@@ -1129,7 +1158,7 @@ mod tests {
     #[test]
     fn draws_calmly_without_a_service_and_asks_for_nothing_it_cannot_send() {
         let mut m = Mortiflix::default();
-        m.state.stage = STAGE_VOICE_MUSIC;
+        m.state.stage = STAGE_MUSIC;
         let ids = frames(&mut m, 3);
         assert!(ids.iter().any(|i| i == "mfx.service.setup"), "service not running: the Setup link shows");
         assert!(ids.iter().any(|i| i == "mfx.vm.playAll"));
@@ -1165,15 +1194,15 @@ mod tests {
             ..Vm::default()
         };
         stage_status(&mut c, &mut vm);
-        assert_eq!(c.state.status(STAGE_VOICE_MUSIC).line(), "1 of 2 OK");
+        assert_eq!(c.state.status(STAGE_MUSIC).line(), "1 of 2 OK");
         // ours: it keeps following
         vm.tl.lines[1].state = PieceState::Failed;
         stage_status(&mut c, &mut vm);
-        assert_eq!(c.state.status(STAGE_VOICE_MUSIC).kind, StatusKind::NeedsYou);
+        assert_eq!(c.state.status(STAGE_MUSIC).kind, StatusKind::NeedsYou);
         // the service said something: it stays
-        c.state.statuses[usize::from(STAGE_VOICE_MUSIC)] = StageStatus::of(StatusKind::Done);
+        c.state.statuses[usize::from(STAGE_MUSIC)] = StageStatus::of(StatusKind::Done);
         stage_status(&mut c, &mut vm);
-        assert_eq!(c.state.status(STAGE_VOICE_MUSIC).kind, StatusKind::Done);
+        assert_eq!(c.state.status(STAGE_MUSIC).kind, StatusKind::Done);
     }
 
     #[test]

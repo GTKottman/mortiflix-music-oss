@@ -835,7 +835,7 @@ pub fn remaking_words(shots: usize, lines: usize) -> Option<String> {
     }
 }
 
-/// Stage 1's main panel (PanelKind::MfxStage on stage 1).
+/// Stage 1's script, centre stage (PanelKind::MfxPreview on stage 1; the gate beside it).
 pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     let t = ctx.theme;
     let full = ui.max_rect();
@@ -878,6 +878,70 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
         save_bar(&mut b, ctx, "panel");
     }
     ui.allocate_rect(full, Sense::hover());
+}
+
+/// Spoken words a minute the gate times the script at (the explainer's `script-fits-length` check).
+const WORDS_A_MINUTE: usize = 150;
+
+/// The Script stage's gate (PanelKind::MfxStage on stage 1, beside the script in the centre): what has
+/// to be true before Next, checked here rather than in a long gates file (owner, 2026-10-18), and the
+/// promise that nothing is made before it passes.
+pub fn gate(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
+    let t = ctx.theme;
+    // nothing here may widen the panel: long lines wrap
+    ui.set_max_width(ui.available_width());
+    ui.label(RichText::new("Script gate").size(15.0).color(t.text).strong());
+    ui.add_space(2.0);
+    ui.label(RichText::new("Nothing is recorded, drawn or rendered until this passes.").size(12.0).color(t.text_dim));
+    ui.add_space(10.0);
+    if crate::service_notice(ui, ctx) {
+        return;
+    }
+    let s = &ctx.state.script.script;
+    let words: usize = s.beats.iter().flat_map(|b| &b.lines).map(|l| l.words.split_whitespace().count()).sum();
+    let filled = !s.beats.is_empty() && s.beats.iter().all(|b| b.lines.iter().any(|l| !l.words.trim().is_empty()));
+    let secs = words * 60 / WORDS_A_MINUTE;
+    let status = ctx.state.status(0);
+    let rows: [(bool, String); 4] = [
+        (s.loaded && !s.writing, if s.writing { "The AI is still writing".into() } else { "The AI has finished writing".into() }),
+        (filled, format!("Every beat has its words ({} beats)", s.beats.len())),
+        (!ctx.state.script.unsaved(), if ctx.state.script.unsaved() { "Unsaved changes: Save them first".into() } else { "Every change is saved".into() }),
+        (
+            status.need == 0,
+            if status.need == 0 { "Every beat is OK'd".into() } else { format!("{} beats wait for your OK (Next OKs them as they are)", status.need) },
+        ),
+    ];
+    for (ok, text) in &rows {
+        ui.horizontal_top(|ui| {
+            ui.label(RichText::new(if *ok { "✓" } else { "○" }).size(13.0).color(if *ok { t.ok } else { t.text_faint }));
+            ui.add(egui::Label::new(RichText::new(text).size(13.0).color(if *ok { t.text } else { t.text_dim })).wrap());
+        });
+        ui.add_space(2.0);
+    }
+    ui.add_space(8.0);
+    ui.label(
+        RichText::new(format!("{words} words · about {}:{:02} spoken at {WORDS_A_MINUTE} words a minute", secs / 60, secs % 60)).size(12.0).color(t.text_faint),
+    );
+    ui.add_space(14.0);
+    ui.label(RichText::new(format!("Next: {}", crate::stage_name(1))).size(13.0).color(t.text).strong());
+    ui.label(
+        RichText::new("The script is read aloud, one voice line per scene. You check each scene's voice there before any picture is made.")
+            .size(12.0)
+            .color(t.text_dim),
+    );
+    ui.add_space(10.0);
+    let ready = rows.iter().take(3).all(|r| r.0);
+    let b = ui.add_enabled(
+        ready,
+        egui::Button::new(RichText::new(format!("Pass the gate: Next: {}", crate::stage_name(1))).size(13.0).color(Color32::WHITE))
+            .fill(t.accent)
+            .min_size(vec2(0.0, 28.0))
+            .corner_radius(4.0),
+    );
+    ctx.auto("mfx.script.gate.next", &b, "Pass the gate");
+    if b.clicked() {
+        ctx.command("stages.next", json!({}));
+    }
 }
 
 /// The draft's line: "3 unsaved changes · Discard · Save" (or the last save's outcome).

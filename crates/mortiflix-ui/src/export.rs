@@ -1232,7 +1232,7 @@ fn preview_panel(ui: &mut egui::Ui, r: Rect, ctx: &mut MfxCtx, st: &mut ExportSt
         let b = c.put(Rect::from_center_size(area.center() + vec2(0.0, 30.0), vec2(220.0, 26.0)), egui::Button::new("Back to the stages"));
         ctx.auto("mfx.export.backToStages", &b, "Back to the stages");
         if b.clicked() {
-            ctx.command("stages.voiceMusic", json!({}));
+            ctx.command("stages.music", json!({}));
         }
         return;
     }

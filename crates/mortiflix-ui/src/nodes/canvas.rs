@@ -434,13 +434,18 @@ pub fn show(parent: &mut egui::Ui, area: &mut NodeArea, t: &MfxTheme, rect: Rect
             .and_then(|t| area.work.label(t))
             .or_else(|| (board_next.as_deref() == Some(cut.id.as_str())).then(|| "Making…".to_string()));
         let planned = working.is_none() && cut.transition.is_none() && area.work.making_kind("transition");
-        if let Some(w) = &working {
+        let empty = !area.shows_transitions();
+        if empty {
+            kind = "Transition".into();
+            pick = false;
+        } else if let Some(w) = &working {
             kind.clone_from(w);
             pick = false;
         } else if planned {
             kind = "Planned".into();
             pick = false;
         }
+        let planned = planned || empty;
         let dim = !area.find.trim().is_empty() && !found.contains(&cut.id) || area.highlight != super::area::Highlight::All;
         let fill = fade(if pick { t.error.gamma_multiply(0.18) } else { t.header_bg }, dim);
         let radius = CornerRadius::same(u8::try_from(((r.height() / 2.0) as i32).clamp(2, 40)).unwrap_or(8));
@@ -894,7 +899,8 @@ fn shot_node(
         return;
     }
     let radius = 5.0;
-    if lod >= Lod::Middle && still_pending(area, n, stills) {
+    let (own, looks) = (area.shows_shots(), area.shows_looks());
+    if looks && lod >= Lod::Middle && still_pending(area, n, stills) {
         wireframe(p, n, r, z, true, sel, t);
         return;
     }
@@ -932,9 +938,16 @@ fn shot_node(
     if lod >= Lod::Middle {
         let sh = (STILL_H * z).min(r.max.y - y);
         let still = Rect::from_min_size(pos2(r.min.x, y), vec2(r.width(), sh));
-        let tex =
-            n.still().and_then(|f| resolve(f, &area.graph.base, &area.studio, area.project.as_deref())).and_then(|path| stills.get(&path)).or_else(|| {
-                // a planned or video shot shows its look's still until it has its own
+        let tex = n
+            .still()
+            .filter(|_| own)
+            .and_then(|f| resolve(f, &area.graph.base, &area.studio, area.project.as_deref()))
+            .and_then(|path| stills.get(&path))
+            .or_else(|| {
+                // a planned or video shot shows its look's still until it has its own (from Style frames on)
+                if !looks {
+                    return None;
+                }
                 let look = n.look.as_deref().and_then(|l| area.graph.get(l))?;
                 let f = look.still()?;
                 stills.get(&resolve(f, &area.graph.base, &area.studio, area.project.as_deref())?)
@@ -954,17 +967,17 @@ fn shot_node(
                 // no picture yet: the shot's words and where it is at, never an empty box (owner's first run)
                 p.rect_filled(still, 0.0, fade(Color32::from_gray(30), dim));
                 p.rect_stroke(still.shrink(6.0 * z), 2.0, Stroke::new(1.0, fade(Color32::from_gray(48), dim)), StrokeKind::Inside);
-                plan_card(p, n, still, working.is_some(), z, dim, t);
+                plan_card(p, n, still, working.is_some() || !own, z, dim, t);
             }
         }
         // a plan shown with its look's picture: say so on it, so it never reads as a made shot
-        if n.state == NodeState::Planned && working.is_none() && n.still().is_none() && tex.is_some() && still.height() > 24.0 {
+        if (n.state == NodeState::Planned || !own) && working.is_none() && (n.still().is_none() || !own) && tex.is_some() && still.height() > 24.0 {
             let tag = Rect::from_min_size(pos2(still.min.x + 4.0, still.max.y - 4.0 - 18.0 * z.max(0.8)), vec2(still.width() - 8.0, 18.0 * z.max(0.8)));
             p.rect_filled(tag, 3.0, Color32::from_black_alpha(190));
             let g = line(p, "Planned · its look for now", text_size(z, 11.0), t.text, tag.width() - 8.0);
             p.galley(pos2(tag.min.x + 5.0, tag.center().y - g.size().y / 2.0), g, t.text);
         }
-        if n.state == NodeState::Planned {
+        if n.state == NodeState::Planned || !own {
             let pts = vec![still.left_top(), still.right_top(), still.right_bottom(), still.left_bottom(), still.left_top()];
             p.extend(Shape::dashed_line(&pts, Stroke::new(1.0, t.text_faint), 5.0, 4.0));
         }
@@ -979,7 +992,7 @@ fn shot_node(
             }
         }
         // ▶ on the picture plays the shot (owner, 2026-10-18); a plan has nothing to play yet
-        if !n.versions.is_empty() && still.height() > 24.0 {
+        if own && !n.versions.is_empty() && still.height() > 24.0 {
             play_button(ui, p, n, still, z, dim, out, area);
         }
         y = still.max.y;
@@ -991,7 +1004,9 @@ fn shot_node(
         }
         let st = Rect::from_min_size(pos2(r.min.x + 6.0, y), vec2(r.width() - 12.0, (20.0 * z).max(14.0)));
         let mut word = format!("{} {}", n.state.glyph(), n.state.word());
-        if let Some(w) = &working {
+        if !own {
+            word = format!("· Empty · made in {}", crate::stage_name(crate::STAGE_ANIMATIC));
+        } else if let Some(w) = &working {
             word = format!("» {w}");
         } else if n.state == NodeState::Planned {
             word = if area.work.running { "· Planned · the AI makes it later".into() } else { "· Planned · waiting".into() };
@@ -999,7 +1014,7 @@ fn shot_node(
             // asked for, but the AI isn't on it right now
             word = if area.work.running { "· Fix queued: the AI does it next".into() } else { "· Fix waiting: the AI isn't running".into() };
         }
-        if let Some(v) = n.version_tag() {
+        if let Some(v) = n.version_tag().filter(|_| own) {
             word = format!("{word}  {v}");
         }
         let g = line(p, &word, text_size(z, 11.5), fade(state_colour(n.state, t), dim), st.width());
@@ -1007,7 +1022,7 @@ fn shot_node(
         y = st.max.y;
     }
     // OK · Fix · Cut it (near only: small and quiet; the inspector carries the filled OK)
-    if lod == Lod::Near && r.max.y - y > 12.0 {
+    if own && lod == Lod::Near && r.max.y - y > 12.0 {
         let bh = (r.max.y - y - 6.0).min(22.0 * z).max(10.0);
         let bw = (r.width() - 16.0) / 3.0;
         for (i, (key, label)) in [("ok", "OK"), ("fix", "Fix"), ("cut", "Cut it")].iter().enumerate() {
@@ -1173,30 +1188,36 @@ fn line_node(ui: &mut egui::Ui, p: &Painter, area: &mut NodeArea, n: &Node, r: R
     let head_h = (20.0 * z).max(size + 4.0).min(r.height());
     let head = Rect::from_min_size(r.min, vec2(r.width(), head_h));
     p.rect_filled(head, CornerRadius { nw: 4, ne: 4, sw: 0, se: 0 }, fade(colour.map_or(t.hover, |c| c.fill), dim));
+    let shows = area.shows_lines();
     let len = match (n.start_sec, n.end_sec) {
-        (Some(a), Some(b)) if b > a => format!(" · {:.1} s", b - a),
+        (Some(a), Some(b)) if b > a && shows => format!(" · {:.1} s", b - a),
         _ => String::new(),
     };
     let g = line(p, &format!("{}{len}", n.display_name()), size, fade(Color32::WHITE, dim), head.width() - 30.0);
     p.galley(pos2(head.min.x + 6.0, head.center().y - g.size().y / 2.0), g, Color32::WHITE);
-    // ▶ play the line
-    let play_r = Rect::from_center_size(pos2(head.max.x - 12.0, head.center().y), Vec2::splat(head_h.min(20.0)));
-    let resp = ui.interact(play_r, egui::Id::new(("mfx-line-play", &n.id)), Sense::click());
-    let c = play_r.center();
-    let s = play_r.height() * 0.28;
-    p.add(Shape::convex_polygon(
-        vec![pos2(c.x - s * 0.7, c.y - s), pos2(c.x + s, c.y), pos2(c.x - s * 0.7, c.y + s)],
-        if resp.hovered() { Color32::WHITE } else { Color32::from_white_alpha(190) },
-        Stroke::NONE,
-    ));
-    out.auto(format!("mfx.nodes.node.{}.play", n.id), &resp, "Play the line");
-    if resp.clicked() {
-        play(out, area, &n.id, "shot");
+    // ▶ play the line (from the Voice stage on: before it, nothing is made)
+    if shows {
+        let play_r = Rect::from_center_size(pos2(head.max.x - 12.0, head.center().y), Vec2::splat(head_h.min(20.0)));
+        let resp = ui.interact(play_r, egui::Id::new(("mfx-line-play", &n.id)), Sense::click());
+        let c = play_r.center();
+        let s = play_r.height() * 0.28;
+        p.add(Shape::convex_polygon(
+            vec![pos2(c.x - s * 0.7, c.y - s), pos2(c.x + s, c.y), pos2(c.x - s * 0.7, c.y + s)],
+            if resp.hovered() { Color32::WHITE } else { Color32::from_white_alpha(190) },
+            Stroke::NONE,
+        ));
+        out.auto(format!("mfx.nodes.node.{}.play", n.id), &resp, "Play the line");
+        if resp.clicked() {
+            play(out, area, &n.id, "shot");
+        }
     }
     if lod > Lod::Far {
         let g = line(p, &n.title, text_size(z, 11.5), fade(t.text, dim), r.width() - 12.0);
         p.galley(pos2(r.min.x + 6.0, head.max.y + 4.0), g, t.text);
-        let g = line(p, &format!("{} {}", n.state.glyph(), n.state.word()), text_size(z, 11.0), fade(state_colour(n.state, t), dim), r.width() - 12.0);
+        let word =
+            if shows { format!("{} {}", n.state.glyph(), n.state.word()) } else { format!("· Empty · made in {}", crate::stage_name(crate::STAGE_VOICE)) };
+        let col = if shows { state_colour(n.state, t) } else { t.text_faint };
+        let g = line(p, &word, text_size(z, 11.0), fade(col, dim), r.width() - 12.0);
         p.galley(pos2(r.min.x + 6.0, r.max.y - g.size().y - 4.0), g, t.text);
     }
     if sel {

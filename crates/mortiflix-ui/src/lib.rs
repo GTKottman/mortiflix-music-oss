@@ -1,8 +1,9 @@
 //! Mortiflix Studio: the Mortiflix layer on top of Mortiflix Studio.
 //!
-//! The app walks a video through six stages (doc 30): 1 Script · 2 Look · 3 Shots · 4 Voice & music ·
-//! 5 Edit · 6 Render. Stages 1-4 are Mortiflix panels docked in Mortiflix Studio's window; stage 5 is
-//! Mortiflix Studio's Edit mode with the Mortiflix chat docked right; stage 6 is Mortiflix Studio's Export mode.
+//! The app walks a video through eight stages (owner, 2026-10-18): 1 Script · 2 Voice · 3 Style frames ·
+//! 4 Transitions · 5 Animatic · 6 Music · 7 Edit · 8 Render. Nothing of a stage is made before the gate
+//! before it passed. Stages 1-6 are Mortiflix panels docked in Mortiflix Studio's window; stage 7 is
+//! Mortiflix Studio's Edit mode with the Mortiflix chat docked right; stage 8 is Mortiflix Studio's Export mode.
 //!
 //! This crate owns the Mortiflix state ([`state::MfxState`]), the stage bar ([`stagebar`]), one module
 //! per part (each a `show(ui, ctx)`), and the supervisor of the Node "Mortiflix service" that does the AI
@@ -14,18 +15,23 @@
 
 pub mod chat;
 pub mod export;
+pub mod gates;
 pub mod into_edit;
 pub mod look;
+pub mod look_menu;
+pub mod motion_menu;
 pub mod new_project;
 pub mod nodes;
 pub mod preview;
 pub mod resume;
+pub mod score;
 pub mod script;
 pub mod service;
 pub mod setup;
 pub mod stagebar;
 pub mod state;
 pub mod tokens;
+pub mod transitions;
 pub mod voice_music;
 pub mod work;
 
@@ -35,16 +41,32 @@ use serde_json::Value;
 pub use service::{Service, ServiceConfig, ServiceStatus};
 pub use state::{MfxState, StageStatus, StatusKind};
 
-/// The six stages: (name shown, command key). Index = `MfxState::stage`.
-pub const STAGES: [(&str, &str); 6] =
-    [("Script", "script"), ("Look", "look"), ("Shots", "shots"), ("Voice & music", "voiceMusic"), ("Edit", "edit"), ("Render", "render")];
+/// The eight stages: (name shown, command key). Index = `MfxState::stage`.
+pub const STAGES: [(&str, &str); 8] = [
+    ("Script", "script"),
+    ("Voice", "voice"),
+    ("Style frames", "styleFrames"),
+    ("Transitions", "transitions"),
+    ("Animatic", "animatic"),
+    ("Music", "music"),
+    ("Edit", "edit"),
+    ("Render", "render"),
+];
 
-/// Stage index of Voice & music (the stage that shows Get the video / Edit the video).
-pub const STAGE_VOICE_MUSIC: u8 = 3;
+/// Stage index of Voice (the voice per scene, as nodes).
+pub const STAGE_VOICE: u8 = 1;
+/// Stage index of Style frames (the look and the style panels to check off).
+pub const STAGE_STYLE_FRAMES: u8 = 2;
+/// Stage index of Transitions.
+pub const STAGE_TRANSITIONS: u8 = 3;
+/// Stage index of Animatic (the first moving pictures).
+pub const STAGE_ANIMATIC: u8 = 4;
+/// Stage index of Music (the stage that shows Get the video / Edit the video).
+pub const STAGE_MUSIC: u8 = 5;
 /// Stage index of Mortiflix Studio (final edits in Mortiflix Studio's Edit mode).
-pub const STAGE_EDIT: u8 = 4;
+pub const STAGE_EDIT: u8 = 6;
 /// Stage index of Render (Mortiflix Studio's Export mode).
-pub const STAGE_RENDER: u8 = 5;
+pub const STAGE_RENDER: u8 = 7;
 
 /// Height of the stage bar row under Mortiflix Studio's header (doc 30).
 pub const STAGE_BAR_HEIGHT: f32 = 44.0;
@@ -174,15 +196,18 @@ impl Mortiflix {
         script::tick(&mut self.state, &mut self.service);
         look::tick(&mut self.state, &mut self.service);
         resume::tick(&mut self.state, &mut self.service);
+        score::tick(&mut self.state, &mut self.service);
+        motion_menu::tick(&mut self.state, &mut self.service);
+        transitions::tick(&mut self.state, &mut self.service);
     }
-    /// Go to a stage (0-5). `done`: the stage being left was finished with Next. Tells the service.
+    /// Go to a stage (0-7). `done`: the stage being left was finished with Next. Tells the service.
     /// Returns the stage it was on, or None when `to` is out of range.
     pub fn go_to(&mut self, to: u8, done: bool) -> Option<u8> {
         let from = self.state.go_to(to, done)?;
         self.service.request("stage.set", serde_json::json!({"stage": to, "key": stage_key(to), "from": from, "done": done}));
         Some(from)
     }
-    /// The stage commands' logic (`stages.<what>`): `back`, `next`, `getVideo` (Voice & music
+    /// The stage commands' logic (`stages.<what>`): `back`, `next`, `getVideo` (Music
     /// straight to Render), `editVideo` (to Mortiflix Studio), or a stage key (`script` … `render`).
     /// `force` skips the "still need you" question. None = unknown command.
     pub fn navigate(&mut self, what: &str, force: bool) -> Option<Nav> {
@@ -228,32 +253,62 @@ impl Mortiflix {
     }
 }
 
-/// The stage's display name ("Voice & music"), or "" out of range.
+/// The stage's display name ("Style frames"), or "" out of range.
 pub fn stage_name(stage: u8) -> &'static str {
     STAGES.get(usize::from(stage)).map_or("", |s| s.0)
 }
 
-/// The stage's command key ("voiceMusic"), or "" out of range.
+/// The stage's command key ("styleFrames"), or "" out of range.
 pub fn stage_key(stage: u8) -> &'static str {
     STAGES.get(usize::from(stage)).map_or("", |s| s.1)
 }
 
-/// The stage with this command key.
+/// The stage with this command key. The six-stage keys still work (`look`, `shots`, `voiceMusic`:
+/// agents and saved chats from before 2026-10-18).
 pub fn stage_by_key(key: &str) -> Option<u8> {
-    STAGES.iter().position(|s| s.1.eq_ignore_ascii_case(key)).and_then(|i| u8::try_from(i).ok())
+    let old = match key {
+        "look" => Some(STAGE_STYLE_FRAMES),
+        "shots" => Some(STAGE_ANIMATIC),
+        "voiceMusic" => Some(STAGE_MUSIC),
+        _ => None,
+    };
+    old.or_else(|| STAGES.iter().position(|s| s.1.eq_ignore_ascii_case(key)).and_then(|i| u8::try_from(i).ok()))
 }
 
-/// PanelKind::MfxStage: the stage's main panel, by stage (Script, Look, Shots, Voice & music, then
-/// the Into Edit and Render parts).
+/// PanelKind::MfxStage: the stage's gate on stages 1-6 (Script's own, then [`gates`]), then the
+/// Into Edit and Render parts.
 pub fn show_stage(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     match ctx.state.stage {
-        0 => script::show(ui, ctx),
-        1 => look::show(ui, ctx),
-        2 => nodes::show_stage(ui, ctx),
-        3 => voice_music::show(ui, ctx),
-        4 => into_edit::show(ui, ctx),
+        0 => script::gate(ui, ctx),
+        s if s < STAGE_EDIT => gates::show(ui, ctx),
+        STAGE_EDIT => into_edit::show(ui, ctx),
         _ => export::show(ui, ctx),
     }
+}
+
+/// PanelKind::MfxPreview: each stage's own centre (owner, 2026-10-18: "Each … needs its own unique
+/// UI"): the script on Script, the voice lines on Voice, the looks on Style frames, the cuts board on
+/// Transitions, the motion menu on Animatic until the motion is picked; then the loose preview. True
+/// when the stage has its own centre (no video picture under it).
+pub fn show_centre(ui: &mut egui::Ui, ctx: &mut MfxCtx) -> bool {
+    match ctx.state.stage {
+        0 => script::show(ui, ctx),
+        STAGE_VOICE => voice_music::show(ui, ctx),
+        STAGE_STYLE_FRAMES => look::show(ui, ctx),
+        STAGE_TRANSITIONS => transitions::show(ui, ctx),
+        STAGE_ANIMATIC if motion_menu::wanted(ctx.state) => motion_menu::show(ui, ctx),
+        _ => {
+            preview::show(ui, ctx);
+            return false;
+        }
+    }
+    true
+}
+
+/// The stage has its own centre panel instead of the video preview (the Animatic while its motion
+/// menu shows).
+pub fn own_centre(state: &MfxState) -> bool {
+    matches!(state.stage, 0 | STAGE_VOICE | STAGE_STYLE_FRAMES | STAGE_TRANSITIONS) || (state.stage == STAGE_ANIMATIC && motion_menu::wanted(state))
 }
 
 /// The calm placeholder every part stub draws: the part's name and the doc that specifies it.
@@ -288,7 +343,7 @@ mod tests {
 
     #[test]
     fn stage_keys_round_trip() {
-        for i in 0..6u8 {
+        for i in 0..8u8 {
             assert_eq!(stage_by_key(stage_key(i)), Some(i));
         }
         assert_eq!(stage_by_key("nope"), None);
@@ -300,7 +355,7 @@ mod tests {
         let mut m = Mortiflix::default();
         assert_eq!(m.go_to(2, false), Some(0));
         assert_eq!(m.state.stage, 2);
-        assert_eq!(m.go_to(6, false), None);
+        assert_eq!(m.go_to(8, false), None);
         assert_eq!(m.state.stage, 2);
         // not started: the stage.set request is answered locally with an error, never left waiting
         assert!(m.service.take_reply(1).is_some_and(|r| !r.ok));
@@ -312,14 +367,14 @@ mod tests {
         assert_eq!(m.navigate("back", false), Some(Nav::Stay));
         assert!(m.state.show_new_project);
         assert_eq!(m.navigate("next", false), Some(Nav::Moved { from: 0, to: 1 }));
-        assert_eq!(m.navigate("voiceMusic", false), Some(Nav::Moved { from: 1, to: 3 }));
-        m.state.statuses[3] = StageStatus { kind: StatusKind::NeedsYou, need: 2, ..StageStatus::default() };
+        assert_eq!(m.navigate("music", false), Some(Nav::Moved { from: 1, to: STAGE_MUSIC }));
+        m.state.statuses[5] = StageStatus { kind: StatusKind::NeedsYou, need: 2, ..StageStatus::default() };
         assert_eq!(m.navigate("getVideo", false), Some(Nav::Asked));
         assert!(m.state.confirm_next.as_ref().is_some_and(|c| c.to_render && c.need == 2));
-        assert_eq!(m.navigate("getVideo", true), Some(Nav::Moved { from: 3, to: STAGE_RENDER }));
-        assert_eq!(m.state.status(3).kind, StatusKind::Done);
+        assert_eq!(m.navigate("getVideo", true), Some(Nav::Moved { from: STAGE_MUSIC, to: STAGE_RENDER }));
+        assert_eq!(m.state.status(STAGE_MUSIC).kind, StatusKind::Done);
         assert_eq!(m.navigate("next", false), Some(Nav::Stay));
-        assert_eq!(m.navigate("back", false), Some(Nav::Moved { from: 5, to: 4 }));
+        assert_eq!(m.navigate("back", false), Some(Nav::Moved { from: STAGE_RENDER, to: STAGE_EDIT }));
         assert_eq!(m.navigate("nonsense", false), None);
         // making (or stopped) while pieces wait for you: still asks on the first click
         let mut m = Mortiflix::default();

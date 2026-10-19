@@ -121,7 +121,7 @@ fn field(m: &Map<String, Value>, key: &str) -> Option<String> {
     m.get(key).and_then(|v| s(v, MAX_FIELD))
 }
 
-/// A stage given as a number (0-5) or a key (`voiceMusic`).
+/// A stage given as a number (0-7) or a key (`styleFrames`).
 pub fn stage_of(v: &Value) -> Option<u8> {
     match v {
         Value::Number(n) => n.as_u64().and_then(|n| u8::try_from(n).ok()).filter(|n| usize::from(*n) < crate::STAGES.len()),
@@ -851,7 +851,7 @@ mod tests {
             "question": {"id": "q1", "text": "Voice?", "choices": ["Calm", {"id": "w", "label": "Warm"}, 5], "default": "w"},
             "refs": [{"id": "s07", "text": "Shot 7"}, {"id": 3}], "actions": [{"label": "Try again", "type": "node.edit", "params": {"node": "s07"}}, {"label": "x"}],
             "files": ["/home/a/b/photo.jpg", "C:\\x\\logo.png"]}));
-        assert_eq!((m.role, m.stage, m.context.as_deref(), m.edit.as_deref()), (Role::Ai, Some(1), Some("s07"), Some("E007")));
+        assert_eq!((m.role, m.stage, m.context.as_deref(), m.edit.as_deref()), (Role::Ai, Some(crate::STAGE_STYLE_FRAMES), Some("s07"), Some("E007")));
         let q = m.question.unwrap();
         assert_eq!((q.choices.len(), q.default.as_deref(), q.custom), (2, Some("w"), true));
         assert_eq!(q.label_of("w"), "Warm");

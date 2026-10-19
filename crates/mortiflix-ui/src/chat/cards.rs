@@ -188,9 +188,12 @@ fn script(ui: &mut egui::Ui, ctx: &mut MfxCtx, msg: usize, card: &Value, open: b
     });
 }
 
-/// A fixed 16:9 frame (rule: framed for real content, nothing drawn over it).
-fn frame(ui: &mut egui::Ui, w: f32, fill: Color32, outline: Option<Color32>, still: Option<&str>) -> egui::Response {
-    let (r, resp) = ui.allocate_exact_size(vec2(w, w * 9.0 / 16.0), Sense::click());
+/// A frame in the video's shape (`aspect` = width / height, 16:9 when unknown; rule: framed for
+/// real content, nothing drawn over it). A vertical video's frame is narrower, so it isn't too tall.
+fn frame(ui: &mut egui::Ui, w: f32, aspect: f32, fill: Color32, outline: Option<Color32>, still: Option<&str>) -> egui::Response {
+    let aspect = if aspect > 0.0 { aspect.clamp(0.25, 4.0) } else { 16.0 / 9.0 };
+    let fw = if aspect < 1.0 { w * 0.6 } else { w };
+    let (r, resp) = ui.allocate_exact_size(vec2(fw, fw / aspect), Sense::click());
     ui.painter().rect_filled(r, 4.0, fill);
     if let Some(path) = still.map(std::path::Path::new).filter(|p| p.is_absolute()) {
         // the piece's still (graph.get `still`, the node area's decoder and cache), cropped to fill
@@ -265,7 +268,7 @@ fn looks(ui: &mut egui::Ui, ctx: &mut MfxCtx, msg: usize, card: &Value, answered
                         .or_else(|| live.as_ref().map(|f| f.path.clone()).filter(|x| !x.is_empty()))
                         .or_else(|| Some(text(l, "path")).filter(|x| !x.is_empty()))
                         .or_else(|| still_of(&ctx.state.graph, &id, None));
-                    let r = frame(ui, w, fill, on.then_some(t.text), still.as_deref());
+                    let r = frame(ui, w, ctx.state.look.view.aspect, fill, on.then_some(t.text), still.as_deref());
                     let r = r.on_hover_text(format!("Use {name}"));
                     if r.clicked() && !on {
                         if question.is_empty() {
@@ -329,7 +332,7 @@ fn versions(ui: &mut egui::Ui, ctx: &mut MfxCtx, msg: usize, card: &Value, out: 
                 ui.vertical(|ui| {
                     ui.set_width(w);
                     let still = Some(text(v, "still")).filter(|x| !x.is_empty() && !making);
-                    let r = frame(ui, w, if making { t.panel_bg } else { t.hover }, in_use.then_some(t.text), still.as_deref());
+                    let r = frame(ui, w, ctx.state.look.view.aspect, if making { t.panel_bg } else { t.hover }, in_use.then_some(t.text), still.as_deref());
                     if making {
                         // striped slot: the new version is on its way
                         let p = ui.painter().with_clip_rect(r.rect);
