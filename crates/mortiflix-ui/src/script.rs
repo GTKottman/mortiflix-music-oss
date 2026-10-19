@@ -888,6 +888,8 @@ const WORDS_A_MINUTE: usize = 150;
 /// promise that nothing is made before it passes.
 pub fn gate(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     let t = ctx.theme;
+    // nothing here may widen the panel: long lines wrap
+    ui.set_max_width(ui.available_width());
     ui.label(RichText::new("Script gate").size(15.0).color(t.text).strong());
     ui.add_space(2.0);
     ui.label(RichText::new("Nothing is recorded, drawn or rendered until this passes.").size(12.0).color(t.text_dim));
@@ -910,9 +912,9 @@ pub fn gate(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
         ),
     ];
     for (ok, text) in &rows {
-        ui.horizontal(|ui| {
+        ui.horizontal_top(|ui| {
             ui.label(RichText::new(if *ok { "✓" } else { "○" }).size(13.0).color(if *ok { t.ok } else { t.text_faint }));
-            ui.label(RichText::new(text).size(13.0).color(if *ok { t.text } else { t.text_dim }));
+            ui.add(egui::Label::new(RichText::new(text).size(13.0).color(if *ok { t.text } else { t.text_dim })).wrap());
         });
         ui.add_space(2.0);
     }
