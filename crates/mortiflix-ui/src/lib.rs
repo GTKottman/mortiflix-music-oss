@@ -25,6 +25,7 @@ pub mod service;
 pub mod setup;
 pub mod stagebar;
 pub mod state;
+pub mod tokens;
 pub mod voice_music;
 pub mod work;
 

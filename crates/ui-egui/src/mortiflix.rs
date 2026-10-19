@@ -153,7 +153,7 @@ const ASSET_EXTS: &[&str] = &[
 
 /// The Mortiflix panels.
 pub fn is_panel(p: PanelKind) -> bool {
-    matches!(p, PanelKind::MfxChat | PanelKind::MfxPreview | PanelKind::MfxNodes | PanelKind::MfxStage | PanelKind::MfxAssets)
+    matches!(p, PanelKind::MfxChat | PanelKind::MfxPreview | PanelKind::MfxNodes | PanelKind::MfxStage | PanelKind::MfxAssets | PanelKind::MfxTokens)
 }
 
 pub fn theme(t: &Tokens) -> mfx::MfxTheme {
@@ -295,6 +295,7 @@ pub fn panel(app: &mut StudioApp, ui: &mut egui::Ui, p: PanelKind, rect: egui::R
     match p {
         PanelKind::MfxChat => mfx::chat::show(&mut child, &mut c),
         PanelKind::MfxAssets => mfx::chat::show_assets(&mut child, &mut c),
+        PanelKind::MfxTokens => mfx::tokens::show(&mut child, &mut c),
         PanelKind::MfxPreview => mfx::preview::show(&mut child, &mut c),
         PanelKind::MfxNodes => mfx::nodes::show(&mut child, &mut c),
         _ => mfx::show_stage(&mut child, &mut c),

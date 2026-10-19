@@ -46,10 +46,11 @@ pub enum PanelKind {
     MfxNodes,
     MfxStage,
     MfxAssets,
+    MfxTokens,
 }
 
 impl PanelKind {
-    pub const ALL: [PanelKind; 33] = [
+    pub const ALL: [PanelKind; 34] = [
         PanelKind::Project,
         PanelKind::MediaBrowser,
         PanelKind::Libraries,
@@ -83,6 +84,7 @@ impl PanelKind {
         PanelKind::MfxNodes,
         PanelKind::MfxStage,
         PanelKind::MfxAssets,
+        PanelKind::MfxTokens,
     ];
     pub fn title(self) -> &'static str {
         match self {
@@ -119,6 +121,7 @@ impl PanelKind {
             PanelKind::MfxNodes => "Mortiflix Nodes",
             PanelKind::MfxStage => "Mortiflix Stage",
             PanelKind::MfxAssets => "Mortiflix Assets",
+            PanelKind::MfxTokens => "Mortiflix Tokens",
         }
     }
     pub fn id(self) -> String {
@@ -375,10 +378,14 @@ pub fn workspace(name: &str) -> DockNode {
             tabs(&[EssentialGraphics, Properties], 0),
         ),
         // Mortiflix Studio stages 1-4 (doc 40): chat left, preview and the stage's own panel,
-        // the node area along the bottom.
+        // the node area along the bottom; token usage beside the stage's panel (owner, 2026-10-18).
         "Mortiflix" => vsplit(
             Ratio(0.64),
-            hsplit(FixedA(400.0), tabs(&[MfxChat, MfxAssets], 0), hsplit(Ratio(0.58), tabs(&[MfxPreview], 0), tabs(&[MfxStage], 0))),
+            hsplit(
+                FixedA(400.0),
+                tabs(&[MfxChat, MfxAssets], 0),
+                hsplit(Ratio(0.58), tabs(&[MfxPreview], 0), hsplit(Ratio(0.5), tabs(&[MfxStage], 0), tabs(&[MfxTokens], 0))),
+            ),
             tabs(&[MfxNodes], 0),
         ),
         "All Panels" => vsplit(

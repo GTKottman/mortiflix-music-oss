@@ -614,6 +614,36 @@ fn local_hm(at: &str) -> Option<(i64, i64)> {
     Some((sod / 3600, (sod % 3600) / 60))
 }
 
+/// (month, day) of a UTC ISO time (`…Z`) in local time (the token panel's run dates: a run at 01:51Z is
+/// the evening before for someone west of UTC). The UTC date without the app's offset.
+pub fn local_month_day(at: &str) -> Option<(i64, i64)> {
+    month_day_in(at, LOCAL_OFFSET.get().copied())
+}
+
+fn month_day_in(at: &str, offset: Option<fn(i64) -> i32>) -> Option<(i64, i64)> {
+    let (date, time) = at.split_once(['T', ' '])?;
+    let num = |s: Option<&str>| s.and_then(|x| x.parse::<i64>().ok());
+    let mut dp = date.split('-');
+    let (y, mo, d) = (num(dp.next())?, num(dp.next())?, num(dp.next())?);
+    let days = days_from_civil(y, mo, d)?;
+    let (Some(f), Some(h), Some(mi)) = (offset, num(time.get(0..2)), num(time.get(3..5))) else { return Some((mo, d)) };
+    if !time.ends_with('Z') || !(0..24).contains(&h) || !(0..60).contains(&mi) {
+        return Some((mo, d));
+    }
+    let unix = days * 86_400 + h * 3600 + mi * 60;
+    let local_days = (unix + i64::from(f(unix))).div_euclid(86_400);
+    // civil from days (Howard Hinnant's algorithm)
+    let z = local_days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    Some((month, day))
+}
+
 /// "14:04" in an ISO time → "2:04 pm" (local time when the app gave the offset). Empty when it has
 /// no time.
 pub fn clock(at: &str) -> String {
@@ -888,6 +918,22 @@ mod tests {
         assert_eq!(open_questions(&qs, &answered).len(), 1);
         answered.insert("q1".into(), "a".into());
         assert!(open_questions(&qs, &answered).is_empty());
+    }
+
+    #[test]
+    fn run_dates_in_local_time() {
+        fn central(_: i64) -> i32 {
+            -5 * 3600
+        }
+        fn tokyo(_: i64) -> i32 {
+            9 * 3600
+        }
+        // 01:51 UTC on Oct 18 is the evening of Oct 17 in Texas, still Oct 18 in Tokyo
+        assert_eq!(month_day_in("2026-10-18T01:51:43.331Z", Some(central)), Some((10, 17)));
+        assert_eq!(month_day_in("2026-10-18T01:51:43.331Z", Some(tokyo)), Some((10, 18)));
+        assert_eq!(month_day_in("2026-01-01T02:00:00Z", Some(central)), Some((12, 31)));
+        assert_eq!(month_day_in("2026-10-18T01:51:43.331Z", None), Some((10, 18)));
+        assert_eq!(month_day_in("junk", Some(central)), None);
     }
 
     #[test]
