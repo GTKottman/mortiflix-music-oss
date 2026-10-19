@@ -18,7 +18,7 @@ import { loadProject, projectPaths, projectPipeline } from './projects.mjs';
 import { stepView, stepChecks, submit } from './gates.mjs';
 import { scriptView } from './svc/script.mjs';
 import { loadTheme } from './svc/theme.mjs';
-import { tempoMap, placeOf, sectionsFromScenes, planProblems, blueprintFrom, composeChecked, scoreText, instrumentsFor, usedParts, ROLES, PARTS, VARIATIONS, PALETTES, HIT_KINDS } from './music/compose.mjs';
+import { tempoMap, placeOf, sectionsFromScenes, planProblems, blueprintFrom, composeChecked, scoreText, instrumentsFor, balanceGains, usedParts, ROLES, PARTS, VARIATIONS, PALETTES, HIT_KINDS } from './music/compose.mjs';
 import { readWav, levelOf } from '../pipelines/_shared/skills/music/lib/wav.mjs';
 
 const CHECKS = ['loudness', 'sync', 'music-check', 'music-instruments', 'music-source', 'music-under-voice'];
@@ -202,6 +202,14 @@ export async function quickMusic({ root, id, view, run, runArgs, config, onActiv
   const stopped = () => runArgs.signal?.aborted;
   if (!renders) return give('no render queue');
   if (!env.MFX_STRUDEL || !env.MFX_CHROME) return give('Strudel or its Chrome isn\'t set up');
+  // the real instruments (VCSL, CC0): fetched into the studio once, then served to the renderer from disk
+  if (!env.MFX_SAMPLES) {
+    const dirS = join(root, 'tools', 'samples');
+    onActivity({ kind: 'info', text: 'Fetching the instrument samples (once, about 360 MB).' });
+    const f = await exec(process.execPath, [join(REPO, 'pipelines', '_shared', 'skills', 'music', 'samples.mjs'), 'fetch', dirS], { timeout: 30 * 60_000 });
+    if (!existsSync(join(dirS, 'vcsl.json'))) return give(`the instrument samples couldn't be fetched: ${tail(f.out, 200)}`);
+    env.MFX_SAMPLES = dirS;
+  }
   if (/\bno music\b/i.test(String(c.project.intake?.answers?.music || ''))) return give('the brief asks for no music');
   const own = /MIDI/i.test(String(c.project.intake?.answers?.music || '')) || c.theme?.finish === 'own';
 
@@ -262,9 +270,10 @@ export async function quickMusic({ root, id, view, run, runArgs, config, onActiv
     onActivity({ kind: 'info', text: 'Auditioning every instrument across its range.' });
     audition = await engine(c, env, 'audition');
     if (stopped()) return { ok: false, error: 'stopped', usage };
-    if (audition.code === 0) break;
-    // a part clipping alone comes down, a silent one goes up; then the audition again
     const rep = readJsonOr(join(mu, 'audition.json'), { parts: [] });
+    // every instrument sounds: level each part to its place in the mix from what the audition measured, then again
+    if (audition.code === 0) { if (round < 3 && balanceGains(inst, rep)) continue; break; }
+    // a part clipping alone comes down, a silent one goes up; then the audition again
     let changed = false;
     for (const p of rep.parts.filter((x) => !x.ok)) {
       const part = inst.parts.find((x) => x.channel === p.channel);
@@ -275,15 +284,24 @@ export async function quickMusic({ root, id, view, run, runArgs, config, onActiv
   }
   if (audition.code !== 0) return give(`strudel.mjs audition: ${tail(audition.out, 300)}`);
 
-  // 5. the render, through the render queue
-  onActivity({ kind: 'info', text: 'Rendering the music.' });
-  const job = renders.add({ projectId: id, sessionId, label: 'music', argv: [process.execPath, M, 'render'], cwd: c.work, env: { ...process.env, ...env } });
-  let v = job;
-  while (!['done', 'failed'].includes(v.state)) v = await renders.wait(job.id, id, 300);
-  if (stopped()) return { ok: false, error: 'stopped', usage };
-  if (!(v.state === 'done' && v.exit_code === 0 && existsSync(join(c.work, 'out', 'music', 'score.wav')))) return give(`the render failed: ${tail(v.output_tail || v.error, 300)}`);
-  const score = levelOf(readWav(join(c.work, 'out', 'music', 'score.wav')));
-  if (score.peak_db < -50) return give('the render is silent');
+  // 5. the render, through the render queue; a score that peaks over -1 dBFS (the parts add up) comes down as a whole,
+  // every part by the same amount so the balance stays, and renders again
+  let score = null;
+  for (let round = 0; round < 3; round++) {
+    onActivity({ kind: 'info', text: round ? 'The parts add up too hot: turning the whole score down and rendering again.' : 'Rendering the music.' });
+    const job = renders.add({ projectId: id, sessionId, label: 'music', argv: [process.execPath, M, 'render'], cwd: c.work, env: { ...process.env, ...env } });
+    let v = job;
+    while (!['done', 'failed'].includes(v.state)) v = await renders.wait(job.id, id, 300);
+    if (stopped()) return { ok: false, error: 'stopped', usage };
+    if (!(v.state === 'done' && v.exit_code === 0 && existsSync(join(c.work, 'out', 'music', 'score.wav')))) return give(`the render failed: ${tail(v.output_tail || v.error, 300)}`);
+    score = levelOf(readWav(join(c.work, 'out', 'music', 'score.wav')));
+    if (score.peak_db < -50) return give('the render is silent');
+    if (score.peak_db <= -1) break;
+    const k = 10 ** ((Math.min(-6 - score.peak_db, -21 - score.rms_db)) / 20);
+    for (const p of inst.parts) p.gain = +Math.max(0.01, (p.gain ?? 0.8) * k).toFixed(4);
+    writeFileSync(join(mu, 'instruments.json'), `${JSON.stringify(inst, null, 2)}\n`);
+  }
+  if (score.peak_db > -1) return give(`the score still peaks at ${score.peak_db} dBFS`);
   await exec('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-i', 'out/music/score.wav', '-c:a', 'libmp3lame', '-b:a', '256k', 'out/music/score.mp3'], { cwd: c.work });
   await exec('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-i', 'out/music/score.wav', '-lavfi', 'showspectrumpic=s=1600x400', 'music/spectrum.png'], { cwd: c.work });
 
@@ -332,7 +350,7 @@ export async function quickMusic({ root, id, view, run, runArgs, config, onActiv
     { id: 'loudness', result: 'pass', note: `qc.mjs on out/animatic-music.mp4: ${lufs || 'loudness inside -14 LUFS ±1'}, true peak ${tp || '≤ -1 dBTP'}; ${/none/.test(mix.loudnorm?.normalization_type || '') ? 'the mix was already at -14 LUFS (the mastered voice carries it), so no loudness pass' : 'two-pass loudnorm with a fixed gain (linear)'}. The score alone peaks at ${score.peak_db} dBFS. Measured only: nothing here is by ear.` },
     { id: 'sync', result: 'pass', note: `${hitRows.length ? `${hitRows.length} hit${hitRows.length === 1 ? '' : 's'} within a frame: ${hitRows.map((h) => `bar ${h.bar} beat ${h.beat ?? 1} (${h.off_sec >= 0 ? '+' : ''}${h.off_sec} s)`).join(', ')}.` : 'No hits at this tempo.'}${bp.hits.some((h) => h.kind === 'none') ? ` ${bp.hits.filter((h) => h.kind === 'none').length} cut(s) play as no hit.` : ''} The music starts at bar 1 = ${map.offset_sec} s (adelay ${Math.round(map.offset_sec * 1000)} ms). The picture and voice are the approved animatic's, unchanged (video copied).` },
     { id: 'music-check', result: 'pass', note: `strudel.mjs check --video-sec ${c.videoSec} --fps ${FPS}: 0 problems (harmony locked, the curve follows the sections, hits on the picture). MIDI captured: music/notes.json, out/music/midi/. The notes were written by code from the cue plan, every pitched note a chord tone.` },
-    { id: 'music-instruments', result: 'pass', note: `strudel.mjs instruments and audition pass on ${inst.parts.length} channels (a stand-in ${plan.palette} palette chosen by the studio).` },
+    { id: 'music-instruments', result: 'pass', note: `strudel.mjs instruments and audition pass on ${inst.parts.length} channels (a stand-in ${plan.palette} palette of real instruments from VCSL, CC0, chosen by the studio; each part levelled from its audition).` },
     { id: 'music-source', result: 'n/a', note: own ? 'This is the music step itself: the Strudel stand-in for review. The owner\'s own master (strudel.mjs own-master) comes in at the build.' : 'This is the music step itself: the approved Strudel render is used from here on.' },
     { id: 'music-under-voice', result: 'pass', note: `Sidechain ducking, music at ${musicDb} dB into the mix: measured by RMS on every spoken line, the music sits ${uv.min} to ${Math.max(...uv.rows.map((r) => r.under))} dB under the voice (median ${uv.median}). Measured, not listened to.` },
   ].filter((x) => stepChecks(root, id, 'music').some((k) => k.id === x.id));

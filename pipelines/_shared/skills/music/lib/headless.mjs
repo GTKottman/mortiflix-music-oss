@@ -88,6 +88,14 @@ export class HeadlessStrudel {
     this.server = createServer((req, res) => {
       const url = new URL(req.url, 'http://x');
       if (url.pathname === '/') { res.writeHead(200, { 'content-type': 'text/html' }); return res.end(PAGE); }
+      // the studio's local sample library (samples.mjs): a render never waits on a download
+      if (url.pathname.startsWith('/samples/') && process.env.MFX_SAMPLES) {
+        const rel = decodeURIComponent(url.pathname.slice('/samples/'.length));
+        const f = join(process.env.MFX_SAMPLES, rel);
+        if (rel.includes('..') || !existsSync(f)) { res.writeHead(404); return res.end(); }
+        res.writeHead(200, { 'content-type': extname(f) === '.json' ? 'application/json' : 'audio/wav' });
+        return res.end(readFileSync(f));
+      }
       const rel = url.pathname.replace(/^\/strudel\//, '');
       const file = join(this.dist, rel);
       if (!url.pathname.startsWith('/strudel/') || rel.includes('..') || !existsSync(file)) { res.writeHead(404); return res.end(); }

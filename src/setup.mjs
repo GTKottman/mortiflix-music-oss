@@ -790,6 +790,8 @@ export function sessionToolsEnv(root) {
   if (s.ok) env.MFX_STRUDEL = s.path;
   const c = chromeStatus(root);
   if (c.ok) env.MFX_CHROME = c.path;
+  // the real instruments the music engine plays (VCSL, CC0), a local copy it serves to its renderer
+  if (existsSync(join(root, 'tools', 'samples', 'vcsl.json'))) env.MFX_SAMPLES = join(root, 'tools', 'samples');
   const daw = dawConfig(config);
   if (daw.id) env.MFX_DAW = daw.id;
   const browser = browserConfig(config);

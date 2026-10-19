@@ -366,39 +366,43 @@ export function scoreText({ notes, bp, plan }) {
 
 // ---- the stand-in instruments (music/instruments.json) ----
 
-// Three palettes; inside each, every pitched part is a different family of sound, so parts sharing a register never
-// share a timbre (the engine's instruments check). Clean, nothing driven (the owner's rule: never accidental grit).
+// Real instruments from VCSL (the Versilian Community Sample Library, CC0), which Strudel loads as a sample map; the bed
+// stays a soft synth (VCSL has no strings). Every part is a different instrument, so parts sharing a register never
+// share a timbre (the engine's instruments check). Kit samples play at their own pitch (.note(36)): the score's General
+// MIDI numbers only pick the piece. Levels come from the audition (balanceGains), not from these starting gains.
+export const VCSL = '/samples/vcsl.json'; // the studio's local copy (pipelines/_shared/skills/music/samples.mjs)
+const VCSL_SOURCE = 'VCSL, the Versilian Community Sample Library (CC0, public domain): github.com/sgossner/VCSL';
 const KIT = {
-  36: { sound: 'sine', set: '.penv(18).pdecay(.08).decay(.25).sustain(0)', gain: 1 },
-  39: { sound: 'pink', set: '.hpf(900).decay(.12).sustain(0).room(.2)', gain: 0.5 },
-  42: { sound: 'white', set: '.hpf(7000).decay(.035).sustain(0)', gain: 0.3 },
-  45: { sound: 'sine', set: '.penv(7).pdecay(.15).decay(.3).sustain(0)', gain: 0.7 },
-  49: { sound: 'white', set: '.hpf(5000).decay(1.2).sustain(0).room(.3)', gain: 0.25 },
+  36: { sound: 'bassdrum1', set: '.note(36).lpf(4000)', gain: 1 },
+  39: { sound: 'clap', set: '.note(36).room(.2)', gain: 0.6 },
+  42: { sound: 'shaker_small', set: '.note(36).hpf(3000)', gain: 0.5 },
+  45: { sound: 'tom2_mallet', set: '.note(36)', gain: 0.7 },
+  49: { sound: 'sus_cymbal', set: '.note(36).hpf(2000)', gain: 0.4 },
 };
 const PALETTE = {
   warm: {
-    concept: 'Warm and soft: a round sine floor, a filtered saw bed with a slow attack, a hollow triangle theme, a muted square pulse and soft FM bells. Clean, nothing driven.',
-    bass: ['sine', '.lpf(400).attack(.01).release(.25)', 0.75, 'dark', 'a round, pure low end that leaves the voice its register'],
-    pad: ['sawtooth', '.lpf(1100).hpf(140).attack(.4).release(.6).room(.25).size(.5)', 0.22, 'warm', 'a soft, filtered bed; the slow attack keeps chord changes from poking through the narration'],
-    melody: ['triangle', '.lpf(2400).attack(.02).release(.4).vib(4).room(.2)', 0.4, 'warm', 'a hollow, flute-like voice for the theme'],
-    arp: ['square', '.lpf(1600).hpf(250).attack(.003).decay(.12).sustain(0).release(.05)', 0.15, 'neutral', 'dry and woody, very short: motion without weight'],
-    bells: ['sine', '.fm(2).fmh(3).attack(.002).decay(.6).sustain(0).release(.8).hpf(400).room(.35)', 0.3, 'bright', 'a bell for the moments the picture turns'],
+    concept: 'Warm and acoustic: a low piano floor, a soft synth bed far back, a harp theme, a marimba pulse and glockenspiel bells.',
+    bass: ['steinway', '.lpf(1200).release(.3)', 0.8, 'warm', 'a piano left hand: a real, round floor that leaves the voice its register'],
+    pad: ['sawtooth', '.lpf(900).hpf(140).attack(.6).release(.8).room(.3).size(.6)', 0.14, 'warm', 'a soft bed under the words; the slow attack keeps chord changes from poking through'],
+    melody: ['harp', '.release(.6).room(.25)', 0.8, 'warm', 'a plucked harp carries the theme gently, like a lullaby about the sky'],
+    arp: ['marimba', '.room(.15)', 0.6, 'neutral', 'wooden, round motion for the orbit'],
+    bells: ['glockenspiel', '.room(.35)', 0.5, 'bright', 'a small bell for the moments the picture turns'],
   },
   glass: {
-    concept: 'Glassy and light: a triangle floor, a wide supersaw bed far under the voice, an FM glass theme, a reedy pulse and pure sine bells.',
-    bass: ['triangle', '.lpf(500).attack(.01).release(.3)', 0.75, 'dark', 'a soft, rounded floor'],
-    pad: ['supersaw', '.lpf(1300).hpf(160).attack(.5).release(.8).room(.3).size(.6)', 0.16, 'warm', 'a wide shimmer that sits back under the words'],
-    melody: ['sine', '.fm(3).fmh(3.5).attack(.005).decay(.5).sustain(.2).release(.5).delay(.2).delaytime(.33).delayfeedback(.2)', 0.32, 'bright', 'glass, light and clear'],
-    arp: ['pulse', '.lpf(1800).hpf(300).attack(.003).decay(.1).sustain(0)', 0.14, 'neutral', 'a small reedy tick that keeps time'],
-    bells: ['sine', '.attack(.002).decay(.9).sustain(0).release(1).hpf(500).room(.4)', 0.28, 'neutral', 'pure bells for the hits'],
+    concept: 'Glassy and night-like: a low piano floor, a bowed vibraphone bed, a vibraphone theme, a kalimba pulse and handbells.',
+    bass: ['steinway', '.lpf(1000).release(.3)', 0.8, 'warm', 'a piano left hand, soft and round'],
+    pad: ['vibraphone_bowed', '.release(1).room(.4).size(.7)', 1.2, 'warm', 'a bowed, glowing bed, like moonlight'],
+    melody: ['vibraphone', '.release(.8).room(.3)', 0.7, 'bright', 'a clear, shimmering theme'],
+    arp: ['kalimba', '.room(.2)', 0.6, 'neutral', 'small plucked steps that turn like the orbit'],
+    bells: ['handbells', '.room(.4)', 0.5, 'bright', 'a bell for the turns'],
   },
   dark: {
-    concept: 'Dark and close: a sine sub, a low-passed saw bed, a muted square theme, a soft triangle pulse and low FM bells.',
-    bass: ['sine', '.lpf(300).attack(.01).release(.3)', 0.8, 'dark', 'a deep sub floor'],
-    pad: ['sawtooth', '.lpf(750).hpf(120).attack(.6).release(.8).room(.3).size(.6)', 0.24, 'dark', 'a low, closed bed'],
-    melody: ['square', '.lpf(1400).attack(.02).release(.4).room(.25)', 0.28, 'warm', 'a muted, woody theme'],
-    arp: ['triangle', '.lpf(2000).attack(.003).decay(.15).sustain(0)', 0.2, 'neutral', 'soft motion'],
-    bells: ['sine', '.fm(1.5).fmh(2).attack(.002).decay(.8).sustain(0).release(.8).hpf(300).room(.4)', 0.28, 'warm', 'a low bell for the turns'],
+    concept: 'Dark and close: a low piano floor, a low-passed synth bed, an alto recorder theme, a soft marimba pulse and tubular bells.',
+    bass: ['steinway', '.lpf(700).release(.3)', 0.85, 'dark', 'a deep piano floor'],
+    pad: ['sawtooth', '.lpf(700).hpf(120).attack(.7).release(.9).room(.3).size(.6)', 0.16, 'dark', 'a low, closed bed'],
+    melody: ['recorder_alto_sus', '.release(.4).room(.25)', 0.6, 'warm', 'a breathy, human theme'],
+    arp: ['marimba', '.lpf(2500).room(.15)', 0.5, 'neutral', 'soft wooden motion'],
+    bells: ['tubularbells', '.room(.4)', 0.4, 'warm', 'a low bell for the turns'],
   },
 };
 export function instrumentsFor(palette, used) {
@@ -406,13 +410,49 @@ export function instrumentsFor(palette, used) {
   const pans = { bass: 0, pad: 0, melody: 0.2, arp: -0.25, bells: 0.3 };
   const parts = PARTS.filter((k) => used.has(k)).map((k) => {
     if (k === 'drums') {
-      const kit = Object.fromEntries([...used.get('drums')].map((gm) => [String(gm), KIT[gm]]));
-      return { channel: 10, role: ROLES.drums.name, gain: 0.7, pan: 0, why: 'soft, tight and dry, so the facts never feel like a trailer', kit };
+      const kit = Object.fromEntries([...used.get('drums')].map((gm) => [String(gm), { ...KIT[gm], source: VCSL_SOURCE }]));
+      return { channel: 10, role: ROLES.drums.name, gain: 0.7, pan: 0, why: 'real, soft percussion (kick, clap, shaker, tom, cymbal), so the facts never feel like a trailer', kit };
     }
     const [sound, set, gain, character, why] = pal[k];
-    return { channel: ROLES[k].channel, role: ROLES[k].name, sound, set, gain, pan: pans[k], character, why };
+    return { channel: ROLES[k].channel, role: ROLES[k].name, sound, set, gain, pan: pans[k], character, why, ...(SYNTH_NAMES.has(sound) ? {} : { source: VCSL_SOURCE }) };
   });
-  return { concept: `${pal.concept} A stand-in chosen by the studio, for judging the notes against the picture.`, parts };
+  return { concept: `${pal.concept} A stand-in chosen by the studio, for judging the notes against the picture.`, samples: [VCSL], parts };
+}
+const SYNTH_NAMES = new Set(['sine', 'triangle', 'square', 'sawtooth', 'supersaw', 'pulse', 'white', 'pink', 'brown', 'crackle']);
+
+// Each part's level from its audition (RMS of its notes, dB), moved toward its place in the mix: the theme and the
+// floor in front, the bed and the pulse behind, bells and drums between; never past a -3 dBFS peak (a bell is all
+// peak). A kit levels each piece on its own. gain stops at 1.5 (the engine's limit): a quiet recording gets the rest
+// as .postgain() in its chain. Returns true when anything moved more than 1 dB.
+const TARGET_RMS = { 1: -20, 2: -27, 3: -20, 4: -28, 5: -26, 10: -26 };
+const PEAK_MAX = -3;
+const mean = (xs) => xs.reduce((x, y) => x + y, 0) / xs.length;
+function level(v, gainKey, d) {
+  const post = Number(String(v.set || '').match(/\.postgain\(([\d.]+)\)/)?.[1] || 1);
+  const total = Math.max(0.03, Math.min(1.5 * 60, (v[gainKey] ?? 0.8) * post * 10 ** (d / 20)));
+  v[gainKey] = +Math.min(1.5, total).toFixed(3);
+  const rest = +(total / v[gainKey]).toFixed(3);
+  v.set = `${String(v.set || '').replace(/\.postgain\([^)]*\)/, '')}${rest > 1.001 ? `.postgain(${rest})` : ''}`;
+}
+export function balanceGains(inst, audition) {
+  let moved = false;
+  for (const a of audition.parts || []) {
+    const p = inst.parts.find((x) => x.channel === a.channel);
+    const target = TARGET_RMS[a.channel];
+    if (!p || target === undefined) continue;
+    const groups = p.kit
+      ? Object.entries(p.kit).map(([gm, v]) => [v, (a.notes || []).filter((n) => n.note === `GM ${gm}`)])
+      : [[p, a.notes || []]];
+    for (const [v, ns] of groups) {
+      const heard = ns.filter((n) => n.rms_db > -90);
+      if (!heard.length) continue;
+      const d = Math.min(target - mean(heard.map((n) => n.rms_db)), PEAK_MAX - Math.max(...heard.map((n) => n.peak_db)));
+      if (Math.abs(d) <= 1) continue;
+      level(v, 'gain', d);
+      moved = true;
+    }
+  }
+  return moved;
 }
 
 // Which parts play, and for the drums which General MIDI numbers.
