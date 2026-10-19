@@ -18,6 +18,7 @@ import * as gates from './gates.mjs';
 import { RenderQueue } from './renderq.mjs';
 import { voiceOverview, saveVoice } from './voice/index.mjs';
 import { boothStatus, addTake, keepTake } from './booth.mjs';
+import { musicScore } from './svc/score.mjs';
 import { STAGES, STAGE_NAMES, stageIndex, stageStatuses, stageDone, handOverToApp, remakesIf, reopenStage, saveLastStage, stageOf, mfxView, STAGE_MUSIC, STAGE_EDIT, STAGE_RENDER } from './svc/stages.mjs';
 import { listPresets, getPreset, savePresetFull, deletePreset } from './svc/presets.mjs';
 import { addAsset, updateAsset, replaceAsset, removeAsset, useAsset, listAssets } from './svc/assets.mjs';
@@ -454,6 +455,7 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
     },
     'music.theme.check': (p) => ({ theme: cleanTheme(p?.theme || {}) }),
     'music.cues': (p) => graph.voiceMusicView(root, needProject(p)).cues,
+    'music.score': (p) => musicScore(root, needProject(p)),
     // A cue's feel or energy: before the score it changes the plan; once scored it's a Fix on that cue (only it changes).
     'music.cue.set': (p) => {
       const id = needProject(p);
