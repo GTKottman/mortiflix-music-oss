@@ -415,6 +415,13 @@ pub fn route(app: &mut StudioApp, ctx: &egui::Context, id: &str, params: &Value)
     {
         return Some(Ok(json!({"asked": "script"})));
     }
+    // File ▸ New ▸ Project… (Cmd/Ctrl+Alt+N) is Mortiflix's New project window here: the editor's own command
+    // only emptied the hidden edit project, so nothing seemed to happen (owner, 2026-10-18). With a `name`
+    // (Bring the video into Edit, agents) it stays the editor's command.
+    if app.mfx.core.state.active && id == "file.newProject" && params.get("name").is_none() {
+        app.mfx.core.state.show_new_project = true;
+        return Some(Ok(json!({"dialog": "newProject"})));
+    }
     if let Some(what) = id.strip_prefix("mortiflix.preview.") {
         return Some(crate::mortiflix_preview::command(app, what, params));
     }
@@ -694,6 +701,13 @@ mod tests {
         frame_begin(&mut app, &ctx);
         assert!(!app.ui.dock.contains(PanelKind::Timeline));
         assert!(app.ui.dock.contains(PanelKind::MfxChat) && app.ui.dock.contains(PanelKind::MfxAssets));
+        // File ▸ New ▸ Project… and its shortcut open the New project window, the edit project untouched
+        app.mfx.core.state.show_new_project = false;
+        let rev = app.session.revision;
+        assert_eq!(crate::menus::invoke(&mut app, &ctx, "file.newProject", json!({})).unwrap(), json!({"dialog": "newProject"}));
+        assert!(app.mfx.core.state.show_new_project);
+        assert_eq!(app.session.revision, rev);
+        app.mfx.core.state.show_new_project = false;
         crate::menus::invoke(&mut app, &ctx, "stages.editVideo", json!({})).unwrap();
         assert_eq!((app.mfx.core.state.stage, app.ui.mode), (mfx::STAGE_EDIT, Mode::Edit));
         assert_ne!(app.ui.workspace, WORKSPACE);
