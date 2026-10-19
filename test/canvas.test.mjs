@@ -8,6 +8,7 @@ import { createProject, startProject, projectPaths, addIntakeFile } from '../src
 import { respond } from '../src/gates.mjs';
 import { Runner } from '../src/runner.mjs';
 import { syncCanvas, BEAT_COLOURS } from '../src/canvas.mjs';
+import { setBrief } from '../src/svc/lookbrief.mjs';
 
 const write = (dir, rel, data) => { mkdirSync(join(dir, rel, '..'), { recursive: true }); writeFileSync(join(dir, rel), typeof data === 'string' || Buffer.isBuffer(data) ? data : JSON.stringify(data)); };
 
@@ -145,6 +146,7 @@ test('canvas: OK, Cut it and Fix; a fix starts a session that remakes only that 
   const root = tempStudio(t);
   const p = createProject(root, { pipeline: 'explainer', title: 'Fixes', answers: { topic: 'tides' } });
   startProject(root, p.id);
+  setBrief(root, p.id, { vibe: 'calm', font: 'Inter' }); // the owner picks a look before the style frames
   const runner = new Runner(root);
   runner.acquire();
   t.after(() => runner.release());
@@ -209,6 +211,7 @@ test('canvas: nothing runs ahead of a gate; each step starts only when every ste
   const root = tempStudio(t);
   const p = createProject(root, { pipeline: 'explainer', title: 'Gated', answers: { topic: 'tides' } });
   startProject(root, p.id);
+  setBrief(root, p.id, { vibe: 'calm', font: 'Inter' }); // the owner picks a look before the style frames
   const runner = new Runner(root);
   runner.acquire();
   t.after(() => runner.release());
@@ -266,6 +269,7 @@ test('edit: the final as a Mortiflix Studio project, every shot its own named cl
   const root = tempStudio(t);
   const p = createProject(root, { pipeline: 'explainer', title: 'Hand off', answers: { topic: 'tides' } });
   startProject(root, p.id);
+  setBrief(root, p.id, { vibe: 'calm', font: 'Inter' }); // the owner picks a look before the style frames
   const runner = new Runner(root);
   runner.acquire();
   t.after(() => runner.release());
@@ -315,4 +319,33 @@ test('canvas: a media file still being written (empty, or a WAV shorter than its
   writeFileSync(join(dir, 'empty.wav'), ''); writeFileSync(join(dir, 'half.wav'), wav(100, 1000)); writeFileSync(join(dir, 'whole.wav'), wav(100));
   writeFileSync(join(dir, 'empty.mp3'), ''); writeFileSync(join(dir, 'take.mp3'), Buffer.from('ID3....'));
   assert.deepEqual(['empty.wav', 'half.wav', 'whole.wav', 'empty.mp3', 'take.mp3'].map((f) => mediaUnfinished(join(dir, f))), [true, true, false, true, false]);
+});
+
+test('look: the style frames wait for the look the owner picks; a style pack or a font, colours, vibe and look', async (t) => {
+  const { loadProject, projectPipeline } = await import('../src/projects.mjs');
+  const { stepView } = await import('../src/gates.mjs');
+  const { setBrief, listPacks } = await import('../src/svc/lookbrief.mjs');
+  const root = tempStudio(t);
+  const p = createProject(root, { pipeline: 'explainer', title: 'Look first', answers: { topic: 'tides' } });
+  startProject(root, p.id);
+  const runner = new Runner(root);
+  runner.acquire();
+  t.after(() => runner.release());
+  const state = (k) => stepView(loadProject(root, p.id), projectPipeline(root, p.id)).find((s) => s.key === k).state;
+  await runner.loop();
+  for (const step of ['brief', 'script', 'voice']) { respond(root, p.id, step, 1, { verdict: 'approve' }); await runner.loop(); }
+  assert.equal(state('style-frames'), 'blocked', 'no look picked: nothing drawn');
+  assert.throws(() => setBrief(root, p.id, {}), /pick a style pack/);
+  assert.throws(() => setBrief(root, p.id, { pack: 'nope' }), /no style pack/);
+  mkdirSync(join(root, 'style-packs', 'noir'), { recursive: true });
+  writeFileSync(join(root, 'style-packs', 'noir', 'pack.json'), JSON.stringify({ name: 'Noir', fonts: ['Bebas Neue'], palette: ['#101010', '#e0c080', 'red'], vibe: 'tense' }));
+  writeFileSync(join(root, 'style-packs', 'noir', 'ref.png'), 'x');
+  const packs = listPacks(root);
+  assert.deepEqual(packs.map((x) => [x.id, x.name, x.palette, x.pictures.length]), [['noir', 'Noir', ['#101010', '#e0c080'], 1]]);
+  const b = setBrief(root, p.id, { pack: 'noir', palette: ['#123456', 'bad'], vibe: 'x'.repeat(500) });
+  assert.equal(b.pack_files.name, 'Noir');
+  assert.deepEqual(b.palette, ['#123456']);
+  assert.equal(b.vibe.length, 200);
+  assert.ok(existsSync(join(projectPaths(root, p.id).work, 'design', 'look-brief.json')));
+  assert.equal(state('style-frames'), 'ready');
 });

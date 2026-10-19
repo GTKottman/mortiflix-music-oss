@@ -58,6 +58,7 @@ test('script: get, edit a line (its shot and voice line remade, v2), add, delete
   await assert.rejects(call('script.get'), /no_project/);
   const made = await call('project.new', { preset: 'explainer', title: 'Bikes', idea: 'Why bike lanes pay off', backend: 'demo' });
   const id = made.project.id;
+  await call('look.brief.set', { vibe: 'calm', font: 'Inter' }); // the owner picks a look before the style frames
   await until(() => loadProject(root, id).state === 'queued');
   await run();
   await run();

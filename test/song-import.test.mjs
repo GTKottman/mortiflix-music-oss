@@ -105,6 +105,8 @@ test('the demo backend writes a song (S11): the browser can try the song lane wi
   const root = tempStudio(t);
   const p = createProject(root, { pipeline: 'explainer', title: 'Demo song', answers: { topic: 'tides' } });
   startProject(root, p.id);
+  const { setBrief } = await import('../src/svc/lookbrief.mjs');
+  setBrief(root, p.id, { vibe: 'calm', font: 'Inter' }); // the owner picks a look before the style frames
   const runner = new Runner(root);
   runner.acquire();
   t.after(() => runner.release());

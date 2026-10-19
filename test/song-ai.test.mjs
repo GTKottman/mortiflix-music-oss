@@ -114,6 +114,8 @@ test('the demo backend fixes bars 7–8 end to end: Fix → session → notes ch
   const root = tempStudio(t);
   const p = createProject(root, { pipeline: 'explainer', title: 'Demo fix', answers: { topic: 'tides' } });
   startProject(root, p.id);
+  const { setBrief } = await import('../src/svc/lookbrief.mjs');
+  setBrief(root, p.id, { vibe: 'calm', font: 'Inter' }); // the owner picks a look before the style frames
   const runner = new Runner(root);
   runner.acquire();
   t.after(() => { runner.release(); closeLadder(); });

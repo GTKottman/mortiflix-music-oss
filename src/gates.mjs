@@ -42,7 +42,9 @@ export function stepView(project, pipeline) {
   const approvedChain = (k) => finished(k) && (byKey[k]?.after || []).every(approvedChain);
   return pipeline.steps.map((s) => {
     const rec = stored[s.key] || {};
-    const state = rec.state || (s.after.every(approvedChain) ? 'ready' : 'blocked');
+    // The style frames wait for the look the owner asks for (mfx.look_brief), whatever else is approved.
+    const lookWaits = s.canvas === 'frame' && s.key === 'style-frames' && !project.mfx?.look_brief;
+    const state = rec.state || (s.after.every(approvedChain) && !lookWaits ? 'ready' : 'blocked');
     return { ...s, state, version: rec.version || 0, last_feedback: rec.last_feedback || null };
   });
 }

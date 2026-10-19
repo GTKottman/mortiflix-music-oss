@@ -19,6 +19,7 @@ import { RenderQueue } from './renderq.mjs';
 import { voiceOverview, saveVoice } from './voice/index.mjs';
 import { boothStatus, addTake, keepTake } from './booth.mjs';
 import { musicScore } from './svc/score.mjs';
+import { listPacks, listFonts, getBrief, setBrief } from './svc/lookbrief.mjs';
 import { STAGES, STAGE_NAMES, stageIndex, stageStatuses, stageDone, handOverToApp, remakesIf, reopenStage, saveLastStage, stageOf, mfxView, STAGE_MUSIC, STAGE_EDIT, STAGE_RENDER } from './svc/stages.mjs';
 import { listPresets, getPreset, savePresetFull, deletePreset } from './svc/presets.mjs';
 import { addAsset, updateAsset, replaceAsset, removeAsset, useAsset, listAssets } from './svc/assets.mjs';
@@ -489,6 +490,10 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
     },
     // ---- stage 2 Look: the looks to pick from (the Look panel + the chat's looks card) ----
     'look.get': (p) => lookView(root, needProject(p)),
+    'look.packs': () => listPacks(root),
+    'look.fonts': () => listFonts(),
+    'look.brief.get': (p) => getBrief(root, needProject(p)),
+    'look.brief.set': (p) => { const r = setBrief(root, needProject(p), p || {}); runner?.wake(); poke(); return r; },
     // Picking another look asks first when shots exist (no `confirm`: nothing changes, the answer lists what would be
     // remade); confirmed, the shots made in the old look are remade in the new one (a Fix each), one grey chat line.
     'look.use': (p) => {

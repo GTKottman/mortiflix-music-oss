@@ -65,6 +65,7 @@ test('stdio: the app\'s whole path on the demo backend, each stage made once the
   assert.ok((await s.request('presets.list')).built_in.some((p) => p.slug === 'explainer'));
 
   const { project } = await s.request('project.new', { preset: 'explainer', title: 'Stdio', idea: 'How a bill becomes law', backend: 'demo' });
+  await s.request('look.brief.set', { vibe: 'calm', font: 'Inter' });
   // The runner makes the script, then waits at its gate; Next on each stage lets the next one be made.
   await s.wait((m) => m.event === 'chat.message' && m.data.card?.kind === 'script', 60_000, 'the script card');
   for (const from of [0, 1, 2, 3]) {

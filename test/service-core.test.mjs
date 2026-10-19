@@ -84,6 +84,7 @@ test('service core: new project from preset + idea + assets + theme, the whole f
   const made = await call('project.new', { preset: 'explainer', title: 'Bikes', idea: 'Why bike lanes pay off', backend: 'demo',
     assets: [{ path: logo, use: 'must', where: ['b04'], note: 'Last shot, bottom right' }], music: { theme: { mood: ['calm'], genre: 'piano' } } });
   const id = made.project.id;
+  await call('look.brief.set', { vibe: 'calm', font: 'Inter' }); // the owner picks a look before the style frames
   assert.equal(made.assets_pending, 1);
   await until(() => loadProject(root, id).state === 'queued');
   const added = events('assets.added')[0].asset;
