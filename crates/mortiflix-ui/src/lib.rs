@@ -15,12 +15,14 @@
 
 pub mod chat;
 pub mod export;
+pub mod gates;
 pub mod into_edit;
 pub mod look;
 pub mod new_project;
 pub mod nodes;
 pub mod preview;
 pub mod resume;
+pub mod score;
 pub mod script;
 pub mod service;
 pub mod setup;
@@ -191,6 +193,7 @@ impl Mortiflix {
         script::tick(&mut self.state, &mut self.service);
         look::tick(&mut self.state, &mut self.service);
         resume::tick(&mut self.state, &mut self.service);
+        score::tick(&mut self.state, &mut self.service);
     }
     /// Go to a stage (0-7). `done`: the stage being left was finished with Next. Tells the service.
     /// Returns the stage it was on, or None when `to` is out of range.
@@ -267,17 +270,36 @@ pub fn stage_by_key(key: &str) -> Option<u8> {
     old.or_else(|| STAGES.iter().position(|s| s.1.eq_ignore_ascii_case(key)).and_then(|i| u8::try_from(i).ok()))
 }
 
-/// PanelKind::MfxStage: the stage's main panel, by stage (Script, Voice, Style frames, Transitions,
-/// Animatic, Music, then the Into Edit and Render parts).
+/// PanelKind::MfxStage: the stage's gate on stages 1-6 (Script's own, then [`gates`]), then the
+/// Into Edit and Render parts.
 pub fn show_stage(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     match ctx.state.stage {
-        0 => script::show(ui, ctx),
-        STAGE_VOICE | STAGE_MUSIC => voice_music::show(ui, ctx),
-        STAGE_STYLE_FRAMES => look::show(ui, ctx),
-        STAGE_TRANSITIONS | STAGE_ANIMATIC => nodes::show_stage(ui, ctx),
+        0 => script::gate(ui, ctx),
+        s if s < STAGE_EDIT => gates::show(ui, ctx),
         STAGE_EDIT => into_edit::show(ui, ctx),
         _ => export::show(ui, ctx),
     }
+}
+
+/// PanelKind::MfxPreview: each stage's own centre (owner, 2026-10-18: "Each … needs its own unique
+/// UI"): the script on Script, the voice lines on Voice, the looks on Style frames; from Transitions
+/// on, the loose preview. True when the stage has its own centre (no video picture under it).
+pub fn show_centre(ui: &mut egui::Ui, ctx: &mut MfxCtx) -> bool {
+    match ctx.state.stage {
+        0 => script::show(ui, ctx),
+        STAGE_VOICE => voice_music::show(ui, ctx),
+        STAGE_STYLE_FRAMES => look::show(ui, ctx),
+        _ => {
+            preview::show(ui, ctx);
+            return false;
+        }
+    }
+    true
+}
+
+/// The stage has its own centre panel instead of the video preview.
+pub fn own_centre(stage: u8) -> bool {
+    matches!(stage, 0 | STAGE_VOICE | STAGE_STYLE_FRAMES)
 }
 
 /// The calm placeholder every part stub draws: the part's name and the doc that specifies it.

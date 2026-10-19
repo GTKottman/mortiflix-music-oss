@@ -164,7 +164,7 @@ pub fn frame(app: &mut StudioApp, ctx: &egui::Context) {
 
 /// Draw the Program monitor's picture where the panel's layout puts it (before the controls).
 pub fn picture(app: &mut StudioApp, ui: &mut egui::Ui, rect: egui::Rect) {
-    let l = pv::layout(rect.shrink(8.0));
+    let l = pv::layout(rect.shrink(8.0), app.mfx.core.state.stage == mfx::STAGE_MUSIC);
     let p = &app.mfx.core.state.preview;
     if !p.player.ready || p.plan.shots.is_empty() || l.picture.height() < 8.0 || !loose_active(app) {
         return;

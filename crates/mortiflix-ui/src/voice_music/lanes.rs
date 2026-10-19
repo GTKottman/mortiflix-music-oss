@@ -46,7 +46,7 @@ pub struct LaneOut {
 /// The lanes' height for the current timeline.
 pub fn height(tl: &Timeline) -> f32 {
     let mut h = TOP_H + RULER_H + SHOT_H + 6.0;
-    if !tl.cues.is_empty() || tl.has_music || tl.has_view {
+    if !tl.voice_only && (!tl.cues.is_empty() || tl.has_music || tl.has_view) {
         h += ROW_H;
     }
     if !tl.no_narration() {
@@ -63,8 +63,12 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx, tl: &Timeline, st: &mut LaneUi,
     // Top row: name, counts, legend, Whole video | Zoom.
     ui.horizontal(|ui| {
         ui.set_height(TOP_H);
-        ui.label(egui::RichText::new("Voice & music").color(t.text).strong());
-        let counts = format!("{} lines · {} cues · {}", tl.lines.len(), tl.cues.len(), fmt_time(tl.duration));
+        ui.label(egui::RichText::new(if tl.voice_only { "Voice" } else { "Voice & music" }).color(t.text).strong());
+        let counts = if tl.voice_only {
+            format!("{} lines · {}", tl.lines.len(), fmt_time(tl.duration))
+        } else {
+            format!("{} lines · {} cues · {}", tl.lines.len(), tl.cues.len(), fmt_time(tl.duration))
+        };
         ui.colored_label(t.text_faint, counts);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let zin = ui.add_enabled(st.zoom + 1 < ZOOMS.len(), egui::Button::new("Zoom +").small());
@@ -88,7 +92,7 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx, tl: &Timeline, st: &mut LaneUi,
 
     let rows: Vec<(&str, f32)> = {
         let mut r = vec![("shots", SHOT_H)];
-        if !tl.cues.is_empty() || tl.has_music || tl.has_view {
+        if !tl.voice_only && (!tl.cues.is_empty() || tl.has_music || tl.has_view) {
             r.push(("music", ROW_H));
         }
         if !tl.no_narration() {
@@ -216,6 +220,7 @@ fn lane_header(ui: &egui::Ui, ctx: &MfxCtx, tl: &Timeline, name: &'static str, r
     let p = ui.painter_at(r);
     p.line_segment([r.left_bottom(), r.right_bottom()], Stroke::new(1.0, t.separator));
     let title = match name {
+        "shots" if tl.voice_only => format!("Scenes {}", tl.shots.len()),
         "shots" => format!("Shots {}", tl.shots.len()),
         "music" => "Music".into(),
         _ => "Voice".into(),

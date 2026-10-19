@@ -136,6 +136,9 @@ pub struct MfxState {
     pub nodes: crate::nodes::NodeArea,
     /// The loose preview (doc 36): its plan, scope, loop and the player as the host saw it.
     pub preview: crate::preview::PreviewState,
+    /// The Music stage's score: its Strudel and its MIDI under the animatic.
+    #[serde(skip)]
+    pub score: crate::score::Score,
     /// Into Edit (doc 38): the hand-off and the stage-5 Mortiflix panel.
     pub handoff: crate::into_edit::Handoff,
     /// The script, line by line, and the owner's unsaved draft (Script panel + chat card).
@@ -179,6 +182,7 @@ impl Default for MfxState {
             files_in: Vec::new(),
             nodes: crate::nodes::NodeArea::default(),
             preview: Default::default(),
+            score: crate::score::Score::default(),
             handoff: Default::default(),
             script: Default::default(),
             look: Default::default(),

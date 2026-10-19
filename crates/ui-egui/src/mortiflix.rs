@@ -288,9 +288,9 @@ pub fn stage_bar(app: &mut StudioApp, ui: &mut egui::Ui, rect: egui::Rect) {
 /// Draw a Mortiflix dock panel.
 pub fn panel(app: &mut StudioApp, ui: &mut egui::Ui, p: PanelKind, rect: egui::Rect) {
     let theme = theme(&app.tokens);
-    // the Script stage has no video yet: the script is centre stage (owner, 2026-10-18)
-    let script = app.mfx.core.state.stage == 0;
-    if p == PanelKind::MfxPreview && !script {
+    // Script, Voice and Style frames have no video yet: their own work is centre stage (owner, 2026-10-18)
+    let own = mfx::own_centre(app.mfx.core.state.stage);
+    if p == PanelKind::MfxPreview && !own {
         crate::mortiflix_preview::picture(app, ui, rect);
     }
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(rect.shrink(8.0)).layout(egui::Layout::top_down(egui::Align::Min)));
@@ -300,27 +300,29 @@ pub fn panel(app: &mut StudioApp, ui: &mut egui::Ui, p: PanelKind, rect: egui::R
         PanelKind::MfxChat => mfx::chat::show(&mut child, &mut c),
         PanelKind::MfxAssets => mfx::chat::show_assets(&mut child, &mut c),
         PanelKind::MfxTokens => mfx::tokens::show(&mut child, &mut c),
-        PanelKind::MfxPreview if script => mfx::script::show(&mut child, &mut c),
-        PanelKind::MfxPreview => mfx::preview::show(&mut child, &mut c),
+        PanelKind::MfxPreview => {
+            mfx::show_centre(&mut child, &mut c);
+        }
         PanelKind::MfxNodes => mfx::nodes::show(&mut child, &mut c),
-        _ if script => mfx::script::gate(&mut child, &mut c),
         _ => mfx::show_stage(&mut child, &mut c),
     }
     let (cmds, autos) = (std::mem::take(&mut c.commands), std::mem::take(&mut c.auto));
     finish(app, ui.ctx(), cmds, autos);
 }
 
-/// The Mortiflix panels' tab names follow what they show on the stage: on Script the centre panel is
-/// the script and the stage panel its gate; on the other stages the stage panel carries the stage's name.
+/// The Mortiflix panels' tab names follow what they show: the stage panel is the stage's gate, and the
+/// centre panel carries the stage's name where it shows the stage's own work instead of the preview.
 pub fn tab_titles(app: &StudioApp) -> Vec<(PanelKind, String)> {
     let s = &app.mfx.core.state;
     if !s.active || s.stage >= mfx::STAGE_EDIT {
         return Vec::new();
     }
-    if s.stage == 0 {
-        return vec![(PanelKind::MfxPreview, "Mortiflix Script".into()), (PanelKind::MfxStage, "Script gate".into())];
+    let name = mfx::stage_name(s.stage);
+    let mut titles = vec![(PanelKind::MfxStage, format!("{name} gate"))];
+    if mfx::own_centre(s.stage) {
+        titles.push((PanelKind::MfxPreview, format!("Mortiflix {name}")));
     }
-    vec![(PanelKind::MfxStage, format!("Mortiflix {}", mfx::stage_name(s.stage)))]
+    titles
 }
 
 /// Whisper (captions) and Kokoro (natural voices), from Mortiflix Studio's own catalogues, for the Setup

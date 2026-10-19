@@ -45,6 +45,13 @@ const SHOTS_H: f32 = 40.0;
 const SOUND_H: f32 = 12.0;
 const ROW_GAP: f32 = 4.0;
 const BAR_H: f32 = BEATS_H + ROW_GAP + SHOTS_H + ROW_GAP + SOUND_H + ROW_GAP + SOUND_H;
+/// The Music stage's MIDI row under the Music row (the score's notes on the animatic's clock).
+const MIDI_H: f32 = 56.0;
+
+/// The bar's height: the Music stage adds the MIDI row.
+fn bar_h(midi: bool) -> f32 {
+    if midi { BAR_H + ROW_GAP + MIDI_H } else { BAR_H }
+}
 
 /// What Play plays (doc 36). Picking one doesn't start playback.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -259,7 +266,8 @@ pub struct Layout {
     pub transport: Rect,
 }
 
-pub fn layout(rect: Rect) -> Layout {
+/// `midi`: the Music stage, with the MIDI row under the animatic.
+pub fn layout(rect: Rect, midi: bool) -> Layout {
     // top-down for the header, bottom-up for the rest; a short panel squeezes the picture first,
     // and every part stays inside `rect` with a height of zero or more
     let (top, bottom) = (rect.min.y, rect.max.y.max(rect.min.y));
@@ -269,7 +277,7 @@ pub fn layout(rect: Rect) -> Layout {
     let floor = header.max.y;
     let below = |r: Rect| row(r.min.y.max(floor), r.max.y.max(floor));
     let transport = below(row(bottom - TRANSPORT_H, bottom));
-    let bar = below(row(transport.min.y - GAP - BAR_H, transport.min.y - GAP));
+    let bar = below(row(transport.min.y - GAP - bar_h(midi), transport.min.y - GAP));
     let caption = below(row(bar.min.y - GAP - CAPTION_H, bar.min.y - GAP));
     let picture = row(floor + 4.0, caption.min.y - GAP);
     Layout { header, picture, caption, bar, transport }
@@ -281,7 +289,7 @@ fn hex(c: &str) -> Color32 {
 
 /// The preview panel (PanelKind::MfxPreview), in the middle on stages 1-4.
 pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
-    let l = layout(ui.max_rect());
+    let l = layout(ui.max_rect(), ctx.state.stage == crate::STAGE_MUSIC);
     header(ui, ctx, l.header);
     picture_notice(ui, ctx, l.picture);
     caption(ui, ctx, l.caption);
@@ -456,7 +464,8 @@ fn t_of(area: Rect, total: f64, x: f32) -> f64 {
 fn bar(ui: &mut egui::Ui, ctx: &mut MfxCtx, r: Rect) {
     let t = ctx.theme;
     let now = ui.input(|i| i.time);
-    if r.height() < BAR_H - 1.0 {
+    let midi = ctx.state.stage == crate::STAGE_MUSIC;
+    if r.height() < bar_h(midi) - 1.0 {
         return;
     }
     let area = Rect::from_min_max(pos2(r.min.x + GUTTER, r.min.y), r.max);
@@ -465,8 +474,11 @@ fn bar(ui: &mut egui::Ui, ctx: &mut MfxCtx, r: Rect) {
     let voice_r = Rect::from_min_size(pos2(area.min.x, shots_r.max.y + ROW_GAP), vec2(area.width(), SOUND_H));
     let music_r = Rect::from_min_size(pos2(area.min.x, voice_r.max.y + ROW_GAP), vec2(area.width(), SOUND_H));
     let p = ui.painter_at(r);
-    for (label, row) in [("Beats", beats_r), ("Shots", shots_r), ("Voice", voice_r), ("Music", music_r)] {
-        p.text(pos2(r.min.x + GUTTER - 8.0, row.center().y), Align2::RIGHT_CENTER, label, FontId::proportional(11.0), t.text_faint);
+    let midi_r = Rect::from_min_size(pos2(area.min.x, music_r.max.y + ROW_GAP), vec2(area.width(), if midi { MIDI_H } else { 0.0 }));
+    for (label, row) in [("Beats", beats_r), ("Shots", shots_r), ("Voice", voice_r), ("Music", music_r), ("MIDI", midi_r)] {
+        if row.height() > 0.0 {
+            p.text(pos2(r.min.x + GUTTER - 8.0, row.center().y), Align2::RIGHT_CENTER, label, FontId::proportional(11.0), t.text_faint);
+        }
     }
     let pv = &ctx.state.preview;
     let total = pv.plan.total;
@@ -553,6 +565,11 @@ fn bar(ui: &mut egui::Ui, ctx: &mut MfxCtx, r: Rect) {
                 p.rect_filled(sr, 1.0, Color32::from_gray(0x5a));
             }
         }
+    }
+    // the score's MIDI, pasted under the animatic (Music stage)
+    if midi {
+        let tot = total;
+        crate::score::draw_midi(&p, midi_r, &ctx.state.score, |sec| x_of(area, tot, sec), t.text_faint);
     }
     // the playhead, across every row
     if total > 0.0 {
@@ -820,15 +837,20 @@ mod tests {
 
     #[test]
     fn layout_keeps_every_part_inside_and_the_picture_never_negative() {
-        for h in [10.0, 120.0, 260.0, 900.0] {
-            let r = Rect::from_min_size(pos2(0.0, 0.0), vec2(800.0, h));
-            let l = layout(r);
-            for part in [l.header, l.picture, l.caption, l.bar, l.transport] {
-                assert!(part.height() >= 0.0 && part.min.y >= -0.1, "{h}: {part:?}");
+        for midi in [false, true] {
+            for h in [10.0, 120.0, 260.0, 900.0] {
+                let r = Rect::from_min_size(pos2(0.0, 0.0), vec2(800.0, h));
+                let l = layout(r, midi);
+                for part in [l.header, l.picture, l.caption, l.bar, l.transport] {
+                    assert!(part.height() >= 0.0 && part.min.y >= -0.1, "{h}: {part:?}");
+                }
             }
         }
-        let l = layout(Rect::from_min_size(pos2(0.0, 0.0), vec2(800.0, 900.0)));
+        let l = layout(Rect::from_min_size(pos2(0.0, 0.0), vec2(800.0, 900.0)), false);
         assert!(l.picture.height() > 500.0);
+        // the Music stage's MIDI row takes its room from the picture, never the transport
+        let m = layout(Rect::from_min_size(pos2(0.0, 0.0), vec2(800.0, 900.0)), true);
+        assert!(m.bar.height() > l.bar.height() && m.picture.height() < l.picture.height());
         assert!(l.transport.max.y <= 900.0);
     }
 
