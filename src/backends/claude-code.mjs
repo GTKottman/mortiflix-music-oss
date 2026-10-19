@@ -22,7 +22,8 @@ export const PARENT_SESSION_VARS = ['CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT', 'CLA
   'CLAUDE_CODE_EXECPATH', 'CLAUDE_PID'];
 
 export async function run({ root, workdir, prompt, env, transcript, onActivity, signal, config }) {
-  const args = ['-p', prompt, '--output-format', 'stream-json', '--verbose', ...leanArgs(withCraft(config.claudeArgs || [], workdir), config)];
+  // The prompt goes in on stdin: it carries the start files (tens of kB), past Windows' 32k command-line limit.
+  const args = ['-p', '--output-format', 'stream-json', '--verbose', ...leanArgs(withCraft(config.claudeArgs || [], workdir), config)];
   if (config.model) args.push('--model', config.model);
   // Sessions use the studio browser through browser-harness; Claude in Chrome would drive the owner's own Chrome.
   if (!args.includes('--disallowedTools')) args.push('--disallowedTools', 'mcp__claude-in-chrome__*');
@@ -43,7 +44,9 @@ export async function run({ root, workdir, prompt, env, transcript, onActivity, 
   }
 
   const out = createWriteStream(transcript, { flags: 'a' });
-  const p = spawn(cmd, argv, { cwd: workdir, env: sessionEnv, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
+  const p = spawn(cmd, argv, { cwd: workdir, env: sessionEnv, stdio: ['pipe', 'pipe', 'pipe'], detached: true });
+  p.stdin.on('error', () => { /* exited before reading it: the close below reports why */ });
+  p.stdin.end(prompt);
   const kill = () => { try { process.kill(-p.pid, 'SIGTERM'); } catch { /* gone */ } };
   signal?.addEventListener('abort', kill, { once: true });
 

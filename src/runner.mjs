@@ -1,7 +1,7 @@
 // The runner: picks the next project that has work, starts one session for it, and repeats. Sessions end at gates,
 // so a project waiting on you costs nothing. One session at a time, first in first out.
 import { EventEmitter } from 'node:events';
-import { mkdirSync, rmSync, writeFileSync, readFileSync, existsSync, appendFileSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync, readFileSync, existsSync, appendFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { REPO, paths, loadConfig, readSessionEnv } from './studio.mjs';
 import { sessionVoiceEnv } from './voice/index.mjs';
@@ -24,6 +24,49 @@ const MAX_SESSIONS_WITHOUT_GATE = 8;
 
 // A session that ended because Claude Code isn't signed in ("OAuth session expired", "401", "Please run /login").
 export const loginTrouble = (error) => /oauth|authenticat|\b401\b|\/login|not logged in|logged out|signed out|unauthori[sz]ed|invalid api key|credentials? (?:expired|invalid)|session expired|token expired/i.test(String(error || ''));
+
+// What every session opened first, one tool call each (ls, cat checklist, JOURNAL, feedback, PIPELINE.md, GATES.md,
+// SKILLS.md): handed over in the prompt instead, so the session starts working on its first step, not on step six
+// with all of them re-read on every step after. Long journals and feedback keep their newest part.
+const START_FILES = [
+  ['CLAUDE.md', 'CLAUDE.md', 0],
+  ['SKILLS.md', 'SKILLS.md', 0],
+  ['pipeline/PIPELINE.md', 'pipeline/PIPELINE.md', 0],
+  ['.mortiflix/GATES.md', '.mortiflix/GATES.md', 0],
+  ['checklist.md', 'checklist.md', 0],
+  ['JOURNAL.md', 'JOURNAL.md (newest part)', 12_000],
+];
+const FEEDBACK_MAX = 20_000;
+
+export function startPrompt(work, reason, { claudeMd = true } = {}) {
+  const parts = [];
+  const add = (label, text, max) => {
+    const body = max && text.length > max ? `…\n${text.slice(-max)}` : text;
+    parts.push(`<file path="${label}">\n${body.trim()}\n</file>`);
+  };
+  for (const [file, label, max] of START_FILES) {
+    if (file === 'CLAUDE.md' && !claudeMd) continue;
+    const f = join(work, file);
+    if (existsSync(f)) add(label, readFileSync(f, 'utf8'), max);
+  }
+  const fb = join(work, 'feedback');
+  if (existsSync(fb)) {
+    let left = FEEDBACK_MAX;
+    const files = readdirSync(fb).filter((n) => statSync(join(fb, n)).isFile())
+      .sort((a, b) => statSync(join(fb, b)).mtimeMs - statSync(join(fb, a)).mtimeMs);
+    for (const n of files) {
+      const text = readFileSync(join(fb, n), 'utf8');
+      if (text.length > left) { parts.push(`(older feedback files not included: open feedback/ if you need them)`); break; }
+      left -= text.length;
+      add(`feedback/${n}`, text, 0);
+    }
+  }
+  return [
+    `These are this project's start files as they are right now: ${claudeMd ? 'CLAUDE.md (follow it), ' : ''}SKILLS.md, the pipeline, the gate protocol, the checklist, the journal and the feedback. Don't open them again: start on the work. Open any other file as usual.`,
+    ...parts,
+    `Resume this project from the checklist, the journal and the feedback above. Why this session started: ${reason}`,
+  ].join('\n\n');
+}
 
 export class Runner extends EventEmitter {
   constructor(root, { log = () => {} } = {}) {
@@ -153,7 +196,7 @@ export class Runner extends EventEmitter {
         root,
         projectId,
         workdir: pp.work,
-        prompt: `Read ./CLAUDE.md fully and follow it. Resume this project from checklist.md, JOURNAL.md and feedback/. Why this session started: ${reason}`,
+        prompt: startPrompt(pp.work, reason, { claudeMd: config.backend !== 'anthropic-api' }),
         env: { ...sessionEnv, ...bridge.env, MFX_SHARED: join(paths(root).run, 'shared') },
         transcript,
         onActivity: (a) => this.addActivity(projectId, a),

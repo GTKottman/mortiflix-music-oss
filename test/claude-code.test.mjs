@@ -171,3 +171,23 @@ test('sessions start lean: no owner MCP servers, plugins, skills or global CLAUD
   assert.equal(own.filter((a) => a === '--tools').length, 1);
   assert.equal(own[own.indexOf('--tools') + 1], 'Bash');
 });
+
+test('the session prompt carries the start files, so a session starts on the work instead of opening them', async () => {
+  const { startPrompt } = await import('../src/runner.mjs');
+  const work = mkdtempSync(join(tmpdir(), 'mfx-start-'));
+  try {
+    const { mkdirSync } = await import('node:fs');
+    mkdirSync(join(work, 'pipeline'));
+    mkdirSync(join(work, '.mortiflix'));
+    mkdirSync(join(work, 'feedback'));
+    writeFileSync(join(work, 'CLAUDE.md'), '# brief file');
+    writeFileSync(join(work, 'pipeline', 'PIPELINE.md'), 'pipeline steps');
+    writeFileSync(join(work, '.mortiflix', 'GATES.md'), 'gate protocol');
+    writeFileSync(join(work, 'JOURNAL.md'), `old start ${'x'.repeat(20_000)} newest line`);
+    writeFileSync(join(work, 'feedback', 'brief-v1.json'), '{"answers":1}');
+    const p = startPrompt(work, 'Carrying on.');
+    for (const s of ['# brief file', 'pipeline steps', 'gate protocol', 'newest line', '{"answers":1}', '<file path="feedback/brief-v1.json">', 'Why this session started: Carrying on.']) assert.ok(p.includes(s), s);
+    assert.ok(!p.includes('old start'), 'a long journal keeps only its newest part');
+    assert.ok(!startPrompt(work, 'r', { claudeMd: false }).includes('# brief file'), 'the API backend sends CLAUDE.md itself');
+  } finally { rmSync(work, { recursive: true, force: true }); }
+});
