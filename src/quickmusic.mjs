@@ -18,7 +18,7 @@ import { loadProject, projectPaths, projectPipeline } from './projects.mjs';
 import { stepView, stepChecks, submit } from './gates.mjs';
 import { scriptView } from './svc/script.mjs';
 import { loadTheme } from './svc/theme.mjs';
-import { tempoMap, placeOf, sectionsFromScenes, planProblems, blueprintFrom, composeChecked, scoreText, instrumentsFor, balanceGains, usedParts, ROLES, PARTS, VARIATIONS, PALETTES, HIT_KINDS } from './music/compose.mjs';
+import { tempoMap, placeOf, sectionsFromScenes, planProblems, blueprintFrom, composeChecked, scoreText, instrumentsFor, balanceGains, nudge, usedParts, ROLES, PARTS, VARIATIONS, PALETTES, HIT_KINDS } from './music/compose.mjs';
 import { readWav, levelOf } from '../pipelines/_shared/skills/music/lib/wav.mjs';
 
 const CHECKS = ['loudness', 'sync', 'music-check', 'music-instruments', 'music-source', 'music-under-voice'];
@@ -29,6 +29,7 @@ const MAX_FIXES = 2;
 const UNDER = 18; // dB the music sits under the voice while it speaks (music SKILL.md §8)
 
 const read = (f, n = 200_000) => (existsSync(f) ? readFileSync(f, 'utf8').slice(0, n) : '');
+const r3 = (x) => Math.round(x * 1000) / 1000;
 const readJsonOr = (f, d) => { try { return JSON.parse(readFileSync(f, 'utf8')); } catch { return d; } };
 
 export function quickMusicStep(root, id, config) {
@@ -84,64 +85,92 @@ function cutHits(c) {
   }).filter(Boolean);
 }
 
+const ACCENTS = ['bell', 'bass', 'theme', 'drop'];
 const PLAN_SCHEMA = {
   type: 'object',
-  required: ['title', 'dramatic_reading', 'must_not', 'scale', 'palette', 'motif', 'sections', 'hits', 'ending', 'note'],
+  required: ['title', 'dramatic_reading', 'must_not', 'concept', 'scale', 'tempo', 'palette', 'palette_why', 'motif', 'sections', 'key_words', 'hits', 'ending', 'note'],
   properties: {
     title: { type: 'string', description: 'a real title for the cue' },
     dramatic_reading: { type: 'string', description: 'the transformation in one line: "confusion -> recognition -> confidence"' },
-    must_not: { type: 'string', description: 'what the music must not do here' },
+    must_not: { type: 'string', description: 'what the music must not do here, and why' },
+    concept: { type: 'string', description: 'the small vocabulary and why it fits this story: tonal centre, harmonic character, the motif\'s characteristic interval and rhythm, register, texture' },
     scale: { type: 'string', description: 'tonic:mode, e.g. "E:dorian" (modes: major minor dorian phrygian lydian mixolydian harmonic minor melodic minor)' },
+    tempo: { type: 'object', required: ['bpm_min', 'bpm_max', 'why'], properties: { bpm_min: { type: 'number' }, bpm_max: { type: 'number' }, why: { type: 'string' } }, description: 'a range at least 16 BPM wide: the studio picks the tempo inside it that lands the cuts and your key words on the grid' },
     palette: { type: 'string', enum: PALETTES },
+    palette_why: { type: 'string' },
     motif: {
-      type: 'object', required: ['degrees', 'beats', 'contour'],
+      type: 'object', required: ['degrees', 'beats', 'contour', 'why'],
       properties: {
         degrees: { type: 'array', items: { type: 'integer' }, description: 'scale degrees from the tonic (0 = tonic, 7 = an octave up in a 7-note mode, negatives below)' },
         beats: { type: 'array', items: { type: 'number' }, description: 'each note\'s length in beats (quarter notes), multiples of 0.25' },
         contour: { type: 'string', description: 'the shape in words: a question that rises, an answer that falls…' },
+        why: { type: 'string', description: 'what in the story the motif stands for' },
       },
     },
     sections: {
       type: 'array',
       items: {
-        type: 'object', required: ['name', 'function', 'intensity', 'chords', 'melody', 'parts'],
+        type: 'object', required: ['name', 'function', 'why', 'intensity', 'chords', 'melody', 'parts'],
         properties: {
           name: { type: 'string', description: 'story-bearing, never Intro/Verse/A/B' },
           function: { type: 'string', description: 'establish, develop, destabilise, withhold, release, reinterpret, resolve: what happens, what rises or is held back' },
+          why: { type: 'string', description: 'the words or picture that make this section sound this way: chords, intensity, parts, variation' },
           intensity: { type: 'integer', minimum: 0, maximum: 10 },
           chords: { type: 'array', items: { anyOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }] }, description: 'one chord per bar, cycling through the section; ["Am7", "G"] splits a bar in halves' },
           melody: { type: 'string', enum: VARIATIONS },
           parts: { type: 'array', items: { type: 'string', enum: PARTS } },
-          picture: { type: 'string' },
         },
       },
     },
-    hits: { type: 'array', items: { type: 'object', required: ['cut', 'kind', 'response'], properties: { cut: { type: 'integer' }, kind: { type: 'string', enum: HIT_KINDS }, response: { type: 'string' } } } },
-    ending: { type: 'string' },
-    note: { type: 'string', description: 'for the owner, short: the idea, how the hits are played, what to listen for' },
+    key_words: {
+      type: 'array', description: '3-8 spoken words the music answers exactly where they are said',
+      items: { type: 'object', required: ['t', 'word', 'response', 'why'], properties: { t: { type: 'number', description: 'the word\'s start, copied from the word list' }, word: { type: 'string' }, response: { type: 'string', enum: ACCENTS }, why: { type: 'string' } } },
+    },
+    hits: { type: 'array', items: { type: 'object', required: ['cut', 'kind', 'why'], properties: { cut: { type: 'integer' }, kind: { type: 'string', enum: HIT_KINDS }, why: { type: 'string' } } } },
+    ending: { type: 'string', description: 'how it ends and why (resolved, or left open on purpose)' },
+    note: { type: 'string', description: 'for the owner, short: the idea, how the hits and key words are played, what to listen for' },
   },
 };
 
-function planPrompt(c, map, sections, hits, fix) {
+// The craft the plan is made with (the music skill's own pages), so one call has what a session reads first.
+const CRAFT = join(REPO, 'pipelines', '_shared', 'skills', 'music', 'craft');
+const craftText = () => {
+  const melody = read(join(CRAFT, 'melody-craft.md'));
+  return `${read(join(CRAFT, 'picture-scoring.md')).replace(/\n## Output workflow[\s\S]*?(?=\n## Quality rules)/, '\n')}\n\n${melody.slice(0, melody.indexOf('## 5.') > 0 ? melody.indexOf('## 5.') : undefined)}`;
+};
+const HARMONY = `## Harmony: what makes it sound right (the code writes only chord tones, so the chart you write is the sound you get)
+- Build the chart from the scale's own chords; a borrowed chord (iv in major, bVI, bVII) is a colour for one story moment, named in the section's why.
+- Chords that share tones move smoothly under speech (Cmaj7 to Am7, Fmaj7 to Dm7: two or three common tones). Root motion by fifths drives forward; by thirds it changes colour without pushing; by step (IV to V, bVI to bVII) it lifts.
+- Functional motion (ii-V-I, IV-V-I) creates expectation and arrival; modal motion (i-IV in dorian, I-II in lydian, I-bVII in mixolydian) floats and wonders; a chord held under changing words suspends time.
+- Harmonic rhythm is a dial: one chord for two bars under dense narration, one per bar in the middle, two per bar only for a build or the last lift. Changing it is how a section feels faster without getting louder.
+- Tension and release: sus4 or add9 open a question, maj7 is sweet and open, m7b5 or a borrowed iv shades; release lands on a stable chord on a downbeat, best where a key word lands.
+- Avoid dim and aug chords except as a passing colour, and crowded chords (an 11th or 13th with every tone): where two chord tones sit a semitone apart the code drops one, so a crowded chord thins the texture.
+- Cadence where the story answers its question (V-I or IV-I under the answer, the end card); leave it open (end on IV, or on I with its 9th) only when the story should end on a question.
+- Do not equate major with happy or minor with sad: register, spacing, rhythm and the harmonic rhythm decide the feeling as much.`;
+
+function planPrompt(c, sections, cuts, fix) {
   const busyWords = (a, b) => c.timing.lines.filter((l) => l.end > a && l.start < b).map((l) => l.text).join(' ');
   const t = c.theme;
   const using = t?.samples?.find((s) => s.id === t.using);
+  const words = c.timing.lines.map((l) => `${l.id} (${l.start.toFixed(2)}-${l.end.toFixed(2)}): ${(l.words || []).map((w) => `${w.text}@${Number(w.start).toFixed(2)}`).join(' ')}`).join('\n');
   return [
-    `You plan the original score for "${c.project.title}", an explainer video with narration. You make the musical decisions; the studio's code writes every note from your plan (each one a tone of the chord of its moment), checks it, renders a stand-in and mixes it under the voice. Answer with the JSON asked for, nothing else.`,
+    `You plan the original score for "${c.project.title}", an explainer video with narration. You make every musical decision and give the reason for it; the studio's code writes every note from your plan (each one a tone of the chord of its moment, checked by the harmony lock), fits the tempo, renders a stand-in and mixes it under the voice. This is your one chance to score it: use the craft below, plan the whole cue, answer with the JSON asked for and nothing else.`,
     `## The brief\n${JSON.stringify({ ...c.project.intake?.answers, ...Object.fromEntries(Object.entries(c.project.mfx?.answers || {}).map(([k, v]) => [k, v.answer])) })}`,
     t ? `## The music theme ${t.picked_by === 'you' ? 'the owner chose' : 'set for this project'} (follow it${using ? '; the motif is its opening phrase, written as scale degrees' : ''})\n${JSON.stringify({ mood: t.mood, genre: t.genre, tempo: t.tempo, key: t.key, instruments: t.instruments, words: t.words, theme: using ? { name: using.name, desc: using.desc, key: using.key, strudel: using.strudel } : undefined })}` : '',
-    `## The tempo (the studio fitted it to the cuts: don't change it)\n${map.bpm} BPM, ${map.meter}, bar 1 at ${map.offset_sec} s, ${map.bars} bars of ${map.sec_per_bar} s; the video is ${c.videoSec} s.`,
-    `## The sections (one per scene, fixed: plan exactly these, in order)\n${sections.map((s, i) => `${i + 1}. bars ${s.start_bar}-${s.end_bar} (${s.start_sec.toFixed(1)}-${s.end_sec.toFixed(1)} s), scene ${s.scenes.join('+')}: ${s.scenes.map((k) => c.script.beats.find((b) => b.id === c.scenes.find((x) => x.key === k)?.beat)).filter(Boolean).map((b) => `"${b.name}", picture: ${b.visual}`).join(' / ')}. Spoken: "${busyWords(s.start_sec, s.end_sec)}"`).join('\n')}`,
-    `## The cuts (hits on the picture)\n${hits.map((h) => `cut ${h.cut} at ${h.t_sec} s (${h.what}) = bar ${h.bar} beat ${h.beat}${h.fits ? '' : ': between beats at this tempo, it plays as no hit'}`).join('\n')}`,
+    `## The sections (one per scene, fixed: plan exactly these, in order). The video is ${c.videoSec} s.\n${sections.map((s, i) => { const b = c.script.beats.find((x) => x.id === s.beat); return `${i + 1}. ${s.start_sec.toFixed(2)}-${s.end_sec.toFixed(2)} s, scene ${s.key}${b ? ` "${b.name}", picture: ${b.visual}` : ''}. Spoken: "${busyWords(s.start_sec, s.end_sec)}"`; }).join('\n')}`,
+    `## The cuts (picture hits; the studio fits the tempo so they land on the beat)\n${cuts.map((h) => `cut ${h.cut} at ${h.t_sec} s: ${h.what}`).join('\n')}`,
+    `## Every spoken word with its start (seconds): pick your key words from here\n${words}`,
     `## The owner's recent pieces (vary key, opening chords and mood from them: the same key and opening progression as one is refused)\n${JSON.stringify(c.recent.map((r) => ({ title: r.title, scale: r.scale, bpm: r.bpm, opening: r.opening })))}`,
     `## How the code plays your plan
 - parts: bass (the root on every chord change; long notes when quiet, root-fifth from intensity 4, octave eighths from 7), pad (the chords held, voice-led), melody (your motif, varied per section), arp (broken chords, eighths; sixteenths from 8), bells (on the hits, at a section that rises, on the last chord), drums (a soft kick from intensity 0, hats from 4, a second kick from 6, claps from 7, a tom fill into a section that rises, a crash on a direct hit). Parts enter and leave by section: list only what plays.
 - melody variations: statement, fragment (its first half), inversion, augmentation (twice as slow), octave-up, sequence (repeated a step higher each time), rest. A phrase plays, then rests as long (call and answer); under the words it plays every other phrase, softer.
 - intensity 0-10 is the energy curve and follows the picture: builds really build, the quiet really thins out; contrast makes it legible. The code measures it, so a section asked 2+ higher than another must have more going on.
-- chords: from the scale's own chords (borrowed colours only where they serve the story), symbols like Am7 Cmaj7 G Dsus4 Fadd9 Em9; under speech a slow harmonic rhythm (a chord lasting 2 bars is the same symbol twice). Vary the harmony across sections; the last section resolves or is left open on purpose (say which in "ending").
+- key words: the 3-8 words that carry the meaning (the answer, the turn, the name of the thing, the call to action), not every noun. The code answers each exactly where it is said: bell (a bell tone on the word), bass (the floor re-strikes its root on it), theme (a theme note lands on it), drop (the beat before empties, so the word lands in space). The tempo is fitted so as many as possible fall on the grid.
 - the voice talks almost all the time: the music sits ~18 dB under it (ducked), so the busiest writing goes where the words are fewest; the end card can open up.
-- palette: the stand-in sound (warm, glass or dark); the owner makes the final sound from the MIDI.
+- palette: the stand-in sound. warm = piano floor, soft synth bed, harp theme, marimba pulse, glockenspiel bells; glass = piano floor, bowed vibraphone bed, vibraphone theme, kalimba pulse, handbells; dark = piano floor, low synth bed, alto recorder theme, marimba pulse, tubular bells. Real, soft percussion in all. The owner makes the final sound from the MIDI.
 - hits: for each cut, direct (on it), anticipation (the change just before), aftermath (react a beat after) or none; hit the few that change meaning.`,
+    HARMONY,
+    `## The craft (the music skill: read it, then plan)\n${craftText()}`,
     fix ? `## Your last plan was refused: fix only these\n${fix.errors.join('\n')}\n\n## That plan\n${JSON.stringify(fix.plan)}` : '',
   ].filter(Boolean).join('\n\n');
 }
@@ -213,44 +242,61 @@ export async function quickMusic({ root, id, view, run, runArgs, config, onActiv
   if (/\bno music\b/i.test(String(c.project.intake?.answers?.music || ''))) return give('the brief asks for no music');
   const own = /MIDI/i.test(String(c.project.intake?.answers?.music || '')) || c.theme?.finish === 'own';
 
-  // 1. the tempo map and the sections (no AI)
+  // 1. the picture: the animatic's length, the cuts, one section per scene (no AI)
   const probe = await exec('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', 'out/animatic.mp4'], { cwd: c.work });
   c.videoSec = +Number(probe.out).toFixed(3);
   if (!(c.videoSec > 5)) return give('the animatic\'s length couldn\'t be read');
-  const tt = c.theme?.tempo || {};
-  const bpmMin = tt.bpm_fixed || tt.bpm_min || 64; const bpmMax = tt.bpm_fixed || tt.bpm_max || 140;
-  onActivity({ kind: 'info', text: 'Fitting a tempo to the cuts.' });
   const cuts = cutHits(c);
-  const map = tempoMap({ hits: cuts, videoSec: c.videoSec, fps: FPS, bpmMin, bpmMax, prefer: (bpmMin + bpmMax) / 2 > 64 && tt.bpm_min ? (bpmMin + bpmMax) / 2 : 90 });
-  const hits = cuts.map((h) => { const p = placeOf(map, h.t_sec); return { ...h, bar: p.bar, beat: p.beat, fits: Math.abs(p.at - h.t_sec) <= 1 / FPS + 1e-6 && p.bar <= map.bars }; }).filter((h) => h.bar >= 1 && h.bar <= map.bars);
-  const sections = sectionsFromScenes(map, c.scenes);
-  if (!sections.length) return give('no scenes to score');
+  if (!c.scenes.length) return give('no scenes to score');
+  const tt = c.theme?.tempo || {};
+  const allWords = c.timing.lines.flatMap((l) => (l.words || []).map((w) => ({ text: w.text, t: Number(w.start) })));
 
-  // 2. the cue plan: one call, a fix call with only the errors when the plan or the engine refuses it
+  // 2. the cue plan: one call with the craft in it; a fix call with only the errors when the plan or the engine
+  // refuses it. 3. the tempo fitted to the cuts and the plan's key words, inside the plan's range; the notes by code,
+  // checked with the engine's own harmony lock and intensity curve
   const mu = join(c.work, 'music');
   mkdirSync(mu, { recursive: true });
-  onActivity({ kind: 'info', text: `Planning the music: ${map.bpm} BPM, ${map.meter}, ${sections.length} sections, ${hits.filter((h) => h.fits).length} of ${hits.length} cuts on the beat.` });
-  let plan = null; let fix = null; let bp = null; let composed = null;
+  onActivity({ kind: 'info', text: `Planning the music: ${c.scenes.length} scenes, ${cuts.length} cuts, ${allWords.length} words.` });
+  let plan = null; let fix = null; let bp = null; let composed = null; let map = null; let hits = null; let sections = null; let keys = null;
   for (let round = 0; ; round++) {
     if (round > MAX_FIXES) return give(`the plan still fails: ${fix.errors.join('; ').slice(0, 300)}`);
-    const r = await call(planPrompt(c, map, sections, hits, fix), PLAN_SCHEMA);
+    // config._reusePlan (tests): the plan already written (music/plan.json) instead of a new call, first round only
+    const saved = !round && config._reusePlan ? readJsonOr(join(mu, 'plan.json'), null) : null;
+    const r = saved ? { ok: true, structured: saved } : await call(planPrompt(c, c.scenes, cuts, fix), PLAN_SCHEMA);
     if (stopped()) return { ok: false, error: 'stopped', usage };
     plan = r.ok ? r.structured : null;
     if (!plan) return give(r.error || 'the plan call gave no answer');
-    const pp = planProblems(plan, sections);
-    if (pp.length) { fix = { plan, errors: pp }; continue; }
-    // 3. the notes, by code, checked with the engine's own harmony lock and intensity curve
-    const used0 = new Set(plan.sections.flatMap((s) => s.parts || []).filter((p) => PARTS.includes(p)));
-    bp = blueprintFrom({ plan, map, sections, hits, used: used0 });
+    const raw = plan;
+    writeFileSync(join(mu, 'plan.json'), `${JSON.stringify(plan, null, 2)}\n`);
+    const pp = planProblems(plan, c.scenes);
+    // every key word must be a spoken word, at its start
+    keys = (plan.key_words || []).map((k) => { const w = allWords.reduce((x, y) => (Math.abs(y.t - k.t) < Math.abs(x.t - k.t) ? y : x), allWords[0]); return w && Math.abs(w.t - k.t) <= 0.15 ? { ...k, t: w.t, word: w.text } : null; });
+    keys.forEach((k, i) => { if (!k) pp.push(`key_words[${i}] "${plan.key_words[i].word}" at ${plan.key_words[i].t} s isn't a word start in the list`); });
+    if (pp.length) { fix = { plan: raw, errors: pp }; continue; }
+    // the tempo inside the plan's range (and the theme's), landing the cuts (on an eighth) and the key words (a sixteenth)
+    let lo = Math.max(48, Number(plan.tempo?.bpm_min) || 64); let hi = Math.min(180, Number(plan.tempo?.bpm_max) || 140);
+    if (tt.bpm_fixed) { lo = tt.bpm_fixed; hi = tt.bpm_fixed; } else { if (tt.bpm_min) lo = Math.max(lo, tt.bpm_min); if (tt.bpm_max) hi = Math.min(hi, tt.bpm_max); }
+    if (hi - lo < 16) { const m = (lo + hi) / 2; lo = Math.max(48, m - 8); hi = m + 8; }
+    onActivity({ kind: 'info', text: `Fitting the tempo (${Math.round(lo)}-${Math.round(hi)} BPM) to ${cuts.length} cuts and ${keys.length} key words.` });
+    map = tempoMap({ hits: [...cuts.map((h) => ({ t_sec: h.t_sec, weight: 3, div: 2 })), ...keys.map((k) => ({ t_sec: k.t, weight: 1, div: 4 }))], videoSec: c.videoSec, fps: FPS, bpmMin: lo, bpmMax: hi, prefer: (lo + hi) / 2 });
+    hits = cuts.map((h) => { const p = placeOf(map, h.t_sec); return { ...h, bar: p.bar, beat: p.beat, fits: Math.abs(p.at - h.t_sec) <= 1 / FPS + 1e-6 && p.bar <= map.bars }; }).filter((h) => h.bar >= 1 && h.bar <= map.bars);
+    keys = keys.map((k) => { const p = placeOf(map, k.t, 4); return { ...k, bar: p.bar, beat: p.beat, q: p.q, off: r3(p.at - k.t) }; }).filter((k) => k.bar >= 1 && k.bar <= map.bars);
+    // one section per scene; scenes that land in the same bar at this tempo share a section (their plans merge)
+    sections = sectionsFromScenes(map, c.scenes);
+    const merged = { ...plan, sections: sections.map((s) => { const ps = s.scenes.map((k) => plan.sections[c.scenes.findIndex((x) => x.key === k)]); return ps.length === 1 ? ps[0] : { ...ps[0], intensity: Math.max(...ps.map((x) => x.intensity)), chords: ps.flatMap((x) => x.chords), why: ps.map((x) => x.why).join(' / '), parts: [...new Set(ps.flatMap((x) => x.parts))] }; }) };
+    const used0 = new Set(merged.sections.flatMap((s) => s.parts || []).filter((p) => PARTS.includes(p)));
+    bp = blueprintFrom({ plan: merged, map, sections, hits, used: used0 });
+    bp.key_words = keys.map((k) => ({ t_sec: k.t, word: k.word, bar: k.bar, beat: k.beat, off_sec: k.off, response: k.response, why: k.why }));
     const busy = (t) => c.timing.lines.some((l) => t >= l.start && t < l.end);
-    composed = composeChecked({ plan, bp, voiceBusy: busy });
+    composed = composeChecked({ plan: merged, bp, voiceBusy: busy, accents: keys.map((k) => ({ beat: k.q, response: k.response })) });
+    plan = merged;
     const used = usedParts(composed.notes);
-    bp.roles = bp.roles.filter((r) => [...used.keys()].some((k) => ROLES[k].name === r.name));
+    bp.roles = PARTS.filter((k) => used.has(k)).map((k) => ({ channel: ROLES[k].channel, harmony: ROLES[k].harmony, name: ROLES[k].name, job: ROLES[k].job }));
     writeFileSync(join(mu, 'blueprint.json'), `${JSON.stringify(bp, null, 2)}\n`);
     const pl = await engine(c, env, 'plan');
-    if (pl.code !== 0) { fix = { plan, errors: pl.out.split('\n').filter((l) => /blueprint\.json|✖/.test(l)) }; continue; }
+    if (pl.code !== 0) { fix = { plan: raw, errors: pl.out.split('\n').filter((l) => /blueprint\.json|✖/.test(l)) }; continue; }
     if (!composed.harmony.ok) return give(`the written notes break the harmony lock (a studio bug): ${composed.harmony.errors.slice(0, 3).join(' ')}`.slice(0, 400));
-    if (composed.curve.problems.length) { fix = { plan, errors: composed.curve.problems.map((p) => `intensity: ${p} (change the asks or the parts that play)`) }; continue; }
+    if (composed.curve.problems.length) { fix = { plan: raw, errors: composed.curve.problems.map((p) => `intensity: ${p} (change the asks or the parts that play)`) }; continue; }
     break;
   }
   writeFileSync(join(mu, 'score.strudel.js'), scoreText({ notes: composed.notes, bp, plan }));
@@ -263,7 +309,7 @@ export async function quickMusic({ root, id, view, run, runArgs, config, onActiv
   const used = usedParts(composed.notes);
   const inst = instrumentsFor(plan.palette, used);
   let audition = null;
-  for (let round = 0; round < 4; round++) {
+  for (let round = 0; round < 6; round++) {
     writeFileSync(join(mu, 'instruments.json'), `${JSON.stringify(inst, null, 2)}\n`);
     const ins = await engine(c, env, 'instruments');
     if (ins.code !== 0) return give(`strudel.mjs instruments: ${tail(ins.out, 300)}`);
@@ -277,8 +323,15 @@ export async function quickMusic({ root, id, view, run, runArgs, config, onActiv
     let changed = false;
     for (const p of rep.parts.filter((x) => !x.ok)) {
       const part = inst.parts.find((x) => x.channel === p.channel);
-      const loud = p.notes.some((n) => n.peak_db > -0.3);
-      if (part) { part.gain = +Math.max(0.05, Math.min(1.4, (part.gain ?? 0.8) * (loud ? 0.6 : 1.6))).toFixed(3); changed = true; }
+      if (!part) continue;
+      for (const n of p.notes.filter((x) => x.peak_db < -50 || x.peak_db > -0.3)) {
+        // a kit moves only its failing piece; a pitched part moves as a whole
+        const v = part.kit ? part.kit[String(n.note).replace('GM ', '')] : part;
+        if (!v) continue;
+        nudge(v, n.peak_db > -0.3 ? -6 : Math.min(30, -30 - n.peak_db));
+        changed = true;
+        if (!part.kit) break;
+      }
     }
     if (!changed) break;
   }
@@ -333,15 +386,23 @@ export async function quickMusic({ root, id, view, run, runArgs, config, onActiv
 
   // 7. the spotting map, written from the plan (no AI), and the submission
   const check = readJsonOr(join(mu, 'check.json'), { hits: [], intensity: [] });
+  const cell = (x) => String(x ?? '').replace(/\|/g, '/').replace(/\n/g, ' ');
   const spot = [
     `# Spotting: ${c.project.title}`, '',
     `**Dramatic reading:** ${plan.dramatic_reading}.`, '',
     `**What the music must not do:** ${plan.must_not}`, '',
-    `Tempo map (fitted by the studio to the cuts): ${map.bpm} BPM, ${map.meter}, bar 1 at ${map.offset_sec} s (a bar is ${map.sec_per_bar} s), ${map.bars} bars.`, '',
-    '| bars | time (s) | section | intensity | function | melody | parts |', '|---|---|---|---|---|---|---|',
-    ...bp.sections.map((s, i) => `| ${s.start_bar}-${s.end_bar} | ${sections[i].start_sec.toFixed(2)} | ${s.name} | ${s.intensity} | ${s.function} | ${s.variation} | ${(s.parts || []).join(', ')} |`), '',
-    '| time (s) | cut | music | response |', '|---|---|---|---|',
-    ...bp.hits.map((h) => `| ${h.t_sec} | ${h.what.split(':')[0]} | bar ${h.bar} beat ${h.beat} | ${h.kind} |`), '',
+    `**Concept:** ${plan.concept}`, '',
+    `**Motif:** scale degrees ${plan.motif.degrees.join(' ')}, beats ${plan.motif.beats.join(' ')}: ${plan.motif.contour}. Why: ${plan.motif.why}`, '',
+    `**Tempo:** ${map.bpm} BPM, ${map.meter}, bar 1 at ${map.offset_sec} s (a bar is ${map.sec_per_bar} s), ${map.bars} bars. The plan asked ${plan.tempo.bpm_min}-${plan.tempo.bpm_max} BPM (${plan.tempo.why}); the studio chose the tempo inside it that lands the most cuts and key words on the grid.`, '',
+    `**Sound (stand-in):** ${plan.palette}: ${plan.palette_why}`, '',
+    '| bars | time (s) | section | intensity | chords | melody | parts | function | why |', '|---|---|---|---|---|---|---|---|---|',
+    ...bp.sections.map((s, i) => `| ${s.start_bar}-${s.end_bar} | ${sections[i].start_sec.toFixed(2)} | ${cell(s.name)} | ${s.intensity} | ${cell(plan.sections[i].chords.map((x) => (Array.isArray(x) ? x.join(' ') : x)).join(' · '))} | ${s.variation} | ${(s.parts || []).join(', ')} | ${cell(s.function)} | ${cell(s.why)} |`), '',
+    '## Key words (the music answers each where it is said)', '',
+    '| time (s) | word | music | off by | response | why |', '|---|---|---|---|---|---|',
+    ...(bp.key_words || []).map((k) => `| ${k.t_sec} | ${cell(k.word)} | bar ${k.bar} beat ${k.beat} | ${k.off_sec >= 0 ? '+' : ''}${k.off_sec} s | ${k.response} | ${cell(k.why)} |`), '',
+    '## Cuts', '',
+    '| time (s) | cut | music | kind | why |', '|---|---|---|---|---|',
+    ...bp.hits.map((h) => `| ${h.t_sec} | ${cell(h.what.split(':')[0])} | bar ${h.bar} beat ${h.beat} | ${h.kind} | ${cell(h.what.split(':').slice(1).join(':').trim())} |`), '',
     `**Ending:** ${plan.ending}`, '',
   ].join('\n');
   writeFileSync(join(mu, 'SPOTTING.md'), spot);
@@ -350,7 +411,7 @@ export async function quickMusic({ root, id, view, run, runArgs, config, onActiv
   const hitRows = (check.hits || []).filter((h) => h.kind !== 'none');
   const error_checks = [
     { id: 'loudness', result: 'pass', note: `qc.mjs on out/animatic-music.mp4: ${lufs || 'loudness inside -14 LUFS ±1'}, true peak ${tp || '≤ -1 dBTP'}; ${/none/.test(mix.loudnorm?.normalization_type || '') ? 'the mix was already at -14 LUFS (the mastered voice carries it), so no loudness pass' : 'two-pass loudnorm with a fixed gain (linear)'}. The score alone peaks at ${score.peak_db} dBFS. Measured only: nothing here is by ear.` },
-    { id: 'sync', result: 'pass', note: `${hitRows.length ? `${hitRows.length} hit${hitRows.length === 1 ? '' : 's'} within a frame: ${hitRows.map((h) => `bar ${h.bar} beat ${h.beat ?? 1} (${h.off_sec >= 0 ? '+' : ''}${h.off_sec} s)`).join(', ')}.` : 'No hits at this tempo.'}${bp.hits.some((h) => h.kind === 'none') ? ` ${bp.hits.filter((h) => h.kind === 'none').length} cut(s) play as no hit.` : ''} The music starts at bar 1 = ${map.offset_sec} s (adelay ${Math.round(map.offset_sec * 1000)} ms). The picture and voice are the approved animatic's, unchanged (video copied).` },
+    { id: 'sync', result: 'pass', note: `${hitRows.length ? `${hitRows.length} hit${hitRows.length === 1 ? '' : 's'} within a frame: ${hitRows.map((h) => `bar ${h.bar} beat ${h.beat ?? 1} (${h.off_sec >= 0 ? '+' : ''}${h.off_sec} s)`).join(', ')}.` : 'No hits at this tempo.'}${bp.hits.some((h) => h.kind === 'none') ? ` ${bp.hits.filter((h) => h.kind === 'none').length} cut(s) play as no hit.` : ''} ${bp.key_words?.length ? ` ${bp.key_words.length} key words answered where they are said: ${bp.key_words.filter((k) => Math.abs(k.off_sec) <= 1 / FPS).length} within a frame, the rest on the nearest sixteenth (largest ${Math.max(...bp.key_words.map((k) => Math.abs(k.off_sec))).toFixed(3)} s off).` : ''} The music starts at bar 1 = ${map.offset_sec} s (adelay ${Math.round(map.offset_sec * 1000)} ms). The picture and voice are the approved animatic's, unchanged (video copied).` },
     { id: 'music-check', result: 'pass', note: `strudel.mjs check --video-sec ${c.videoSec} --fps ${FPS}: 0 problems (harmony locked, the curve follows the sections, hits on the picture). MIDI captured: music/notes.json, out/music/midi/. The notes were written by code from the cue plan, every pitched note a chord tone.` },
     { id: 'music-instruments', result: 'pass', note: `strudel.mjs instruments and audition pass on ${inst.parts.length} channels (a stand-in ${plan.palette} palette of real instruments from VCSL, CC0, chosen by the studio; each part levelled from its audition).` },
     { id: 'music-source', result: 'n/a', note: own ? 'This is the music step itself: the Strudel stand-in for review. The owner\'s own master (strudel.mjs own-master) comes in at the build.' : 'This is the music step itself: the approved Strudel render is used from here on.' },

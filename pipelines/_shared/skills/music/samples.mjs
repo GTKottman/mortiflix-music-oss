@@ -7,13 +7,13 @@
 //   node samples.mjs list                           the instruments the studio uses
 //
 // Files are stored as 16-bit 44.1 kHz WAV. vcsl.json keeps Strudel's sample-map format with _base "/samples/vcsl/".
-import { existsSync, mkdirSync, writeFileSync, renameSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync, renameSync, rmSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const MAP = 'https://raw.githubusercontent.com/felixroos/dough-samples/main/vcsl.json';
 export const INSTRUMENTS = ['steinway', 'harp', 'vibraphone', 'vibraphone_bowed', 'kalimba', 'marimba', 'glockenspiel', 'handbells',
-  'tubularbells', 'recorder_alto_sus', 'bassdrum1', 'clap', 'shaker_small', 'tom2_mallet', 'sus_cymbal'];
+  'tubularbells', 'recorder_alto_sus', 'bassdrum1', 'clap', 'shaker_small', 'tom2_mallet', 'clash'];
 const LICENCE = 'VCSL, the Versilian Community Sample Library (CC0, public domain): https://github.com/sgossner/VCSL';
 
 const [cmd, dir, ...names] = process.argv.slice(2);
@@ -23,7 +23,10 @@ if (cmd !== 'fetch' || !dir) { console.error('usage: samples.mjs fetch <dir> [in
 const want = names.length ? names : INSTRUMENTS;
 const map = await (await fetch(MAP)).json();
 const base = map._base;
-const out = { _base: '/samples/vcsl/' };
+// a fetch adds to the map already there (fetching one instrument never drops the others)
+let had = {};
+try { had = JSON.parse(readFileSync(join(dir, 'vcsl.json'), 'utf8')); } catch { /* the first fetch */ }
+const out = { ...had, _base: '/samples/vcsl/' };
 const jobs = [];
 for (const name of want) {
   const entry = map[name];

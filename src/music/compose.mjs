@@ -29,26 +29,28 @@ const bpbOf = (meter) => Number(String(meter).split('/')[0]);
 
 // ---- the tempo map (no AI) ----
 
-// The tempo, meter and bar 1 (offset_sec) that land the most structural hits within a frame of an eighth note, then
-// the smallest largest error, then the tempo nearest the feel asked for. Tempos are searched in 0.01 BPM steps.
+// The tempo, meter and bar 1 (offset_sec) that land the most hits within a frame of the grid, weighted (the cuts
+// weigh more than the key words, and land on an eighth; a key word may land on a sixteenth), then the smallest
+// largest error on the cuts, then the tempo nearest the feel asked for. Tempos are searched in 0.01 BPM steps.
 export function tempoMap({ hits, videoSec, fps = 30, bpmMin = 64, bpmMax = 140, prefer = 90, meters = ['4/4', '3/4'] }) {
   const frame = 1 / fps;
-  const ts = hits.map((h) => h.t_sec).filter((t) => t > 0 && t < videoSec);
+  const hs = hits.filter((h) => h.t_sec > 0 && h.t_sec < videoSec).map((h) => ({ t: h.t_sec, w: h.weight ?? 1, div: h.div ?? 2 }));
+  const ts = hs.filter((h) => h.div === 2).map((h) => h.t);
   let best = null;
   for (const meter of meters) {
     for (let c = Math.round(bpmMin * 100); c <= Math.round(bpmMax * 100); c++) {
       const bpm = c / 100;
       const beat = 60 / bpm;
-      const grid = beat / 2;
       const anchors = ts.length ? ts : [0];
       for (const a of anchors) {
         const offset = ((a % beat) + beat) % beat;
         let fit = 0; let worst = 0;
-        for (const t of ts) {
-          const p = (t - offset) / grid;
-          const e = Math.abs(p - Math.round(p)) * grid;
-          if (e <= frame * 0.95) fit++;
-          worst = Math.max(worst, e);
+        for (const h of hs) {
+          const g = beat / h.div;
+          const p = (h.t - offset) / g;
+          const e = Math.abs(p - Math.round(p)) * g;
+          if (e <= frame * 0.95) fit += h.w;
+          if (h.div === 2) worst = Math.max(worst, e);
         }
         // 4/4 first when the two fit as well: it's the plainer choice under speech
         const score = fit * 1000 - worst * 100 - Math.abs(bpm - prefer) * 0.5 - (meter === '4/4' ? 0 : 5);
@@ -59,15 +61,16 @@ export function tempoMap({ hits, videoSec, fps = 30, bpmMin = 64, bpmMax = 140, 
   const bpb = bpbOf(best.meter);
   const spb = bpb * 60 / best.bpm;
   const bars = Math.max(2, Math.floor((videoSec - best.offset) / spb + 1e-9));
-  return { bpm: best.bpm, meter: best.meter, beats_per_bar: bpb, offset_sec: best.offset, bars, sec_per_bar: r3(spb), hits_fitted: best.fit, hits_total: ts.length };
+  return { bpm: best.bpm, meter: best.meter, beats_per_bar: bpb, offset_sec: best.offset, bars, sec_per_bar: r3(spb), hits_fitted: best.fit, hits_total: hs.length };
 }
 
-// Where a moment in the video falls in the music: { bar, beat } on the eighth-note grid (bars and beats from 1).
-export function placeOf(map, t) {
+// Where a moment in the video falls in the music: { bar, beat } on the eighth-note grid (div 2) or the sixteenth
+// (div 4), bars and beats from 1, with q the position in beats from bar 1.
+export function placeOf(map, t, div = 2) {
   const beat = 60 / map.bpm;
-  const q = Math.round(((t - map.offset_sec) / beat) * 2) / 2;
+  const q = Math.round(((t - map.offset_sec) / beat) * div) / div;
   const bar = Math.floor(q / map.beats_per_bar + 1e-9) + 1;
-  return { bar, beat: r2(q - (bar - 1) * map.beats_per_bar + 1), at: r3(map.offset_sec + q * beat) };
+  return { bar, beat: r2(q - (bar - 1) * map.beats_per_bar + 1), at: r3(map.offset_sec + q * beat), q };
 }
 
 // One section per scene, starting at the bar nearest the scene's start; scenes that land in the same bar share it.
@@ -114,12 +117,12 @@ export function blueprintFrom({ plan, map, sections, hits, used }) {
     sections: sections.map((s, i) => ({
       name: plan.sections[i].name, start_bar: s.start_bar, end_bar: s.end_bar, function: plan.sections[i].function,
       intensity: plan.sections[i].intensity, picture: plan.sections[i].picture || s.scenes.join(', '),
-      variation: plan.sections[i].melody, parts: plan.sections[i].parts,
+      variation: plan.sections[i].melody, parts: plan.sections[i].parts, why: plan.sections[i].why,
     })),
     hits: hits.map((h, i) => {
       const k = kinds.get(i + 1);
       const kind = h.fits ? (HIT_KINDS.includes(k?.kind) ? k.kind : 'direct') : 'none';
-      return { t_sec: h.t_sec, bar: h.bar, beat: h.beat, kind, what: `${h.what}${k?.response ? `: ${k.response}` : ''}${h.fits ? '' : ' (between beats at this tempo: no hit)'}` };
+      return { t_sec: h.t_sec, bar: h.bar, beat: h.beat, kind, what: `${h.what}${k?.why || k?.response ? `: ${k.why || k.response}` : ''}${h.fits ? '' : ' (between beats at this tempo: no hit)'}` };
     }),
     chart,
     roles: PARTS.filter((k) => used.has(k)).map((k) => ({ channel: ROLES[k].channel, harmony: ROLES[k].harmony, name: ROLES[k].name, job: ROLES[k].job })),
@@ -133,7 +136,7 @@ export function blueprintFrom({ plan, map, sections, hits, used }) {
 // notes: [{ part, pitch, start, dur, vel }] in beats from bar 1. Every pitched note is a chord tone of its moment and
 // never crosses a chord change; a note a semitone from another part's sounding note moves to the nearest other chord
 // tone, or is left out.
-export function compose({ plan, bp, voiceBusy, boost = {} }) {
+export function compose({ plan, bp, voiceBusy, boost = {}, accents = [] }) {
   const bpb = bpbOf(bp.meter);
   const { timeline } = chartTimeline(bp.chart, { bars: bp.bars, beatsPerBar: bpb });
   const key = parseScale(bp.scale);
@@ -277,6 +280,37 @@ export function compose({ plan, bp, voiceBusy, boost = {} }) {
     const i = sectionOf(h.bar); if (i < 0 || !plays(i, 'drums')) continue;
     add('drums', 49, (h.bar - 1) * bpb + (h.beat - 1), 0.25, 0.6);
   }
+
+  // 7. the key words: the music answers each one exactly where it is said (on the sixteenth nearest the word)
+  const cut = (pred) => { for (let k = notes.length - 1; k >= 0; k--) if (pred(notes[k])) notes.splice(k, 1); };
+  for (const a of accents) {
+    const t = a.beat; const c = chordAt(t);
+    if (!c || t >= lastBar * bpb) continue;
+    if (a.response === 'drop') {
+      // the beat before the word empties out, so the word lands in space
+      cut((n) => ['arp', 'drums', 'melody', 'bells'].includes(n.part) && n.start >= t - 1 - 1e-9 && n.start < t - 1e-9);
+      continue;
+    }
+    if (a.response === 'bass') {
+      // the floor re-strikes its root on the word
+      for (const n of notes) if (n.part === 'bass' && n.start < t - 1e-9 && n.start + n.dur > t + 1e-9) n.dur = r3(t - n.start);
+      cut((n) => n.part === 'bass' && n.start >= t - 1e-9 && n.start < t + 0.5 - 1e-9);
+      const root = 36 + c.chord.bass; const r = root > 45 ? root - 12 : root;
+      add('bass', r, t, Math.min(2, c.end - t), 0.85, c.chord, [r, r]);
+      continue;
+    }
+    if (a.response === 'theme') {
+      // a theme note on the word, a chord tone in the theme's register
+      for (const n of notes) if (n.part === 'melody' && n.start < t - 1e-9 && n.start + n.dur > t + 1e-9) n.dur = r3(t - n.start);
+      cut((n) => n.part === 'melody' && n.start >= t - 1e-9 && n.start < t + 1 - 1e-9);
+      add('melody', 72, t, Math.min(1, c.end - t), 0.8, c.chord, [67, 79]);
+      continue;
+    }
+    // a bell on the word
+    cut((n) => n.part === 'bells' && Math.abs(n.start - t) < 0.5);
+    bell(t, 0.7);
+  }
+  cut((n) => n.dur < 0.1); // a sliver left by a cut is no note
   return notes.sort((a, b) => a.start - b.start || a.part.localeCompare(b.part) || a.pitch - b.pitch);
 }
 
@@ -291,10 +325,10 @@ export function manifestOf(notes, bp) {
 
 // Compose, then run the engine's own harmony lock and intensity curve on the result. A section measured out of the
 // order its intensity asks for gets more (or less) in it, and the notes are written again (up to 8 times).
-export function composeChecked({ plan, bp, voiceBusy }) {
+export function composeChecked({ plan, bp, voiceBusy, accents = [] }) {
   const boost = {};
   for (let round = 0; ; round++) {
-    const notes = compose({ plan, bp, voiceBusy, boost });
+    const notes = compose({ plan, bp, voiceBusy, boost, accents });
     const man = manifestOf(notes, bp);
     const harmony = checkHarmony(man, bp);
     const curve = intensity(man, bp);
@@ -377,7 +411,7 @@ const KIT = {
   39: { sound: 'clap', set: '.note(36).room(.2)', gain: 0.6 },
   42: { sound: 'shaker_small', set: '.note(36).hpf(3000)', gain: 0.5 },
   45: { sound: 'tom2_mallet', set: '.note(36)', gain: 0.7 },
-  49: { sound: 'sus_cymbal', set: '.note(36).hpf(2000)', gain: 0.4 },
+  49: { sound: 'clash', set: '.note(36).hpf(2000).release(1.5)', gain: 0.4 },
 };
 const PALETTE = {
   warm: {
@@ -427,6 +461,7 @@ const SYNTH_NAMES = new Set(['sine', 'triangle', 'square', 'sawtooth', 'supersaw
 const TARGET_RMS = { 1: -20, 2: -27, 3: -20, 4: -28, 5: -26, 10: -26 };
 const PEAK_MAX = -3;
 const mean = (xs) => xs.reduce((x, y) => x + y, 0) / xs.length;
+export function nudge(v, d) { level(v, 'gain', d); }
 function level(v, gainKey, d) {
   const post = Number(String(v.set || '').match(/\.postgain\(([\d.]+)\)/)?.[1] || 1);
   const total = Math.max(0.03, Math.min(1.5 * 60, (v[gainKey] ?? 0.8) * post * 10 ** (d / 20)));
