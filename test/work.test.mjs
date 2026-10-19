@@ -19,7 +19,7 @@ function project(t) {
   return { root, id: p.id };
 }
 // the owner's look and motion are picked (the style frames and the animatic wait for them)
-const steps = (root, id, done) => update(root, id, (p) => { p.state = 'queued'; p.mfx = { ...p.mfx, look_brief: { vibe: 'calm' }, motion_brief: { motion_pack: null, rule_packs: [] } }; for (const k of done) p.steps[k] = { state: 'approved', version: 1 }; });
+const steps = (root, id, done) => update(root, id, (p) => { p.state = 'queued'; p.mfx = { ...p.mfx, look_brief: { vibe: 'calm' }, transition_brief: { transition_pack: null }, motion_brief: { motion_pack: null, rule_packs: [] } }; for (const k of done) p.steps[k] = { state: 'approved', version: 1 }; });
 
 test('work: nothing is animated while no session runs; the steps before the shots are named', (t) => {
   const { root, id } = project(t);

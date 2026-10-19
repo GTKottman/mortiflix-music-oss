@@ -5,7 +5,8 @@
 // exists (gates.mjs). The rule packs are in every session's brief from then on (brief.mjs).
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { loadProject, projectPaths, update, event, now } from '../projects.mjs';
+import { loadProject, projectPaths, projectPipeline, update, event, now } from '../projects.mjs';
+import { settle } from '../gates.mjs';
 import { listAllPacks } from './packs.mjs';
 import { UserError } from '../studio.mjs';
 
@@ -32,7 +33,8 @@ export function setMotionBrief(root, id, params = {}) {
     words: str(params.words, 2000),
     at: now(),
   };
-  update(root, id, (p) => { p.mfx ||= {}; p.mfx.motion_brief = saved; });
+  // the step waiting for this pick can start now: the project goes back in the queue
+  update(root, id, (p) => { p.mfx ||= {}; p.mfx.motion_brief = saved; settle(p, projectPipeline(root, id)); });
   const design = join(projectPaths(root, id).work, 'design');
   mkdirSync(design, { recursive: true });
   writeFileSync(join(design, 'motion-brief.json'), JSON.stringify(saved, null, 2));
@@ -48,6 +50,38 @@ export function motionBriefText(root, id) {
   if (b.motion_pack) lines.push(`Motion pack "${b.motion_pack.name}": ${[b.motion_pack.pace && `pace ${b.motion_pack.pace}`, b.motion_pack.easing && `easing ${b.motion_pack.easing}`].filter(Boolean).join(', ')}`, ...b.motion_pack.moves.map((m) => `- move: ${m}`), b.motion_pack.words);
   else lines.push('Motion: the owner left it to you.');
   for (const r of b.rule_packs) lines.push(`Rule pack "${r.name}":`, ...r.rules.map((x) => `- ${x}`), r.words);
+  if (b.words) lines.push(`The owner's words: ${b.words}`);
+  return lines.filter(Boolean).join('\n').slice(0, 20_000);
+}
+
+// The transitions, picked before any is made (owner, 2026-10-18: the Transitions stage asks first, like the look and the
+// motion): a transition pack (its transitions are the ones the board picks from) or the remotion-transitions library,
+// plus the owner's words. mfx.transition_brief and design/transition-brief.json; the transitions step waits for it.
+export function getTransitionBrief(root, id) {
+  return loadProject(root, id).mfx?.transition_brief || null;
+}
+
+export function setTransitionBrief(root, id, params = {}) {
+  if (!params || typeof params !== 'object') throw new UserError('transition.brief.set takes an object');
+  const packId = params.transition_pack ? str(params.transition_pack, 120) : null;
+  const pack = packId ? listAllPacks(root, 'transition').find((p) => p.id === packId) : null;
+  if (packId && !pack) throw new UserError(`no transition pack "${packId}"`);
+  const saved = { transition_pack: pack ? { id: pack.id, name: pack.name, transitions: pack.transitions, words: pack.words, dir: pack.dir } : null, words: str(params.words, 2000), at: now() };
+  // the step waiting for this pick can start now: the project goes back in the queue
+  update(root, id, (p) => { p.mfx ||= {}; p.mfx.transition_brief = saved; settle(p, projectPipeline(root, id)); });
+  const design = join(projectPaths(root, id).work, 'design');
+  mkdirSync(design, { recursive: true });
+  writeFileSync(join(design, 'transition-brief.json'), JSON.stringify(saved, null, 2));
+  event(root, id, { event: 'TRANSITION_BRIEF', actor: 'you', details: pack ? `transition pack ${pack.name}` : 'the transitions library' });
+  return saved;
+}
+
+export function transitionBriefText(root, id) {
+  const b = getTransitionBrief(root, id);
+  if (!b) return '';
+  const lines = b.transition_pack
+    ? [`Transition pack "${b.transition_pack.name}": pick every cut's transition from these (or one inspired by them):`, ...b.transition_pack.transitions.map((t) => `- ${t.name}${t.sec ? ` (${t.sec} s)` : ''}${t.words ? `: ${t.words}` : ''}`), b.transition_pack.words]
+    : ['Transitions: from the remotion-transitions library, as the transition-board skill says.'];
   if (b.words) lines.push(`The owner's words: ${b.words}`);
   return lines.filter(Boolean).join('\n').slice(0, 20_000);
 }

@@ -46,7 +46,9 @@ export function stepView(project, pipeline) {
     const lookWaits = s.canvas === 'frame' && s.key === 'style-frames' && !project.mfx?.look_brief;
     // The animatic waits for the motion the owner picks (mfx.motion_brief: a motion pack and rule packs, or "the AI decides").
     const motionWaits = s.canvas === 'shot' && s.key === 'animatic' && !project.mfx?.motion_brief;
-    const state = rec.state || (s.after.every(approvedChain) && !lookWaits && !motionWaits ? 'ready' : 'blocked');
+    // The transitions wait for the owner's transition pick (mfx.transition_brief: a transition pack, or the library).
+    const cutsWait = s.canvas === 'transition' && s.key === 'transitions' && !project.mfx?.transition_brief;
+    const state = rec.state || (s.after.every(approvedChain) && !lookWaits && !motionWaits && !cutsWait ? 'ready' : 'blocked');
     return { ...s, state, version: rec.version || 0, last_feedback: rec.last_feedback || null };
   });
 }

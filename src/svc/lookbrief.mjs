@@ -9,7 +9,8 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { listAllPacks } from './packs.mjs';
 import { spawnSync } from 'node:child_process';
-import { loadProject, projectPaths, update, event, now } from '../projects.mjs';
+import { loadProject, projectPaths, projectPipeline, update, event, now } from '../projects.mjs';
+import { settle } from '../gates.mjs';
 import { listPipelines } from '../pipelines.mjs';
 import { UserError } from '../studio.mjs';
 
@@ -57,7 +58,8 @@ export function setBrief(root, id, params) {
   const pack = brief.pack ? listPacks(root).find((p) => p.id === brief.pack) : null;
   if (brief.pack && !pack) throw new UserError(`no style pack "${brief.pack}"`);
   const saved = { ...brief, pack_files: pack ? { name: pack.name, fonts: pack.fonts, palette: pack.palette, vibe: pack.vibe, look: pack.look, words: pack.words, pictures: pack.pictures } : null, at: now() };
-  update(root, id, (p) => { p.mfx ||= {}; p.mfx.look_brief = saved; });
+  // the step waiting for this pick can start now: the project goes back in the queue
+  update(root, id, (p) => { p.mfx ||= {}; p.mfx.look_brief = saved; settle(p, projectPipeline(root, id)); });
   const design = join(projectPaths(root, id).work, 'design');
   mkdirSync(design, { recursive: true });
   writeFileSync(join(design, 'look-brief.json'), JSON.stringify(saved, null, 2));

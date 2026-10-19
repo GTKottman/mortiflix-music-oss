@@ -86,6 +86,7 @@ test('service core: new project from preset + idea + assets + theme, the whole f
   const id = made.project.id;
   await call('look.brief.set', { vibe: 'calm', font: 'Inter' }); // the owner picks a look before the style frames
   await call('motion.brief.set', {}); // and leaves the motion to the AI before the animatic
+  await call('transition.brief.set', {}); // and the transitions to the library
   assert.equal(made.assets_pending, 1);
   await until(() => loadProject(root, id).state === 'queued');
   const added = events('assets.added')[0].asset;
