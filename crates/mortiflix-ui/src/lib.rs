@@ -16,6 +16,7 @@
 pub mod chat;
 pub mod export;
 pub mod gates;
+pub mod home;
 pub mod into_edit;
 pub mod look;
 pub mod look_menu;

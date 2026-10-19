@@ -570,7 +570,11 @@ fn defaults(ui: &mut egui::Ui, ctx: &mut MfxCtx, msg: usize, card: &Value, answe
                 ctx.auto(&format!("mfx.chat.card.{msg}.q.{}.{}", q.id, c.id), &r, &c.label);
             }
             // A suggestion with no choice to press (own-words questions): one press takes it.
-            if waiting && using.is_none() && q.choices.is_empty() && let Some(d) = &q.default {
+            if waiting
+                && using.is_none()
+                && q.choices.is_empty()
+                && let Some(d) = &q.default
+            {
                 let short: String = d.chars().take(60).collect();
                 let label = if short.len() < d.len() { format!("Use: {short}…") } else { format!("Use: {short}") };
                 let r = ui.add(
@@ -690,12 +694,13 @@ mod tests {
         let press = |card: &Value, m: &mut crate::Mortiflix| {
             let ectx = egui::Context::default();
             let mut got = Vec::new();
-            let mut out = ectx.run_ui(egui::RawInput { screen_rect: Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(400.0, 800.0))), ..Default::default() }, |ui| {
-                let mut ctx = m.ctx(crate::MfxTheme::default());
-                let mut o = CardOut::default();
-                show(ui, &mut ctx, 0, card, false, &BTreeMap::new(), None, &mut o);
-                got = ctx.auto.iter().map(|(id, _, l)| format!("{id}={l}")).collect();
-            });
+            let mut out =
+                ectx.run_ui(egui::RawInput { screen_rect: Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(400.0, 800.0))), ..Default::default() }, |ui| {
+                    let mut ctx = m.ctx(crate::MfxTheme::default());
+                    let mut o = CardOut::default();
+                    show(ui, &mut ctx, 0, card, false, &BTreeMap::new(), None, &mut o);
+                    got = ctx.auto.iter().map(|(id, _, l)| format!("{id}={l}")).collect();
+                });
             out.textures_delta.clear();
             got
         };

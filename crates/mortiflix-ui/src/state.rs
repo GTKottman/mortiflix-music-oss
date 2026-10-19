@@ -145,6 +145,9 @@ pub struct MfxState {
     /// The Transitions stage: the transition pack picked and the board's Fix box.
     #[serde(skip)]
     pub cuts: crate::transitions::CutsState,
+    /// Home's templates: the packs installed, the category picked.
+    #[serde(skip)]
+    pub home: crate::home::HomeState,
     /// Into Edit (doc 38): the hand-off and the stage-5 Mortiflix panel.
     pub handoff: crate::into_edit::Handoff,
     /// The script, line by line, and the owner's unsaved draft (Script panel + chat card).
@@ -191,6 +194,7 @@ impl Default for MfxState {
             score: crate::score::Score::default(),
             motion: crate::motion_menu::MotionState::default(),
             cuts: crate::transitions::CutsState::default(),
+            home: crate::home::HomeState::default(),
             handoff: Default::default(),
             script: Default::default(),
             look: Default::default(),

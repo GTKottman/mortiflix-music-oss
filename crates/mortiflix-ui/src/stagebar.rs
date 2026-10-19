@@ -126,7 +126,19 @@ pub fn show(ui: &mut egui::Ui, rect: Rect, ctx: &mut MfxCtx) {
         } else {
             tp.circle_stroke(pos2(tab.min.x + 21.0, status_y), 3.5, Stroke::new(1.0, locked));
         }
-        tp.text(pos2(tab.min.x + 30.0, status_y), Align2::LEFT_CENTER, st.line(), FontId::proportional(11.0), if here { t.text_dim } else if open { t.text_faint } else { locked });
+        tp.text(
+            pos2(tab.min.x + 30.0, status_y),
+            Align2::LEFT_CENTER,
+            st.line(),
+            FontId::proportional(11.0),
+            if here {
+                t.text_dim
+            } else if open {
+                t.text_faint
+            } else {
+                locked
+            },
+        );
         if resp.clicked() && open {
             ctx.command(&format!("stages.{key}"), json!({}));
         }

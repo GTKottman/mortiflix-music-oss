@@ -285,6 +285,15 @@ pub fn stage_bar(app: &mut StudioApp, ui: &mut egui::Ui, rect: egui::Rect) {
     finish(app, ui.ctx(), cmds, autos);
 }
 
+/// Draw Home's packs (by category) in `rect`.
+pub fn home_packs(app: &mut StudioApp, ui: &mut egui::Ui, rect: egui::Rect) {
+    let theme = theme(&app.tokens);
+    let mut c = app.mfx.core.ctx(theme);
+    mfx::home::show(ui, &mut c, rect);
+    let (cmds, autos) = (std::mem::take(&mut c.commands), std::mem::take(&mut c.auto));
+    finish(app, ui.ctx(), cmds, autos);
+}
+
 /// Draw a Mortiflix dock panel.
 pub fn panel(app: &mut StudioApp, ui: &mut egui::Ui, p: PanelKind, rect: egui::Rect) {
     let theme = theme(&app.tokens);

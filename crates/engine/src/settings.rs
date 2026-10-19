@@ -26,6 +26,8 @@ use crate::{EngineError, Result, Session};
 /// v1: Auto Save, Audio (mixer automation), Playback (pre/postroll), Trim, Media (proxies), guides,
 /// Essential Sound presets. v2: every Settings category.
 pub const PREFS_VERSION: u32 = 2;
+/// How many recent projects are remembered (Home lists them all; File ▸ Open Recent the first 10).
+pub const MAX_RECENT: usize = 30;
 
 // ------------------------------------------------------------------ category values
 
@@ -1531,7 +1533,8 @@ impl crate::autosave::Preferences {
         let r = &mut self.general.recent_projects;
         r.retain(|p| p != path);
         r.insert(0, path.to_string());
-        r.truncate(10);
+        // Home lists them down the screen (owner, 2026-10-19); File ▸ Open Recent shows the first 10
+        r.truncate(MAX_RECENT);
     }
 }
 

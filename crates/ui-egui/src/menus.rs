@@ -721,6 +721,7 @@ fn open_recent(items: &mut Vec<MenuItem>, session: &mortiflix_engine::Session, t
     let recent = &session.prefs.general.recent_projects;
     let mut sub: Vec<MenuItem> = recent
         .iter()
+        .take(10)
         .enumerate()
         .map(|(i, p)| MenuItem { id: format!("file.openRecent.{i}"), label: recent_name(p), path: path.clone(), shortcut: None, enabled: true, checked: None })
         .collect();
