@@ -8,11 +8,11 @@ import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { projectPaths, projectPipeline, loadProject, readEvents } from '../projects.mjs';
-import { loadConfig } from '../studio.mjs';
+import { loadConfig, paths } from '../studio.mjs';
 import { canvasView, nodeAction, readBeats } from '../canvas.mjs';
 import { beatNames } from './beatnames.mjs';
 import { submissions, answerQuestion } from '../gates.mjs';
-import { PARENT_SESSION_VARS } from '../backends/claude-code.mjs';
+import { PARENT_SESSION_VARS, leanArgs } from '../backends/claude-code.mjs';
 import { credentials, DEFAULT_MODEL } from '../backends/anthropic-api.mjs';
 import { stageOf, STAGE_NAMES } from './stages.mjs';
 import { readLook } from './look.mjs';
@@ -223,7 +223,7 @@ export async function quickReply(root, id, { text, context }) {
     const r = await client.messages.create({ model: config.chatModel || config.model || DEFAULT_MODEL, max_tokens: 600, system: SYSTEM, messages: [{ role: 'user', content: prompt }] });
     return parseReply(r.content.filter((b) => b.type === 'text').map((b) => b.text).join(''));
   }
-  const out = await runClaude(config, ['-p', `${SYSTEM}\n\n${prompt}`, '--output-format', 'json', '--tools', '', '--no-session-persistence', ...(config.chatModel || config.model ? ['--model', config.chatModel || config.model] : [])], projectPaths(root, id).work);
+  const out = await runClaude(config, ['-p', `${SYSTEM}\n\n${prompt}`, '--output-format', 'json', '--tools', '', '--no-session-persistence', ...(config.chatModel || config.model ? ['--model', config.chatModel || config.model] : [])], quickDir(root, config, id));
   let j;
   try { j = JSON.parse(out); } catch { throw new Error('Claude Code answered something that is not JSON'); }
   if (j.is_error) throw new Error(String(j.result || j.error || 'Claude Code failed').slice(0, 300));
@@ -243,13 +243,25 @@ export async function askAI(root, id, prompt, { maxTokens = 400 } = {}) {
     const r = await client.messages.create({ model: config.chatModel || config.model || DEFAULT_MODEL, max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] });
     return r.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
   }
-  const out = await runClaude(config, ['-p', prompt, '--output-format', 'json', '--tools', '', '--no-session-persistence', ...(config.chatModel || config.model ? ['--model', config.chatModel || config.model] : [])], projectPaths(root, id).work, { timeoutMs: 120_000 });
+  const out = await runClaude(config, ['-p', prompt, '--output-format', 'json', '--tools', '', '--no-session-persistence', ...(config.chatModel || config.model ? ['--model', config.chatModel || config.model] : [])], quickDir(root, config, id), { timeoutMs: 120_000 });
   const j = JSON.parse(out);
   if (j.is_error) throw new Error(String(j.result || 'Claude Code failed').slice(0, 300));
   return String(j.result || '');
 }
 
+// Where a quick call runs: lean, a folder of its own (the project's CLAUDE.md and skills are for sessions; the
+// prompt already carries what a reply needs); config.leanSessions: false keeps the project folder.
+function quickDir(root, config, id) {
+  if (config.leanSessions === false) return projectPaths(root, id).work;
+  const dir = join(paths(root).run, 'quick');
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+// A quick call starts lean like a session (no MCP servers, plugins, skills or global CLAUDE.md of your own): a chat
+// reply went from about 59k tokens to 3k.
 export function runClaude(config, args, cwd, { timeoutMs = 180_000 } = {}) {
+  if (config.leanSessions !== false) args = [...leanArgs(args, config), ...(args.includes('--disable-slash-commands') ? [] : ['--disable-slash-commands'])];
   return new Promise((ok, fail) => {
     const env = { ...process.env };
     for (const k of PARENT_SESSION_VARS) delete env[k];
