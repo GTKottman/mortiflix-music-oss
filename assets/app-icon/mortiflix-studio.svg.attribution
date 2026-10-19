@@ -1,8 +1,8 @@
 asset:        mortiflix-studio.svg
 title:        Mortiflix Studio app icon, canonical vector (owl with ear tufts)
-author:       Brandon Thomas (Mortiflix Studio owner), for the Mortiflix Studio project
-source:       original work (drawn by the owner in ArtCraft, then vectorised)
+author:       Gerrod Kottman (Mortiflix owner), for Mortiflix Studio
+source:       original work: the Mortiflix logo mark (3D render, brand/mortiflix/logo-3d/mortiflix-mark-dark.png in GTKottman/mortiflix)
 license:      MIT OR Apache-2.0
 license-file: assets/app-icon/LICENSE.txt
-added:        2026-10-02 by Claude (agent) for Brandon Thomas
-notes:        SVG traced at 2048 px with craftrules assets/logo-options/_tools/vectorize_tile.py from the owner's ArtCraft drawing (craftrules assets/app-icons/mortiflix-studio/source.png). Three colours: ink #0b0b0c, paper #efe9dc, app colour #8b5cf6; 512 viewBox, rx=112. See assets/app-icon/README.md.
+added:        2026-10-18 by Claude (agent) for Gerrod Kottman (replaces the FilmCraft owl)
+notes:        Made from the mark render by packaging/icon_from_mark.py (rounded 512-unit tile, rx 112; macOS files on Apple's 824/1024 grid). The Mortiflix name and logo are the owner's brand: the licence covers this file, not the brand.

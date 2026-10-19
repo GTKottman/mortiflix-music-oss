@@ -1,8 +1,8 @@
 asset:        mortiflix-studio-small.svg
 title:        Mortiflix Studio app icon, lighter vector
-author:       Brandon Thomas (Mortiflix Studio owner), for the Mortiflix Studio project
-source:       original work (drawn by the owner in ArtCraft, then vectorised)
+author:       Gerrod Kottman (Mortiflix owner), for Mortiflix Studio
+source:       original work: the Mortiflix logo mark (3D render, brand/mortiflix/logo-3d/mortiflix-mark-dark.png in GTKottman/mortiflix)
 license:      MIT OR Apache-2.0
 license-file: assets/app-icon/LICENSE.txt
-added:        2026-10-02 by Claude (agent) for Brandon Thomas
-notes:        The same drawing traced at 1024 px (smaller file). Copied unchanged from craftrules assets/app-icons/mortiflix-studio/icon.svg.
+added:        2026-10-18 by Claude (agent) for Gerrod Kottman (replaces the FilmCraft owl)
+notes:        Made from the mark render by packaging/icon_from_mark.py (rounded 512-unit tile, rx 112; macOS files on Apple's 824/1024 grid). The Mortiflix name and logo are the owner's brand: the licence covers this file, not the brand.

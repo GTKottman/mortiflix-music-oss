@@ -2,12 +2,13 @@ Mortiflix Studio app icon (mortiflix-studio.svg and every file derived from it i
 mortiflix-studio-small.svg, mortiflix-studio-1024.png, mortiflix-studio-macos-512.png, mortiflix-studio.icns, mortiflix-studio.ico,
 hicolor/, and apps/mortiflix-studio-web/web/favicon.png).
 
-Original artwork made for this project by the Mortiflix Studio owner (Brandon Thomas) in ArtCraft, then
-vectorised. No third-party material. Licensed like the rest of Mortiflix Studio, under either of
+Original work: the Mortiflix logo mark, a 3D render made by the Mortiflix owner (Gerrod Kottman). No
+third-party material. These files are licensed like the rest of Mortiflix Studio, under either of
 
   * Apache License, Version 2.0 (https://www.apache.org/licenses/LICENSE-2.0)
   * MIT license (https://opensource.org/licenses/MIT)
 
-at your option.
+at your option. The licence covers these files; the Mortiflix name and logo stay the owner's brand.
 
-Regenerate the derived files with packaging/icons.sh.
+Regenerate the derived files with packaging/icon_from_mark.py (from the mark render) or packaging/icons.sh
+(from mortiflix-studio.svg).
