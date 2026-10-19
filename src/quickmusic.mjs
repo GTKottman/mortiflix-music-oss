@@ -26,7 +26,7 @@ const M = join(REPO, 'pipelines', '_shared', 'skills', 'music', 'strudel.mjs');
 const QC = join(REPO, 'pipelines', '_shared', 'skills', 'final-pass', 'qc.mjs');
 const FPS = 30;
 const MAX_FIXES = 2;
-const UNDER = 18; // dB the music sits under the voice while it speaks (music SKILL.md §8)
+const UNDER = 20; // dB the music sits under the voice while it speaks (owner, 2026-10-19: 18 was "a smidge too loud")
 
 const read = (f, n = 200_000) => (existsSync(f) ? readFileSync(f, 'utf8').slice(0, n) : '');
 const r3 = (x) => Math.round(x * 1000) / 1000;
