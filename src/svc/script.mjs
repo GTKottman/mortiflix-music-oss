@@ -182,7 +182,7 @@ export function applyScriptEdits(root, id, params) {
     for (const e of list) {
       if (!e || typeof e !== 'object') throw new CanvasError('each edit is an object');
       const beat = s.beats.find((b) => b.id === String(e.beat || ''));
-      if (!beat) throw new CanvasError(`no beat ${String(e.beat || '').slice(0, 20) || '(none)'} in the script`);
+      if (!beat) throw new CanvasError(`no scene ${String(e.beat || '').slice(0, 20) || '(none)'} in the script`);
       if (!Array.isArray(beat.lines)) beat.lines = linesOf(beat, voice);
       const words = e.words === undefined || e.words === null ? null : String(e.words).replace(/\s+/g, ' ').trim();
       if (words !== null && words.length > MAX_WORDS) throw new CanvasError(`a line is at most ${MAX_WORDS} characters`);
@@ -300,7 +300,7 @@ export function scriptActionText(done, remade) {
   if (added) parts.push(`${n(added, 'line', 'lines')} added`);
   if (done.deleted.length) parts.push(`${n(done.deleted.length, 'line', 'lines')} deleted`);
   if (done.restored.length) parts.push(`${n(done.restored.length, 'line', 'lines')} back`);
-  if (done.renamed.length) parts.push(`${n(done.renamed.length, 'beat', 'beats')} renamed`);
+  if (done.renamed.length) parts.push(`${n(done.renamed.length, 'scene', 'scenes')} renamed`);
   const shots = remade.filter((r) => r.kind === 'shot').length;
   const lines = remade.filter((r) => r.kind === 'line').length;
   const what = [shots && n(shots, 'shot', 'shots'), lines && n(lines, 'voice line', 'voice lines')].filter(Boolean).join(' and ');

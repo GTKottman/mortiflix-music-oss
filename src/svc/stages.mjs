@@ -33,7 +33,7 @@ const BY_KEY = {
 // can wait for the owner there.
 const KINDS = [['beat'], ['line'], ['frame'], ['transition'], ['shot'], ['cue'], [], []];
 const REVIEW_KINDS = [['beat'], ['line'], ['frame'], ['transition'], ['shot'], ['cue'], [], []];
-const NOUN = ['beats', 'voice lines', 'style frames', 'transitions', 'shots', 'cues', '', ''];
+const NOUN = ['scenes', 'voice lines', 'style frames', 'transitions', 'shots', 'cues', '', ''];
 
 export function stageOf(step) {
   if (step.stage && STAGES.includes(step.stage)) return STAGES.indexOf(step.stage);

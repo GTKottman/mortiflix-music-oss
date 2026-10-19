@@ -41,7 +41,7 @@ function stepWords(step, g, project) {
   switch (step.canvas) {
     case 'beat': {
       const n = of('beat').length;
-      return { text: n ? `Writing the script: ${n} beat${n === 1 ? '' : 's'} so far` : 'Writing the script', done: n, total: null, noun: 'beats' };
+      return { text: n ? `Writing the script: ${n} scene${n === 1 ? '' : 's'} so far` : 'Writing the script', done: n, total: null, noun: 'scenes' };
     }
     case 'frame': {
       const n = of('frame').filter(made).length;

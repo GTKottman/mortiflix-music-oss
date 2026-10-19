@@ -115,7 +115,7 @@ test('service core: new project from preset + idea + assets + theme, the whole f
   assert.match(chat.map((r) => r.text).join('\n'), /that's every answer/);
   assert.equal(readJson(join(root, 'state', id, 'reviews', 'brief', 'v1', 'feedback.json')).answers.find((a) => a.id === rest[0].id).answer, 'My own words');
   // the script is in the Mortiflix Script box: the chat says so without listing it
-  const ready = chat.find((r) => /The script is ready in the Mortiflix Script box: 4 beats\./.test(r.text));
+  const ready = chat.find((r) => /The script is ready in the Mortiflix Script box: 4 scenes\./.test(r.text));
   assert.ok(ready && !ready.card && ready.refs.length === 4);
   // Nothing is made past a gate: no voice, no looks, no shots while the script waits for the owner.
   assert.ok(!chat.some((r) => r.card?.kind === 'looks'));

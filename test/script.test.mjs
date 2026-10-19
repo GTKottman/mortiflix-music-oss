@@ -158,7 +158,7 @@ test('script: get, edit a line (its shot and voice line remade, v2), add, delete
   assert.deepEqual((await call('script.edit', { beat: 'b03', line: 'b03-1', delete: false })).restored, []);
 
   // Refusals: unknown beat or line, empty words.
-  await assert.rejects(call('script.edit', { beat: 'b09', line: 'b09-1', words: 'x' }), /no beat b09/);
+  await assert.rejects(call('script.edit', { beat: 'b09', line: 'b09-1', words: 'x' }), /no scene b09/);
   await assert.rejects(call('script.edit', { beat: 'b01', line: 'b01-7', words: 'x' }), /no line b01-7/);
   await assert.rejects(call('script.edit', { beat: 'b01', line: 'b01-1', words: '  ' }), /empty/);
 });
