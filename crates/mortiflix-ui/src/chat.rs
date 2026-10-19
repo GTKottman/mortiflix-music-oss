@@ -894,7 +894,7 @@ fn node_intro(ui: &mut egui::Ui, ctx: &mut MfxCtx, id: &str) {
     let beat = n.beat.as_deref().filter(|_| n.kind != "beat").map(|b| model::node(&ctx.state.graph, b));
     let mut parts: Vec<String> = Vec::new();
     if n.kind == "beat" {
-        parts.push(format!("Everything in beat {}: its shots, lines and music.", n.beat_no.unwrap_or(0)));
+        parts.push(format!("Everything in scene {}: its shots, lines and music.", n.beat_no.unwrap_or(0)));
         parts.push(n.name.clone());
     } else {
         if !n.title.is_empty() {
@@ -903,7 +903,7 @@ fn node_intro(ui: &mut egui::Ui, ctx: &mut MfxCtx, id: &str) {
         if let Some(b) = &beat {
             // part 08's beat title is its words: name it only when it says something new
             let title = if b.name == n.title { String::new() } else { format!(" {}", model::short(&b.name, 40)) };
-            parts.push(format!("From beat {}{title}.", n.beat_no.unwrap_or(0)));
+            parts.push(format!("From scene {}{title}.", n.beat_no.unwrap_or(0)));
         }
         if n.versions > 1 {
             parts.push(format!("v{} in use of {}.", n.current.unwrap_or(n.versions), n.versions));

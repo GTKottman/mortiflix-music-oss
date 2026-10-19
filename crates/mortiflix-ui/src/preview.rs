@@ -82,7 +82,7 @@ impl Scope {
             Scope::All => "All",
             Scope::FromHere => "From here",
             Scope::Shot => "This shot",
-            Scope::Beat => "This beat",
+            Scope::Beat => "This scene",
         }
     }
     pub fn parse(s: &str) -> Option<Scope> {
@@ -475,7 +475,7 @@ fn bar(ui: &mut egui::Ui, ctx: &mut MfxCtx, r: Rect) {
     let music_r = Rect::from_min_size(pos2(area.min.x, voice_r.max.y + ROW_GAP), vec2(area.width(), SOUND_H));
     let p = ui.painter_at(r);
     let midi_r = Rect::from_min_size(pos2(area.min.x, music_r.max.y + ROW_GAP), vec2(area.width(), if midi { MIDI_H } else { 0.0 }));
-    for (label, row) in [("Beats", beats_r), ("Shots", shots_r), ("Voice", voice_r), ("Music", music_r), ("MIDI", midi_r)] {
+    for (label, row) in [("Scenes", beats_r), ("Shots", shots_r), ("Voice", voice_r), ("Music", music_r), ("MIDI", midi_r)] {
         if row.height() > 0.0 {
             p.text(pos2(r.min.x + GUTTER - 8.0, row.center().y), Align2::RIGHT_CENTER, label, FontId::proportional(11.0), t.text_faint);
         }
@@ -580,7 +580,7 @@ fn bar(ui: &mut egui::Ui, ctx: &mut MfxCtx, r: Rect) {
     let resp = ui.interact(Rect::from_min_max(shots_r.min, music_r.max), egui::Id::new("mfx-preview-bar"), Sense::click_and_drag());
     ctx.auto("mfx.preview.bar", &resp, "Shots bar: click to jump, drag to scrub");
     let beats_resp = ui.interact(beats_r, egui::Id::new("mfx-preview-beats"), Sense::click());
-    ctx.auto("mfx.preview.beats", &beats_resp, "Beats: click to jump to a beat");
+    ctx.auto("mfx.preview.beats", &beats_resp, "Scenes: click to jump to a scene");
     if total <= 0.0 {
         return;
     }
@@ -822,7 +822,7 @@ mod tests {
         assert_eq!(pv.range(Scope::Beat, 6.0, Some("s02")), (0.0, 5.0));
         assert_eq!(pv.range(Scope::Beat, 6.0, Some("b01")), (0.0, 5.0));
         assert_eq!(pv.range(Scope::Shot, 0.0, Some("nope")), (0.0, 2.0));
-        assert_eq!(Scope::parse("This beat"), Some(Scope::Beat));
+        assert_eq!(Scope::parse("This scene"), Some(Scope::Beat));
         assert_eq!(Scope::parse("fromhere"), Some(Scope::FromHere));
         assert_eq!(Scope::parse("x"), None);
     }

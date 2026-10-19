@@ -351,7 +351,7 @@ fn display_name(kind: &str, id: &str, label: &str, title: &str) -> String {
         ("stage", _) => format!("The {} stage", id.trim_start_matches("stage:")),
         ("cue", _) if !label.is_empty() && !title.is_empty() => format!("{label} {title}"),
         ("beat", _) if !title.is_empty() => title.to_string(),
-        ("beat", Some(n)) => format!("Beat {n}"),
+        ("beat", Some(n)) => format!("Scene {n}"),
         ("frame" | "asset", _) if !title.is_empty() => title.to_string(),
         _ if !label.is_empty() => label.to_string(),
         _ => id.to_uppercase(),

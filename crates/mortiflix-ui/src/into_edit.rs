@@ -710,7 +710,7 @@ const ROWS: [(&str, &str); 8] = [
     ("sounds", "Sounds"),
     ("assets", "Your assets"),
     ("captions", "Captions"),
-    ("beats", "Beats"),
+    ("beats", "Scenes"),
 ];
 
 impl Handoff {
@@ -1456,7 +1456,7 @@ pub fn build(h: &mut Handoff, plan: &Plan, exec: &mut Exec) {
     let assets = n_items("asset");
     h.set_row("assets", assets, "in the Your assets bin".into());
     h.set_row("captions", captions, "short subtitles, each at its words".into());
-    h.set_row("beats", chapters, format!("a Chapter marker per beat · {cue_markers} music cue marker{}", plural(cue_markers)));
+    h.set_row("beats", chapters, format!("a Chapter marker per scene · {cue_markers} music cue marker{}", plural(cue_markers)));
     h.placed = placed;
     h.phase = Phase::Done;
     h.show_summary = true;
@@ -1623,7 +1623,7 @@ fn from_mortiflix(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     } else {
         None
     };
-    ui.colored_label(t.text_dim, "Everything you OK'd is placed on one timeline: shots, voice, music, captions and a marker per beat.");
+    ui.colored_label(t.text_dim, "Everything you OK'd is placed on one timeline: shots, voice, music, captions and a marker per scene.");
     if let Some(m) = missing {
         ui.colored_label(t.warn, m);
     }
@@ -1766,7 +1766,7 @@ fn summary(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
         ui.label(RichText::new("How it's placed").strong().color(t.text));
         ui.colored_label(t.text_dim, format!("{}×{} · {} fps · {}", h.width, h.height, trim_fps(h.fps), clock(h.seconds)));
         ui.horizontal_wrapped(|ui| {
-            ui.colored_label(t.text_faint, "Clip colours = beats");
+            ui.colored_label(t.text_faint, "Clip colours = scenes");
             for b in &h.beats {
                 swatch(ui, b.colour.as_deref());
                 ui.colored_label(t.text_dim, format!("{} {}", b.number, b.name));

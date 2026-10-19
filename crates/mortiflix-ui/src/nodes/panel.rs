@@ -125,7 +125,7 @@ pub fn toolbar(ui: &mut egui::Ui, area: &mut NodeArea, rect: Rect, t: &MfxTheme,
     }
     // Find (Ctrl/⌘ + F)
     let find_id = egui::Id::new("mfx-nodes-find");
-    let fr = ui.add(egui::TextEdit::singleline(&mut area.find).id(find_id).hint_text("Find a shot, words, beat…  Ctrl+F").desired_width(230.0));
+    let fr = ui.add(egui::TextEdit::singleline(&mut area.find).id(find_id).hint_text("Find a shot, words, scene…  Ctrl+F").desired_width(230.0));
     out.auto.push(("mfx.nodes.find".into(), fr.clone(), "Find".into()));
     if area.focus_find {
         fr.request_focus();
@@ -831,12 +831,12 @@ fn beat(ui: &mut egui::Ui, area: &mut NodeArea, n: &Node, t: &MfxTheme, out: &mu
         if made > 0 && button(ui, out, "inspector.okAll", &label, true, t).clicked() {
             out.cmds.push(("nodes.ok".into(), json!({"nodes": ids})));
         }
-        if button(ui, out, "inspector.fixBeat", "Fix the beat", false, t).clicked() {
+        if button(ui, out, "inspector.fixBeat", "Fix the scene", false, t).clicked() {
             area.fix_open = true;
         }
     });
     if area.fix_open {
-        let r = ui.add(egui::TextEdit::multiline(&mut area.fix_text).hint_text("What should change in this beat?").desired_rows(3));
+        let r = ui.add(egui::TextEdit::multiline(&mut area.fix_text).hint_text("What should change in this scene?").desired_rows(3));
         out.auto.push(("mfx.nodes.inspector.fixText".into(), r, "Fix text".into()));
         if button(ui, out, "inspector.fixSend", "Send", true, t).clicked() && !area.fix_text.trim().is_empty() {
             out.cmds.push(("nodes.fix".into(), json!({"node": n.id, "text": area.fix_text.trim()})));

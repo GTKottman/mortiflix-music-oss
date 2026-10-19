@@ -303,7 +303,7 @@ pub fn command(m: &mut Mortiflix, what: &str, params: &Value) -> Result<Value, S
                 .and_then(|n| n.checked_sub(1))
                 .and_then(|i| area.graph.beats.get(i))
                 .cloned()
-                .ok_or_else(|| format!("there is no beat {n}"))?;
+                .ok_or_else(|| format!("there is no scene {n}"))?;
             area.want_frame = Some(Frame::Beat(beat.clone()));
             json!({"beat": beat})
         }
@@ -679,15 +679,15 @@ pub const COMMANDS: &[(&str, &str, Option<&str>)] = &[
     ("nodes.undo", "Undo in the Node Area", Some("Cmd+Z")),
     ("nodes.redo", "Redo in the Node Area", Some("Cmd+Shift+Z")),
     ("nodes.addShot", "Add a Shot", None),
-    ("nodes.frameBeat1", "Frame Beat 1", Some("1")),
-    ("nodes.frameBeat2", "Frame Beat 2", Some("2")),
-    ("nodes.frameBeat3", "Frame Beat 3", Some("3")),
-    ("nodes.frameBeat4", "Frame Beat 4", Some("4")),
-    ("nodes.frameBeat5", "Frame Beat 5", Some("5")),
-    ("nodes.frameBeat6", "Frame Beat 6", Some("6")),
-    ("nodes.frameBeat7", "Frame Beat 7", Some("7")),
-    ("nodes.frameBeat8", "Frame Beat 8", Some("8")),
-    ("nodes.frameBeat9", "Frame Beat 9", Some("9")),
+    ("nodes.frameBeat1", "Frame Scene 1", Some("1")),
+    ("nodes.frameBeat2", "Frame Scene 2", Some("2")),
+    ("nodes.frameBeat3", "Frame Scene 3", Some("3")),
+    ("nodes.frameBeat4", "Frame Scene 4", Some("4")),
+    ("nodes.frameBeat5", "Frame Scene 5", Some("5")),
+    ("nodes.frameBeat6", "Frame Scene 6", Some("6")),
+    ("nodes.frameBeat7", "Frame Scene 7", Some("7")),
+    ("nodes.frameBeat8", "Frame Scene 8", Some("8")),
+    ("nodes.frameBeat9", "Frame Scene 9", Some("9")),
     ("nodes.select", "Select a Node", None),
     ("nodes.ok", "OK", None),
     ("nodes.fix", "Fix", None),

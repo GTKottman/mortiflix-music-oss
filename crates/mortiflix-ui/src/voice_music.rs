@@ -306,7 +306,7 @@ fn header(ui: &mut egui::Ui, ctx: &mut MfxCtx, vm: &mut Vm) {
             .and_then(|(k, id)| vm.tl.find(*k, id))
             .and_then(|p| p.beat.clone())
             .or_else(|| vm.tl.shot_at(vm.cursor).and_then(|s| s.beat.clone()));
-        let beat_label = sel_beat.as_deref().and_then(model::beat_no).map_or("▶ Play beat".to_string(), |n| format!("▶ Play beat {n}"));
+        let beat_label = sel_beat.as_deref().and_then(model::beat_no).map_or("▶ Play scene".to_string(), |n| format!("▶ Play scene {n}"));
         let beat = ui.add_enabled(sel_beat.is_some(), egui::Button::new(&beat_label));
         ctx.auto("mfx.vm.playBeat", &beat, &beat_label);
         let next = ui.button("⏭").on_hover_text("Next line");
@@ -789,7 +789,7 @@ fn plan_panel(ui: &mut egui::Ui, ctx: &mut MfxCtx, vm: &mut Vm, p: &Piece, info:
     let t = ctx.theme;
     ui.colored_label(
         t.text_dim,
-        format!("{} – {} · under the shots of beat {}", fmt_time(p.start), fmt_time(p.end), p.beat_no.map_or("?".to_string(), |n| n.to_string())),
+        format!("{} – {} · under the shots of scene {}", fmt_time(p.start), fmt_time(p.end), p.beat_no.map_or("?".to_string(), |n| n.to_string())),
     );
     let (mut feel, mut energy) = vm.plan.as_ref().filter(|x| x.0 == p.id).map_or((info.feel.clone(), info.energy.unwrap_or(3)), |x| (x.1.clone(), x.2));
     ui.horizontal(|ui| {

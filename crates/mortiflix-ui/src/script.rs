@@ -845,7 +845,7 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
         let lines: usize = s.beats.iter().map(|b| b.lines.len()).sum();
         let words: usize = s.beats.iter().flat_map(|b| &b.lines).map(|l| l.words.split_whitespace().count()).sum();
         if s.loaded && !s.beats.is_empty() {
-            ui.label(RichText::new(format!("{} beats · {lines} lines · {words} words", s.beats.len())).size(12.0).color(t.text_faint));
+            ui.label(RichText::new(format!("{} scenes · {lines} lines · {words} words", s.beats.len())).size(12.0).color(t.text_faint));
         }
         if s.writing {
             ui.label(RichText::new("· the AI is still writing").size(12.0).color(t.ok));
@@ -917,14 +917,14 @@ pub fn gate(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
                 "The AI has finished writing".into()
             },
         ),
-        (filled, format!("Every beat has its words ({} beats)", s.beats.len())),
+        (filled, format!("Every scene has its words ({} scenes)", s.beats.len())),
         (!ctx.state.script.unsaved(), if ctx.state.script.unsaved() { "Unsaved changes: Save them first".into() } else { "Every change is saved".into() }),
         (
             written && status.need == 0,
             if !written || status.need == 0 {
-                "Every beat is OK'd".into()
+                "Every scene is OK'd".into()
             } else {
-                format!("{} beats wait for your OK (Next OKs them as they are)", status.need)
+                format!("{} scenes wait for your OK (Next OKs them as they are)", status.need)
             },
         ),
     ];
@@ -1097,15 +1097,15 @@ fn beat_block(ui: &mut egui::Ui, ctx: &mut MfxCtx, scope: &str, beat: &Beat, com
                     if !field(ui, ctx, scope, &target, if compact { 12.0 } else { 14.0 }) {
                         let name = ctx.state.script.draft.names.get(&beat.id).cloned().unwrap_or_else(|| beat.name.clone());
                         let renamed = ctx.state.script.draft.names.contains_key(&beat.id);
-                        let shown = if name.is_empty() { "Name this beat".to_string() } else { name };
+                        let shown = if name.is_empty() { "Name this scene".to_string() } else { name };
                         let r = ui
                             .add(egui::Label::new(RichText::new(shown).size(if compact { 12.0 } else { 14.0 }).color(t.text).strong()).sense(Sense::click()))
                             .on_hover_cursor(egui::CursorIcon::Text)
-                            .on_hover_text("Click to rename this beat");
+                            .on_hover_text("Click to rename this scene");
                         if r.clicked() {
                             ctx.state.script.open(scope, target);
                         }
-                        ctx.auto(&format!("mfx.script.{scope}.name.{}", beat.id), &r, "Beat name");
+                        ctx.auto(&format!("mfx.script.{scope}.name.{}", beat.id), &r, "Scene name");
                         if renamed {
                             dot(ui, t.warn);
                         }

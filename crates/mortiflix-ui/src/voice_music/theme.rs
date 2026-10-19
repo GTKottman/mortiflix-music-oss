@@ -164,11 +164,11 @@ pub fn show_cue_plan(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     let shots: Vec<Value> = st.view.get("shots").and_then(Value::as_array).cloned().unwrap_or_default();
     let beat_colour = |beat: &str| shots.iter().find(|s| s.get("beat").and_then(Value::as_str) == Some(beat)).and_then(colour_of);
     if cues.is_empty() {
-        ui.colored_label(t.text_faint, if st.error.is_empty() { "The music cues are planned once the script has its beats." } else { st.error.as_str() });
+        ui.colored_label(t.text_faint, if st.error.is_empty() { "The music cues are planned once the script has its scenes." } else { st.error.as_str() });
         store(ui, st);
         return;
     }
-    ui.colored_label(t.text_dim, "Music cues, one per beat. Planned: the notes are written after the shots, to their exact cuts.");
+    ui.colored_label(t.text_dim, "Music cues, one per scene. Planned: the notes are written after the shots, to their exact cuts.");
     let w = ui.available_width().max(120.0);
     let n = cues.len().clamp(1, 64) as f32;
     let gap = 4.0;
