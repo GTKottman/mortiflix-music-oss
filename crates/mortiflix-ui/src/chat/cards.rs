@@ -548,11 +548,15 @@ fn defaults(ui: &mut egui::Ui, ctx: &mut MfxCtx, msg: usize, card: &Value, answe
         if !q.text.is_empty() {
             ui.label(RichText::new(&q.text).size(12.0).color(t.text));
         }
-        let using = answered.get(&q.id).cloned().or(q.picked.clone()).or(q.default.clone());
+        // Waiting for the owner (the brief's questions): nothing is ticked until they pick; the suggestion is marked.
+        let waiting = card.get("waiting").and_then(Value::as_bool).unwrap_or(false);
+        let mine = answered.get(&q.id).cloned().or(q.picked.clone());
+        let using = if waiting { mine.clone() } else { mine.clone().or(q.default.clone()) };
         ui.horizontal_wrapped(|ui| {
             for c in &q.choices {
                 let on = using.as_deref() == Some(c.id.as_str());
-                let label = if on { format!("✓ {}", c.label) } else { c.label.clone() };
+                let suggested = waiting && using.is_none() && q.default.as_deref() == Some(c.id.as_str());
+                let label = chip_text(&c.label, on, suggested);
                 let r = ui.add(
                     egui::Button::new(RichText::new(&label).size(12.0).color(if on { t.text } else { t.text_dim }))
                         .min_size(vec2(0.0, 22.0))
@@ -564,6 +568,22 @@ fn defaults(ui: &mut egui::Ui, ctx: &mut MfxCtx, msg: usize, card: &Value, answe
                     out.answer = Some((q.id.clone(), c.id.clone()));
                 }
                 ctx.auto(&format!("mfx.chat.card.{msg}.q.{}.{}", q.id, c.id), &r, &c.label);
+            }
+            // A suggestion with no choice to press (own-words questions): one press takes it.
+            if waiting && using.is_none() && q.choices.is_empty() && let Some(d) = &q.default {
+                let short: String = d.chars().take(60).collect();
+                let label = if short.len() < d.len() { format!("Use: {short}…") } else { format!("Use: {short}") };
+                let r = ui.add(
+                    egui::Button::new(RichText::new(&label).size(12.0).color(t.text))
+                        .min_size(vec2(0.0, 22.0))
+                        .fill(t.panel_bg)
+                        .stroke(Stroke::new(1.0, t.separator.gamma_multiply(2.0)))
+                        .corner_radius(11.0),
+                );
+                if r.clicked() {
+                    out.answer = Some((q.id.clone(), d.clone()));
+                }
+                ctx.auto(&format!("mfx.chat.card.{msg}.q.{}.suggested", q.id), &r, &label);
             }
             // A question with no choices (or room for own words) still needs a way in.
             if q.custom || q.choices.is_empty() {
@@ -586,12 +606,24 @@ fn defaults(ui: &mut egui::Ui, ctx: &mut MfxCtx, msg: usize, card: &Value, answe
             Some(u) if !q.choices.is_empty() && q.choices.iter().all(|c| &c.id != u) => format!("Your words: {u}"),
             Some(u) if q.choices.is_empty() => format!("Going with: {u}"),
             Some(_) => String::new(),
+            None if waiting => "Waiting for your answer.".into(),
             None if q.choices.is_empty() => "No answer yet: the AI picks one unless you say.".into(),
             None => String::new(),
         };
         if !line.is_empty() {
             ui.label(RichText::new(line).size(12.0).color(t.text_dim));
         }
+    }
+}
+
+/// A choice chip's words: ticked when in use, marked when it's the suggestion nobody picked yet.
+fn chip_text(label: &str, on: bool, suggested: bool) -> String {
+    if on {
+        format!("✓ {label}")
+    } else if suggested {
+        format!("{label} (suggested)")
+    } else {
+        label.to_string()
     }
 }
 
@@ -646,6 +678,32 @@ mod tests {
         });
         out.textures_delta.clear();
         assert!(h > 100.0, "two rows of 16:9 frames, got {h}");
+    }
+
+    // The brief's questions wait for the owner: nothing ticked, the suggestion marked, one press takes it.
+    #[test]
+    fn waiting_questions_tick_nothing_until_answered() {
+        assert_eq!(chip_text("Warm", false, true), "Warm (suggested)");
+        assert_eq!(chip_text("Playful", true, false), "✓ Playful");
+        let mut m = crate::Mortiflix::default();
+        let qs = json!([{"id": "tone", "text": "Tone?", "choices": ["Warm", "Playful"], "default": "Warm"}, {"id": "ending", "text": "Last card?", "default": "The title"}]);
+        let press = |card: &Value, m: &mut crate::Mortiflix| {
+            let ectx = egui::Context::default();
+            let mut got = Vec::new();
+            let mut out = ectx.run_ui(egui::RawInput { screen_rect: Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(400.0, 800.0))), ..Default::default() }, |ui| {
+                let mut ctx = m.ctx(crate::MfxTheme::default());
+                let mut o = CardOut::default();
+                show(ui, &mut ctx, 0, card, false, &BTreeMap::new(), None, &mut o);
+                got = ctx.auto.iter().map(|(id, _, l)| format!("{id}={l}")).collect();
+            });
+            out.textures_delta.clear();
+            got
+        };
+        let waiting = press(&json!({"kind": "submission", "waiting": true, "questions": qs}), &mut m);
+        assert!(waiting.contains(&"mfx.chat.card.0.q.ending.suggested=Use: The title".to_string()), "{waiting:?}");
+        // the old card (went on with the defaults) has the default in use, so no suggestion to press
+        let old = press(&json!({"kind": "defaults", "questions": qs}), &mut m);
+        assert!(!old.iter().any(|x| x.contains(".suggested=")), "{old:?}");
     }
 
     #[test]
