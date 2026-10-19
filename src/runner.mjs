@@ -12,7 +12,7 @@ import { projectMissingKeys, missingKeysText } from './keys.mjs';
 import { prepareWorkdir, writeTorch, sessionReason } from './torch.mjs';
 import { loadTheme } from './svc/theme.mjs';
 import { openBridge } from './bridge.mjs';
-import { quickScriptStep, quickScript } from './quickscript.mjs';
+import { quickScriptStep, quickScript, quickBriefStep, quickBrief } from './quickscript.mjs';
 import { RenderQueue } from './renderq.mjs';
 import * as claudeCode from './backends/claude-code.mjs';
 import * as anthropicApi from './backends/anthropic-api.mjs';
@@ -205,10 +205,14 @@ export class Runner extends EventEmitter {
         config,
       };
       // The script alone is next: one quick call writes it (src/quickscript.mjs), a session only if that can't.
-      const scriptView = backendName === 'claude-code' ? quickScriptStep(root, projectId, config) : null;
-      result = scriptView
-        ? await quickScript({ root, id: projectId, view: scriptView, run: backend.run, runArgs, config, onActivity: runArgs.onActivity, fallback: () => backend.run(runArgs) })
-        : await backend.run(runArgs);
+      // The brief alone is next: the same, one call (quickBrief).
+      const quick = backendName === 'claude-code';
+      const scriptView = quick ? quickScriptStep(root, projectId, config) : null;
+      const briefView = quick && !scriptView ? quickBriefStep(root, projectId, config) : null;
+      const q = { root, id: projectId, run: backend.run, runArgs, config, onActivity: runArgs.onActivity, fallback: () => backend.run(runArgs) };
+      result = scriptView ? await quickScript({ ...q, view: scriptView })
+        : briefView ? await quickBrief({ ...q, view: briefView })
+          : await backend.run(runArgs);
     } catch (e) {
       result = { ok: false, error: e.message };
     } finally {

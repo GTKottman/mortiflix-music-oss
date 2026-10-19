@@ -75,3 +75,29 @@ test('the owner\'s own script in input/ goes to a session', async (t) => {
   assert.equal(quickScriptStep(root, id, loadConfig(root)), null);
   assert.ok(existsSync(input));
 });
+
+test('the brief alone is next: one call restates it and asks the questions; files to read go to a session', async (t) => {
+  const root = tempStudio(t);
+  const p = createProject(root, { pipeline: 'explainer', title: 'Bikes', answers: { topic: 'city bikes', length: '60 s' } });
+  startProject(root, p.id);
+  const { quickBriefStep, quickBrief, briefPrompt } = await import('../src/quickscript.mjs');
+  const config = loadConfig(root);
+  const view = quickBriefStep(root, p.id, config);
+  assert.equal(view?.key, 'brief');
+  assert.match(briefPrompt(root, p.id, view), /city bikes/);
+  let fellBack = false;
+  const r = await quickBrief({ root, id: p.id, view, config, runArgs: {}, onActivity: () => {}, fallback: async () => { fellBack = true; return { ok: true }; },
+    run: answer({ note: 'What: city bikes.', research_notes: '- Bike shares started in 1965.', questions: [{ id: 'tone', text: 'Tone?', choices: ['Warm', 'Punchy'], default: 'warm ' }, { id: 'ending', text: 'Last card?', choices: [], default: 'The title' }] }) });
+  assert.equal(fellBack, false);
+  assert.equal(r.ok, true);
+  const sub = gates.submissions(root, p.id).find((s) => s.step === 'brief');
+  assert.deepEqual(sub.questions.map((q) => [q.id, q.default, q.choices]), [['tone', 'Warm', ['Warm', 'Punchy']], ['ending', 'The title', null]]);
+  assert.equal(sub.items[0].label, 'Early research notes');
+  assert.equal(loadProject(root, p.id).steps.brief.state, 'in_review');
+  // the owner's own files: a session reads them
+  const q = createProject(root, { pipeline: 'explainer', title: 'Mine', answers: { topic: 'x' } });
+  startProject(root, q.id);
+  mkdirSync(join(projectPaths(root, q.id).work, 'input'), { recursive: true });
+  writeFileSync(join(projectPaths(root, q.id).work, 'input', 'notes.txt'), 'read me');
+  assert.equal(quickBriefStep(root, q.id, config), null);
+});

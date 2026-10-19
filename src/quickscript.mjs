@@ -11,6 +11,8 @@ import { paths, writeJson } from './studio.mjs';
 import { loadProject, projectPaths, projectPipeline } from './projects.mjs';
 import { stepView, stepChecks, submit, submissions } from './gates.mjs';
 import { chatHistory } from './svc/chat.mjs';
+import { serviceBrief } from './svc/brief.mjs';
+import { listAssets } from './svc/assets.mjs';
 
 export const WORDS_PER_MINUTE = 150;
 const QUICK_CHECKS = ['spelling-and-facts', 'script-fits-length'];
@@ -86,6 +88,7 @@ export function scriptPrompt(root, id, view, { targetSec, tooLong = null } = {})
     `You write the script for "${project.title}", a ${projectPipeline(root, id).makes} made in the Mortiflix studio for its owner. Answer with the JSON asked for, nothing else. Use web search only to check a fact you aren't sure of.`,
     `## What the owner asked for (the new-project form)\n${JSON.stringify(project.intake?.answers || {}, null, 1)}`,
   ];
+  parts.push(...studioContext(root, id));
   if (brief) parts.push(`## The brief, as the studio read it\n${brief.note}`);
   if (brief?.feedback) parts.push(`## The owner's answers to the brief\n${(brief.feedback.answers || []).map((a) => `- ${a.text} → ${a.answer}${a.used_default ? ' (default)' : ''}`).join('\n')}${brief.feedback.overall ? `\nOverall: ${brief.feedback.overall}` : ''}`);
   if (chat.length) parts.push(`## The owner's words in the chat since then (newest last; they win over the answers above)\n${chat.map((r) => `- ${r.text}`).join('\n')}`);
@@ -104,16 +107,26 @@ export function scriptPrompt(root, id, view, { targetSec, tooLong = null } = {})
   return parts.join('\n\n');
 }
 
+// What a session's CLAUDE.md also gives it: the preset's look and voice, the music theme, the owner's taste.
+function studioContext(root, id) {
+  const out = [];
+  const svc = serviceBrief(root, id);
+  if (svc) out.push(svc);
+  const taste = existsSync(join(root, 'TASTE.md')) ? readFileSync(join(root, 'TASTE.md'), 'utf8').trim() : '';
+  if (taste) out.push(`## The owner's taste (learned across projects)\n${taste}`);
+  return out;
+}
+
 export function scriptMarkdown(s, version) {
   const beats = s.beats.map((b, i) => `### B${String(i + 1).padStart(2, '0')} · ${b.name.trim()}\n*${b.visual.trim().replace(/\*/g, '')}*\n\n${b.words.trim()}`);
   return `# ${s.title.trim()} · Script v${version}\n\n${s.intro.trim()}\n\n---\n\n${beats.join('\n\n')}\n`;
 }
 
-function tickChecklist(work, line) {
+function tickChecklist(work, line, section = 'Script') {
   const f = join(work, 'checklist.md');
   if (!existsSync(f)) return;
   const lines = readFileSync(f, 'utf8').split('\n');
-  const at = lines.findIndex((l) => /^##\s+Script\b/i.test(l));
+  const at = lines.findIndex((l) => new RegExp(`^##\\s+${section}\\b`, 'i').test(l));
   if (at < 0) return;
   for (let i = at + 1; i < lines.length && !/^##\s/.test(lines[i]); i++) lines[i] = lines[i].replace(/^- \[ \]/, '- [x]');
   let end = at + 1;
@@ -175,4 +188,108 @@ export async function quickScript({ root, id, view, run, runArgs, config, onActi
   onActivity({ kind: 'info', text: `The quick script didn't work (${last?.ok ? `${tooLong.words} words, ${tooLong.sec} s, off the target` : last?.error || 'no answer'}): a session writes it.` });
   const r = await fallback();
   return { ...r, usage: { input_tokens: total.input_tokens + (r.usage?.input_tokens || 0), output_tokens: total.output_tokens + (r.usage?.output_tokens || 0) } };
+}
+
+// ---- the brief, the same way ----
+// A full session spent five steps on it (182k tokens, almost all the same context re-read): look in input/, search the
+// web twice, write notes, submit, tick the checklist. Here one call gets the new-project answers, the preset, the
+// owner's taste and chat, and the pipeline's brief rules, may search the web, and returns the restatement and the
+// questions; the studio submits them. Files to read (input/, the owner's assets) go to a session.
+
+export function quickBriefStep(root, id, config) {
+  if (config.quickScript === false) return null;
+  const project = loadProject(root, id);
+  const pipeline = projectPipeline(root, id);
+  const step = pipeline.steps.find((s) => s.key === 'brief');
+  if (!step || step.review !== 'questions') return null;
+  const runnable = stepView(project, pipeline).filter((s) => ['ready', 'working', 'changes'].includes(s.state));
+  if (runnable.length !== 1 || runnable[0].key !== 'brief') return null;
+  if (project.mfx && Object.keys(project.mfx).some((k) => k.endsWith('_wanted'))) return null;
+  if ((project.intake?.files || []).length) return null;
+  const input = join(projectPaths(root, id).work, 'input');
+  if (existsSync(input) && readdirSync(input).length) return null;
+  try { if (listAssets(root, id).length) return null; } catch { /* no assets */ }
+  if (stepChecks(root, id, 'brief').length) return null;
+  return runnable[0];
+}
+
+const BRIEF_SCHEMA = {
+  type: 'object',
+  required: ['note', 'questions'],
+  properties: {
+    note: { type: 'string', description: 'for the owner: the brief restated in three lines (what, for whom, the one takeaway), then a line on the questions' },
+    questions: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['id', 'text', 'choices', 'default'],
+        properties: {
+          id: { type: 'string', description: 'short, lowercase, e.g. tone' },
+          text: { type: 'string' },
+          choices: { type: 'array', items: { type: 'string' }, description: '2-4 choices; empty for an own-words answer' },
+          default: { type: 'string', description: 'one of the choices, word for word (or the suggested words when there are no choices)' },
+        },
+      },
+    },
+    research_notes: { type: 'string', description: 'Markdown: what the web search found that the script will need, with source links; empty if nothing' },
+    pin_changes: {
+      type: 'array',
+      items: { type: 'object', required: ['note', 'change', 'status'], properties: { note: { type: 'integer' }, change: { type: 'string' }, status: { type: 'string', enum: ['done', 'partly', 'not_done'] } } },
+    },
+  },
+};
+
+export function briefPrompt(root, id, view) {
+  const project = loadProject(root, id);
+  const pp = projectPaths(root, id);
+  const pipeline = projectPipeline(root, id);
+  const pipelineMd = existsSync(join(pp.work, 'pipeline', 'PIPELINE.md')) ? readFileSync(join(pp.work, 'pipeline', 'PIPELINE.md'), 'utf8') : '';
+  const last = submissions(root, id).filter((s) => s.step === 'brief').at(-1);
+  const parts = [
+    `You read the brief for "${project.title}", a ${pipeline.makes} made in the Mortiflix studio for its owner. Answer with the JSON asked for, nothing else. Search the web only for facts that change which questions to ask.`,
+    `## What the owner asked for (the new-project form)\n${JSON.stringify(project.intake?.answers || {}, null, 1)}`,
+    ...studioContext(root, id),
+  ];
+  parts.push(`## The pipeline (follow its rules for the brief step)\n${pipelineMd}`);
+  if (view.state === 'changes' && last) {
+    parts.push(`## Version ${last.version} (the owner asked for changes)\n${last.note}\n${JSON.stringify(last.questions)}\n\n## The owner's notes on it\n${last.feedback?.overall ? `Overall: ${last.feedback.overall}\n` : ''}${(last.feedback?.notes || []).map((n) => `${n.n}. ${n.text}`).join('\n')}\nAnswer every note in pin_changes (note number, what you changed, done/partly/not_done).`);
+  }
+  parts.push('Questions: only ones that change the video, each with a default the owner can just accept. Never imitate a real brand that isn\'t the owner\'s own: if the topic is someone else\'s brand, one question says how you\'ll keep it generic.');
+  return parts.join('\n\n');
+}
+
+export async function quickBrief({ root, id, view, run, runArgs, config, onActivity, fallback }) {
+  const pp = projectPaths(root, id);
+  const dir = join(paths(root).run, 'quick');
+  mkdirSync(dir, { recursive: true });
+  onActivity({ kind: 'info', text: 'Reading the brief in one call.' });
+  const r = await run({ ...runArgs, workdir: dir, prompt: briefPrompt(root, id, view), config: { ...config, claudeArgs: ['--tools', 'WebSearch WebFetch', '--allowedTools', 'WebSearch WebFetch', '--json-schema', JSON.stringify(BRIEF_SCHEMA)] } });
+  if (runArgs.signal?.aborted) return r;
+  const s = r.ok ? r.structured : null;
+  const why = !r.ok ? r.error || 'no answer' : !s?.note?.trim() || !Array.isArray(s.questions) || !s.questions.length ? 'no questions came back' : null;
+  if (!why) {
+    const version = view.version + 1;
+    const items = [];
+    if (String(s.research_notes || '').trim()) {
+      mkdirSync(join(pp.work, 'research'), { recursive: true });
+      writeFileSync(join(pp.work, 'research', 'brief-notes.md'), `${s.research_notes.trim()}\n`);
+      items.push({ path: 'research/brief-notes.md', label: 'Early research notes' });
+    }
+    const questions = s.questions.map((q) => {
+      const choices = (q.choices || []).map(String).filter((c) => c.trim()).slice(0, 12);
+      // the default word for word as one of its choices (a different case or spacing is the same choice)
+      const same = choices.find((c) => c.trim().toLowerCase() === String(q.default || '').trim().toLowerCase());
+      return { id: q.id, text: q.text, ...(choices.length ? { choices } : {}), default: same ?? q.default };
+    });
+    try {
+      submit(root, id, 'brief', { note: s.note, questions, items, error_checks: [], pin_changes: s.pin_changes || [] });
+      tickChecklist(pp.work, `Brief submitted v${version} (${questions.length} questions) by the quick brief call: waiting on owner`, 'Brief');
+      appendFileSync(join(pp.work, 'JOURNAL.md'), `\n- ${new Date().toISOString()} · Brief v${version} read in one quick call and submitted (${questions.length} questions).\n`);
+      return r;
+    } catch (e) {
+      onActivity({ kind: 'info', text: `The quick brief couldn't be submitted (${e.message}): a session finishes it.` });
+    }
+  } else onActivity({ kind: 'info', text: `The quick brief didn't work (${why}): a session reads it.` });
+  const f = await fallback();
+  return { ...f, usage: { input_tokens: (r.usage?.input_tokens || 0) + (f.usage?.input_tokens || 0), output_tokens: (r.usage?.output_tokens || 0) + (f.usage?.output_tokens || 0) } };
 }
