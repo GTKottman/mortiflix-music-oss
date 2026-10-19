@@ -52,6 +52,22 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     ui.label(RichText::new(format!("{} gate", stage_name(stage))).size(15.0).color(t.text).strong());
     ui.add_space(2.0);
     ui.label(RichText::new(format!("Nothing after {} is made until this passes.", stage_name(stage))).size(12.0).color(t.text_dim));
+    if stage == STAGE_TRANSITIONS {
+        // the transition pack picked before the transitions are made (owner, 2026-10-18)
+        let c = &ctx.state.cuts;
+        let words = if c.saved {
+            format!("Transitions from: {}", c.packs.iter().find(|p| p.id == c.pack).map_or("the transitions library".to_string(), |p| p.name.clone()))
+        } else {
+            "Transitions: not picked yet".to_string()
+        };
+        ui.add_space(4.0);
+        ui.label(RichText::new(words).size(12.0).color(t.text_dim));
+        let b = ui.button("Transitions menu…");
+        ctx.auto("mfx.gate.cutsMenu", &b, "Transitions menu…");
+        if b.clicked() {
+            ctx.state.cuts.show = true;
+        }
+    }
     if stage == STAGE_ANIMATIC {
         // the motion and rule packs picked before animating (owner, 2026-10-18)
         let m = &ctx.state.motion;

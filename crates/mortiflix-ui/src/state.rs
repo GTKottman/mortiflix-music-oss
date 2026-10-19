@@ -142,6 +142,9 @@ pub struct MfxState {
     /// The Animatic's motion menu: the motion and rule packs, the owner's picks.
     #[serde(skip)]
     pub motion: crate::motion_menu::MotionState,
+    /// The Transitions stage: the transition pack picked and the board's Fix box.
+    #[serde(skip)]
+    pub cuts: crate::transitions::CutsState,
     /// Into Edit (doc 38): the hand-off and the stage-5 Mortiflix panel.
     pub handoff: crate::into_edit::Handoff,
     /// The script, line by line, and the owner's unsaved draft (Script panel + chat card).
@@ -187,6 +190,7 @@ impl Default for MfxState {
             preview: Default::default(),
             score: crate::score::Score::default(),
             motion: crate::motion_menu::MotionState::default(),
+            cuts: crate::transitions::CutsState::default(),
             handoff: Default::default(),
             script: Default::default(),
             look: Default::default(),

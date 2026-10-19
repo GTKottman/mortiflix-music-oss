@@ -31,6 +31,7 @@ pub mod setup;
 pub mod stagebar;
 pub mod state;
 pub mod tokens;
+pub mod transitions;
 pub mod voice_music;
 pub mod work;
 
@@ -197,6 +198,7 @@ impl Mortiflix {
         resume::tick(&mut self.state, &mut self.service);
         score::tick(&mut self.state, &mut self.service);
         motion_menu::tick(&mut self.state, &mut self.service);
+        transitions::tick(&mut self.state, &mut self.service);
     }
     /// Go to a stage (0-7). `done`: the stage being left was finished with Next. Tells the service.
     /// Returns the stage it was on, or None when `to` is out of range.
@@ -285,13 +287,15 @@ pub fn show_stage(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
 }
 
 /// PanelKind::MfxPreview: each stage's own centre (owner, 2026-10-18: "Each … needs its own unique
-/// UI"): the script on Script, the voice lines on Voice, the looks on Style frames; from Transitions
-/// on, the loose preview. True when the stage has its own centre (no video picture under it).
+/// UI"): the script on Script, the voice lines on Voice, the looks on Style frames, the cuts board on
+/// Transitions, the motion menu on Animatic until the motion is picked; then the loose preview. True
+/// when the stage has its own centre (no video picture under it).
 pub fn show_centre(ui: &mut egui::Ui, ctx: &mut MfxCtx) -> bool {
     match ctx.state.stage {
         0 => script::show(ui, ctx),
         STAGE_VOICE => voice_music::show(ui, ctx),
         STAGE_STYLE_FRAMES => look::show(ui, ctx),
+        STAGE_TRANSITIONS => transitions::show(ui, ctx),
         STAGE_ANIMATIC if motion_menu::wanted(ctx.state) => motion_menu::show(ui, ctx),
         _ => {
             preview::show(ui, ctx);
@@ -304,7 +308,7 @@ pub fn show_centre(ui: &mut egui::Ui, ctx: &mut MfxCtx) -> bool {
 /// The stage has its own centre panel instead of the video preview (the Animatic while its motion
 /// menu shows).
 pub fn own_centre(state: &MfxState) -> bool {
-    matches!(state.stage, 0 | STAGE_VOICE | STAGE_STYLE_FRAMES) || (state.stage == STAGE_ANIMATIC && motion_menu::wanted(state))
+    matches!(state.stage, 0 | STAGE_VOICE | STAGE_STYLE_FRAMES | STAGE_TRANSITIONS) || (state.stage == STAGE_ANIMATIC && motion_menu::wanted(state))
 }
 
 /// The calm placeholder every part stub draws: the part's name and the doc that specifies it.
