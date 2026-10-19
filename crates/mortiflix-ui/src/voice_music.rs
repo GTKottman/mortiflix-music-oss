@@ -511,6 +511,8 @@ fn line_panel(ui: &mut egui::Ui, ctx: &mut MfxCtx, vm: &mut Vm, p: &Piece) {
         }
     });
     ui.colored_label(t.text_faint, "The script changes with it.");
+    // Check the words (owner, 2026-10-19): what speech-to-text heard, or that nobody listened yet
+    heard_row(ui, ctx, &info);
 
     // Voice
     ui.horizontal(|ui| {
@@ -673,6 +675,28 @@ fn line_panel(ui: &mut egui::Ui, ctx: &mut MfxCtx, vm: &mut Vm, p: &Piece) {
     });
     if !vm.tl.has_view {
         ui.colored_label(t.text_faint, "Levels, timing and takes need the service's voicemusic.view (update the Mortiflix service).");
+    }
+}
+
+/// What the check heard in this line's take, so the owner can compare it with the words; when no
+/// speech-to-text listened (a voice without one, your own take), a note to listen and check by ear.
+fn heard_row(ui: &mut egui::Ui, ctx: &MfxCtx, info: &model::LineInfo) {
+    let t = ctx.theme;
+    match (&info.heard, info.words_ok) {
+        (Some(h), ok) => {
+            ui.horizontal_wrapped(|ui| {
+                ui.colored_label(t.text_dim, "Heard");
+                ui.add(egui::Label::new(egui::RichText::new(h).color(t.text)).wrap());
+            });
+            if ok == Some(false) {
+                ui.colored_label(t.warn, "The words heard don't match the script: listen, then Fix or change the words.");
+            } else {
+                ui.colored_label(t.text_faint, "Checked by speech-to-text against the script.");
+            }
+        }
+        (None, _) => {
+            ui.colored_label(t.warn, "Nobody checked these words yet: listen to the line and check them before you OK it.");
+        }
     }
 }
 

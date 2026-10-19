@@ -104,6 +104,10 @@ pub struct LineInfo {
     pub takes: Vec<Take>,
     /// The start was set by hand (a timing lock).
     pub moved: bool,
+    /// What speech-to-text heard in the take; None = nothing listened (the owner checks the words by ear).
+    pub heard: Option<String>,
+    /// The check's verdict on the words, when it ran.
+    pub words_ok: Option<bool>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -467,6 +471,8 @@ pub fn build(graph: &Value, view: Option<&Value>) -> Timeline {
             take,
             takes,
             moved: x.get("timing_locked").and_then(Value::as_bool) == Some(true),
+            heard: x.get("heard").and_then(Value::as_str).map(|h| short(h, 2000)),
+            words_ok: x.get("words_ok").and_then(Value::as_bool),
         });
         tl.lines.push(p);
     }
