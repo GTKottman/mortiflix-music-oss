@@ -16,6 +16,7 @@ import { quickScriptStep, quickScript, quickBriefStep, quickBrief } from './quic
 import { quickVoiceStep, quickVoice } from './quickvoice.mjs';
 import { quickFramesStep, quickFrames } from './quickframes.mjs';
 import { quickTransitionsStep, quickTransitions } from './quicktransitions.mjs';
+import { quickAnimaticStep, quickAnimatic } from './quickanimatic.mjs';
 import { RenderQueue } from './renderq.mjs';
 import * as claudeCode from './backends/claude-code.mjs';
 import * as anthropicApi from './backends/anthropic-api.mjs';
@@ -218,12 +219,15 @@ export class Runner extends EventEmitter {
       const framesView = quick && !scriptView && !briefView && !voiceView ? quickFramesStep(root, projectId, config) : null;
       // The transition board, the same way: the catalog and one sheet in, the studio renders and checks the board.
       const cutsView = quick && !scriptView && !briefView && !voiceView && !framesView ? quickTransitionsStep(root, projectId, config) : null;
+      // The animatic, the same way: one call writes the video, the studio renders and runs the QC, fresh reviews.
+      const animaticView = quick && !scriptView && !briefView && !voiceView && !framesView && !cutsView ? quickAnimaticStep(root, projectId, config) : null;
       const q = { root, id: projectId, run: backend.run, runArgs, config, onActivity: runArgs.onActivity, fallback: () => backend.run(runArgs) };
       result = scriptView ? await quickScript({ ...q, view: scriptView })
         : briefView ? await quickBrief({ ...q, view: briefView })
           : voiceView ? await quickVoice({ ...q, view: voiceView })
             : framesView ? await quickFrames({ ...q, view: framesView, renders: this.renders, sessionId })
               : cutsView ? await quickTransitions({ ...q, view: cutsView, renders: this.renders, sessionId })
+                : animaticView ? await quickAnimatic({ ...q, view: animaticView, renders: this.renders, sessionId })
           : await backend.run(runArgs);
     } catch (e) {
       result = { ok: false, error: e.message };

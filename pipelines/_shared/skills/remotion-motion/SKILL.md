@@ -40,8 +40,8 @@ Everything that starts Remotion's browser goes through `mfx render` (one heavy j
 ```
 # a style frame (a still at a chosen frame)
 mfx render --label "SF01" -- npx remotion still src/index.ts Main ../out/frames/sf01.png --frame=45
-# the animatic (720p is enough for timing)
-mfx render --label "animatic" -- npx remotion render src/index.ts Main ../out/animatic.mp4 --scale=0.6667
+# the animatic (full size; a --scale must give whole pixels: 0.5 works, 0.6667 of 1080 is 720.036 and fails)
+mfx render --label "animatic" -- npx remotion render src/index.ts Main ../out/animatic.mp4
 # the final
 mfx render --label "final" -- npx remotion render src/index.ts Main ../out/final.mp4 --codec=h264 --crf=18
 mfx render-wait <id>     # repeat until state is done or failed

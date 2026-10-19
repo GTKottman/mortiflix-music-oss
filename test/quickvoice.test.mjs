@@ -40,3 +40,15 @@ test('style frames: the studio measures text contrast the WCAG way', async () =>
   assert.equal(contrast('#777777', '#777777'), 1);
   assert.equal(contrast('red', '#000'), null);
 });
+
+test('animatic: one scene per beat from the voice, each starting just before its first word', async () => {
+  const { scenesFromTiming } = await import('../src/quickanimatic.mjs');
+  const beats = [{ id: 'b01', name: 'One' }, { id: 'b02', name: 'Two' }, { id: 'b03', name: 'Three' }];
+  const timing = { lines: [
+    { id: 'b01-1', start: 0.1, words: [{ start: 0.2 }] },
+    { id: 'b02-1', start: 4, words: [{ start: 4.25 }] },
+    { id: 'b03-1', start: 9, words: [{ start: 9.25 }] },
+  ] };
+  const s = scenesFromTiming(beats, timing, 360);
+  assert.deepEqual(s.map((x) => [x.key, x.beat, x.from_frame, x.frames]), [['s01', 'b01', 0, 120], ['s02', 'b02', 120, 150], ['s03', 'b03', 270, 90]]);
+});
