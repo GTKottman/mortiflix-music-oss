@@ -48,7 +48,7 @@ test('script: a beat with no name is named by its first words', () => {
 });
 
 test('script: get, edit a line (its shot and voice line remade, v2), add, delete and restore, rename', { skip: !hasFfmpeg && 'needs ffmpeg' }, async (t) => {
-  const root = tempStudio(t);
+  const root = tempStudio(t, { mfxQuestionsBlock: false }); // the brief goes on with its defaults (not what this tests)
   const { call, events, tick } = harness(t, root);
   const runner = new Runner(root);
   runner.acquire();
@@ -164,7 +164,7 @@ test('script: get, edit a line (its shot and voice line remade, v2), add, delete
 });
 
 test('script: the app\'s unsaved changes are kept per project (a service restart, a switch) until saved', { skip: !hasFfmpeg && 'needs ffmpeg' }, async (t) => {
-  const root = tempStudio(t);
+  const root = tempStudio(t, { mfxQuestionsBlock: false }); // the brief goes on with its defaults (not what this tests)
   const { call, tick } = harness(t, root);
   const runner = new Runner(root);
   runner.acquire();

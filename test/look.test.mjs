@@ -42,7 +42,7 @@ async function until(fn, { ms = 15_000, step = 25 } = {}) {
 }
 
 test('look: the looks to pick from, pick another (asks first, remakes only the shots made in the old look), make more', { skip: !hasFfmpeg && 'needs ffmpeg' }, async (t) => {
-  const root = tempStudio(t);
+  const root = tempStudio(t, { mfxQuestionsBlock: false }); // the brief goes on with its defaults (not what this tests)
   const { call, events, tick } = harness(t, root);
   const runner = new Runner(root);
   runner.acquire();

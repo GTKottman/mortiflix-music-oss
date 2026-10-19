@@ -158,9 +158,20 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
     if (p && p.state !== lastProjectState) { lastProjectState = p.state; emit('project.changed', { id, state: p.state, needs_you: p.needs_you, deliverables: p.deliverables }); }
   }
 
-  // Policies the app's flow needs (docs 30, 37): questions never block (a questions step whose questions all have a
-  // default goes on with them; a later answer is a chat message), and a stage the owner moved on from keeps what
-  // arrives "as it is".
+  // The owner's answers to a questions submission, given in the chat after it arrived: { question id: answer }.
+  function ownerAnswers(p, sub) {
+    const out = {};
+    for (const [qid, a] of Object.entries(p.mfx?.answers || {})) {
+      if (sub && a?.step === sub.step && String(a.at || '') >= String(sub.submitted_at || '')) out[qid] = a.answer;
+    }
+    return out;
+  }
+  const nextStepName = (pipeline, key) => (pipeline.steps.find((x) => (x.after || []).includes(key))?.name || 'next step').toLowerCase();
+
+  // Policies the app's flow needs (docs 30, 37): a questions step waits for the owner (owner, 2026-10-18: nothing
+  // after the brief starts until every question in the chat is answered) and goes on with their answers once the last
+  // one is in; `config.mfxQuestionsBlock: false` goes on with the defaults at once, as before. A stage the owner moved
+  // on from keeps what arrives "as it is".
   function policies(id) {
     const config = loadConfig(root);
     const p = loadProject(root, id);
@@ -169,12 +180,20 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
     const done = mfxView(p).stages_done || {};
     for (const s of gates.stepView(p, pipeline).filter((x) => x.state === 'in_review')) {
       try {
-        if (s.review === 'questions' && config.mfxQuestionsBlock !== true) {
+        if (s.review === 'questions') {
           const sub = gates.submissions(root, id).find((x) => x.step === s.key && x.version === s.version);
-          if (sub && sub.questions.every((q) => q.default !== null)) {
-            gates.respond(root, id, s.key, s.version, { verdict: 'approve', overall: 'Going on with the defaults (questions never block; the owner can change any answer in the chat).' });
+          if (sub && config.mfxQuestionsBlock === false && sub.questions.every((q) => q.default !== null)) {
+            gates.respond(root, id, s.key, s.version, { verdict: 'approve', overall: 'Going on with the defaults (the owner can change any answer in the chat).' });
             const row = appendChat(root, id, { role: 'ai', text: `Going with: ${sub.questions.map((q) => `${q.text} → ${q.default}`).join(' · ')}. Change any of these in the chat.`, card: { kind: 'defaults', questions: sub.questions } });
             emit('chat.message', row);
+            continue;
+          }
+          const given = ownerAnswers(p, sub);
+          if (sub && sub.questions.length && sub.questions.every((q) => given[q.id] !== undefined)) {
+            gates.respond(root, id, s.key, s.version, { verdict: 'approve', overall: 'Every question answered in the chat.', answers: given });
+            const row = appendChat(root, id, { role: 'ai', text: `Thanks, that's every answer. Starting the ${nextStepName(pipeline, s.key)} now.` });
+            emit('chat.message', row);
+            runner?.wake();
             continue;
           }
         }
@@ -626,8 +645,8 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
       const id = needProject(p);
       const qid = String(p?.question || '');
       if (!loadProject(root, id).questions.some((x) => x.id === qid)) {
-        // A question that went on with its default (the `defaults` card): the owner's answer is kept with the
-        // project, said in the chat (the AI reads the chat) and logged; nothing waits on it.
+        // A submission's question (the brief's): the owner's answer is kept with the project, said in the chat (the AI
+        // reads the chat) and logged. A step still waiting goes on once its last question is answered (policies).
         const sub = [...gates.submissions(root, id)].reverse().find((s) => (s.questions || []).some((q) => q?.id === qid));
         const q = sub?.questions.find((x) => x?.id === qid);
         if (!q) bad(`no question ${qid}`);
@@ -647,7 +666,13 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
       poke();
       return r;
     },
-    'questions.list': (p) => loadProject(root, needProject(p)).questions,
+    // The AI's own questions, then the answers given on a submission's questions (the brief's), so the chat's
+    // cards show them after a restart too.
+    'questions.list': (p) => {
+      const pr = loadProject(root, needProject(p));
+      const given = Object.entries(pr.mfx?.answers || {}).map(([id, a]) => ({ id, step: a.step, text: a.text, answer: a.answer, answered_at: a.at }));
+      return [...pr.questions, ...given.filter((g) => !pr.questions.some((q) => q.id === g.id))];
+    },
     // The service is the source of truth: the user's own message comes back as a chat.message too. In a node
     // context it becomes a Fix there; otherwise the user's own Claude Code answers (and may pick a move).
     'chat.send': (p) => {

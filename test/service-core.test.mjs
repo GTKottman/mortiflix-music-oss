@@ -9,7 +9,7 @@ import { tempStudio } from './helpers.mjs';
 import { createService } from '../src/service.mjs';
 import { Runner } from '../src/runner.mjs';
 import { loadProject } from '../src/projects.mjs';
-import { saveConfig } from '../src/studio.mjs';
+import { saveConfig, readJson } from '../src/studio.mjs';
 import { videosDir } from '../src/svc/export.mjs';
 
 const hasFfmpeg = spawnSync('ffmpeg', ['-version']).status === 0;
@@ -95,13 +95,25 @@ test('service core: new project from preset + idea + assets + theme, the whole f
   assert.ok(events('assets.progress').length >= 1);
   assert.equal((await call('music.theme.get')).theme.picked_by, 'you');
 
-  // The brief's questions all have defaults: they never block (the policy approves them and says so in the chat).
-  await run();
+  // The brief's questions wait for the owner, defaults or not: nothing is made until every one is answered.
   await run();
   await run();
   let chat = await call('chat.history');
+  const briefQs = chat.find((r) => r.card?.waiting);
+  assert.ok(briefQs, "the brief questions wait in the chat");
+  assert.ok(!chat.some((r) => r.card?.kind === 'script'), 'no script before the answers');
+  const [first, ...rest] = briefQs.card.questions;
+  await call('chat.answer', { question: first.id, value: first.default });
+  await run();
+  assert.equal(loadProject(root, id).steps.brief.state, 'in_review', 'one answer is not every answer');
+  for (const q of rest) await call('chat.answer', { question: q.id, value: 'My own words' });
+  assert.ok((await call('questions.list')).some((q) => q.id === first.id && q.answered_at), 'answers come back after a restart');
+  await run();
+  await run();
+  chat = await call('chat.history');
   assert.equal(chat[0].role, 'user');
-  assert.match(chat.map((r) => r.text).join('\n'), /Going with: /);
+  assert.match(chat.map((r) => r.text).join('\n'), /that's every answer/);
+  assert.equal(readJson(join(root, 'state', id, 'reviews', 'brief', 'v1', 'feedback.json')).answers.find((a) => a.id === rest[0].id).answer, 'My own words');
   assert.ok(chat.some((r) => r.card?.kind === 'script' && r.card.beats.length === 4));
   // Nothing is made past a gate: no voice, no looks, no shots while the script waits for the owner.
   assert.ok(!chat.some((r) => r.card?.kind === 'looks'));

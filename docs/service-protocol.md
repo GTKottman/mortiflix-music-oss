@@ -265,5 +265,6 @@ Cards: `script {beats}`, `looks {frames, using}`, `shots`/`transitions {nodes}`,
 - `torch.mjs`: the session's brief gets the owner's assets, the music theme, the preset's look and voice, and the
   chat since the last session (`svc/brief.mjs`).
 - `backends/demo.mjs`: voice lines with clips and a quiet score (so every lane has something), new shots, line remakes.
-- Policies in the service: questions never block (a questions step whose questions all have defaults goes on with
-  them; `config.mfxQuestionsBlock: true` turns that off), and a stage the owner moved on from keeps what arrives.
+- Policies in the service: a questions step waits for the owner's answers in the chat (its card has `waiting: true`;
+  once every question is answered the step is approved with those answers; `config.mfxQuestionsBlock: false` goes on
+  with the defaults at once instead), and a stage the owner moved on from keeps what arrives.
