@@ -13,9 +13,9 @@ pub const APP_PAGE: &str = "https://mortiflix.com";
 pub const ISSUES: &str = "https://mortiflix.com";
 
 /// (command id, label, url) for every link, in menu order.
-pub const ALL: [(&str, &str, &str); 4] = [
+// No ArtCraft Website item in Help (owner, 2026-10-19: no ArtCraft mentions); WEBSITE stays for the About box.
+pub const ALL: [(&str, &str, &str); 3] = [
     ("help.discord", "Join the Mortiflix Discord…", DISCORD),
-    ("help.website", "ArtCraft Website", WEBSITE),
     ("help.appPage", "Mortiflix Studio on mortiflix.com", APP_PAGE),
     ("help.reportIssue", "Report an Issue…", ISSUES),
 ];

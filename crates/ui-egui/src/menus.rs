@@ -137,7 +137,6 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     uic!("mode.edit", "Edit", [], None),
     uic!("mode.export", "Export", ["File", "Export"], Some("Cmd+M")),
     uic!("help.discord", "Join the Mortiflix Discord…", ["Help"], None),
-    uic!("help.website", "ArtCraft Website", ["Help"], None),
     uic!("help.appPage", "Mortiflix Studio on mortiflix.com", ["Help"], None),
     uic!("help.reportIssue", "Report an Issue…", ["Help"], None),
     uic!("help.revealLogFiles", "Reveal Log Files…", ["Help"], None),
