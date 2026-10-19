@@ -902,13 +902,30 @@ pub fn gate(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     let filled = !s.beats.is_empty() && s.beats.iter().all(|b| b.lines.iter().any(|l| !l.words.trim().is_empty()));
     let secs = words * 60 / WORDS_A_MINUTE;
     let status = ctx.state.status(0);
+    // the same signal as the Script box's spinner: the script step running counts as writing, and no beats yet
+    // is not finished (owner, 2026-10-18: both were ticked while the AI was still writing)
+    let writing = s.writing || ctx.state.work.stage() == Some(0);
+    let written = s.loaded && !writing && !s.beats.is_empty();
     let rows: [(bool, String); 4] = [
-        (s.loaded && !s.writing, if s.writing { "The AI is still writing".into() } else { "The AI has finished writing".into() }),
+        (
+            written,
+            if writing {
+                "The AI is still writing".into()
+            } else if s.beats.is_empty() {
+                "The AI hasn't written it yet".into()
+            } else {
+                "The AI has finished writing".into()
+            },
+        ),
         (filled, format!("Every beat has its words ({} beats)", s.beats.len())),
         (!ctx.state.script.unsaved(), if ctx.state.script.unsaved() { "Unsaved changes: Save them first".into() } else { "Every change is saved".into() }),
         (
-            status.need == 0,
-            if status.need == 0 { "Every beat is OK'd".into() } else { format!("{} beats wait for your OK (Next OKs them as they are)", status.need) },
+            written && status.need == 0,
+            if !written || status.need == 0 {
+                "Every beat is OK'd".into()
+            } else {
+                format!("{} beats wait for your OK (Next OKs them as they are)", status.need)
+            },
         ),
     ];
     for (ok, text) in &rows {
