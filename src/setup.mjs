@@ -792,6 +792,9 @@ export function sessionToolsEnv(root) {
   if (c.ok) env.MFX_CHROME = c.path;
   // the real instruments the music engine plays (VCSL, CC0), a local copy it serves to its renderer
   if (existsSync(join(root, 'tools', 'samples', 'vcsl.json'))) env.MFX_SAMPLES = join(root, 'tools', 'samples');
+  // the film mix (Dubstage): the studio's own build, or one set by the owner
+  const dub = process.env.MFX_DUBSTAGE || [join(root, 'tools', 'dubstage', 'dubstage'), '/mnt/storage/drive_1/dubstage-target/release/dubstage'].find((f) => existsSync(f));
+  if (dub) env.MFX_DUBSTAGE = dub;
   const daw = dawConfig(config);
   if (daw.id) env.MFX_DAW = daw.id;
   const browser = browserConfig(config);

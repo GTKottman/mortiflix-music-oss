@@ -111,8 +111,11 @@ Music: instrumental unless `--vocals`, 3 s to 10 min. Note every prompt in `asse
 
 ## 5. Mix
 
-Music about 18 dB under the voice while it speaks; it can come up in the gaps. The final mix: -14 LUFS, true peak
-≤ -1 dBTP (final-pass skill).
+The narration is never processed: no speed change (`atempo` or any other), no compressor, limiter, EQ or loudness
+normalisation, from the engine's file to the final mix. Record lossless (ElevenLabs `output_format` `pcm_48000`).
+The mix is Dubstage (`$MFX_DUBSTAGE`): the voice untouched, the music about 20 dB under it while it speaks, one plain
+gain for the whole soundtrack (the level stops where the voice's own peaks reach -1 dBTP; no limiter). Its `--bus-out`
+proves the voice is untouched: the mix minus the bus is the voice times one gain.
 
 ## 6. Record
 

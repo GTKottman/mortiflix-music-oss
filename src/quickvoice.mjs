@@ -6,7 +6,7 @@
 // LUFS, a clip per scene, and the submission. A line nothing could check (a voice with no speech-to-text) is marked
 // for the owner to listen to: the Voice stage shows what was heard for every line, or that nobody listened yet.
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, appendFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, appendFileSync, copyFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { paths, writeJson, REPO } from './studio.mjs';
 import { loadProject, projectPaths, projectPipeline } from './projects.mjs';
@@ -14,6 +14,7 @@ import { stepView, stepChecks, submit } from './gates.mjs';
 import { scriptView } from './svc/script.mjs';
 import { voiceConfig } from './voice/index.mjs';
 import { lengthSeconds } from './quickscript.mjs';
+import { makeVoice } from './soundtrack/voice.mjs';
 
 const CHECKS = ['loudness', 'sync', 'music-source'];
 const LUFS = -14;
@@ -36,7 +37,7 @@ export function quickVoiceStep(root, id, config) {
   const work = projectPaths(root, id).work;
   // the owner's own recording to cut into lines
   if (existsSync(join(work, 'input')) && readdirSync(join(work, 'input')).length) return null;
-  if (!existsSync(VO)) return null;
+  if (voiceConfig(root).engine !== 'elevenlabs' && !existsSync(VO)) return null;
   if (stepChecks(root, id, 'voice').some((c) => !CHECKS.includes(c.id))) return null;
   return runnable[0];
 }
@@ -123,6 +124,8 @@ export async function quickVoice({ root, id, view, run, runArgs, config, onActiv
   if (!lines.length) return give('the script has no words');
   mkdirSync(join(work, 'voice'), { recursive: true });
   writeFileSync(join(work, 'voice', 'lines.json'), JSON.stringify(lines, null, 2));
+  // ElevenLabs: the soundtrack's voice (src/soundtrack/voice.mjs), lossless and never processed
+  if (engine === 'elevenlabs') return soundtrackVoice({ root, id, view, work, script, lines, env, onActivity, give, usage });
   onActivity({ kind: 'info', text: `Recording the narration: ${lines.length} lines, checked as they're made.` });
 
   let sp = vo(work, env, ['speak', 'voice/lines.json']);
@@ -206,5 +209,59 @@ export async function quickVoice({ root, id, view, run, runArgs, config, onActiv
   appendFileSync(join(work, 'JOURNAL.md'), `\n- ${new Date().toISOString()} · Voice v${view.version + 1} recorded and submitted by the studio (no session): ${lines.length} lines, ${r1(timing.seconds)} s, ${r1(m.after.i)} LUFS.\n`);
   writeJson(join(work, 'voice', 'quick-voice.json'), { lines: lines.length, seconds: timing.seconds, retaken, still_failing: bad.map((x) => x.id), unchecked, loudness: m });
   onActivity({ kind: 'info', text: `Voice ready for your check: ${r1(timing.seconds)} s, ${lines.length} lines.` });
+  return { ok: true, usage, summary: note };
+}
+
+// The voice from Soundtrack v1 (owner, 2026-10-19: the old path saved 128 kbps MP3s and a session sped them up 4% and
+// compressed them; "a finished voice should be perfect if it's coming from 11 labs"): ElevenLabs pcm_48000 with word
+// timings, the silent edges cut, the lines joined with the script's gaps, and nothing else. The narration the later
+// steps use (out/voice/narration.wav) is that file, untouched; the soundtrack's mix sets one plain gain for everything.
+async function soundtrackVoice({ root, id, view, work, script, lines, env, onActivity, give, usage }) {
+  const key = (() => { try { return JSON.parse(readFileSync(join(root, 'secrets.json'), 'utf8')).elevenlabs_api_key; } catch { return env.ELEVENLABS_API_KEY; } })();
+  if (!key) return give('no ElevenLabs key');
+  const el = voiceConfig(root).elevenlabs;
+  onActivity({ kind: 'info', text: `Recording the narration: ${lines.length} lines from ElevenLabs, lossless, nothing done to it.` });
+  let v;
+  try {
+    v = await makeVoice({ work, key, voice: el.voice_name || 'the studio voice', voiceId: el.voice_id, model: el.model_id, stability: el.stability, similarity: el.similarity_boost, speakerBoost: el.use_speaker_boost !== false, log: (t) => onActivity({ kind: 'info', text: t }) });
+  } catch (e) { return give(`ElevenLabs: ${e.message}`); }
+  const timing = v.timing;
+  writeFileSync(join(work, 'voice', 'timing.json'), JSON.stringify(timing, null, 2));
+  mkdirSync(join(work, 'out', 'voice'), { recursive: true });
+  copyFileSync(v.file, join(work, 'voice', 'voice.wav'));
+  copyFileSync(v.file, join(work, 'out', 'voice', 'narration.wav'));
+  const m = measure(v.file);
+  const items = [{ path: 'out/voice/narration.wav', label: `Narration · full (${r1(timing.seconds)} s)`, section: 'Full' }];
+  for (const beat of script.beats) {
+    const ls = timing.lines.filter((l) => l.id.startsWith(`${beat.id}-`));
+    if (!ls.length) continue;
+    const from = Math.max(0, ls[0].start - 0.05), to = ls.at(-1).end + 0.15;
+    const f = `out/voice/${beat.id}.wav`;
+    // a cut of the same samples (32-bit float: nothing rounded)
+    if (ffmpeg(['-ss', String(from), '-t', String(to - from), '-i', join(work, 'out', 'voice', 'narration.wav'), '-c:a', 'pcm_f32le', join(work, f)]).ok) items.push({ path: f, label: `${beat.id.toUpperCase()} · ${beat.name}`, section: 'Scenes' });
+  }
+  const target = lengthSeconds(loadProject(root, id).intake?.answers?.length);
+  const note = [
+    `The narration, read word for word from the approved script by ${el.voice_name || 'the studio voice'} (ElevenLabs ${el.model_id}): ${lines.length} lines, ${r1(timing.seconds)} s${target ? ` (the brief asks for about ${target} s)` : ''}. The full track first, then one clip per scene.`,
+    'It is exactly what ElevenLabs made, lossless (48 kHz PCM): no speed change, no compression, no limiter, no loudness change. Only the silence at each line\'s edges is cut. The soundtrack sets one plain gain for the whole mix at the music step.',
+    'No speech-to-text check on this path: listen for the words before you OK it.',
+    target && Math.abs(timing.seconds - target) > target * 0.1 ? `It runs ${timing.seconds > target ? 'long' : 'short'} for ${target} s: Fix a scene (fewer words) or keep it. The picture is cut to the voice; the voice is never sped up.` : '',
+  ].filter(Boolean).join('\n\n');
+  const error_checks = [
+    { id: 'loudness', result: 'n/a', note: `Measured, not changed: ${m ? `${r1(m.i)} LUFS integrated, true peak ${r1(m.tp)} dBTP as ElevenLabs made it` : 'not measured'}. The level is set once for the whole soundtrack at the mix (Dubstage: one plain gain, no limiter).` },
+    { id: 'sync', result: 'pass', note: 'No picture yet. Word timings for every line from ElevenLabs\' own alignment in voice/timing.json; the animatic is timed to them.' },
+    { id: 'music-source', result: 'n/a', note: 'Voice only: the music comes after the animatic.' },
+  ].filter((c) => stepChecks(root, id, 'voice').some((n) => n.id === c.id));
+  try {
+    submit(root, id, 'voice', { note, questions: [], items, error_checks });
+  } catch (e) { return give(`the submission was refused: ${e.message}`); }
+  const ck = join(work, 'checklist.md');
+  if (existsSync(ck)) {
+    const t = readFileSync(ck, 'utf8').split('\n');
+    const at = t.findIndex((l) => /^##\s+Voice\b/i.test(l));
+    if (at >= 0) { for (let i = at + 1; i < t.length && !/^##\s/.test(t[i]); i++) t[i] = t[i].replace(/^- \[ \]/, '- [x]'); writeFileSync(ck, t.join('\n')); }
+  }
+  appendFileSync(join(work, 'JOURNAL.md'), `\n- ${new Date().toISOString()} · Voice v${view.version + 1} from ElevenLabs (soundtrack v1, lossless, untouched): ${lines.length} lines, ${r1(timing.seconds)} s.\n`);
+  onActivity({ kind: 'info', text: `Voice ready for your check: ${r1(timing.seconds)} s, ${lines.length} lines, untouched.` });
   return { ok: true, usage, summary: note };
 }

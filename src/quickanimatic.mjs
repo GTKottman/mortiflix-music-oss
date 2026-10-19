@@ -17,6 +17,8 @@ import { loadProject, projectPaths, projectPipeline } from './projects.mjs';
 import { stepView, stepChecks, submit } from './gates.mjs';
 import { scriptView } from './svc/script.mjs';
 import { sceneGaps, gapsText } from './scenes.mjs';
+import { measure } from './quickvoice.mjs';
+import { plainGain } from './soundtrack/voice.mjs';
 
 const CHECKS = ['spelling-and-facts', 'text-safe-area', 'no-collisions', 'text-contrast', 'frame-sheet', 'format', 'loudness', 'sync', 'music-source', 'transitions-carried'];
 const FILES = ['src/timing.ts', 'src/scenes/animatic.tsx', 'src/Main.tsx', 'src/video.ts', 'src/ui.tsx', 'src/scenes/frames.tsx'];
@@ -160,7 +162,7 @@ function qc(c, seconds) {
   mkdirSync(join(c.work, 'checks'), { recursive: true });
   const vt = read(join(c.work, 'video', 'src', 'video.ts'));
   const size = `${vt.match(/width:\s*(\d+)/)?.[1] || 1920}x${vt.match(/height:\s*(\d+)/)?.[1] || 1080}`;
-  const r = spawnSync(process.execPath, [QC, 'out/animatic.mp4', '--size', size, '--fps', String(FPS), '--duration', String(Math.round(seconds)), '--lufs', '-14', '--true-peak', '-1', '--end-hold', '--sheet', 'checks/animatic-sheet.png', '--json', 'checks/qc-animatic.json'], { cwd: c.work, encoding: 'utf8', timeout: 10 * 60_000, maxBuffer: 16 * 1024 * 1024 });
+  const r = spawnSync(process.execPath, [QC, 'out/animatic.mp4', '--size', size, '--fps', String(FPS), '--duration', String(Math.round(seconds)), '--lufs', String(c.voiceLufs ?? -14), '--true-peak', '-1', '--end-hold', '--sheet', 'checks/animatic-sheet.png', '--json', 'checks/qc-animatic.json'], { cwd: c.work, encoding: 'utf8', timeout: 10 * 60_000, maxBuffer: 16 * 1024 * 1024 });
   const json = readJsonOr(join(c.work, 'checks', 'qc-animatic.json'), null);
   // still stretches are the reviewer's call (a designed hold is fine, an undesigned freeze is blocking): everything
   // else qc.mjs checks (format, black frames, loudness, the sheet) must pass outright
@@ -187,7 +189,13 @@ export async function quickAnimatic({ root, id, view, run, runArgs, config, onAc
   };
   if (!renders) return give('no render queue');
   mkdirSync(join(c.work, 'video', 'public'), { recursive: true });
-  copyFileSync(join(c.work, 'out', 'voice', 'narration.wav'), join(c.work, 'video', 'public', 'voice.wav'));
+  // the narration as the voice step made it, with one plain gain (toward -14 LUFS, stopping where its own peaks reach
+  // -1 dBTP): the same for every sample, never a limiter (soundtrack v1); the QC expects the level that gain gives
+  const vm = measure(join(c.work, 'out', 'voice', 'narration.wav'));
+  const vgain = vm ? plainGain(vm.i, vm.tp) : 0;
+  const vr = spawnSync('ffmpeg', ['-hide_banner', '-nostdin', '-y', '-i', join(c.work, 'out', 'voice', 'narration.wav'), '-af', `volume=${vgain.toFixed(2)}dB`, '-c:a', 'pcm_f32le', join(c.work, 'video', 'public', 'voice.wav')], { encoding: 'utf8' });
+  if (vr.status !== 0) return give('the narration could not be copied for the animatic');
+  c.voiceLufs = vm ? +(vm.i + vgain).toFixed(1) : -14;
   // transitions that need WebGL render with --gl=angle
   const lib = env.MFX_TRANSITIONS ? readJsonOr(join(env.MFX_TRANSITIONS, 'catalog.json'), { transitions: [] }) : { transitions: [] };
   const gl = c.board.cuts.some((x) => (lib.transitions.find((t) => t.id === x.transition)?.requires || []).includes('webgl2'));
@@ -252,7 +260,7 @@ export async function quickAnimatic({ root, id, view, run, runArgs, config, onAc
     { id: 'text-contrast', result: 'pass', note: checks['text-contrast'] },
     { id: 'frame-sheet', result: 'pass', note: `checks/animatic-sheet.png (qc.mjs, about a frame a second) viewed: ${checks['frame-sheet']}` },
     { id: 'format', result: 'pass', note: `qc.mjs passes: the video's own size, ${FPS} fps, ${Math.round(seconds)} s, no black or frozen stretch but the designed end hold.` },
-    { id: 'loudness', result: 'pass', note: `qc.mjs: ${lufs || 'integrated loudness inside -14 LUFS ±1'}, true peak ${tp || '≤ -1 dBTP'}; the approved narration as mastered at the voice step, no music yet.` },
+    { id: 'loudness', result: 'pass', note: `qc.mjs: ${lufs || `integrated loudness inside ${c.voiceLufs} LUFS ±1`}, true peak ${tp || '≤ -1 dBTP'}; the approved narration untouched but for one plain gain (toward -14 LUFS, stopped by its own peaks at -1 dBTP), no music yet.` },
     { id: 'sync', result: 'pass', note: `The approved narration plays as it is; src/timing.ts holds its word starts and every move is placed on one. Each beat's scene in out/scenes.json starts ${LEAD} s before its first word.` },
     { id: 'music-source', result: 'n/a', note: 'No music yet: the music step scores this timing.' },
     { id: 'transitions-carried', result: 'pass', note: `The approved board's ${c.board.cuts.length} cuts from src/cuts.ts, at their lengths, in src/Main.tsx's TransitionSeries.` },

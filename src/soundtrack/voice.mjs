@@ -13,7 +13,7 @@ const SILENT = 10 ** (-50 / 20);
 const LEAD = 0.06;
 const TAIL = 0.1;
 
-async function voiceId(key, name) {
+async function findVoice(key, name) {
   const r = await fetch(`https://api.elevenlabs.io/v2/voices?search=${encodeURIComponent(name)}&page_size=20`, { headers: { 'xi-api-key': key } });
   const v = (await r.json()).voices?.find((x) => x.name === name) || null;
   if (!v) throw new Error(`no ElevenLabs voice named "${name}"`);
@@ -35,19 +35,21 @@ export function wordsFrom(alignment) {
   return words.filter((w) => /[\p{L}\p{N}]/u.test(w.text));
 }
 
-export async function makeVoice({ work, key, voice = 'Tracy K', model = 'eleven_v4', stability = 0.5, similarity = 0.75, log = () => {} }) {
+export async function makeVoice({ work, key, voice = 'Tracy K', voiceId = null, model = 'eleven_v4', stability = 0.5, similarity = 0.75, speakerBoost = true, log = () => {} }) {
   const lines = JSON.parse(readFileSync(join(work, 'voice', 'lines.json'), 'utf8'));
   const dir = join(work, 'sound', 'voice');
   mkdirSync(join(dir, 'lines'), { recursive: true });
-  const id = await voiceId(key, voice);
+  const id = voiceId || await findVoice(key, voice);
   const clips = [];
   for (const l of lines) {
     const pcm = join(dir, 'lines', `${l.id}.pcm`); const meta = join(dir, 'lines', `${l.id}.json`);
-    if (!existsSync(pcm) || !existsSync(meta)) {
+    // a line is recorded again whenever its text, voice or model changed (the cache is never stale)
+    const had = existsSync(meta) ? JSON.parse(readFileSync(meta, 'utf8')) : null;
+    if (!existsSync(pcm) || !had || had.text !== l.text || had.voice_id !== id || had.model !== model) {
       log(`ElevenLabs: ${l.id}`);
       const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${id}/with-timestamps?output_format=${FORMAT}`, {
         method: 'POST', headers: { 'xi-api-key': key, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: l.text, model_id: model, voice_settings: { stability, similarity_boost: similarity } }),
+        body: JSON.stringify({ text: l.text, model_id: model, voice_settings: { stability, similarity_boost: similarity, use_speaker_boost: speakerBoost } }),
       });
       if (!r.ok) throw new Error(`ElevenLabs ${r.status} on ${l.id}: ${(await r.text()).slice(0, 200)}`);
       const j = await r.json();
@@ -73,11 +75,17 @@ export async function makeVoice({ work, key, voice = 'Tracy K', model = 'eleven_
     out.set(c.samples, at);
     const t0 = at / RATE;
     timing.lines.push({ id: c.line.id, text: c.line.script || c.line.text, start: +(t0).toFixed(3), end: +(t0 + c.samples.length / RATE).toFixed(3),
-      words: c.words.map((w) => ({ text: w.text, start: +(t0 + w.start).toFixed(3), end: +(t0 + w.end).toFixed(3) })) });
+      timing: 'words', words: c.words.map((w) => ({ text: w.text, start: +(t0 + w.start).toFixed(3), end: +(t0 + w.end).toFixed(3) })) });
     at += c.samples.length + Math.round((c.line.gap_after ?? 0.3) * RATE);
   }
   timing.seconds = +(total / RATE).toFixed(3);
   writeWav(join(dir, 'voice.wav'), [out], RATE);
   writeFileSync(join(dir, 'timing.json'), JSON.stringify(timing, null, 1));
   return { file: join(dir, 'voice.wav'), timing, voice, model, format: FORMAT };
+}
+
+// One plain gain for listening to the voice alone (the animatic): toward -14 LUFS, stopping where the voice's own peaks
+// reach the ceiling. Never a limiter: the gain is the same for every sample.
+export function plainGain(i, tp, target = -14, ceiling = -1) {
+  return Math.min(target - i, ceiling - tp);
 }

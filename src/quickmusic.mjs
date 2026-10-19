@@ -18,15 +18,14 @@ import { loadProject, projectPaths, projectPipeline } from './projects.mjs';
 import { stepView, stepChecks, submit } from './gates.mjs';
 import { scriptView } from './svc/script.mjs';
 import { loadTheme } from './svc/theme.mjs';
-import { tempoMap, placeOf, sectionsFromScenes, planProblems, blueprintFrom, composeChecked, scoreText, instrumentsFor, balanceGains, nudge, usedParts, ROLES, PARTS, VARIATIONS, PALETTES, HIT_KINDS } from './music/compose.mjs';
-import { readWav, levelOf } from '../pipelines/_shared/skills/music/lib/wav.mjs';
+import { makeSoundtrack } from './soundtrack/index.mjs';
+import { tempoMap, placeOf, sectionsFromScenes, planProblems, blueprintFrom, composeChecked, scoreText, usedParts, ROLES, PARTS, VARIATIONS, PALETTES, HIT_KINDS } from './music/compose.mjs';
 
 const CHECKS = ['loudness', 'sync', 'music-check', 'music-instruments', 'music-source', 'music-under-voice'];
 const M = join(REPO, 'pipelines', '_shared', 'skills', 'music', 'strudel.mjs');
 const QC = join(REPO, 'pipelines', '_shared', 'skills', 'final-pass', 'qc.mjs');
 const FPS = 30;
 const MAX_FIXES = 2;
-const UNDER = 20; // dB the music sits under the voice while it speaks (owner, 2026-10-19: 18 was "a smidge too loud")
 
 const read = (f, n = 200_000) => (existsSync(f) ? readFileSync(f, 'utf8').slice(0, n) : '');
 const r3 = (x) => Math.round(x * 1000) / 1000;
@@ -175,42 +174,6 @@ export function planPrompt(c, sections, cuts, fix) {
   ].filter(Boolean).join('\n\n');
 }
 
-// Under-voice: the music's level (after ducking) against the voice's, on every spoken line (RMS, dB).
-export function underVoice(c, voiceWav, duckedWav, offset) {
-  const v = readWav(voiceWav); const m = readWav(duckedWav);
-  const rows = c.timing.lines.filter((l) => l.end - l.start > 0.8).map((l) => {
-    const a = levelOf(v, l.start, l.end).rms_db; const b = levelOf(m, l.start, l.end).rms_db;
-    return { id: l.id, voice: a, music: b, under: +(a - b).toFixed(1) };
-  }).filter((r) => r.music > -90 && r.voice > -60);
-  const unders = rows.map((r) => r.under).sort((x, y) => x - y);
-  return { rows, min: unders[0] ?? null, median: unders[Math.floor(unders.length / 2)] ?? null, offset };
-}
-
-// The mix under the voice (music SKILL.md §8): bar 1 at offset_sec, sidechain ducking, then two-pass loudnorm to
-// -14 LUFS / -1.5 dBTP; the music alone after ducking is kept for the under-voice measurement.
-export async function mixUnderVoice(c, voiceRel, map, musicDb) {
-  mkdirSync(join(c.work, 'audio'), { recursive: true });
-  const ms = Math.round(map.offset_sec * 1000);
-  const V = c.videoSec.toFixed(3);
-  const graph = `[0:a]aresample=48000,apad=whole_dur=${V},asplit=2[v1][v2];[1:a]aresample=48000,adelay=${ms}|${ms},volume=${musicDb}dB,atrim=0:${V},afade=t=out:st=${Math.max(0, c.videoSec - 0.5).toFixed(3)}:d=0.5[m];[m][v1]sidechaincompress=threshold=0.03:ratio=8:attack=20:release=450,asplit=2[duck][dk];[v2][duck]amix=inputs=2:normalize=0[out]`;
-  let r = await exec('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-i', voiceRel, '-i', 'out/music/score.wav', '-filter_complex', graph, '-map', '[out]', '-ar', '48000', '-c:a', 'pcm_f32le', 'audio/mix-pre.wav', '-map', '[dk]', '-ar', '48000', '-c:a', 'pcm_f32le', 'audio/music-ducked.wav'], { cwd: c.work });
-  if (r.code !== 0) return { ok: false, error: `the mix: ${tail(r.out, 400)}` };
-  const LN = 'loudnorm=I=-14:TP=-1.5:LRA=11';
-  r = await exec('ffmpeg', ['-hide_banner', '-i', 'audio/mix-pre.wav', '-af', `${LN}:print_format=json`, '-f', 'null', '-'], { cwd: c.work });
-  const m1 = JSON.parse(r.out.slice(r.out.lastIndexOf('{'), r.out.lastIndexOf('}') + 1) || '{}');
-  // already at the delivery level (the mastered voice carries it: the music sits far under it): no gain to add, so
-  // the mix stays as it is; a second pass would ride the level for a few hundredths of a dB
-  if (Math.abs(Number(m1.input_i) + 14) <= 0.5 && Number(m1.input_tp) <= -1) {
-    r = await exec('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-i', 'audio/mix-pre.wav', '-ar', '48000', '-c:a', 'pcm_s24le', 'audio/mix.wav'], { cwd: c.work });
-    if (r.code !== 0) return { ok: false, error: `the mix: ${tail(r.out, 400)}` };
-    return { ok: true, linear: true, loudnorm: { input_i: m1.input_i, input_tp: m1.input_tp, normalization_type: 'none (already at -14 LUFS)' } };
-  }
-  r = await exec('ffmpeg', ['-hide_banner', '-y', '-i', 'audio/mix-pre.wav', '-af', `${LN}:measured_I=${m1.input_i}:measured_TP=${m1.input_tp}:measured_LRA=${m1.input_lra}:measured_thresh=${m1.input_thresh}:offset=${m1.target_offset}:linear=true:print_format=json`, '-ar', '48000', '-c:a', 'pcm_s24le', 'audio/mix.wav'], { cwd: c.work });
-  const m2 = JSON.parse(r.out.slice(r.out.lastIndexOf('{'), r.out.lastIndexOf('}') + 1) || '{}');
-  if (r.code !== 0) return { ok: false, error: `the loudness pass: ${tail(r.out, 400)}` };
-  return { ok: true, linear: m2.normalization_type !== 'dynamic', loudnorm: m2 };
-}
-
 // The cue plan and the notes, shared by the music step and the soundtrack system (src/soundtrack): one plan call with the
 // craft in it (a fix call with only the errors when the plan or the engine refuses it), the tempo fitted to the cuts
 // and the plan's key words inside the plan's range, the notes by code, checked with the engine's own harmony lock and
@@ -301,97 +264,35 @@ export async function quickMusic({ root, id, view, run, runArgs, config, onActiv
   if (/\bno music\b/i.test(String(c.project.intake?.answers?.music || ''))) return give('the brief asks for no music');
   const own = /MIDI/i.test(String(c.project.intake?.answers?.music || '')) || c.theme?.finish === 'own';
 
-  // 1. the picture: the animatic's length, the cuts, one section per scene (no AI)
+  // 1-6. Soundtrack v1 (owner approved 2026-10-19, src/soundtrack): the plan and the notes, real instruments (no sample
+  // boosted past 12 dB, a synth where one still fails), the stems, the effects from the SFX pack, the Dubstage mix
+  // (the voice untouched and proven so, the score held under it, one plain delivery gain), then onto the animatic
   const probe = await exec('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', 'out/animatic.mp4'], { cwd: c.work });
   c.videoSec = +Number(probe.out).toFixed(3);
   if (!(c.videoSec > 5)) return give('the animatic\'s length couldn\'t be read');
-  const cuts = cutHits(c);
-  if (!c.scenes.length) return give('no scenes to score');
   const mu = join(c.work, 'music');
-  const pc = await planAndCompose({ c, cuts, call, config, env, onActivity, stopped });
-  if (pc.stopped) return { ok: false, error: 'stopped', usage };
-  if (!pc.ok) return give(pc.error);
-  const { plan, bp, composed, map, sections } = pc;
-  writeFileSync(join(mu, 'score.strudel.js'), scoreText({ notes: composed.notes, bp, plan }));
-
-  // 4. the engine's check (captures the MIDI), the instruments, the audition
-  onActivity({ kind: 'info', text: 'Checking the score and capturing the MIDI.' });
-  const ck = await engine(c, env, 'check', '--video-sec', String(c.videoSec), '--fps', String(FPS));
-  if (stopped()) return { ok: false, error: 'stopped', usage };
-  if (ck.code !== 0) return give(`strudel.mjs check: ${tail(ck.out, 300)}`);
-  const used = usedParts(composed.notes);
-  const inst = instrumentsFor(plan.palette, used);
-  let audition = null;
-  for (let round = 0; round < 6; round++) {
-    writeFileSync(join(mu, 'instruments.json'), `${JSON.stringify(inst, null, 2)}\n`);
-    const ins = await engine(c, env, 'instruments');
-    if (ins.code !== 0) return give(`strudel.mjs instruments: ${tail(ins.out, 300)}`);
-    onActivity({ kind: 'info', text: 'Auditioning every instrument across its range.' });
-    audition = await engine(c, env, 'audition');
+  let st;
+  try {
+    st = await makeSoundtrack({ root, id, run, runArgs, config, stages: ['music', 'effects', 'mix'], videoSec: c.videoSec, log: (t) => onActivity({ kind: 'info', text: String(t).split('\n')[0].slice(0, 200) }) });
+  } catch (e) {
     if (stopped()) return { ok: false, error: 'stopped', usage };
-    const rep = readJsonOr(join(mu, 'audition.json'), { parts: [] });
-    // every instrument sounds: level each part to its place in the mix from what the audition measured, then again
-    if (audition.code === 0) { if (round < 3 && balanceGains(inst, rep)) continue; break; }
-    // a part clipping alone comes down, a silent one goes up; then the audition again
-    let changed = false;
-    for (const p of rep.parts.filter((x) => !x.ok)) {
-      const part = inst.parts.find((x) => x.channel === p.channel);
-      if (!part) continue;
-      for (const n of p.notes.filter((x) => x.peak_db < -50 || x.peak_db > -0.3)) {
-        // a kit moves only its failing piece; a pitched part moves as a whole
-        const v = part.kit ? part.kit[String(n.note).replace('GM ', '')] : part;
-        if (!v) continue;
-        nudge(v, n.peak_db > -0.3 ? -6 : Math.min(30, -30 - n.peak_db));
-        changed = true;
-        if (!part.kit) break;
-      }
-    }
-    if (!changed) break;
+    return give(e.message);
   }
-  if (audition.code !== 0) return give(`strudel.mjs audition: ${tail(audition.out, 300)}`);
-
-  // 5. the render, through the render queue; a score that peaks over -1 dBFS (the parts add up) comes down as a whole,
-  // every part by the same amount so the balance stays, and renders again
-  let score = null;
-  for (let round = 0; round < 3; round++) {
-    onActivity({ kind: 'info', text: round ? 'The parts add up too hot: turning the whole score down and rendering again.' : 'Rendering the music.' });
-    const job = renders.add({ projectId: id, sessionId, label: 'music', argv: [process.execPath, M, 'render'], cwd: c.work, env: { ...process.env, ...env } });
-    let v = job;
-    while (!['done', 'failed'].includes(v.state)) v = await renders.wait(job.id, id, 300);
-    if (stopped()) return { ok: false, error: 'stopped', usage };
-    if (!(v.state === 'done' && v.exit_code === 0 && existsSync(join(c.work, 'out', 'music', 'score.wav')))) return give(`the render failed: ${tail(v.output_tail || v.error, 300)}`);
-    score = levelOf(readWav(join(c.work, 'out', 'music', 'score.wav')));
-    if (score.peak_db < -50) return give('the render is silent');
-    if (score.peak_db <= -1) break;
-    const k = 10 ** ((Math.min(-6 - score.peak_db, -21 - score.rms_db)) / 20);
-    for (const p of inst.parts) p.gain = +Math.max(0.01, (p.gain ?? 0.8) * k).toFixed(4);
-    writeFileSync(join(mu, 'instruments.json'), `${JSON.stringify(inst, null, 2)}\n`);
-  }
-  if (score.peak_db > -1) return give(`the score still peaks at ${score.peak_db} dBFS`);
-  await exec('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-i', 'out/music/score.wav', '-c:a', 'libmp3lame', '-b:a', '256k', 'out/music/score.mp3'], { cwd: c.work });
+  usage.input_tokens += st.usage.input_tokens; usage.output_tokens += st.usage.output_tokens;
+  const sr = st.report;
+  const plan = readJsonOr(join(mu, 'plan.json'), {});
+  const bp = readJsonOr(join(mu, 'blueprint.json'), {});
+  const bpb = String(bp.meter || '4/4').startsWith('3') ? 3 : 4;
+  const map = { bpm: bp.bpm, meter: bp.meter, offset_sec: bp.offset_sec, bars: bp.bars, sec_per_bar: +(bpb * 60 / bp.bpm).toFixed(3) };
+  const sections = bp.sections.map((x) => ({ start_sec: map.offset_sec + (x.start_bar - 1) * map.sec_per_bar }));
+  const used = new Set(sr.music.parts.map((p) => p.channel));
+  await exec('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-i', 'out/music/score.wav', '-c:a', 'libmp3lame', '-b:a', '320k', 'out/music/score.mp3'], { cwd: c.work });
   await exec('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-i', 'out/music/score.wav', '-lavfi', 'showspectrumpic=s=1600x400', 'music/spectrum.png'], { cwd: c.work });
-
-  // 6. the mix under the voice (the animatic's own narration), measured line by line, then onto the animatic
-  onActivity({ kind: 'info', text: 'Mixing the music under the voice.' });
-  const voiceRel = existsSync(join(c.work, 'video', 'public', 'voice.wav')) ? 'video/public/voice.wav' : 'out/voice/narration.wav';
-  let musicDb = -4; let mix = null; let uv = null;
-  for (let round = 0; round < 4; round++) {
-    mix = await mixUnderVoice(c, voiceRel, map, musicDb);
-    if (!mix.ok) return give(mix.error);
-    uv = underVoice(c, join(c.work, voiceRel), join(c.work, 'audio', 'music-ducked.wav'), map.offset_sec);
-    // the music at UNDER dB under the words (±2), up or down (owner, 2026-10-19: v1 at 25 dB under was too quiet);
-    // loud enough that loudnorm had to ride the level: down 2 dB, and again
-    const off = uv.median !== null ? uv.median - UNDER : 0;
-    if (!mix.linear) { musicDb -= 2; continue; }
-    if (Math.abs(off) > 2 && round < 3) { musicDb = Math.min(12, musicDb + Math.round(off)); continue; }
-    break;
-  }
-  if (!mix.linear) return give('the mix\'s peaks are too hot for a fixed loudness gain');
-  const mux = await exec('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-i', 'out/animatic.mp4', '-i', 'audio/mix.wav', '-map', '0:v', '-map', '1:a', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '256k', '-t', String(c.videoSec), 'out/animatic-music.mp4'], { cwd: c.work });
+  const mux = await exec('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-i', 'out/animatic.mp4', '-i', 'sound/mix.wav', '-map', '0:v', '-map', '1:a', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '320k', '-t', String(c.videoSec), 'out/animatic-music.mp4'], { cwd: c.work });
   if (mux.code !== 0) return give(`putting the mix on the animatic: ${tail(mux.out, 300)}`);
   const vt = read(join(c.work, 'video', 'src', 'video.ts'));
   const size = `${vt.match(/width:\s*(\d+)/)?.[1] || 1920}x${vt.match(/height:\s*(\d+)/)?.[1] || 1080}`;
-  await exec(process.execPath, [QC, 'out/animatic-music.mp4', '--size', size, '--fps', String(FPS), '--duration', String(Math.round(c.videoSec)), '--lufs', '-14', '--true-peak', '-1', '--end-hold', '--json', 'checks/qc-music.json'], { cwd: c.work });
+  await exec(process.execPath, [QC, 'out/animatic-music.mp4', '--size', size, '--fps', String(FPS), '--duration', String(Math.round(c.videoSec)), '--lufs', String(sr.mix.lufs), '--true-peak', '-1', '--end-hold', '--json', 'checks/qc-music.json'], { cwd: c.work });
   const qc = readJsonOr(join(c.work, 'checks', 'qc-music.json'), { checks: [] });
   const q = (k) => (qc.checks || []).find((x) => x.id === k);
   const audioFails = (qc.checks || []).filter((x) => /^audio\./.test(x.id) && x.result === 'fail');
@@ -409,7 +310,7 @@ export async function quickMusic({ root, id, view, run, runArgs, config, onActiv
     `**Tempo:** ${map.bpm} BPM, ${map.meter}, bar 1 at ${map.offset_sec} s (a bar is ${map.sec_per_bar} s), ${map.bars} bars. The plan asked ${plan.tempo.bpm_min}-${plan.tempo.bpm_max} BPM (${plan.tempo.why}); the studio chose the tempo inside it that lands the most cuts and key words on the grid.`, '',
     `**Sound (stand-in):** ${plan.palette}: ${plan.palette_why}`, '',
     '| bars | time (s) | section | intensity | chords | melody | parts | function | why |', '|---|---|---|---|---|---|---|---|---|',
-    ...bp.sections.map((s, i) => `| ${s.start_bar}-${s.end_bar} | ${sections[i].start_sec.toFixed(2)} | ${cell(s.name)} | ${s.intensity} | ${cell(plan.sections[i].chords.map((x) => (Array.isArray(x) ? x.join(' ') : x)).join(' · '))} | ${s.variation} | ${(s.parts || []).join(', ')} | ${cell(s.function)} | ${cell(s.why)} |`), '',
+    ...bp.sections.map((s, i) => `| ${s.start_bar}-${s.end_bar} | ${sections[i].start_sec.toFixed(2)} | ${cell(s.name)} | ${s.intensity} | ${cell((bp.chart[i]?.chords || []).map((x) => (Array.isArray(x) ? x.join(' ') : x)).join(' · '))} | ${s.variation} | ${(s.parts || []).join(', ')} | ${cell(s.function)} | ${cell(s.why)} |`), '',
     '## Key words (the music answers each where it is said)', '',
     '| time (s) | word | music | off by | response | why |', '|---|---|---|---|---|---|',
     ...(bp.key_words || []).map((k) => `| ${k.t_sec} | ${cell(k.word)} | bar ${k.bar} beat ${k.beat} | ${k.off_sec >= 0 ? '+' : ''}${k.off_sec} s | ${k.response} | ${cell(k.why)} |`), '',
@@ -423,15 +324,15 @@ export async function quickMusic({ root, id, view, run, runArgs, config, onActiv
   const lufs = q('audio.loudness')?.detail; const tp = q('audio.true-peak')?.detail;
   const hitRows = (check.hits || []).filter((h) => h.kind !== 'none');
   const error_checks = [
-    { id: 'loudness', result: 'pass', note: `qc.mjs on out/animatic-music.mp4: ${lufs || 'loudness inside -14 LUFS ±1'}, true peak ${tp || '≤ -1 dBTP'}; ${/none/.test(mix.loudnorm?.normalization_type || '') ? 'the mix was already at -14 LUFS (the mastered voice carries it), so no loudness pass' : 'two-pass loudnorm with a fixed gain (linear)'}. The score alone peaks at ${score.peak_db} dBFS. Measured only: nothing here is by ear.` },
-    { id: 'sync', result: 'pass', note: `${hitRows.length ? `${hitRows.length} hit${hitRows.length === 1 ? '' : 's'} within a frame: ${hitRows.map((h) => `bar ${h.bar} beat ${h.beat ?? 1} (${h.off_sec >= 0 ? '+' : ''}${h.off_sec} s)`).join(', ')}.` : 'No hits at this tempo.'}${bp.hits.some((h) => h.kind === 'none') ? ` ${bp.hits.filter((h) => h.kind === 'none').length} cut(s) play as no hit.` : ''} ${bp.key_words?.length ? ` ${bp.key_words.length} key words answered where they are said: ${bp.key_words.filter((k) => Math.abs(k.off_sec) <= 1 / FPS).length} within a frame, the rest on the nearest sixteenth (largest ${Math.max(...bp.key_words.map((k) => Math.abs(k.off_sec))).toFixed(3)} s off).` : ''} The music starts at bar 1 = ${map.offset_sec} s (adelay ${Math.round(map.offset_sec * 1000)} ms). The picture and voice are the approved animatic's, unchanged (video copied).` },
+    { id: 'loudness', result: 'pass', note: `qc.mjs on out/animatic-music.mp4: ${lufs || `${sr.mix.lufs} LUFS`}, true peak ${tp || `${sr.mix.true_peak_dbtp} dBTP`}. Dubstage set one plain gain (${sr.mix.delivery_gain_db} dB) for the whole soundtrack, no limiter: the level is where the untouched voice's own peaks allow (owner's choice, 2026-10-19). The score alone peaks at ${sr.music.score_peak_db} dBFS. Measured only: nothing here is by ear.` },
+    { id: 'sync', result: 'pass', note: `${hitRows.length ? `${hitRows.length} hit${hitRows.length === 1 ? '' : 's'} within a frame: ${hitRows.map((h) => `bar ${h.bar} beat ${h.beat ?? 1} (${h.off_sec >= 0 ? '+' : ''}${h.off_sec} s)`).join(', ')}.` : 'No hits at this tempo.'}${bp.hits.some((h) => h.kind === 'none') ? ` ${bp.hits.filter((h) => h.kind === 'none').length} cut(s) play as no hit.` : ''} ${bp.key_words?.length ? ` ${bp.key_words.length} key words answered where they are said: ${bp.key_words.filter((k) => Math.abs(k.off_sec) <= 1 / FPS).length} within a frame, the rest on the nearest sixteenth (largest ${Math.max(...bp.key_words.map((k) => Math.abs(k.off_sec))).toFixed(3)} s off).` : ''} The music starts at bar 1 = ${map.offset_sec} s (adelay ${Math.round(map.offset_sec * 1000)} ms). The picture is the approved animatic's (video copied); the voice is the approved narration, untouched.` },
     { id: 'music-check', result: 'pass', note: `strudel.mjs check --video-sec ${c.videoSec} --fps ${FPS}: 0 problems (harmony locked, the curve follows the sections, hits on the picture). MIDI captured: music/notes.json, out/music/midi/. The notes were written by code from the cue plan, every pitched note a chord tone.` },
-    { id: 'music-instruments', result: 'pass', note: `strudel.mjs instruments and audition pass on ${inst.parts.length} channels (a stand-in ${plan.palette} palette of real instruments from VCSL, CC0, chosen by the studio; each part levelled from its audition).` },
+    { id: 'music-instruments', result: 'pass', note: `strudel.mjs instruments and audition pass on ${sr.music.parts.length} channels: a ${sr.music.palette} palette of real instruments (VCSL, CC0), each levelled from its audition, none boosted past 12 dB (${sr.music.parts.map((p) => `${p.role} ${p.sound} ${p.boost_db >= 0 ? '+' : ''}${p.boost_db}`).join(', ')})${sr.music.synth_fallbacks.length ? `; a synth plays ${sr.music.synth_fallbacks.join(', ')} (its sample needed more)` : ''}.` },
     { id: 'music-source', result: 'n/a', note: own ? 'This is the music step itself: the Strudel stand-in for review. The owner\'s own master (strudel.mjs own-master) comes in at the build.' : 'This is the music step itself: the approved Strudel render is used from here on.' },
-    { id: 'music-under-voice', result: 'pass', note: `Sidechain ducking, music at ${musicDb} dB into the mix: measured by RMS on every spoken line, the music sits ${uv.min} to ${Math.max(...uv.rows.map((r) => r.under))} dB under the voice (median ${uv.median}). Measured, not listened to.` },
+    { id: 'music-under-voice', result: 'pass', note: `Dubstage: the score sits ${sr.mix.music_under_voice_db} dB under the voice while it speaks (target 20; 10 in the gaps), dipping just before each word, with a gentle 2.5 kHz cut under speech. The voice itself is untouched: mix minus everything else = the voice x ${sr.mix.voice_gain_db} dB, leftover ${sr.mix.voice_residual_db} dB. ${(sr.effects || []).length} effects from the SFX pack (${(sr.effects || []).map((e) => `${e.sound} at ${e.moment} s`).join(', ')}). Measured, not listened to.` },
   ].filter((x) => stepChecks(root, id, 'music').some((k) => k.id === x.id));
   const curve = (check.intensity || []).map((s) => `${s.name} ${s.asked}→${s.measured}`).join(' · ');
-  const note = `${plan.note}\n\n"${plan.title}": ${map.bpm} BPM, ${map.meter}, ${plan.scale}, ${map.bars} bars, ${used.size} parts. The story: ${plan.dramatic_reading}. Intensity asked → measured: ${curve}.\n\nThe studio wrote the notes from one AI cue plan (no session). These are measurements, not listening: judge it by ear.${own ? ' It\'s a stand-in: the MIDI pack is ready on the project page (Music › Download MIDI) for you to finish the sound in your DAW.' : ''}`;
+  const note = `${plan.note}\n\n"${plan.title}": ${map.bpm} BPM, ${map.meter}, ${plan.scale}, ${map.bars} bars, ${used.size} parts, ${(sr.effects || []).length} effects. The story: ${plan.dramatic_reading}. Intensity asked → measured: ${curve}.\n\nThe studio wrote the notes from one AI cue plan and mixed everything with Dubstage (soundtrack v1, no session); the mix is also in sound/mix.wav (lossless) and sound/mix.mp3. These are measurements, not listening: judge it by ear.${own ? ' It\'s a stand-in: the MIDI pack is ready on the project page (Music › Download MIDI) for you to finish the sound in your DAW.' : ''}`;
   try {
     submit(root, id, 'music', {
       note, questions: [], error_checks,
@@ -441,6 +342,7 @@ export async function quickMusic({ root, id, view, run, runArgs, config, onActiv
         { path: 'music/MUSIC-SHEET.md', label: 'Music sheet' },
         { path: 'music/SPOTTING.md', label: 'Spotting map' },
         { path: 'music/spectrum.png', label: 'Spectrum of the score' },
+        { path: 'sound/REPORT.md', label: 'Soundtrack report (with the voice proof)' },
       ].filter((it) => existsSync(join(c.work, it.path))),
     });
   } catch (e) { return give(`the submission was refused: ${e.message}`); }

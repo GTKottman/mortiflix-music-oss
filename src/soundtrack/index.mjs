@@ -18,6 +18,7 @@ import { context, planAndCompose, engine, exec } from '../quickmusic.mjs';
 import { instrumentsFor, balanceGains, nudge, toSynth, usedParts, MAX_BOOST } from '../music/compose.mjs';
 import { readWav, levelOf } from '../../pipelines/_shared/skills/music/lib/wav.mjs';
 import { makeVoice } from './voice.mjs';
+import { voiceConfig } from '../voice/index.mjs';
 import { loadPack, planEffects } from './effects.mjs';
 
 const FPS = 30;
@@ -44,7 +45,7 @@ function moments(c, timing) {
   return { scenes, cuts };
 }
 
-export async function makeSoundtrack({ root, id, run, runArgs = {}, config = {}, stages = ['voice', 'music', 'effects', 'mix'], log = console.log }) {
+export async function makeSoundtrack({ root, id, run, runArgs = {}, config = {}, stages = ['voice', 'music', 'effects', 'mix'], videoSec = null, log = console.log }) {
   const c = context(root, id);
   const env = { ...process.env, ...(runArgs.env || {}) };
   const dir = join(c.work, 'sound');
@@ -57,18 +58,22 @@ export async function makeSoundtrack({ root, id, run, runArgs = {}, config = {},
   if (stages.includes('voice')) {
     const key = readJson(join(root, 'secrets.json'), {}).elevenlabs_api_key || env.ELEVENLABS_API_KEY;
     if (!key) throw new Error('no ElevenLabs key');
-    const v = await makeVoice({ work: c.work, key, log });
+    const el = voiceConfig(root).elevenlabs;
+    const v = await makeVoice({ work: c.work, key, voice: el.voice_name || 'Tracy K', voiceId: el.voice_id, model: el.model_id, stability: el.stability, similarity: el.similarity_boost, speakerBoost: el.use_speaker_boost !== false, log });
     const lv = levelOf(readWav(v.file));
     report.voice = { file: 'sound/voice/voice.wav', source: `ElevenLabs ${v.model}, voice ${v.voice}, ${v.format} (lossless)`, seconds: v.timing.seconds, lines: v.timing.lines.length, peak_db: lv.peak_db, processing: 'none: silent edges cut, lines joined with the script\'s gaps' };
     save();
     log(`voice: ${v.timing.lines.length} lines, ${v.timing.seconds} s, ${v.format}, peak ${lv.peak_db} dBFS, unprocessed`);
   }
-  const timing = readJson(join(dir, 'voice', 'timing.json'));
-  if (!timing) throw new Error('no voice yet (stage voice)');
+  // the soundtrack's own voice, or (a project voiced before soundtrack v1) the voice step's narration, used as it is
+  const own = existsSync(join(dir, 'voice', 'voice.wav'));
+  const timing = readJson(join(dir, 'voice', 'timing.json')) || readJson(join(c.work, 'voice', 'timing.json'));
+  const voiceFile = own ? join(dir, 'voice', 'voice.wav') : join(c.work, 'out', 'voice', 'narration.wav');
+  if (!timing || !existsSync(voiceFile)) throw new Error('no voice yet (stage voice)');
   c.timing = timing;
   const { scenes, cuts } = moments(c, timing);
   c.scenes = scenes;
-  c.videoSec = +(timing.seconds + END_HOLD).toFixed(3);
+  c.videoSec = videoSec || +(timing.seconds + END_HOLD).toFixed(3);
   const mu = join(c.work, 'music');
 
   // 2. the music
@@ -147,13 +152,13 @@ export async function makeSoundtrack({ root, id, run, runArgs = {}, config = {},
     const notes = readJson(join(mu, 'notes.json'), { tracks: [] });
     const stems = notes.tracks.map((t) => { const f = join(c.work, 'out', 'music', 'stems', `${String(t.channel).padStart(2, '0')}-${t.name.replace(/[^\w-]+/g, '-').replace(/^-|-$/g, '').toLowerCase()}.wav`); return existsSync(f) ? `${f}=${ROLE_OF[t.channel] || 'Auto'}@${bp.offset_sec}:${t.name}` : null; }).filter(Boolean);
     const fx = (report.effects || []).map((e) => `${e.file}@${e.at}=${e.strength}:${e.label.replace(/\s+/g, '_')}`);
-    const args = [join(dir, 'mix.wav'), '--voice', join(dir, 'voice', 'voice.wav'), '--bpm', String(bp.bpm), '--offset', String(bp.offset_sec), '--bpb', String(bp.meter?.startsWith('3') ? 3 : 4),
+    const args = [join(dir, 'mix.wav'), '--voice', voiceFile, '--bpm', String(bp.bpm), '--offset', String(bp.offset_sec), '--bpb', String(bp.meter?.startsWith('3') ? 3 : 4),
       '--delivery', 'web', '--under', '20', '--gap-under', '10', '--report', join(dir, 'mix-report.json'), '--bus-out', join(dir, 'bus.wav'), ...stems, ...fx];
-    const r = await exec(DUBSTAGE, args, { timeout: 10 * 60_000 });
+    const r = await exec(env.MFX_DUBSTAGE || DUBSTAGE, args, { timeout: 10 * 60_000 });
     if (r.code !== 0) throw new Error(`mix: dubstage: ${r.out.slice(-400)}`);
     log(r.out);
     // the proof: mix - bus = the voice (centred) times one gain, to the last sample
-    const mix = readWav(join(dir, 'mix.wav')); const bus = readWav(join(dir, 'bus.wav')); const voice = readWav(join(dir, 'voice', 'voice.wav'));
+    const mix = readWav(join(dir, 'mix.wav')); const bus = readWav(join(dir, 'bus.wav')); const voice = readWav(voiceFile);
     let xy = 0; let xx = 0;
     const n = Math.min(mix.channels[0].length, voice.channels[0].length);
     for (let i = 0; i < n; i++) { const d = mix.channels[0][i] - bus.channels[0][i]; const v = voice.channels[0][i] * Math.SQRT1_2; xy += d * v; xx += v * v; }
