@@ -9,7 +9,11 @@ export function readWav(fileOrBuf) {
   let fmt = null; let data = null;
   for (let o = 12; o + 8 <= b.length;) {
     const id = b.toString('latin1', o, o + 4); const size = b.readUInt32LE(o + 4);
-    if (id === 'fmt ') fmt = { format: b.readUInt16LE(o + 8), channels: b.readUInt16LE(o + 10), rate: b.readUInt32LE(o + 12), bits: b.readUInt16LE(o + 22) };
+    if (id === 'fmt ') {
+      fmt = { format: b.readUInt16LE(o + 8), channels: b.readUInt16LE(o + 10), rate: b.readUInt32LE(o + 12), bits: b.readUInt16LE(o + 22) };
+      // WAVE_FORMAT_EXTENSIBLE (hound, many tools): the real format is the first two bytes of the sub-format GUID
+      if (fmt.format === 0xfffe && size >= 40) fmt.format = b.readUInt16LE(o + 8 + 24);
+    }
     if (id === 'data') { data = b.subarray(o + 8, Math.min(b.length, o + 8 + size)); break; }
     o += 8 + size + (size % 2);
   }

@@ -462,7 +462,13 @@ const TARGET_RMS = { 1: -20, 2: -27, 3: -20, 4: -28, 5: -26, 10: -26 };
 const PEAK_MAX = -3;
 const mean = (xs) => xs.reduce((x, y) => x + y, 0) / xs.length;
 export function nudge(v, d) { level(v, 'gain', d); }
+// A sample is never turned up more than MAX_BOOST dB in all from its palette level: a quiet recording boosted further
+// brings its own noise up with it (2026-10-19: a bowed vibraphone at +26 dB laid a haze under the whole score).
+export const MAX_BOOST = 12;
 function level(v, gainKey, d) {
+  const was = v.boost_db || 0;
+  d = Math.min(d, MAX_BOOST - was);
+  v.boost_db = +(was + d).toFixed(2);
   const post = Number(String(v.set || '').match(/\.postgain\(([\d.]+)\)/)?.[1] || 1);
   const total = Math.max(0.03, Math.min(1.5 * 60, (v[gainKey] ?? 0.8) * post * 10 ** (d / 20)));
   v[gainKey] = +Math.min(1.5, total).toFixed(3);
@@ -482,7 +488,8 @@ export function balanceGains(inst, audition) {
       const heard = ns.filter((n) => n.rms_db > -90);
       if (!heard.length) continue;
       const d = Math.min(target - mean(heard.map((n) => n.rms_db)), PEAK_MAX - Math.max(...heard.map((n) => n.peak_db)));
-      if (Math.abs(d) <= 1) continue;
+      const room = Math.min(d, MAX_BOOST - (v.boost_db || 0));
+      if (Math.abs(room) <= 1) continue;
       level(v, 'gain', d);
       moved = true;
     }
@@ -498,4 +505,37 @@ export function usedParts(notes) {
     if (n.part === 'drums') used.get('drums').add(n.pitch);
   }
   return used;
+}
+
+// A part (or a kit piece) the audition still finds silent or clipping after levelling falls back to a built-in synth
+// that always sounds (no sample, no noise floor): the soundtrack never stops on one bad recording.
+const SYNTH_FALLBACK = {
+  1: ['sine', '.lpf(400).attack(.01).release(.25)', 0.75],
+  2: ['sawtooth', '.lpf(1100).hpf(140).attack(.4).release(.6).room(.25).size(.5)', 0.22],
+  3: ['triangle', '.lpf(2400).attack(.02).release(.4).room(.2)', 0.4],
+  4: ['square', '.lpf(1600).hpf(250).attack(.003).decay(.12).sustain(0).release(.05)', 0.15],
+  5: ['sine', '.fm(2).fmh(3).attack(.002).decay(.6).sustain(0).release(.8).hpf(400).room(.35)', 0.3],
+};
+const SYNTH_KIT = {
+  36: { sound: 'sine', set: '.penv(18).pdecay(.08).decay(.25).sustain(0)', gain: 1 },
+  39: { sound: 'pink', set: '.hpf(900).decay(.12).sustain(0).room(.2)', gain: 0.5 },
+  42: { sound: 'white', set: '.hpf(7000).decay(.035).sustain(0)', gain: 0.3 },
+  45: { sound: 'sine', set: '.penv(7).pdecay(.15).decay(.3).sustain(0)', gain: 0.7 },
+  49: { sound: 'white', set: '.hpf(5000).decay(1.2).sustain(0).room(.3)', gain: 0.25 },
+};
+export function toSynth(inst, channel, gm = null) {
+  const p = inst.parts.find((x) => x.channel === channel);
+  if (!p) return false;
+  if (p.kit) {
+    const k = SYNTH_KIT[gm];
+    if (!k || !p.kit[String(gm)]) return false;
+    p.kit[String(gm)] = { ...k, fallback: `was ${p.kit[String(gm)].sound}` };
+    return true;
+  }
+  const f = SYNTH_FALLBACK[channel];
+  if (!f) return false;
+  const was = p.sound;
+  Object.assign(p, { sound: f[0], set: f[1], gain: f[2], boost_db: 0, fallback: `was ${was}` });
+  delete p.source;
+  return true;
 }
