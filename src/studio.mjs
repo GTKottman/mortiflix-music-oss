@@ -28,6 +28,7 @@ export const DEFAULT_CONFIG = {
   webTools: true,                   // anthropic-api: give sessions web search + web fetch
   fallbacks: true,                  // anthropic-api: server-side refusal fallbacks
   leanSessions: true,               // claude-code: sessions skip your own MCP servers, plugins, skills and global CLAUDE.md
+  quickScript: true,                // claude-code: the script is written by one quick call, not a whole session
   sandbox: false,                   // claude-code on Linux: run each session inside bubblewrap
   maxSessionMinutes: 240,
   renderPrefix: [],                 // wraps every `mfx render` command, e.g. a machine-wide queue: ["render-queue", "-l", "{label}", "--"]

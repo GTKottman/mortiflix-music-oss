@@ -83,7 +83,7 @@ export async function run({ root, workdir, prompt, env, transcript, onActivity, 
   if (code !== 0 || result?.is_error) {
     return { ok: false, error: (result?.result || stderr || `claude exited with ${code}`).toString().slice(-1000), usage, cost_usd: result?.total_cost_usd, billing };
   }
-  return { ok: true, usage, cost_usd: result?.total_cost_usd, billing, summary: result?.result };
+  return { ok: true, usage, cost_usd: result?.total_cost_usd, billing, summary: result?.result, structured: result?.structured_output };
 }
 
 // The studio's Craft apps (written by prepareWorkdir when any is installed): their MCP servers, and their tools allowed
