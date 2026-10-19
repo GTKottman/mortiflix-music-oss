@@ -147,7 +147,7 @@ function planPrompt(c, map, sections, hits, fix) {
 }
 
 // Under-voice: the music's level (after ducking) against the voice's, on every spoken line (RMS, dB).
-function underVoice(c, voiceWav, duckedWav, offset) {
+export function underVoice(c, voiceWav, duckedWav, offset) {
   const v = readWav(voiceWav); const m = readWav(duckedWav);
   const rows = c.timing.lines.filter((l) => l.end - l.start > 0.8).map((l) => {
     const a = levelOf(v, l.start, l.end).rms_db; const b = levelOf(m, l.start, l.end).rms_db;
@@ -159,7 +159,7 @@ function underVoice(c, voiceWav, duckedWav, offset) {
 
 // The mix under the voice (music SKILL.md §8): bar 1 at offset_sec, sidechain ducking, then two-pass loudnorm to
 // -14 LUFS / -1.5 dBTP; the music alone after ducking is kept for the under-voice measurement.
-async function mixUnderVoice(c, voiceRel, map, musicDb) {
+export async function mixUnderVoice(c, voiceRel, map, musicDb) {
   mkdirSync(join(c.work, 'audio'), { recursive: true });
   const ms = Math.round(map.offset_sec * 1000);
   const V = c.videoSec.toFixed(3);
@@ -309,13 +309,15 @@ export async function quickMusic({ root, id, view, run, runArgs, config, onActiv
   onActivity({ kind: 'info', text: 'Mixing the music under the voice.' });
   const voiceRel = existsSync(join(c.work, 'video', 'public', 'voice.wav')) ? 'video/public/voice.wav' : 'out/voice/narration.wav';
   let musicDb = -4; let mix = null; let uv = null;
-  for (let round = 0; round < 3; round++) {
+  for (let round = 0; round < 4; round++) {
     mix = await mixUnderVoice(c, voiceRel, map, musicDb);
     if (!mix.ok) return give(mix.error);
     uv = underVoice(c, join(c.work, voiceRel), join(c.work, 'audio', 'music-ducked.wav'), map.offset_sec);
-    const short = uv.median !== null ? UNDER - uv.median : 0;
-    // too loud under the words, or loud enough that loudnorm had to ride the level: down, and again
-    if (short > 2 || !mix.linear) { musicDb -= Math.max(2, Math.round(short)); continue; }
+    // the music at UNDER dB under the words (±2), up or down (owner, 2026-10-19: v1 at 25 dB under was too quiet);
+    // loud enough that loudnorm had to ride the level: down 2 dB, and again
+    const off = uv.median !== null ? uv.median - UNDER : 0;
+    if (!mix.linear) { musicDb -= 2; continue; }
+    if (Math.abs(off) > 2 && round < 3) { musicDb = Math.min(12, musicDb + Math.round(off)); continue; }
     break;
   }
   if (!mix.linear) return give('the mix\'s peaks are too hot for a fixed loudness gain');
