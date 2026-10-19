@@ -93,6 +93,8 @@ pub struct View {
     pub frames: Vec<Frame>,
     pub shots: Vec<Shot>,
     pub can_more: bool,
+    /// The video's shape, width / height (16:9 → 1.78, 9:16 → 0.56): the frames are drawn in it.
+    pub aspect: f32,
 }
 
 impl View {
@@ -150,7 +152,9 @@ impl View {
             })
             .collect();
         let using = Some(text(v, "using", 24)).filter(|u| !u.is_empty());
-        Self { loaded: true, using, frames, shots, can_more: v.get("can_more").and_then(Value::as_bool).unwrap_or(false) }
+        // a shape between 1:4 and 4:1, else 16:9
+        let aspect = v.get("aspect").and_then(Value::as_f64).filter(|a| a.is_finite() && (0.25..=4.0).contains(a)).map_or(16.0 / 9.0, |a| a as f32);
+        Self { loaded: true, using, frames, shots, can_more: v.get("can_more").and_then(Value::as_bool).unwrap_or(false), aspect }
     }
 
     pub fn frame(&self, id: &str) -> Option<&Frame> {
@@ -190,6 +194,8 @@ pub struct LookState {
     pub note: String,
     /// The Music theme page is open (Change…).
     pub theme_open: bool,
+    /// The look menu is open over the style frames (Look menu…).
+    pub show_menu: bool,
     #[serde(skip)]
     theme_draft: Option<MusicTheme>,
     #[serde(skip)]
@@ -308,6 +314,11 @@ pub fn tick(state: &mut MfxState, service: &mut Service) {
 
 /// Stage 2's main panel (PanelKind::MfxStage on stage 2).
 pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
+    // before any style frame: ask for the look first (owner, 2026-10-18)
+    if crate::look_menu::wanted(ui, ctx) {
+        crate::look_menu::show(ui, ctx);
+        return;
+    }
     let t = ctx.theme;
     let full = ui.max_rect();
     let view = ctx.state.look.view.clone();
@@ -326,6 +337,12 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
                 .on_hover_text("The AI makes two more looks to pick from; the ones here stay")
                 .on_disabled_hover_text(if making { "The new looks are being made" } else { "No more looks can be added" });
             ctx.auto("mfx.look.more", &b, "Make more looks");
+            let menu = ui.add(egui::Button::new(RichText::new("Look menu…").size(12.0).color(t.text)).fill(t.hover).corner_radius(4.0));
+            let menu = menu.on_hover_text("The look these are made from: style pack, font, colours, vibe and look");
+            ctx.auto("mfx.look.menu", &menu, "Look menu…");
+            if menu.clicked() {
+                ctx.state.look.show_menu = true;
+            }
             if b.clicked() {
                 let id = ctx.service.request("look.more", json!({}));
                 ctx.state.look.ops.push((id, "Making 2 more looks: they appear here when they're ready.".into()));
@@ -383,8 +400,13 @@ fn note(ui: &mut egui::Ui, ctx: &MfxCtx) {
 fn frames(ui: &mut egui::Ui, ctx: &mut MfxCtx, view: &View) {
     let t = ctx.theme;
     let w = ui.available_width();
-    let cols = (((w + GAP) / (CARD_MIN_W + GAP)).floor() as usize).clamp(1, 3);
-    let card_w = ((w - GAP * (cols as f32 - 1.0)) / cols as f32).max(80.0);
+    // the frames in the video's own shape: a vertical video's frames are tall, so more fit across
+    // and none is taller than the panel shows at once (owner, 2026-10-18)
+    let aspect = if view.aspect > 0.0 { view.aspect } else { 16.0 / 9.0 };
+    let min_w = if aspect < 1.0 { CARD_MIN_W * 0.62 } else { CARD_MIN_W };
+    let cols = (((w + GAP) / (min_w + GAP)).floor() as usize).clamp(1, if aspect < 1.0 { 5 } else { 3 });
+    let max_h = (ui.clip_rect().height() - 90.0).max(160.0);
+    let card_w = ((w - GAP * (cols as f32 - 1.0)) / cols as f32).max(80.0).min(max_h * aspect);
     let busy = ctx.state.look.busy();
     for row in view.frames.chunks(cols) {
         ui.horizontal_top(|ui| {
@@ -394,7 +416,7 @@ fn frames(ui: &mut egui::Ui, ctx: &mut MfxCtx, view: &View) {
                     ui.set_width(card_w);
                     let on = view.using.as_deref() == Some(f.id.as_str());
                     let name = if f.name.is_empty() { f.label.clone() } else { f.name.clone() };
-                    let r = picture(ui, ctx, card_w, &f.path, on, !f.making);
+                    let r = picture(ui, ctx, card_w, aspect, &f.path, on, !f.making);
                     let r = if f.making {
                         r.on_hover_text("Being made")
                     } else if on {
@@ -450,11 +472,11 @@ fn frames(ui: &mut egui::Ui, ctx: &mut MfxCtx, view: &View) {
     }
 }
 
-/// A fixed 16:9 frame with the picture cropped to fill it (nothing drawn over it); `on` = the look
-/// in use (outlined), else hover outlines it.
-fn picture(ui: &mut egui::Ui, ctx: &MfxCtx, w: f32, path: &str, on: bool, clickable: bool) -> egui::Response {
+/// A frame in the video's shape (`aspect` = width / height) with the picture cropped to fill it
+/// (nothing drawn over it); `on` = the look in use (outlined), else hover outlines it.
+fn picture(ui: &mut egui::Ui, ctx: &MfxCtx, w: f32, aspect: f32, path: &str, on: bool, clickable: bool) -> egui::Response {
     let t = ctx.theme;
-    let (r, resp) = ui.allocate_exact_size(vec2(w, w * 9.0 / 16.0), if clickable { Sense::click() } else { Sense::hover() });
+    let (r, resp) = ui.allocate_exact_size(vec2(w, w / aspect.max(0.1)), if clickable { Sense::click() } else { Sense::hover() });
     ui.painter().rect_filled(r, 4.0, t.field_bg);
     let p = std::path::Path::new(path);
     if !path.is_empty() && p.is_absolute() {

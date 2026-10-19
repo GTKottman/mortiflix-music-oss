@@ -18,6 +18,7 @@ pub mod export;
 pub mod gates;
 pub mod into_edit;
 pub mod look;
+pub mod look_menu;
 pub mod new_project;
 pub mod nodes;
 pub mod preview;
