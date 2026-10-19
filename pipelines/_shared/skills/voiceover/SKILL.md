@@ -92,7 +92,8 @@ models take turns on the GPU.
 
 ## 3. Build
 
-`build` joins the clips with their gaps into `voice/voice.wav` (48 kHz mono) and writes `voice/timing.json`: every
+`build` trims each clip to its words (the dead air at a take's edges is cut, with tiny fades; `--no-trim` keeps
+them whole), joins the clips with their gaps into `voice/voice.wav` (48 kHz mono) and writes `voice/timing.json`: every
 line's start and end, and every word's start and end when the check measured them (`"timing": "words"`), otherwise
 the line only. Turn the times you animate to into frames (`Math.round(seconds * fps)`) in `video/src/timing.ts`,
 and copy `voice.wav` into `video/public/`. Never cut inside a word: cut in the silences.

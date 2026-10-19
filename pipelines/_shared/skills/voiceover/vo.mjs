@@ -4,7 +4,8 @@
 //
 //   node .claude/skills/voiceover/vo.mjs check
 //   node .claude/skills/voiceover/vo.mjs speak voice/lines.json [--only id,id] [--max-takes 3] [--jobs N]
-//   node .claude/skills/voiceover/vo.mjs build voice/lines.json [--gap 0.4]     → voice/voice.wav + voice/timing.json
+//   node .claude/skills/voiceover/vo.mjs build voice/lines.json [--gap 0.4] [--no-trim] → voice/voice.wav + voice/timing.json
+//        (each clip is trimmed to its words, 0.06 s before the first and 0.12 s after the last, when the check timed them)
 //
 // voice/lines.json: [{ "id": "b01-1", "text": "[warm] The words as spoken.", "script": "The words as spoken.", "gap_after": 0.5 }]
 //   text   what the voice reads (ElevenLabs v4 takes [audio tags] and "/IPA/"; the local voice reads `script` if given)
@@ -48,7 +49,23 @@ function lines() {
 
 // The words as they should be heard: tags and IPA out, spelled normally.
 const heard = (l) => String(l.script || l.text).replace(/\[[^\]]*\]/g, ' ').replace(/"?\/[^/\s][^/]*\/"?/g, ' ');
-const words = (s) => String(s).toLowerCase().replace(/[’']/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim().split(' ').filter(Boolean);
+// Numbers compared as words: speech to text writes "29" or "29.5" where the script says "twenty-nine" (or the other way).
+const ONES = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
+const TENS = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+function spell(n) {
+  if (n < 20) return ONES[n];
+  if (n < 100) return `${TENS[Math.floor(n / 10)]}${n % 10 ? ` ${ONES[n % 10]}` : ''}`;
+  if (n < 1000) return `${ONES[Math.floor(n / 100)]} hundred${n % 100 ? ` ${spell(n % 100)}` : ''}`;
+  for (const [v, w] of [[1e9, 'billion'], [1e6, 'million'], [1e3, 'thousand']]) if (n >= v) return `${spell(Math.floor(n / v))} ${w}${n % v ? ` ${spell(n % v)}` : ''}`;
+  return String(n);
+}
+const numbers = (s) => String(s).replace(/(\d),(?=\d{3}\b)/g, '$1').replace(/\b(\d{1,12})(?:\.(\d+))?\b/g, (_, i, d) => {
+  const n = Number(i);
+  // years said as two pairs ("nineteen seventy-nine")
+  const whole = !d && i.length === 4 && n >= 1100 && n < 2100 && n % 100 >= 10 && !(n >= 2000 && n < 2010) ? `${spell(Math.floor(n / 100))} ${spell(n % 100)}` : spell(n);
+  return d ? `${whole} point ${[...d].map((c) => ONES[Number(c)]).join(' ')}` : whole;
+});
+const words = (s) => numbers(String(s).toLowerCase()).replace(/[’']/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim().split(' ').filter(Boolean);
 
 // How much of the script was said: matched words (longest common subsequence) and the longest run left out or added.
 function compare(script, transcript) {
@@ -284,10 +301,21 @@ function build() {
     const clip = ['.wav', '.mp3', '.flac', '.opus'].map((e) => join(OUT, 'clips', `${l.id}${e}`)).find(existsSync);
     if (!clip) die(`no clip for ${l.id}: speak it first`);
     const wav = join(OUT, 'build', `${l.id}.wav`);
-    run(['ffmpeg', '-y', '-loglevel', 'error', '-i', clip, '-ar', '48000', '-ac', '1', wav]);
-    const d = duration(wav);
     const meta = existsSync(join(OUT, 'clips', `${l.id}.json`)) ? JSON.parse(readFileSync(join(OUT, 'clips', `${l.id}.json`), 'utf8')) : {};
-    const ws = (meta.words || []).map((w) => ({ text: w.text, start: r3(t + w.start), end: r3(t + w.end) }));
+    // The dead air at a take's edges (up to 0.6 s on ElevenLabs) cut away: from just before the first word to just
+    // after the last, with 20 ms fades so the cut never clicks. Untimed lines are kept whole.
+    const timed = (meta.words || []).filter((w) => Number.isFinite(w.start) && Number.isFinite(w.end) && w.end > w.start);
+    const full = duration(clip);
+    const cut = !args.includes('--no-trim') && timed.length
+      ? [Math.max(0, timed[0].start - 0.06), Math.min(full || Infinity, timed.at(-1).end + 0.12)]
+      : null;
+    if (cut && cut[1] - cut[0] > 0.2) {
+      const len = cut[1] - cut[0];
+      run(['ffmpeg', '-y', '-loglevel', 'error', '-ss', String(cut[0]), '-t', String(len), '-i', clip, '-af', `afade=t=in:d=0.02,afade=t=out:st=${Math.max(0, len - 0.02)}:d=0.02`, '-ar', '48000', '-ac', '1', wav]);
+    } else run(['ffmpeg', '-y', '-loglevel', 'error', '-i', clip, '-ar', '48000', '-ac', '1', wav]);
+    const d = duration(wav);
+    const off = cut && cut[1] - cut[0] > 0.2 ? cut[0] : 0;
+    const ws = (meta.words || []).map((w) => ({ text: w.text, start: r3(t + Math.max(0, w.start - off)), end: r3(t + Math.min(d, w.end - off)) }));
     timing.push({ id: l.id, text: heard(l).replace(/\s+/g, ' ').trim(), start: r3(t), end: r3(t + d), words: ws, timing: ws.length ? 'words' : 'line' });
     parts.push(wav);
     t += d;

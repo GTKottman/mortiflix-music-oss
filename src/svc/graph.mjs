@@ -312,9 +312,21 @@ export function shotTimeline(root, id, gv = graphView(root, id)) {
   return { shots, length_sec: round3(t) };
 }
 
+// What speech-to-text heard in a line's kept take (voice/clips/<id>.json), so the owner can check the words:
+// `heard` is null and `checked` false when nothing listened (a voice with no speech-to-text, or the owner's own take);
+// `words_ok` is the check's verdict when it ran.
+function heardOf(work, lineId) {
+  try {
+    const j = JSON.parse(readFileSync(join(work, 'voice', 'clips', `${lineId}.json`), 'utf8'));
+    const heard = typeof j.transcript === 'string' ? j.transcript.slice(0, 2000) : null;
+    return { heard, checked: heard !== null, words_ok: heard !== null ? j.pass !== false : null };
+  } catch { return { heard: null, checked: false, words_ok: null }; }
+}
+
 // Voice clips at their times (hand-set start wins), music with its cues' times.
 export function soundTimeline(root, id, gv, shots) {
   const mix = loadMix(root, id);
+  const work = projectPaths(root, id).work;
   const beatStart = {};
   for (const s of shots) if (s.beat && beatStart[s.beat] === undefined) beatStart[s.beat] = s.start_sec;
   const cursor = {};
@@ -324,7 +336,7 @@ export function soundTimeline(root, id, gv, shots) {
     const len = n.end_sec != null && n.start_sec != null ? round3(n.end_sec - n.start_sec) : null;
     const at = m.start_sec ?? n.start_sec ?? ((beatStart[n.beat] ?? 0) + (cursor[n.beat] || 0));
     cursor[n.beat] = (cursor[n.beat] || 0) + (len || 0);
-    return { node: n.id, label: n.label, words: n.title, beat: n.beat, beat_no: n.beat_no, colour: n.colour, state: n.state, version: n.plays, path: v?.path || null, start_sec: round3(at), dur_sec: len, gain_db: m.gain_db ?? 0, voice: m.voice ?? null, timing_locked: m.start_sec !== undefined };
+    return { node: n.id, label: n.label, words: n.title, beat: n.beat, beat_no: n.beat_no, colour: n.colour, state: n.state, version: n.plays, path: v?.path || null, start_sec: round3(at), dur_sec: len, gain_db: m.gain_db ?? 0, voice: m.voice ?? null, timing_locked: m.start_sec !== undefined, ...heardOf(work, n.id) };
   });
   const music = gv.nodes.find((n) => n.id === 'music' && !n.missing);
   const mv = music?.versions.find((x) => x.v === music.plays);
