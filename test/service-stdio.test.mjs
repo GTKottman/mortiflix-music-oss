@@ -72,7 +72,7 @@ test('stdio: the app\'s whole path on the demo backend, each stage made once the
   const asked = await s.wait((m) => m.event === 'chat.message' && m.data.card?.waiting, 60_000, 'the brief questions');
   for (const q of asked.data.card.questions) await s.request('chat.answer', { question: q.id, value: q.default });
   // The runner makes the script, then waits at its gate; Next on each stage lets the next one be made.
-  await s.wait((m) => m.event === 'chat.message' && m.data.card?.kind === 'script', 60_000, 'the script card');
+  await s.wait((m) => m.event === 'chat.message' && /ready in the Mortiflix Script box/.test(m.data.text), 60_000, 'the script message');
   for (const from of [0, 1, 2, 3]) {
     const key = ['voice', 'styleFrames', 'transitions', 'animatic'][from];
     await s.request('stage.set', { stage: from + 1, from, done: true });

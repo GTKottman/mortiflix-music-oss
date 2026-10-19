@@ -101,7 +101,7 @@ test('service core: new project from preset + idea + assets + theme, the whole f
   let chat = await call('chat.history');
   const briefQs = chat.find((r) => r.card?.waiting);
   assert.ok(briefQs, "the brief questions wait in the chat");
-  assert.ok(!chat.some((r) => r.card?.kind === 'script'), 'no script before the answers');
+  assert.ok(!chat.some((r) => /Mortiflix Script box/.test(r.text)), 'no script before the answers');
   const [first, ...rest] = briefQs.card.questions;
   await call('chat.answer', { question: first.id, value: first.default });
   await run();
@@ -114,7 +114,9 @@ test('service core: new project from preset + idea + assets + theme, the whole f
   assert.equal(chat[0].role, 'user');
   assert.match(chat.map((r) => r.text).join('\n'), /that's every answer/);
   assert.equal(readJson(join(root, 'state', id, 'reviews', 'brief', 'v1', 'feedback.json')).answers.find((a) => a.id === rest[0].id).answer, 'My own words');
-  assert.ok(chat.some((r) => r.card?.kind === 'script' && r.card.beats.length === 4));
+  // the script is in the Mortiflix Script box: the chat says so without listing it
+  const ready = chat.find((r) => /The script is ready in the Mortiflix Script box: 4 beats\./.test(r.text));
+  assert.ok(ready && !ready.card && ready.refs.length === 4);
   // Nothing is made past a gate: no voice, no looks, no shots while the script waits for the owner.
   assert.ok(!chat.some((r) => r.card?.kind === 'looks'));
   assert.ok(!(await call('graph.get')).nodes.some((n) => ['line', 'frame', 'shot'].includes(n.kind) && n.versions?.length));
