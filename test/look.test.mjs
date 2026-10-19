@@ -56,6 +56,11 @@ test('look: the looks to pick from, pick another (asks first, remakes only the s
   await run();
   await run();
   await run();
+  // pass the gates up to the animatic (nothing is made before its gate)
+  for (const from of [0, 1, 2, 3]) {
+    await call('stage.set', { stage: from + 1, from, done: true });
+    await run();
+  }
 
   const v = await call('look.get');
   assert.equal(v.frames.length, 4);

@@ -123,6 +123,8 @@ export async function run({ root, projectId, workdir, env, onActivity, signal, c
       while (!['done', 'failed'].includes(r.state)) r = await mfx('render-wait', { id: job.id, seconds: 30 });
       if (r.state === 'failed') return { ok: false, error: `the placeholder render failed: ${r.output_tail}` };
       items.push({ path: `out/${step.key}-v${version}/${file}`, label: `${step.name} v${version}` });
+      // The narration: one line per beat with its time, so the voice nodes have lines (quiet tones).
+      if (step.key === 'voice') writeDemoVoice(workdir);
       // The music step's blueprint: one section per beat (the canvas's music cues).
       if (step.key === 'music') {
         mkdirSync(join(workdir, 'music'), { recursive: true });
@@ -137,8 +139,8 @@ export async function run({ root, projectId, workdir, env, onActivity, signal, c
       if (step.review === 'video' && step.key !== 'music') {
         writeFileSync(join(workdir, 'out', 'scenes.json'), JSON.stringify({ made_from: `out/${step.key}-v${version}/${file}`, fps: FPS,
           scenes: BEATS.map(([words], i) => ({ key: `s0${i + 1}`, name: words.replace(/\.$/, ''), from_frame: i * BEAT_SEC * FPS, frames: BEAT_SEC * FPS, beat: `b0${i + 1}` })) }, null, 2));
-        // The narration: one line per beat with its time, so the voice lane and the canvas have lines (quiet tones).
-        if (step.key === 'animatic') writeDemoVoice(workdir);
+        // A pipeline without a voice step: the animatic brings the narration.
+        if (step.key === 'animatic' && !existsSync(join(workdir, 'voice', 'lines.json'))) writeDemoVoice(workdir);
       }
       // The score as mixed, for the music lane and the Mortiflix Studio hand-off (quiet).
       if (step.key === 'music') {

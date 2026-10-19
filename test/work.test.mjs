@@ -22,7 +22,7 @@ const steps = (root, id, done) => update(root, id, (p) => { p.state = 'queued'; 
 
 test('work: nothing is animated while no session runs; the steps before the shots are named', (t) => {
   const { root, id } = project(t);
-  steps(root, id, ['brief', 'script', 'style-frames']);
+  steps(root, id, ['brief', 'script', 'voice', 'style-frames']);
   const w = activeWork(root, id, { running: false, g: canvasView(root, id) });
   assert.equal(w.running, false);
   assert.deepEqual(w.nodes, []);
@@ -31,7 +31,7 @@ test('work: nothing is animated while no session runs; the steps before the shot
 
 test('work: the step the runner is on, its pieces not made yet, and the doing line with progress', (t) => {
   const { root, id } = project(t);
-  steps(root, id, ['brief', 'script', 'style-frames']);
+  steps(root, id, ['brief', 'script', 'voice', 'style-frames']);
   let w = activeWork(root, id, { running: true, g: canvasView(root, id) });
   assert.equal(w.step.key, 'transitions');
   assert.equal(w.doing, 'Making the transitions between shots: cut 1 of 2');
@@ -55,7 +55,7 @@ test('work: the service sends work.active and the status line says what the AI d
   const svc = createService({ root, send: (m) => out.push(m), runner: false, tickMs: 0 });
   t.after(() => svc.close());
   await svc.handle({ id: 1, type: 'project.open', params: { id } });
-  steps(root, id, ['brief', 'script', 'style-frames', 'transitions']);
+  steps(root, id, ['brief', 'script', 'voice', 'style-frames', 'transitions']);
   update(root, id, (p) => { p.session = { running: true, id: 'x' }; });
   svc.poke(0);
   await new Promise((r) => setTimeout(r, 60));
@@ -79,10 +79,10 @@ test('stage statuses: shots count only shots (never the transition board), and a
   syncCanvas(root, id);
   const { stageStatuses } = await import('../src/svc/stages.mjs');
   const st = stageStatuses(root, id);
-  assert.equal(st[2].total, 3, 'three shots, the two transitions not counted');
-  assert.equal(st[2].text, '0/3 shots');
-  assert.equal(st[3].kind, 'ready');
-  assert.equal(st[3].text, '2/2 voice lines and cues ready');
+  assert.equal(st[4].total, 3, 'three shots, the two transitions not counted');
+  assert.equal(st[4].text, '0/3 shots');
+  assert.equal(st[1].kind, 'ready');
+  assert.equal(st[1].text, '2/2 voice lines ready');
 });
 
 test('a stop says when Claude Code\'s login is the cause, and project.resume carries on', async (t) => {

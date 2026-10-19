@@ -1,7 +1,7 @@
 {
   "slug": "explainer",
   "name": "Explainer video",
-  "description": "A 30 second to 2 minute motion design explainer: script, style frames, animatic, final. Built in Remotion.",
+  "description": "A 30 second to 2 minute motion design explainer: script, voice, style frames, transitions, animatic, music, final. Built in Remotion.",
   "makes": "video",
   "shared_skills": [
     "motion-design",
@@ -102,6 +102,20 @@
       "canvas": "beat"
     },
     {
+      "key": "voice",
+      "name": "Voice",
+      "review": "audio",
+      "when": "voice",
+      "work": [
+        "audio"
+      ],
+      "after": [
+        "script"
+      ],
+      "describe": "The approved script read aloud, one voice line per sentence, with word timings. The owner checks each scene's voice (OK, Fix with a note, or a different voice) before anything is drawn.",
+      "canvas": "line"
+    },
+    {
       "key": "style-frames",
       "name": "Style frames",
       "review": "frames",
@@ -109,9 +123,9 @@
         "stills"
       ],
       "after": [
-        "brief"
+        "voice"
       ],
-      "describe": "Three to five finished-quality stills that fix the look. Runs beside the script.",
+      "describe": "Three to five finished-quality stills that fix the look, made after the script and voice are approved.",
       "canvas": "frame"
     },
     {
@@ -123,7 +137,6 @@
       ],
       "describe": "How each style frame becomes the next: for every cut, the object that carries it, the reason, a transition from the remotion-transitions library (or a new one inspired by it), and real in-between frames.",
       "after": [
-        "script",
         "style-frames"
       ],
       "canvas": "transition"
@@ -139,7 +152,7 @@
       "after": [
         "transitions"
       ],
-      "describe": "Every beat timed to the narration with simple motion in the approved look. No music yet: the score is written to this timing next.",
+      "describe": "Every beat timed to the approved narration with simple motion in the approved look, cut with the approved transitions. No music yet: the score is written to this timing next.",
       "canvas": "shot"
     },
     {

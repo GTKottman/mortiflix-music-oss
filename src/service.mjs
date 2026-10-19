@@ -18,7 +18,7 @@ import * as gates from './gates.mjs';
 import { RenderQueue } from './renderq.mjs';
 import { voiceOverview, saveVoice } from './voice/index.mjs';
 import { boothStatus, addTake, keepTake } from './booth.mjs';
-import { STAGES, STAGE_NAMES, stageIndex, stageStatuses, stageDone, handOverToApp, remakesIf, reopenStage, saveLastStage, stageOf } from './svc/stages.mjs';
+import { STAGES, STAGE_NAMES, stageIndex, stageStatuses, stageDone, handOverToApp, remakesIf, reopenStage, saveLastStage, stageOf, mfxView, STAGE_MUSIC, STAGE_EDIT, STAGE_RENDER } from './svc/stages.mjs';
 import { listPresets, getPreset, savePresetFull, deletePreset } from './svc/presets.mjs';
 import { addAsset, updateAsset, replaceAsset, removeAsset, useAsset, listAssets } from './svc/assets.mjs';
 import { loadTheme, saveTheme, themeSamples, setCuePlan, cleanTheme } from './svc/theme.mjs';
@@ -162,7 +162,7 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
     const p = loadProject(root, id);
     if (!['queued', 'waiting'].includes(p.state)) return;
     const pipeline = projectPipelineOf(id);
-    const done = p.mfx?.stages_done || {};
+    const done = mfxView(p).stages_done || {};
     for (const s of gates.stepView(p, pipeline).filter((x) => x.state === 'in_review')) {
       try {
         if (s.review === 'questions' && config.mfxQuestionsBlock !== true) {
@@ -242,7 +242,7 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
 
   function openProject(p, stage = null) {
     state.project = p;
-    state.stage = stage ?? p.mfx?.stage ?? 0;
+    state.stage = stage ?? mfxView(p).stage ?? 0;
     lastNodes = new Map();
     lastProjectState = '';
     lastWork = '';
@@ -293,7 +293,7 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
     'state.get': () => ({ project: state.project, stage: state.stage, stages: state.stages, line: state.line, context: state.context }),
 
     // ---- projects ----
-    'project.list': () => listProjects(root).map((p) => ({ id: p.id, title: p.title, state: p.state, pipeline: p.pipeline, created_at: p.created_at, updated_at: p.updated_at ?? null, stage: p.mfx?.stage ?? 0, delivered: p.state === 'delivered' })),
+    'project.list': () => listProjects(root).map((p) => ({ id: p.id, title: p.title, state: p.state, pipeline: p.pipeline, created_at: p.created_at, updated_at: p.updated_at ?? null, stage: mfxView(p).stage ?? 0, delivered: p.state === 'delivered' })),
     'project.new': (p) => {
       const slug = String(p?.preset || p?.pipeline || 'explainer');
       const pipeline = findPipeline(root, slug);
@@ -354,15 +354,15 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
     // ---- stages ----
     'stage.set': (p) => {
       const stage = stageIndex(Number.isInteger(p?.stage) ? p.stage : p?.key);
-      if (stage < 0) bad('stage must be 0-5 or a stage key');
+      if (stage < 0) bad('stage must be 0-7 or a stage key');
       const from = stageIndex(p?.from);
       let out = {};
       const id = projectId();
       if (p?.done === true && from >= 0) {
         if (id) {
           out = stageDone(root, id, from);
-          // Leaving Voice & music: the app builds the edit (Edit the video) or renders straight away (Get the video).
-          if (from === 3 && stage >= 4) out.handover = handOverToApp(root, id, stage === 5 ? 'get' : 'edit');
+          // Leaving Music: the app builds the edit (Edit the video) or renders straight away (Get the video).
+          if (from === STAGE_MUSIC && stage >= STAGE_EDIT) out.handover = handOverToApp(root, id, stage === STAGE_RENDER ? 'get' : 'edit');
           chatRow(id, { role: 'action', text: `Next: ${STAGE_NAMES[stage]} (${STAGE_NAMES[from]} kept as it is)` });
         } else state.stages[from] = { kind: 'done' };
       }
@@ -597,7 +597,7 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
       try { plan.subtitles_moved = await placeSubtitles({ captions: plan.captions, shots, cacheDir: join(canvasPaths(root, id).dir, 'ink') }); } catch { /* placed at the bottom as before */ }
       return plan;
     },
-    'handoff.done': (p) => { const id = needProject(p); const r = graph.saveHandoff(root, id, p?.map || p); chatRow(id, { role: 'stage', text: STAGE_NAMES[4], stage: 4 }); poke(); return r; },
+    'handoff.done': (p) => { const id = needProject(p); const r = graph.saveHandoff(root, id, p?.map || p); chatRow(id, { role: 'stage', text: STAGE_NAMES[STAGE_EDIT], stage: STAGE_EDIT }); poke(); return r; },
     'handoff.get': (p) => ({ map: graph.loadHandoff(root, needProject(p)) }),
     'handoff.swaps': (p) => graph.handoffSwaps(root, needProject(p)),
     'handoff.swapped': (p) => graph.markSwapped(root, needProject(p), nodeId(p?.node), p?.version, { clip: p?.clip, item: p?.item }),

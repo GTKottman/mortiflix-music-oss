@@ -11,6 +11,10 @@ Tick items as you finish them (`- [x]`). The next session resumes from the first
 - [ ] Fits the length (word count) · facts checked against sources
 - [ ] Script submitted
 
+## Voice (skipped when the brief has no narration)
+- [ ] Approved script read line by line: `voice/lines.json`, `voice/clips/`, `voice/timing.json`
+- [ ] Every clip listened to · voice submitted
+
 ## Style frames
 - [ ] Remotion project set up in `video/` (remotion-motion skill)
 - [ ] Look decided: palette (hex), type (licensed fonts), shape language, texture
@@ -18,7 +22,7 @@ Tick items as you finish them (`- [x]`). The next session resumes from the first
 - [ ] Checks run · style frames submitted
 
 ## Animatic
-- [ ] Narration recorded and timed (or music bed chosen), word timings saved
+- [ ] The approved voice lines and timings used as they are (or music bed chosen)
 - [ ] Every beat placed on the timeline in the approved look
 - [ ] Rendered through `mfx render` · qc.mjs + frame sheet viewed
 - [ ] Animatic submitted

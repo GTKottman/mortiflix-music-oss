@@ -201,13 +201,13 @@ test('canvas: OK, Cut it and Fix; a fix starts a session that remakes only that 
   assert.equal(canvasView(root, p.id).nodes.s04.state, 'ready');
 });
 
-test('canvas: the AI runs ahead through canvas steps; the build waits until all are approved; OK on every piece approves', async (t) => {
+test('canvas: nothing runs ahead of a gate; each step starts only when every step before it is approved; OK on every piece approves', async (t) => {
   const { canvasView, nodeAction } = await import('../src/canvas.mjs');
   const { loadProject } = await import('../src/projects.mjs');
   const { stepView } = await import('../src/gates.mjs');
   const { projectPipeline } = await import('../src/projects.mjs');
   const root = tempStudio(t);
-  const p = createProject(root, { pipeline: 'explainer', title: 'Ahead', answers: { topic: 'tides' } });
+  const p = createProject(root, { pipeline: 'explainer', title: 'Gated', answers: { topic: 'tides' } });
   startProject(root, p.id);
   const runner = new Runner(root);
   runner.acquire();
@@ -216,16 +216,26 @@ test('canvas: the AI runs ahead through canvas steps; the build waits until all 
   await runner.loop();
   respond(root, p.id, 'brief', 1, { verdict: 'approve' });
   await runner.loop();
-  // One go: script, frames, transitions and the animatic all sent, and the music made ahead of any review.
-  assert.deepEqual(states(), { brief: 'approved', script: 'in_review', 'style-frames': 'in_review', transitions: 'in_review', animatic: 'in_review', music: 'in_review', build: 'blocked', final: 'blocked' });
-  respond(root, p.id, 'music', 1, { verdict: 'approve' });
+  // Only the script is made: the voice, the look and everything after wait for its gate.
+  assert.deepEqual(states(), { brief: 'approved', script: 'in_review', voice: 'blocked', 'style-frames': 'blocked', transitions: 'blocked', animatic: 'blocked', music: 'blocked', build: 'blocked', final: 'blocked' });
+  assert.ok(!Object.values(canvasView(root, p.id).nodes).some((n) => ['line', 'frame', 'shot'].includes(n.kind) && n.versions?.length), 'nothing made past the script');
+  respond(root, p.id, 'script', 1, { verdict: 'approve' });
   await runner.loop();
-  assert.equal(states().build, 'blocked', 'the build waits for every canvas step');
-  // OK every frame: the style frames step approves itself.
+  assert.equal(states().voice, 'in_review');
+  assert.equal(states()['style-frames'], 'blocked', 'the look waits for the voice gate');
+  respond(root, p.id, 'voice', 1, { verdict: 'approve' });
+  await runner.loop();
+  // OK every frame: the style frames step approves itself, and only then are the transitions made.
+  assert.equal(states().transitions, 'blocked');
   for (const f of canvasView(root, p.id).order.frames) nodeAction(root, p.id, f, { action: 'ok' });
   assert.equal(states()['style-frames'], 'approved');
-  for (const s of ['script', 'transitions', 'animatic']) respond(root, p.id, s, 1, { verdict: 'approve' });
   await runner.loop();
+  assert.equal(states().transitions, 'in_review');
+  for (const s of ['transitions', 'animatic', 'music']) {
+    assert.equal(states()[s], 'in_review', s);
+    respond(root, p.id, s, 1, { verdict: 'approve' });
+    await runner.loop();
+  }
   assert.equal(states().final, 'in_review', 'all approved: the build ran and the final waits');
 });
 
@@ -260,8 +270,10 @@ test('edit: the final as a Mortiflix Studio project, every shot its own named cl
   runner.acquire();
   t.after(() => runner.release());
   await runner.loop();
-  respond(root, p.id, 'brief', 1, { verdict: 'approve' });
-  await runner.loop();
+  for (const step of ['brief', 'script', 'voice', 'style-frames', 'transitions']) {
+    respond(root, p.id, step, 1, { verdict: 'approve' });
+    await runner.loop();
+  }
   const map = makeEditProject(root, p.id);
   assert.ok(existsSync(map.fcproj));
   assert.deepEqual(map.clips.filter((c) => c.kind === 'shot').map((c) => [c.node, c.start_sec, c.seconds]), [['s01', 0, 2], ['s02', 2, 2], ['s03', 4, 2], ['s04', 6, 2]]);

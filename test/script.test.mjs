@@ -62,6 +62,11 @@ test('script: get, edit a line (its shot and voice line remade, v2), add, delete
   await run();
   await run();
   await run();
+  // pass the gates up to the animatic (nothing is made before its gate)
+  for (const from of [0, 1, 2, 3]) {
+    await call('stage.set', { stage: from + 1, from, done: true });
+    await run();
+  }
 
   const s = await call('script.get');
   assert.equal(s.beats.length, 4);

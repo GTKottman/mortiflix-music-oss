@@ -109,8 +109,11 @@ test('the demo backend writes a song (S11): the browser can try the song lane wi
   runner.acquire();
   t.after(() => runner.release());
   await runner.loop();
-  respond(root, p.id, 'brief', 1, { verdict: 'approve' });
-  await runner.loop();
+  // the music is written once every gate before it is passed
+  for (const step of ['brief', 'script', 'voice', 'style-frames', 'transitions', 'animatic']) {
+    respond(root, p.id, step, 1, { verdict: 'approve' });
+    await runner.loop();
+  }
   const { song, text } = loadSong(root, p.id);
   assert.deepEqual(checkSong(song), []);
   assert.deepEqual(song.patterns.map((x) => [x.id, x.bars]), [['m01', 2], ['m02', 2], ['m03', 2], ['m04', 2]]);

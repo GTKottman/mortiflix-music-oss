@@ -118,8 +118,11 @@ test('the demo backend fixes bars 7–8 end to end: Fix → session → notes ch
   runner.acquire();
   t.after(() => { runner.release(); closeLadder(); });
   await runner.loop();
-  respond(root, p.id, 'brief', 1, { verdict: 'approve' });
-  await runner.loop();
+  // the music is written once every gate before it is passed
+  for (const step of ['brief', 'script', 'voice', 'style-frames', 'transitions', 'animatic']) {
+    respond(root, p.id, step, 1, { verdict: 'approve' });
+    await runner.loop();
+  }
   const before = loadSong(root, p.id).song;
   const cueV = syncCanvas(root, p.id).nodes.m04.versions.length;
   // bars 7–8 of the song are bars 1–2 of m04
