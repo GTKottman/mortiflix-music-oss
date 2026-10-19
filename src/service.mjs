@@ -29,6 +29,7 @@ import { lookView, useLook, moreLooks } from './svc/look.mjs';
 import { appendChat, chatHistory, translateEvents, typedMove, quickReply, applyMove, initChat, actionText, askAI } from './svc/chat.mjs';
 import { nameBeats, unnamed } from './svc/beatnames.mjs';
 import { activeWork } from './svc/work.mjs';
+import { tokenRuns, tokenRun } from './svc/tokens.mjs';
 import { exportTarget, deliverFromApp, postPlan, postSend } from './svc/export.mjs';
 import * as setup from './svc/setup.mjs';
 import { componentsStatus, installComponents, parseComponents } from './components.mjs';
@@ -341,6 +342,14 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
     'project.resume': (p) => { gates.resume(root, needProject(p)); runner?.wake(); poke(); return { resumed: true }; },
     'project.cancel': (p) => { const id = needProject(p); gates.cancel(root, id); runner?.stopProject(id); poke(); return { cancelled: true }; },
     'project.events': (p) => readEvents(root, needProject(p), { limit: Math.min(2000, Number(p?.limit) || 200) }),
+    // Token usage (owner, 2026-10-18): every Claude run newest first, and one run's bars and what it pulled in.
+    'tokens.runs': (p) => { const id = needProject(p); const pr = loadProject(root, id); return tokenRuns(root, id, { running: pr.session?.running ? pr.session.id : null, limit: p?.limit }); },
+    'tokens.run': (p) => {
+      const id = needProject(p);
+      const pr = loadProject(root, id);
+      if (!p?.run) bad('tokens.run needs a run');
+      return tokenRun(root, id, String(p.run), { running: pr.session?.running ? pr.session.id : null, bars: p?.bars, pulled: p?.pulled });
+    },
 
     // ---- stages ----
     'stage.set': (p) => {

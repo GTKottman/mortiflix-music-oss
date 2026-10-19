@@ -29,6 +29,8 @@ answers and every event it sends. Code: `src/service.mjs` (one handler per type)
 | `project.close` | `{}` | `{closed}` |
 | `project.start` / `.pause` / `.resume` / `.cancel` | `{}` | |
 | `project.events` | `{limit?}` | the project's log rows |
+| `tokens.runs` | `{limit?}` | `{runs: [{id, started, ended, running, backend, model, calls, cost_usd, why, input, cache_write, cache_read, output, total}]}`: every Claude run of the project, newest first, raw tokens (helper agents included) |
+| `tokens.run` | `{run, bars?, pulled?}` | `{run, bars: [{key, calls, input, cache_write, cache_read, output, total, examples: [{label, times}], why}], pulled: [{label, group, from, tokens, calls_after, carried}]}`: the run's calls grouped by what they did (sorted by raw tokens; a helper agent is one bar), and what was pulled into the context (`carried` = its tokens × the calls that re-read it). Claude Code's per-call output is estimated from what each call wrote and scaled to the run's exact total; input and cache are exact. Labels never hold file contents; keys in commands are blanked |
 | `stage.set` | `{stage: 0-5 \| key, from?, done?}` | `{stage, key, kept[], left[], handover?}`. `done: true` = the owner's Next on `from`: steps in review are approved as they are (pieces OK'd, questions take their defaults). From 3 to 4 (Edit the video) or 5 (Get the video), the session's build/final steps are skipped: the app builds and renders the edit |
 | `stage.status` | `{}` | `[StageStatus × 6]` (also in every `status` event) |
 | `stage.remakes` | `{stage}` | `{remade: [{step, name, stage, pieces}]}`: what is made again if that stage changes (the "going back" pop-up) |
