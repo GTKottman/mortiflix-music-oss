@@ -244,7 +244,11 @@ impl Mortiflix {
             "getVideo" => moved(self, STAGE_RENDER, true),
             "editVideo" if ask(&mut self.state, false) => Nav::Asked,
             "editVideo" => moved(self, STAGE_EDIT, true),
-            key => moved(self, stage_by_key(key)?, false),
+            // a stage past a gate not yet passed stays shut (the bar draws it grey)
+            key => match stage_by_key(key)? {
+                to if force || self.state.reachable(to) => moved(self, to, false),
+                _ => Nav::Stay,
+            },
         })
     }
     /// A context for drawing one part.
@@ -367,6 +371,15 @@ mod tests {
         assert_eq!(m.navigate("back", false), Some(Nav::Stay));
         assert!(m.state.show_new_project);
         assert_eq!(m.navigate("next", false), Some(Nav::Moved { from: 0, to: 1 }));
+        // past a gate not yet passed: shut, from the bar, a shortcut or an agent alike
+        assert!(!m.state.reachable(STAGE_MUSIC));
+        assert_eq!(m.navigate("music", false), Some(Nav::Stay));
+        assert_eq!(m.state.stage, 1);
+        assert_eq!(m.navigate("script", false), Some(Nav::Moved { from: 1, to: 0 }), "back to a stage reached");
+        assert_eq!(m.navigate("voice", false), Some(Nav::Moved { from: 0, to: 1 }), "and forward to it again");
+        for s in 1..STAGE_MUSIC {
+            m.state.statuses[usize::from(s)].kind = StatusKind::Done;
+        }
         assert_eq!(m.navigate("music", false), Some(Nav::Moved { from: 1, to: STAGE_MUSIC }));
         m.state.statuses[5] = StageStatus { kind: StatusKind::NeedsYou, need: 2, ..StageStatus::default() };
         assert_eq!(m.navigate("getVideo", false), Some(Nav::Asked));

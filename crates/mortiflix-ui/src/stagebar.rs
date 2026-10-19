@@ -81,8 +81,17 @@ pub fn show(ui: &mut egui::Ui, rect: Rect, ctx: &mut MfxCtx) {
         let tab = Rect::from_min_size(pos2(x, rect.min.y), vec2(stage_w, rect.height()));
         x = tab.max.x;
         let here = i == stage;
-        let resp = ui.interact(tab, egui::Id::new(("mfx-stagebar-stage", i)), Sense::click()).on_hover_text(format!("{} {name} (Ctrl+Alt+{})", i + 1, i + 1));
-        if resp.hovered() && !here {
+        let open = ctx.state.reachable(i);
+        // grey well below the other tabs: it can't be opened yet
+        let locked = t.text_faint.gamma_multiply(0.5);
+        let tip = if open {
+            format!("{} {name} (Ctrl+Alt+{})", i + 1, i + 1)
+        } else {
+            let gate = (0..i).find(|k| ctx.state.status(*k).kind != crate::state::StatusKind::Done).unwrap_or(0);
+            format!("{} {name} opens after you pass the {} gate.", i + 1, stage_name(gate))
+        };
+        let resp = ui.interact(tab, egui::Id::new(("mfx-stagebar-stage", i)), if open { Sense::click() } else { Sense::hover() }).on_hover_text(tip);
+        if resp.hovered() && !here && open {
             p.rect_filled(tab.shrink2(vec2(2.0, 4.0)), 4.0, t.hover);
         }
         let tp = p.with_clip_rect(tab.shrink2(vec2(4.0, 0.0)));
@@ -91,6 +100,8 @@ pub fn show(ui: &mut egui::Ui, rect: Rect, ctx: &mut MfxCtx) {
         }
         let name_col = if here {
             t.tab_text_active
+        } else if !open {
+            locked
         } else if resp.hovered() {
             t.text
         } else {
@@ -110,11 +121,13 @@ pub fn show(ui: &mut egui::Ui, rect: Rect, ctx: &mut MfxCtx) {
         if ctx.state.work.stage() == Some(i) {
             crate::work::spinner(&tp, pos2(tab.min.x + 21.0, status_y), 4.0, t.accent_hover, ui.input(|inp| inp.time));
             ui.ctx().request_repaint_after(crate::work::FRAME);
-        } else {
+        } else if open {
             status_icon(&tp, pos2(tab.min.x + 21.0, status_y), &st, &t);
+        } else {
+            tp.circle_stroke(pos2(tab.min.x + 21.0, status_y), 3.5, Stroke::new(1.0, locked));
         }
-        tp.text(pos2(tab.min.x + 30.0, status_y), Align2::LEFT_CENTER, st.line(), FontId::proportional(11.0), if here { t.text_dim } else { t.text_faint });
-        if resp.clicked() {
+        tp.text(pos2(tab.min.x + 30.0, status_y), Align2::LEFT_CENTER, st.line(), FontId::proportional(11.0), if here { t.text_dim } else if open { t.text_faint } else { locked });
+        if resp.clicked() && open {
             ctx.command(&format!("stages.{key}"), json!({}));
         }
         ctx.auto(&format!("mfx.stagebar.{key}"), &resp, name);

@@ -593,7 +593,7 @@ mod tests {
     fn app_with_plan() -> (StudioApp, egui::Context) {
         let mut app = StudioApp::new(mortiflix_engine::Session::default());
         let ctx = egui::Context::default();
-        crate::menus::invoke(&mut app, &ctx, "stages.animatic", json!({})).unwrap();
+        crate::menus::invoke(&mut app, &ctx, "stages.animatic", json!({"force": true})).unwrap(); // a stage set up for the test, past the gates
         let shot = |id: &str, beat: &str, start: f64, len: f64, colour: &str| PlanShot {
             id: id.into(),
             label: format!("Shot {}", &id[1..]),

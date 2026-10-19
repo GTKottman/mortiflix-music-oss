@@ -211,6 +211,12 @@ impl MfxState {
     pub fn looking_back(&self) -> bool {
         self.stage < self.furthest
     }
+    /// Whether stage `i` can be opened: one already reached, or every stage before it passed its gate
+    /// (Next). Later ones stay grey until then (owner, 2026-10-18: "we can't get there without crossing
+    /// the gate").
+    pub fn reachable(&self, i: u8) -> bool {
+        i <= self.stage || i <= self.furthest || (0..i).all(|k| self.status(k).kind == StatusKind::Done)
+    }
     /// Move to `to` (0-7); `done` marks the stage being left as done (Next). Returns the old stage.
     pub fn go_to(&mut self, to: u8, done: bool) -> Option<u8> {
         if usize::from(to) >= crate::STAGES.len() {

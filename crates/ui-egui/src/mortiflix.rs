@@ -711,7 +711,7 @@ mod tests {
         // off until a stage command (or the desktop app) turns it on: Mortiflix Studio alone is untouched
         assert_eq!(bar_height(&app), 0.0);
         assert!(!hides_mode_tabs(&app));
-        crate::menus::invoke(&mut app, &ctx, "stages.animatic", json!({})).unwrap();
+        crate::menus::invoke(&mut app, &ctx, "stages.animatic", json!({"force": true})).unwrap(); // a stage set up for the test, past the gates
         assert!(app.mfx.core.state.active);
         assert_eq!(app.ui.workspace, WORKSPACE);
         assert!(app.ui.dock.contains(PanelKind::MfxNodes) && app.ui.dock.contains(PanelKind::MfxChat));
