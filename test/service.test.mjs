@@ -40,7 +40,7 @@ test('service: hello, state.get, stage.set, chat.send and bad input over stdio',
   assert.equal(reply(0).ok, true);
   assert.equal(reply(0).result.protocol, 1);
   assert.equal(reply(1).result.stage, 0);
-  assert.deepEqual(reply(2).result, { stage: 2, key: 'shots' });
+  assert.deepEqual(reply(2).result, { stage: 2, key: 'styleFrames' });
   assert.equal(reply(3).ok, true);
   assert.equal(reply(4).error.code, 'no_project');
   assert.equal(reply(5).error.code, 'unknown_type');

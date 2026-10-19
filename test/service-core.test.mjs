@@ -50,7 +50,7 @@ test('service core: presets list, save with steps off, look, voice and theme, th
   const ex = list.built_in.find((p) => p.slug === 'explainer');
   assert.ok(ex);
   assert.equal(ex.idea_field, 'topic');
-  assert.ok(ex.stages.includes('shots'));
+  assert.ok(ex.stages.includes('animatic') && ex.stages.includes('voice'));
   assert.equal(ex.steps.find((s) => s.key === 'final').stage, 'render');
   const pic = join(root, 'ref.png');
   writeFileSync(pic, 'png');
@@ -84,6 +84,9 @@ test('service core: new project from preset + idea + assets + theme, the whole f
   const made = await call('project.new', { preset: 'explainer', title: 'Bikes', idea: 'Why bike lanes pay off', backend: 'demo',
     assets: [{ path: logo, use: 'must', where: ['b04'], note: 'Last shot, bottom right' }], music: { theme: { mood: ['calm'], genre: 'piano' } } });
   const id = made.project.id;
+  await call('look.brief.set', { vibe: 'calm', font: 'Inter' }); // the owner picks a look before the style frames
+  await call('motion.brief.set', {}); // and leaves the motion to the AI before the animatic
+  await call('transition.brief.set', {}); // and the transitions to the library
   assert.equal(made.assets_pending, 1);
   await until(() => loadProject(root, id).state === 'queued');
   const added = events('assets.added')[0].asset;
@@ -96,10 +99,23 @@ test('service core: new project from preset + idea + assets + theme, the whole f
   await run();
   await run();
   await run();
-  const chat = await call('chat.history');
+  let chat = await call('chat.history');
   assert.equal(chat[0].role, 'user');
   assert.match(chat.map((r) => r.text).join('\n'), /Going with: /);
   assert.ok(chat.some((r) => r.card?.kind === 'script' && r.card.beats.length === 4));
+  // Nothing is made past a gate: no voice, no looks, no shots while the script waits for the owner.
+  assert.ok(!chat.some((r) => r.card?.kind === 'looks'));
+  assert.ok(!(await call('graph.get')).nodes.some((n) => ['line', 'frame', 'shot'].includes(n.kind) && n.versions?.length));
+  const st0 = await call('stage.status');
+  assert.equal(st0.length, 8);
+  assert.equal(st0[0].key, 'script');
+  assert.equal(st0[0].kind, 'needsYou', 'four beats wait for an OK');
+  // Next on each stage passes its gate; only then is the next stage made.
+  for (const from of [0, 1, 2, 3]) {
+    await call('stage.set', { stage: from + 1, from, done: true });
+    await run();
+  }
+  chat = await call('chat.history');
   assert.ok(chat.some((r) => r.card?.kind === 'looks'));
   assert.ok(chat.some((r) => r.role === 'action' && /Added logo\.svg/.test(r.text)));
 
@@ -109,15 +125,12 @@ test('service core: new project from preset + idea + assets + theme, the whole f
   assert.ok(g.nodes.find((n) => n.id === 'b01-1')?.versions[0].path, 'demo voice lines');
   assert.ok(g.edges.some((e) => e.kind === 'next' && e.from === 's01'));
   assert.ok(g.edges.some((e) => e.kind === 'says' && e.from === 'b02-1' && e.to === 's02'));
-  assert.ok(g.edges.some((e) => e.kind === 'under' && e.from === 'm01'));
+  assert.ok(!g.nodes.some((n) => n.kind === 'cue'), 'no music before the animatic passes its gate');
   assert.ok(g.nodes.find((n) => n.id === 's01').default_pos);
   assert.ok(events('node.changed').length >= 1);
 
   const st = await call('stage.status');
-  assert.equal(st.length, 6);
-  assert.equal(st[0].key, 'script');
-  assert.equal(st[0].kind, 'needsYou', 'four beats wait for an OK');
-  assert.equal(st[2].total, 4, '4 shots: the 3 transitions never count as shots');
+  assert.equal(st[4].total, 4, '4 shots: the 3 transitions never count as shots');
   assert.ok(events('status').at(-1).stages);
 
   // Preview plan: every shot plays its own piece of the animatic, voice at its time, the score.
@@ -126,7 +139,7 @@ test('service core: new project from preset + idea + assets + theme, the whole f
   assert.equal(pv.shots[1].media.kind, 'video');
   assert.deepEqual([pv.shots[1].start_sec, pv.shots[1].dur_sec], [2, 2]);
   assert.equal(pv.voice.length, 4);
-  assert.ok(pv.music?.path);
+  assert.ok(!pv.music?.path, 'no score before the music stage');
   assert.deepEqual((await call('preview.plan', { scope: 'beat', node: 'b03' })).range, [4, 6]);
 
   // OK, Fix (a session remakes only that shot), the chat lines, node.changed for it.
@@ -167,6 +180,12 @@ test('service core: new project from preset + idea + assets + theme, the whole f
   assert.equal(g2.nodes.find((n) => n.id === 's05').current, 1);
   assert.deepEqual((await call('node.find', { query: 'bell' })).map((n) => n.id), []);
   assert.ok((await call('node.find', { query: 's05' })).length === 1);
+
+  // The animatic passes its gate: the music is written to it.
+  await call('stage.set', { stage: 5, from: 4, done: true });
+  await run();
+  assert.ok((await call('graph.get')).edges.some((e) => e.kind === 'under' && e.from === 'm01'));
+  assert.ok((await call('preview.plan')).music?.path);
 
   // Voice & music: levels, nudges, cues, theme samples (demo: quiet placeholders).
   const start = (await call('voicemusic.view')).voice.find((l) => l.node === 'b02-1').start_sec;
@@ -211,17 +230,16 @@ test('service core: new project from preset + idea + assets + theme, the whole f
   assert.doesNotMatch(brief, /Make the whole thing warmer/, 'an older message was in an earlier brief');
   await run();
 
-  // Next on each stage keeps it as it is; leaving Voice & music by Get the video hands the end to the app.
-  for (const from of [0, 1, 2]) await call('stage.set', { stage: from + 1, from, done: true });
-  const left = await call('stage.set', { stage: 5, from: 3, done: true });
+  // Leaving Music by Get the video hands the end to the app.
+  const left = await call('stage.set', { stage: 7, from: 5, done: true });
   assert.deepEqual(left.handover.skipped, ['build', 'final']);
   const st2 = await call('stage.status');
-  assert.ok(st2.slice(0, 3).every((s) => s.kind === 'done' || s.kind === 'making'), JSON.stringify(st2.map((s) => s.kind)));
+  assert.ok(st2.slice(0, 5).every((s) => s.kind === 'done' || s.kind === 'making'), JSON.stringify(st2.map((s) => s.kind)));
   // The demo can't remake a music cue without Strudel: that failed Fix still needs the owner after Next.
-  assert.equal(st2[3].kind, 'needsYou');
-  assert.equal(st2[3].need, 1);
-  assert.equal(loadProject(root, id).mfx.stage, 5);
-  assert.ok((await call('stage.remakes', { stage: 'look' })).remade.some((r) => r.step === 'animatic'));
+  assert.equal(st2[5].kind, 'needsYou');
+  assert.equal(st2[5].need, 1);
+  assert.equal(loadProject(root, id).mfx.stage, 7);
+  assert.ok((await call('stage.remakes', { stage: 'styleFrames' })).remade.some((r) => r.step === 'animatic'));
 
   // Into Mortiflix Studio: the plan, the map back, a new version to swap in.
   const plan = await call('handoff.plan');

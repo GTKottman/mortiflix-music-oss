@@ -120,6 +120,8 @@ export function startProject(root, id) {
     const noMusic = musicConfig(loadConfig(root)).engine === 'none' || /^\s*(no|none|off)\b/i.test(String(p.intake.answers.music ?? ''));
     for (const s of pipeline.steps) {
       if (s.when === 'music' && noMusic) { p.steps ||= {}; p.steps[s.key] = { state: 'skipped' }; }
+      // Voice needs a narrated brief ("On-screen text and music only" has no voice).
+      if (s.when === 'voice' && /on-screen text|no narration|^\s*(no|none|off)\b/i.test(String(p.intake.answers.voice ?? ''))) { p.steps ||= {}; p.steps[s.key] = { state: 'skipped' }; }
       // A step the preset turned off (doc 31 page 6).
       if (s.off) { p.steps ||= {}; p.steps[s.key] = { state: 'skipped', off: true }; }
     }

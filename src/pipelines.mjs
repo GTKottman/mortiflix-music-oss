@@ -17,10 +17,10 @@ import { zip, unzip, dirEntries } from './zip.mjs';
 export const REVIEW_MODES = ['questions', 'document', 'frames', 'video', 'audio', 'internal'];
 export const WORK_KINDS = ['script', 'stills', 'motion', 'audio', 'music', 'research', 'plan', 'instruments'];
 // A step with "when" runs only if the studio and the brief want it (otherwise it's skipped when the project starts).
-export const STEP_CONDITIONS = ['music'];
-export const CANVAS_KINDS = ['beat', 'frame', 'transition', 'shot'];
+export const STEP_CONDITIONS = ['music', 'voice'];
+export const CANVAS_KINDS = ['beat', 'line', 'frame', 'transition', 'shot'];
 // The Mortiflix Studio stages a step can be shown under (`stage` on a step; otherwise worked out from its key).
-export const STAGE_KEYS = ['script', 'look', 'shots', 'voiceMusic', 'edit', 'render'];
+export const STAGE_KEYS = ['script', 'voice', 'styleFrames', 'transitions', 'animatic', 'music', 'edit', 'render'];
 const KEY = /^[a-z0-9][a-z0-9_-]{0,47}$/;
 
 export function builtInDir() {

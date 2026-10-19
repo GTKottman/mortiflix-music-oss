@@ -114,12 +114,20 @@ test('the demo backend fixes bars 7–8 end to end: Fix → session → notes ch
   const root = tempStudio(t);
   const p = createProject(root, { pipeline: 'explainer', title: 'Demo fix', answers: { topic: 'tides' } });
   startProject(root, p.id);
+  const { setBrief } = await import('../src/svc/lookbrief.mjs');
+  const { setMotionBrief, setTransitionBrief } = await import('../src/svc/motionbrief.mjs');
+  setBrief(root, p.id, { vibe: 'calm', font: 'Inter' }); // the owner picks a look before the style frames
+  setMotionBrief(root, p.id, {}); // and leaves the motion to the AI before the animatic
+  setTransitionBrief(root, p.id, {}); // and the transitions to the library
   const runner = new Runner(root);
   runner.acquire();
   t.after(() => { runner.release(); closeLadder(); });
   await runner.loop();
-  respond(root, p.id, 'brief', 1, { verdict: 'approve' });
-  await runner.loop();
+  // the music is written once every gate before it is passed
+  for (const step of ['brief', 'script', 'voice', 'style-frames', 'transitions', 'animatic']) {
+    respond(root, p.id, step, 1, { verdict: 'approve' });
+    await runner.loop();
+  }
   const before = loadSong(root, p.id).song;
   const cueV = syncCanvas(root, p.id).nodes.m04.versions.length;
   // bars 7–8 of the song are bars 1–2 of m04

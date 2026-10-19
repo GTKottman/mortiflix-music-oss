@@ -1,5 +1,6 @@
 // What the Mortiflix Studio app adds to a session's brief (projects/<id>/CLAUDE.md, written by torch.mjs): the
 // owner's assets with how to use them, the music theme, and what the owner said in the chat since the last session.
+import { motionBriefText, transitionBriefText } from './motionbrief.mjs';
 import { assetsBrief } from './assets.mjs';
 import { chatForSession } from './chat.mjs';
 import { hasTheme, loadTheme } from './theme.mjs';
@@ -23,6 +24,10 @@ export function serviceBrief(root, id) {
     const want = t?.samples_wanted && !t?.samples?.length ? ' The owner asked for three 15 s themes: write them as plain default Strudel into `music/theme.json` `samples` (render each to a quiet WAV), use the first, and carry on.' : '';
     parts.push(`## Music theme\n\n\`music/theme.json\` (${t?.picked_by === 'you' ? 'picked by the owner: it wins over "every piece sounds like itself"' : 'left to you'}). The music skill reads it before the blueprint; its cues are the per-beat plan.${want}`);
   }
+  const cuts = transitionBriefText(root, id);
+  if (cuts) parts.push(`## Transitions (the owner's pick, before the board)\n\nAlso in \`design/transition-brief.json\`.\n\n${fenceIt('TRANSITIONS', cuts)}`);
+  const motion = motionBriefText(root, id);
+  if (motion) parts.push(`## Motion and rule packs (the owner's picks, before the animatic)\n\nAlso in \`design/motion-brief.json\`. Animate with this motion, and follow every rule pack in every step from here on.\n\n${fenceIt('PACKS', motion)}`);
   const chat = chatForSession(root, id);
   if (chat.length) parts.push(`## What the owner said in the chat (since the last session)\n\n${fenceIt('CHAT', chat.map((r) => `- ${r.context ? `[about ${r.context}] ` : ''}${r.text.replace(/\s+/g, ' ').slice(0, 600)}`).join('\n'))}`);
   return parts.length ? `\n${parts.join('\n\n')}\n` : '';

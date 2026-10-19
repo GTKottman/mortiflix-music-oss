@@ -55,7 +55,7 @@ function service(root) {
   return { p, request, wait, seen, exit, end: () => p.stdin.end(), stderr: () => stderr };
 }
 
-test('stdio: the app\'s whole path on the demo backend, with the service running the AI ahead', { skip: !hasFfmpeg && 'needs ffmpeg', timeout: 180_000 }, async (t) => {
+test('stdio: the app\'s whole path on the demo backend, each stage made once the one before it passes its gate', { skip: !hasFfmpeg && 'needs ffmpeg', timeout: 180_000 }, async (t) => {
   const root = tempStudio(t);
   const s = service(root);
   t.after(() => { try { s.p.kill(); } catch { /* gone */ } });
@@ -65,10 +65,18 @@ test('stdio: the app\'s whole path on the demo backend, with the service running
   assert.ok((await s.request('presets.list')).built_in.some((p) => p.slug === 'explainer'));
 
   const { project } = await s.request('project.new', { preset: 'explainer', title: 'Stdio', idea: 'How a bill becomes law', backend: 'demo' });
-  // The runner makes beats, looks, shots, voice and music on its own; the stage bar follows by status events.
-  const shots = await s.wait((m) => m.event === 'status' && m.data.project === project.id && m.data.stages[2].total >= 4 && m.data.stages[3].total >= 8, 120_000, 'shots, lines and cues');
-  assert.equal(shots.data.stages.length, 6);
-  await s.wait((m) => m.event === 'chat.message' && m.data.card?.kind === 'script', 10_000, 'the script card');
+  await s.request('look.brief.set', { vibe: 'calm', font: 'Inter' });
+  await s.request('motion.brief.set', {});
+  await s.request('transition.brief.set', {});
+  // The runner makes the script, then waits at its gate; Next on each stage lets the next one be made.
+  await s.wait((m) => m.event === 'chat.message' && m.data.card?.kind === 'script', 60_000, 'the script card');
+  for (const from of [0, 1, 2, 3]) {
+    const key = ['voice', 'styleFrames', 'transitions', 'animatic'][from];
+    await s.request('stage.set', { stage: from + 1, from, done: true });
+    await s.wait((m) => m.event === 'status' && m.data.project === project.id && ['ready', 'needsYou'].includes(m.data.stages[from + 1].kind), 60_000, key);
+  }
+  const shots = await s.wait((m) => m.event === 'status' && m.data.project === project.id && m.data.stages[4].total >= 4 && m.data.stages[1].total >= 4, 60_000, 'shots and lines');
+  assert.equal(shots.data.stages.length, 8);
   const g = await s.request('graph.get');
   assert.deepEqual(g.order.film, ['s01', 's02', 's03', 's04']);
   assert.equal((await s.request('preview.plan')).shots.length, 4);
@@ -77,8 +85,9 @@ test('stdio: the app\'s whole path on the demo backend, with the service running
   await s.wait((m) => m.event === 'node.changed' && m.data.nodes.some((n) => n.id === 's02' && n.current === 2), 60_000, 's02 v2');
   await s.wait((m) => m.event === 'chat.message' && /S02 is remade/.test(m.data.text), 10_000, 'the remade line in the chat');
 
-  for (const from of [0, 1, 2]) await s.request('stage.set', { stage: from + 1, from, done: true });
-  const handover = await s.request('stage.set', { stage: 4, from: 3, done: true });
+  await s.request('stage.set', { stage: 5, from: 4, done: true });
+  await s.wait((m) => m.event === 'status' && m.data.project === project.id && m.data.stages[5].total >= 4, 60_000, 'the music cues');
+  const handover = await s.request('stage.set', { stage: 6, from: 5, done: true });
   assert.deepEqual(handover.handover.skipped, ['build', 'final']);
   const plan = await s.request('handoff.plan');
   assert.equal(plan.clips.filter((c) => c.kind === 'shot').length, 4);

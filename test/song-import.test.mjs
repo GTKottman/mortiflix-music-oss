@@ -105,12 +105,20 @@ test('the demo backend writes a song (S11): the browser can try the song lane wi
   const root = tempStudio(t);
   const p = createProject(root, { pipeline: 'explainer', title: 'Demo song', answers: { topic: 'tides' } });
   startProject(root, p.id);
+  const { setBrief } = await import('../src/svc/lookbrief.mjs');
+  const { setMotionBrief, setTransitionBrief } = await import('../src/svc/motionbrief.mjs');
+  setBrief(root, p.id, { vibe: 'calm', font: 'Inter' }); // the owner picks a look before the style frames
+  setMotionBrief(root, p.id, {}); // and leaves the motion to the AI before the animatic
+  setTransitionBrief(root, p.id, {}); // and the transitions to the library
   const runner = new Runner(root);
   runner.acquire();
   t.after(() => runner.release());
   await runner.loop();
-  respond(root, p.id, 'brief', 1, { verdict: 'approve' });
-  await runner.loop();
+  // the music is written once every gate before it is passed
+  for (const step of ['brief', 'script', 'voice', 'style-frames', 'transitions', 'animatic']) {
+    respond(root, p.id, step, 1, { verdict: 'approve' });
+    await runner.loop();
+  }
   const { song, text } = loadSong(root, p.id);
   assert.deepEqual(checkSong(song), []);
   assert.deepEqual(song.patterns.map((x) => [x.id, x.bars]), [['m01', 2], ['m02', 2], ['m03', 2], ['m04', 2]]);

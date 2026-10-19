@@ -8,6 +8,8 @@ import { createProject, startProject, projectPaths, addIntakeFile } from '../src
 import { respond } from '../src/gates.mjs';
 import { Runner } from '../src/runner.mjs';
 import { syncCanvas, BEAT_COLOURS } from '../src/canvas.mjs';
+import { setBrief } from '../src/svc/lookbrief.mjs';
+import { setMotionBrief, setTransitionBrief } from '../src/svc/motionbrief.mjs';
 
 const write = (dir, rel, data) => { mkdirSync(join(dir, rel, '..'), { recursive: true }); writeFileSync(join(dir, rel), typeof data === 'string' || Buffer.isBuffer(data) ? data : JSON.stringify(data)); };
 
@@ -145,6 +147,9 @@ test('canvas: OK, Cut it and Fix; a fix starts a session that remakes only that 
   const root = tempStudio(t);
   const p = createProject(root, { pipeline: 'explainer', title: 'Fixes', answers: { topic: 'tides' } });
   startProject(root, p.id);
+  setBrief(root, p.id, { vibe: 'calm', font: 'Inter' }); // the owner picks a look before the style frames
+  setMotionBrief(root, p.id, {}); // and leaves the motion to the AI before the animatic
+  setTransitionBrief(root, p.id, {}); // and the transitions to the library
   const runner = new Runner(root);
   runner.acquire();
   t.after(() => runner.release());
@@ -201,14 +206,17 @@ test('canvas: OK, Cut it and Fix; a fix starts a session that remakes only that 
   assert.equal(canvasView(root, p.id).nodes.s04.state, 'ready');
 });
 
-test('canvas: the AI runs ahead through canvas steps; the build waits until all are approved; OK on every piece approves', async (t) => {
+test('canvas: nothing runs ahead of a gate; each step starts only when every step before it is approved; OK on every piece approves', async (t) => {
   const { canvasView, nodeAction } = await import('../src/canvas.mjs');
   const { loadProject } = await import('../src/projects.mjs');
   const { stepView } = await import('../src/gates.mjs');
   const { projectPipeline } = await import('../src/projects.mjs');
   const root = tempStudio(t);
-  const p = createProject(root, { pipeline: 'explainer', title: 'Ahead', answers: { topic: 'tides' } });
+  const p = createProject(root, { pipeline: 'explainer', title: 'Gated', answers: { topic: 'tides' } });
   startProject(root, p.id);
+  setBrief(root, p.id, { vibe: 'calm', font: 'Inter' }); // the owner picks a look before the style frames
+  setMotionBrief(root, p.id, {}); // and leaves the motion to the AI before the animatic
+  setTransitionBrief(root, p.id, {}); // and the transitions to the library
   const runner = new Runner(root);
   runner.acquire();
   t.after(() => runner.release());
@@ -216,16 +224,26 @@ test('canvas: the AI runs ahead through canvas steps; the build waits until all 
   await runner.loop();
   respond(root, p.id, 'brief', 1, { verdict: 'approve' });
   await runner.loop();
-  // One go: script, frames, transitions and the animatic all sent, and the music made ahead of any review.
-  assert.deepEqual(states(), { brief: 'approved', script: 'in_review', 'style-frames': 'in_review', transitions: 'in_review', animatic: 'in_review', music: 'in_review', build: 'blocked', final: 'blocked' });
-  respond(root, p.id, 'music', 1, { verdict: 'approve' });
+  // Only the script is made: the voice, the look and everything after wait for its gate.
+  assert.deepEqual(states(), { brief: 'approved', script: 'in_review', voice: 'blocked', 'style-frames': 'blocked', transitions: 'blocked', animatic: 'blocked', music: 'blocked', build: 'blocked', final: 'blocked' });
+  assert.ok(!Object.values(canvasView(root, p.id).nodes).some((n) => ['line', 'frame', 'shot'].includes(n.kind) && n.versions?.length), 'nothing made past the script');
+  respond(root, p.id, 'script', 1, { verdict: 'approve' });
   await runner.loop();
-  assert.equal(states().build, 'blocked', 'the build waits for every canvas step');
-  // OK every frame: the style frames step approves itself.
+  assert.equal(states().voice, 'in_review');
+  assert.equal(states()['style-frames'], 'blocked', 'the look waits for the voice gate');
+  respond(root, p.id, 'voice', 1, { verdict: 'approve' });
+  await runner.loop();
+  // OK every frame: the style frames step approves itself, and only then are the transitions made.
+  assert.equal(states().transitions, 'blocked');
   for (const f of canvasView(root, p.id).order.frames) nodeAction(root, p.id, f, { action: 'ok' });
   assert.equal(states()['style-frames'], 'approved');
-  for (const s of ['script', 'transitions', 'animatic']) respond(root, p.id, s, 1, { verdict: 'approve' });
   await runner.loop();
+  assert.equal(states().transitions, 'in_review');
+  for (const s of ['transitions', 'animatic', 'music']) {
+    assert.equal(states()[s], 'in_review', s);
+    respond(root, p.id, s, 1, { verdict: 'approve' });
+    await runner.loop();
+  }
   assert.equal(states().final, 'in_review', 'all approved: the build ran and the final waits');
 });
 
@@ -256,12 +274,17 @@ test('edit: the final as a Mortiflix Studio project, every shot its own named cl
   const root = tempStudio(t);
   const p = createProject(root, { pipeline: 'explainer', title: 'Hand off', answers: { topic: 'tides' } });
   startProject(root, p.id);
+  setBrief(root, p.id, { vibe: 'calm', font: 'Inter' }); // the owner picks a look before the style frames
+  setMotionBrief(root, p.id, {}); // and leaves the motion to the AI before the animatic
+  setTransitionBrief(root, p.id, {}); // and the transitions to the library
   const runner = new Runner(root);
   runner.acquire();
   t.after(() => runner.release());
   await runner.loop();
-  respond(root, p.id, 'brief', 1, { verdict: 'approve' });
-  await runner.loop();
+  for (const step of ['brief', 'script', 'voice', 'style-frames', 'transitions']) {
+    respond(root, p.id, step, 1, { verdict: 'approve' });
+    await runner.loop();
+  }
   const map = makeEditProject(root, p.id);
   assert.ok(existsSync(map.fcproj));
   assert.deepEqual(map.clips.filter((c) => c.kind === 'shot').map((c) => [c.node, c.start_sec, c.seconds]), [['s01', 0, 2], ['s02', 2, 2], ['s03', 4, 2], ['s04', 6, 2]]);
@@ -303,4 +326,83 @@ test('canvas: a media file still being written (empty, or a WAV shorter than its
   writeFileSync(join(dir, 'empty.wav'), ''); writeFileSync(join(dir, 'half.wav'), wav(100, 1000)); writeFileSync(join(dir, 'whole.wav'), wav(100));
   writeFileSync(join(dir, 'empty.mp3'), ''); writeFileSync(join(dir, 'take.mp3'), Buffer.from('ID3....'));
   assert.deepEqual(['empty.wav', 'half.wav', 'whole.wav', 'empty.mp3', 'take.mp3'].map((f) => mediaUnfinished(join(dir, f))), [true, true, false, true, false]);
+});
+
+test('look: the style frames wait for the look the owner picks; a style pack or a font, colours, vibe and look', async (t) => {
+  const { loadProject, projectPipeline } = await import('../src/projects.mjs');
+  const { stepView } = await import('../src/gates.mjs');
+  const { setBrief, listPacks } = await import('../src/svc/lookbrief.mjs');
+  const root = tempStudio(t);
+  const p = createProject(root, { pipeline: 'explainer', title: 'Look first', answers: { topic: 'tides' } });
+  startProject(root, p.id);
+  const runner = new Runner(root);
+  runner.acquire();
+  t.after(() => runner.release());
+  const state = (k) => stepView(loadProject(root, p.id), projectPipeline(root, p.id)).find((s) => s.key === k).state;
+  await runner.loop();
+  for (const step of ['brief', 'script', 'voice']) { respond(root, p.id, step, 1, { verdict: 'approve' }); await runner.loop(); }
+  assert.equal(state('style-frames'), 'blocked', 'no look picked: nothing drawn');
+  assert.throws(() => setBrief(root, p.id, {}), /pick a style pack/);
+  assert.throws(() => setBrief(root, p.id, { pack: 'nope' }), /no style pack/);
+  mkdirSync(join(root, 'style-packs', 'noir'), { recursive: true });
+  writeFileSync(join(root, 'style-packs', 'noir', 'pack.json'), JSON.stringify({ name: 'Noir', fonts: ['Bebas Neue'], palette: ['#101010', '#e0c080', 'red'], vibe: 'tense' }));
+  writeFileSync(join(root, 'style-packs', 'noir', 'ref.png'), 'x');
+  const packs = listPacks(root);
+  assert.deepEqual(packs.map((x) => [x.id, x.name, x.palette, x.pictures.length]), [['noir', 'Noir', ['#101010', '#e0c080'], 1]]);
+  const b = setBrief(root, p.id, { pack: 'noir', palette: ['#123456', 'bad'], vibe: 'x'.repeat(500) });
+  assert.equal(b.pack_files.name, 'Noir');
+  assert.deepEqual(b.palette, ['#123456']);
+  assert.equal(b.vibe.length, 200);
+  assert.ok(existsSync(join(projectPaths(root, p.id).work, 'design', 'look-brief.json')));
+  assert.equal(state('style-frames'), 'ready');
+});
+
+test('packs: every kind in packs/<kind>/, the older style-packs/ too; the animatic waits for the motion and rule packs', async (t) => {
+  const { loadProject, projectPipeline } = await import('../src/projects.mjs');
+  const { stepView } = await import('../src/gates.mjs');
+  const { listAllPacks, packKinds } = await import('../src/svc/packs.mjs');
+  const { serviceBrief } = await import('../src/svc/brief.mjs');
+  const root = tempStudio(t);
+  const put = (kind, id, def, extra = {}) => {
+    const d = join(root, 'packs', kind, id);
+    mkdirSync(d, { recursive: true });
+    writeFileSync(join(d, 'pack.json'), JSON.stringify({ format: 'mortiflix.pack', version: 1, kind, ...def }));
+    for (const [f, txt] of Object.entries(extra)) writeFileSync(join(d, f), txt);
+  };
+  put('motion', 'snappy', { name: 'Snappy', moves: ['whip pan', 'pop in'], easing: 'back out', pace: 'fast' });
+  put('rule', 'safe-text', { name: 'Safe text', rules: ['Text 8% inside the edges'] }, { 'RULES.md': 'never' });
+  put('rule', 'no-red', { name: 'No red' }, { 'RULES.md': 'Never use red.' });
+  put('lottie', 'odd', { name: 'A kind from mortiflix.com' });
+  mkdirSync(join(root, 'style-packs', 'old'), { recursive: true });
+  const all = listAllPacks(root);
+  assert.deepEqual(all.map((p) => `${p.kind}/${p.id}`).sort(), ['lottie/odd', 'motion/snappy', 'rule/no-red', 'rule/safe-text', 'style/old']);
+  assert.equal(all.find((p) => p.id === 'no-red').words, 'Never use red.', 'RULES.md when pack.json has no words');
+  assert.ok(packKinds(root).some((k) => k.kind === 'lottie' && k.count === 1));
+  const p = createProject(root, { pipeline: 'explainer', title: 'Motion first', answers: { topic: 'tides' } });
+  startProject(root, p.id);
+  setBrief(root, p.id, { vibe: 'calm' });
+  put('transition', 'paper', { name: 'Paper', transitions: [{ name: 'Paper tear', sec: 0.6, words: 'the page rips' }, { sec: 2 }] });
+  const runner = new Runner(root);
+  runner.acquire();
+  t.after(() => runner.release());
+  const state = (k) => stepView(loadProject(root, p.id), projectPipeline(root, p.id)).find((s) => s.key === k).state;
+  await runner.loop();
+  for (const step of ['brief', 'script', 'voice', 'style-frames']) { respond(root, p.id, step, 1, { verdict: 'approve' }); await runner.loop(); }
+  assert.equal(state('transitions'), 'blocked', 'no transitions picked: no board');
+  assert.throws(() => setTransitionBrief(root, p.id, { transition_pack: 'nope' }), /no transition pack/);
+  assert.deepEqual(setTransitionBrief(root, p.id, { transition_pack: 'paper' }).transition_pack.transitions, [{ name: 'Paper tear', sec: 0.6, words: 'the page rips' }]);
+  await runner.loop();
+  assert.match(serviceBrief(root, p.id), /- Paper tear \(0.6 s\): the page rips/);
+  respond(root, p.id, 'transitions', 1, { verdict: 'approve' });
+  await runner.loop();
+  assert.equal(state('animatic'), 'blocked', 'no motion picked: nothing animated');
+  assert.throws(() => setMotionBrief(root, p.id, { motion_pack: 'nope' }), /no motion pack/);
+  assert.throws(() => setMotionBrief(root, p.id, { rule_packs: ['snappy'] }), /no rule pack/);
+  setMotionBrief(root, p.id, { motion_pack: 'snappy', rule_packs: ['safe-text', 'no-red'], words: 'keep it tight' });
+  assert.equal(state('animatic'), 'ready');
+  const brief = serviceBrief(root, p.id);
+  assert.match(brief, /Motion pack "Snappy"/);
+  assert.match(brief, /- move: whip pan/);
+  assert.match(brief, /Never use red\./);
+  assert.ok(existsSync(join(projectPaths(root, p.id).work, 'design', 'motion-brief.json')));
 });

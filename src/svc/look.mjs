@@ -10,7 +10,7 @@
 import { readFileSync, writeFileSync, mkdirSync, statSync } from 'node:fs';
 import { join, extname } from 'node:path';
 import { canvasView, canvasPaths, nodeAction, requestNewPiece, loadEdits, CanvasError } from '../canvas.mjs';
-import { projectPaths } from '../projects.mjs';
+import { projectPaths, loadProject } from '../projects.mjs';
 import { withLock } from '../studio.mjs';
 import { filmOrder, loadLayout } from './graph.mjs';
 
@@ -79,7 +79,11 @@ export function lookView(root, id) {
       made: isMade, cut: n.owner === 'cut', look: isMade ? (st.made_in[n.id] || using) : null,
       remaking: Boolean(n.pending), changed: Boolean(c && n.pending && n.pending.id === c.edit), changed_from: c && n.pending && n.pending.id === c.edit ? c.from : null };
   });
-  return { project: id, using, frames, shots, max: MAX_LOOKS, can_more: frames.length < MAX_LOOKS };
+  // the video's shape (width / height) from the brief ("9:16"), so the app draws the frames in it
+  const answers = Object.values(loadProject(root, id).intake?.answers || {});
+  const shape = answers.map((v) => String(v).match(/^\s*(\d{1,2})\s*:\s*(\d{1,2})\s*$/)).find(Boolean);
+  const aspect = shape && Number(shape[2]) > 0 ? Math.round((Number(shape[1]) / Number(shape[2])) * 1000) / 1000 : 16 / 9;
+  return { project: id, using, frames, shots, max: MAX_LOOKS, can_more: frames.length < MAX_LOOKS, aspect };
 }
 
 // look.use {frame, confirm?}: pick the look in use. Shots made in another look are remade in it, but only once the

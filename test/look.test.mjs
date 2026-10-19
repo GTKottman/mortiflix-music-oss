@@ -52,10 +52,18 @@ test('look: the looks to pick from, pick another (asks first, remakes only the s
   await assert.rejects(call('look.get'), /no_project/);
   const made = await call('project.new', { preset: 'explainer', title: 'Bikes', idea: 'Why bike lanes pay off', backend: 'demo' });
   const id = made.project.id;
+  await call('look.brief.set', { vibe: 'calm', font: 'Inter' }); // the owner picks a look before the style frames
+  await call('motion.brief.set', {}); // and leaves the motion to the AI before the animatic
+  await call('transition.brief.set', {}); // and the transitions to the library
   await until(() => loadProject(root, id).state === 'queued');
   await run();
   await run();
   await run();
+  // pass the gates up to the animatic (nothing is made before its gate)
+  for (const from of [0, 1, 2, 3]) {
+    await call('stage.set', { stage: from + 1, from, done: true });
+    await run();
+  }
 
   const v = await call('look.get');
   assert.equal(v.frames.length, 4);

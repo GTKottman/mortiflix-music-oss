@@ -1,43 +1,72 @@
-// The six Mortiflix Studio stages over a pipeline's steps (docs 30, 40): 1 Script · 2 Look · 3 Shots ·
-// 4 Voice & music · 5 Edit · 6 Render. Each step belongs to one stage (its `stage`, else its key, else what it
+// The eight Mortiflix Studio stages over a pipeline's steps (owner, 2026-10-18): 1 Script · 2 Voice · 3 Style frames ·
+// 4 Transitions · 5 Animatic · 6 Music · 7 Edit · 8 Render. Nothing of a stage is made before the stage before it
+// passed its gate (gates.mjs). Each step belongs to one stage (its `stage`, else its key, else what it
 // makes). A stage's status is worked out from its steps and its pieces on the canvas, never stored; only the owner's
 // Next click ("stage done") and the last stage looked at are kept, in project.json `mfx`.
 import { loadProject, projectPipeline, update, event, now } from '../projects.mjs';
 import { stepView, respond, answerQuestion, reopen, GateError } from '../gates.mjs';
 import { canvasView, loadOwner, nodeAction } from '../canvas.mjs';
 
-export const STAGES = ['script', 'look', 'shots', 'voiceMusic', 'edit', 'render'];
-export const STAGE_NAMES = ['Script', 'Look', 'Shots', 'Voice & music', 'Edit', 'Render'];
+export const STAGES = ['script', 'voice', 'styleFrames', 'transitions', 'animatic', 'music', 'edit', 'render'];
+export const STAGE_NAMES = ['Script', 'Voice', 'Style frames', 'Transitions', 'Animatic', 'Music', 'Edit', 'Render'];
+// The six stages before 2026-10-18 (script, look, shots, voiceMusic, edit, render) → the eight: a project saved then
+// opens on the same work.
+export const OLD_STAGE = [0, 2, 4, 5, 6, 7];
+const OLD_DONE = { look: ['styleFrames'], shots: ['transitions', 'animatic'], voiceMusic: ['voice', 'music'] };
+export const STAGE_EDIT = 6;
+export const STAGE_RENDER = 7;
+export const STAGE_MUSIC = 5;
 const DONE = ['approved', 'done', 'skipped'];
 
 const BY_KEY = {
   brief: 0, script: 0, genre: 0, blueprint: 0,
-  'style-frames': 1, directions: 1, look: 1,
-  transitions: 2, animatic: 2, shots: 2,
-  voice: 3, music: 3, score: 3, instruments: 3, mix: 3,
-  build: 4,
-  final: 5,
+  voice: 1, narration: 1,
+  'style-frames': 2, directions: 2, look: 2,
+  transitions: 3,
+  animatic: 4, shots: 4,
+  music: 5, score: 5, instruments: 5, mix: 5,
+  build: 6,
+  final: 7,
 };
 // The canvas pieces each stage shows (doc 35): the node kinds counted for its "made / total" (shots only on stage 3:
 // the transition board never inflates the shot count, owner's first run "0/8" → "3/11"), and the kinds whose pieces
 // can wait for the owner there.
-const KINDS = [['beat'], ['frame'], ['shot'], ['line', 'cue'], [], []];
-const REVIEW_KINDS = [['beat'], ['frame'], ['shot', 'transition'], ['line', 'cue'], [], []];
-const NOUN = ['beats', 'looks', 'shots', 'voice lines and cues', '', ''];
+const KINDS = [['beat'], ['line'], ['frame'], ['transition'], ['shot'], ['cue'], [], []];
+const REVIEW_KINDS = [['beat'], ['line'], ['frame'], ['transition'], ['shot'], ['cue'], [], []];
+const NOUN = ['beats', 'voice lines', 'style frames', 'transitions', 'shots', 'cues', '', ''];
 
 export function stageOf(step) {
   if (step.stage && STAGES.includes(step.stage)) return STAGES.indexOf(step.stage);
   if (BY_KEY[step.key] !== undefined) return BY_KEY[step.key];
-  if (step.delivers) return 5;
-  if (step.canvas === 'frame') return 1;
-  if (step.canvas === 'shot' || step.canvas === 'transition') return 2;
+  if (step.delivers) return STAGE_RENDER;
+  if (step.canvas === 'line') return 1;
+  if (step.canvas === 'frame') return 2;
+  if (step.canvas === 'transition') return 3;
+  if (step.canvas === 'shot') return 4;
   if (step.canvas === 'beat') return 0;
-  if ((step.work || []).some((w) => ['audio', 'music', 'instruments'].includes(w))) return 3;
-  if (step.waits_for_approval) return 4;
+  if ((step.work || []).some((w) => ['music', 'instruments'].includes(w))) return STAGE_MUSIC;
+  if (step.waits_for_approval) return STAGE_EDIT;
   return 0;
 }
 
 export const stageIndex = (v) => (Number.isInteger(v) && v >= 0 && v < STAGES.length ? v : STAGES.indexOf(v));
+
+// A project's `mfx` saved with the six stages, in the eight (stage index and the stages pressed Next on). Idempotent.
+export function upgradeMfx(mfx) {
+  if (!mfx || mfx.stages === STAGES.length) return false;
+  if (Number.isInteger(mfx.stage)) mfx.stage = OLD_STAGE[mfx.stage] ?? 0;
+  const done = {};
+  for (const [k, at] of Object.entries(mfx.stages_done || {})) for (const n of OLD_DONE[k] || [k]) done[n] = at;
+  mfx.stages_done = done;
+  mfx.stages = STAGES.length;
+  return true;
+}
+// A project's `mfx` as the eight stages see it, without saving (reads).
+export function mfxView(project) {
+  const m = structuredClone(project?.mfx || {});
+  upgradeMfx(m);
+  return m;
+}
 
 // What the stage bar shows, one StageStatus per stage (protocol.md). `running`: a session is working on this project.
 export function stageStatuses(root, id, { running = false, graph = null } = {}) {
@@ -47,12 +76,13 @@ export function stageStatuses(root, id, { running = false, graph = null } = {}) 
   let g = graph;
   if (!g) { try { g = canvasView(root, id); } catch { g = { nodes: {} }; } }
   const nodes = Object.values(g.nodes || {}).filter((n) => !n.missing);
-  const done = project.mfx?.stages_done || {};
+  const done = mfxView(project).stages_done || {};
   const stopped = ['paused', 'cancelled'].includes(project.state) && !(project.state === 'paused' && project.needs_you && !project.needs_you.by_you);
   return STAGES.map((key, i) => {
     const steps = view.filter((s) => stageOf(s) === i);
-    const present = steps.length > 0 || i >= 4;
     const pieces = nodes.filter((n) => KINDS[i].includes(n.kind));
+    // a project made before its pipeline had this stage's own step (voice lines from the animatic) still has the stage
+    const present = steps.length > 0 || i >= STAGE_EDIT || pieces.length > 0;
     const live = pieces.filter((n) => n.state !== 'cut');
     const reviewable = nodes.filter((n) => REVIEW_KINDS[i].includes(n.kind) && n.state !== 'cut');
     const made = live.filter((n) => !n.planned && n.versions?.length);
@@ -91,7 +121,7 @@ export function stageStatuses(root, id, { running = false, graph = null } = {}) 
 // OK are OK'd as they are; questions take their defaults). `then`: the stage the owner goes to.
 export function stageDone(root, id, from, { reason = 'Next' } = {}) {
   const i = stageIndex(from);
-  if (i < 0) throw new GateError('stage must be 0-5 or a stage key');
+  if (i < 0) throw new GateError('stage must be 0-7 or a stage key');
   const pipeline = projectPipeline(root, id);
   const kept = [];
   const left = [];
@@ -121,13 +151,14 @@ export function stageDone(root, id, from, { reason = 'Next' } = {}) {
   }
   update(root, id, (p) => {
     p.mfx ||= {};
+    upgradeMfx(p.mfx);
     p.mfx.stages_done = { ...(p.mfx.stages_done || {}), [STAGES[i]]: now() };
   });
   event(root, id, { event: 'STAGE_DONE', actor: 'you', details: `${STAGE_NAMES[i]}: ${reason}` });
   return { stage: i, key: STAGES[i], kept, left };
 }
 
-// Leaving Voice & music for Edit (Edit the video) or Render (Get the video): the app builds the edit from the
+// Leaving Music for Edit (Edit the video) or Render (Get the video): the app builds the edit from the
 // graph and renders it with Mortiflix Studio's export (docs 38, 39), so the session never builds or renders a final. Those
 // steps are skipped, marked as done in the app.
 export function handOverToApp(root, id, how) {
@@ -135,7 +166,7 @@ export function handOverToApp(root, id, how) {
   return update(root, id, (p) => {
     const skipped = [];
     for (const s of pipeline.steps) {
-      if (stageOf(s) < 4 || DONE.includes(p.steps[s.key]?.state)) continue;
+      if (stageOf(s) < STAGE_EDIT || DONE.includes(p.steps[s.key]?.state)) continue;
       p.steps[s.key] = { ...(p.steps[s.key] || {}), state: 'skipped', by: 'app', how };
       skipped.push(s.key);
     }
@@ -150,7 +181,7 @@ export function handOverToApp(root, id, how) {
 // steps and pieces are made again.
 export function remakesIf(root, id, stage) {
   const i = stageIndex(stage);
-  if (i < 0) throw new GateError('stage must be 0-5 or a stage key');
+  if (i < 0) throw new GateError('stage must be 0-7 or a stage key');
   const pipeline = projectPipeline(root, id);
   const view = stepView(loadProject(root, id), pipeline);
   const start = new Set(view.filter((s) => stageOf(s) === i).map((s) => s.key));
@@ -169,7 +200,7 @@ export function remakesIf(root, id, stage) {
 // and the stages from it on are no longer "done".
 export function reopenStage(root, id, stage, text) {
   const i = stageIndex(stage);
-  if (i < 0) throw new GateError('stage must be 0-5 or a stage key');
+  if (i < 0) throw new GateError('stage must be 0-7 or a stage key');
   const pipeline = projectPipeline(root, id);
   const view = stepView(loadProject(root, id), pipeline).filter((s) => stageOf(s) === i && s.review !== 'internal' && ['approved', 'done'].includes(s.state));
   const step = view.at(-1);
@@ -177,6 +208,7 @@ export function reopenStage(root, id, stage, text) {
   const r = reopen(root, id, step.key, { overall: String(text || '').slice(0, 4000) });
   update(root, id, (p) => {
     p.mfx ||= {};
+    upgradeMfx(p.mfx);
     const d = { ...(p.mfx.stages_done || {}) };
     for (const k of STAGES.slice(i)) delete d[k];
     p.mfx.stages_done = d;
@@ -185,5 +217,5 @@ export function reopenStage(root, id, stage, text) {
 }
 
 export function saveLastStage(root, id, stage) {
-  return update(root, id, (p) => { p.mfx ||= {}; p.mfx.stage = stage; return stage; });
+  return update(root, id, (p) => { p.mfx ||= {}; upgradeMfx(p.mfx); p.mfx.stage = stage; return stage; });
 }
