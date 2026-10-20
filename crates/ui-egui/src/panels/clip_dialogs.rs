@@ -312,7 +312,15 @@ pub fn show(app: &mut StudioApp, ctx: &egui::Context) {
     let can_save = app.session.path.is_some() || app.hooks.pick_save.is_some();
     // the title is translated; the window keeps one id whatever the interface language
     let id = egui::Id::new(("clip-dialog", pre));
-    egui::Window::new(title).id(id).collapsible(false).resizable(false).default_width(360.0).centered(ctx).show(ctx, |ui| {
+    // Save Project gets a ✕ in its title bar (owner, 2026-10-19); the ✕ is Cancel
+    let closing = matches!(d.command.as_str(), "file.closeProject" | "app.quit");
+    let mut open = true;
+    let (accent, danger) = (app.tokens.accent, app.tokens.danger);
+    let mut window = egui::Window::new(title).id(id).collapsible(false).resizable(false).default_width(360.0).centered(ctx);
+    if closing {
+        window = window.open(&mut open);
+    }
+    window.show(ctx, |ui| {
         let p = &mut d.params;
         match d.command.as_str() {
             "edit.pasteAttributes" | "edit.removeAttributes" => {
@@ -540,23 +548,34 @@ pub fn show(app: &mut StudioApp, ctx: &egui::Context) {
                 }
             }
             "file.closeProject" | "app.quit" => {
-                ui.label(tlf!("Save changes to “{project_name}” before closing?", project_name));
+                // owner, 2026-10-19: the question and the buttons centred; Save blue, Don't Save red, Cancel as it is
+                ui.vertical_centered(|ui| ui.label(tlf!("Save changes to “{project_name}” before closing?", project_name)));
                 ui.add_space(8.0);
+                // the row's width from the last frame decides the space before it
+                let row = egui::Id::new(("clip-dialog-close-row", pre));
+                let width: f32 = ui.data(|m| m.get_temp(row)).unwrap_or(0.0);
                 ui.horizontal(|ui| {
+                    ui.add_space(((ui.available_width() - width) / 2.0).max(0.0));
+                    let start = ui.cursor().min.x;
                     let r = ui.button(tl!("Cancel"));
                     push(&mut elems, format!("{pre}.cancel"), &r, "Cancel");
                     if r.clicked() {
                         action = Some("cancel");
                     }
-                    let r = ui.button(tl!("Don't Save"));
+                    let r = ui.add(egui::Button::new(RichText::new(tl!("Don't Save")).color(egui::Color32::WHITE)).fill(danger));
                     push(&mut elems, format!("{pre}.dontSave"), &r, "Don't Save");
                     if r.clicked() {
                         action = Some("dontSave");
                     }
-                    let r = ui.add_enabled(can_save, egui::Button::new(tl!("Save")));
+                    let r = ui.add_enabled(can_save, egui::Button::new(RichText::new(tl!("Save")).color(egui::Color32::WHITE)).fill(accent));
                     push(&mut elems, format!("{pre}.save"), &r, "Save");
                     if r.clicked() {
                         action = Some("save");
+                    }
+                    let used = r.rect.max.x - start;
+                    if (used - width).abs() > 0.5 {
+                        ui.data_mut(|m| m.insert_temp(row, used));
+                        ui.ctx().request_repaint();
                     }
                 });
                 return;
@@ -583,7 +602,7 @@ pub fn show(app: &mut StudioApp, ctx: &egui::Context) {
     for (id, r, l) in elems {
         app.auto.add(&id, r, &l);
     }
-    if crate::widgets::escape_closes(ctx) {
+    if crate::widgets::escape_closes(ctx) || !open {
         action = Some("cancel");
     }
     if action.is_some() {
