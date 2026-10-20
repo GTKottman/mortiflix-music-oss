@@ -942,6 +942,9 @@ fn summary(ui: &mut egui::Ui, ctx: &mut MfxCtx, vm: &mut Vm) {
             }
         });
     }
+    if vm.voice_only {
+        return;
+    }
     let not_ok = vm.tl.not_ok();
     ui.add_space(4.0);
     if not_ok.is_empty() && !(vm.tl.lines.is_empty() && vm.tl.cues.is_empty()) {
@@ -1023,42 +1026,139 @@ fn voice_now(ui: &mut egui::Ui, ctx: &mut MfxCtx, vm: &mut Vm) {
     if step || live.as_ref().is_some_and(|l| l.line.is_some()) {
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(250));
     }
-    // every line: its state, number, words and length
+    // every line, one row each: the one list of lines on Voice (owner, 2026-10-19: one place, not four)
     ui.add_space(6.0);
     let recording = live.as_ref().and_then(|l| l.line.clone());
-    let mut pick = None;
-    for p in vm.tl.lines.iter().take(400) {
-        ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = 6.0;
-            let (mark, col) = if recording.as_deref() == Some(p.id.as_str()) {
-                ("recording", t.accent)
-            } else {
-                match p.state {
-                    PieceState::Ok => ("✓ OK", t.ok),
-                    PieceState::Ready => ("made", t.text_dim),
-                    PieceState::Remaking => ("remaking", t.accent),
-                    PieceState::Failed => ("failed", t.error),
-                    PieceState::Making | PieceState::Planned => ("waiting", t.text_faint),
-                    PieceState::Cut => ("cut", t.text_faint),
-                }
-            };
-            ui.add_sized(vec2(64.0, 16.0), egui::Label::new(RichText::new(mark).size(11.0).color(col)));
-            if let Some(c) = p.colour {
-                ui.label(RichText::new("▌").color(c));
+    line_rows(ui, ctx, vm, recording.as_deref());
+    ui.add_space(8.0);
+}
+
+/// How a line is made, in a chip's words: "ElevenLabs", "This computer", "Your voice".
+fn how_label(engine: &str) -> &'static str {
+    match engine {
+        "elevenlabs" => "ElevenLabs",
+        "qwen" => "This computer",
+        "own" => "Your voice",
+        "none" => "No narration",
+        _ => "The project's voice",
+    }
+}
+
+/// One row per line: ▶ · scene-coloured number · words · length · how it's made (a chip that is also the menu to
+/// change it, design standard 3.5) · OK. Clicking the words selects the line.
+fn line_rows(ui: &mut egui::Ui, ctx: &mut MfxCtx, vm: &mut Vm, recording: Option<&str>) {
+    let t = ctx.theme;
+    let rows: Vec<Piece> = vm.tl.lines.iter().take(400).cloned().collect();
+    let mut pick: Option<String> = None;
+    for p in &rows {
+        let Some(info) = p.line.clone() else { continue };
+        let made = !matches!(p.state, PieceState::Making | PieceState::Planned);
+        let sel = vm.sel.as_ref().is_some_and(|s| s.1 == p.id);
+        let row = ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 8.0;
+            let play = ui.add_enabled(made, egui::Button::new("▶").small().frame(false)).on_hover_text("Play the line");
+            ctx.auto(&format!("mfx.vm.row.{}.play", p.id), &play, "Play the line");
+            if play.clicked() {
+                vm.sel = Some((Kind::Line, p.id.clone()));
+                ctx.state.selected_node = Some(p.id.clone());
+                play_from(ctx, vm, (p.start - 0.3).max(0.0));
             }
-            let len = if matches!(p.state, PieceState::Making | PieceState::Planned) { String::new() } else { format!(" · {}", fmt_secs(p.secs())) };
-            let words = p.line.as_ref().map(|l| l.words.as_str()).filter(|w| !w.is_empty()).unwrap_or(&p.title);
-            let r = ui.add(egui::Label::new(RichText::new(format!("{}  {words}{len}", p.label)).size(12.0).color(t.text)).truncate().sense(Sense::click()));
-            ctx.auto(&format!("mfx.vm.now.{}", p.id), &r, &p.label);
+            // the scene's colour carries the number (never colour alone)
+            let g = ui.painter().layout_no_wrap(p.label.clone(), egui::FontId::proportional(11.0), Color32::BLACK);
+            let (chip, _) = ui.allocate_exact_size(vec2(g.size().x + 10.0, 18.0), Sense::hover());
+            ui.painter().rect_filled(chip, 3.0, p.colour.unwrap_or(t.separator));
+            ui.painter().galley(chip.center() - g.size() / 2.0, g, Color32::BLACK);
+            // right side first, in a fixed width, so the words take what's left
+            let right = 250.0;
+            let words_w = (ui.available_width() - right).max(80.0);
+            let words = if info.words.is_empty() { p.title.clone() } else { info.words.clone() };
+            // hard left (design standard 1.2)
+            let r = ui
+                .allocate_ui_with_layout(vec2(words_w, 20.0), egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                    ui.set_min_width(words_w);
+                    ui.add(egui::Label::new(RichText::new(words).size(12.5).color(if made { t.text } else { t.text_dim })).truncate().sense(Sense::click()))
+                })
+                .inner;
+            ctx.auto(&format!("mfx.vm.row.{}", p.id), &r, &p.label);
             if r.clicked() {
                 pick = Some(p.id.clone());
             }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.spacing_mut().item_spacing.x = 8.0;
+                // OK: quiet until it's given (design standard 4.1)
+                if recording == Some(p.id.as_str()) {
+                    ui.add(egui::Spinner::new().size(12.0).color(t.accent));
+                    ui.label(RichText::new("recording").size(11.0).color(t.text_dim));
+                } else if p.state == PieceState::Ok {
+                    let back = ui.add(egui::Button::new(RichText::new("✓ OK").size(12.0).color(t.ok)).frame(false)).on_hover_text("Take the OK back");
+                    ctx.auto(&format!("mfx.vm.row.{}.ok", p.id), &back, "OK'd");
+                    if back.clicked() {
+                        send(ctx, vm, "node.edit", json!({"node": p.id, "action": "clear"}), format!("Line {}: OK taken back.", p.label));
+                    }
+                } else {
+                    let ok = ui.add_enabled(made && p.state != PieceState::Cut, egui::Button::new(RichText::new("OK").size(12.0)).min_size(vec2(44.0, 0.0)));
+                    ctx.auto(&format!("mfx.vm.row.{}.ok", p.id), &ok, "OK");
+                    if ok.clicked() {
+                        send(ctx, vm, "node.edit", json!({"node": p.id, "action": "ok"}), format!("Line {} is OK. The AI won't touch it.", p.label));
+                    }
+                }
+                how_chip(ui, ctx, vm, p, &info);
+                let len = if made { fmt_secs(p.secs()) } else { "waiting".to_string() };
+                ui.label(RichText::new(len).size(11.0).color(t.text_faint));
+            });
         });
+        if sel {
+            let r = row.response.rect;
+            ui.painter().rect_filled(egui::Rect::from_min_max(r.min - vec2(6.0, 0.0), egui::pos2(r.min.x - 3.0, r.max.y)), 1.0, t.text);
+        }
     }
     if let Some(id) = pick {
         select(ctx, vm, Kind::Line, &id, true);
     }
-    ui.add_space(8.0);
+}
+
+/// How this line is made, as a chip: the project's voice is a quiet chip; a line made another way (your own voice,
+/// another engine) is filled, so it stands out without words. Clicking it is the menu to change it, line by line.
+fn how_chip(ui: &mut egui::Ui, ctx: &mut MfxCtx, vm: &mut Vm, p: &Piece, info: &model::LineInfo) {
+    let t = ctx.theme;
+    let engine = if p.own_take() { "own".to_string() } else { info.voice.clone().unwrap_or_else(|| vm.tl.narration.clone()) };
+    let own_way = engine != vm.tl.narration;
+    let text = how_label(&engine);
+    let col = if engine == "own" {
+        t.ok
+    } else if own_way {
+        t.text
+    } else {
+        t.text_dim
+    };
+    let b = egui::Button::new(RichText::new(text).size(11.0).color(col)).corner_radius(10.0).min_size(vec2(104.0, 20.0));
+    let b = if own_way { b.fill(t.hover) } else { b.fill(Color32::TRANSPARENT).stroke(egui::Stroke::new(1.0, t.separator)) };
+    let chip = ui.add(b).on_hover_text("How this line is made: click to change it for this line");
+    ctx.auto(&format!("mfx.vm.row.{}.how", p.id), &chip, "How it's made");
+    egui::Popup::menu(&chip).show(|ui| {
+        for (id, _) in vm.tl.voices.clone() {
+            if id == "own" {
+                continue;
+            }
+            let on = engine == id;
+            let r = ui.selectable_label(on, how_label(&id));
+            ctx.auto(&format!("mfx.vm.row.{}.how.{id}", p.id), &r, how_label(&id));
+            if r.clicked() && !on {
+                send(ctx, vm, "mix.set", json!({"node": p.id, "voice": id}), format!("Line {} is remade with {}.", p.label, how_label(&id)));
+            }
+        }
+        ui.separator();
+        let rec = ui.button("● Record it yourself");
+        ctx.auto(&format!("mfx.vm.row.{}.how.record", p.id), &rec, "Record it yourself");
+        if rec.clicked() {
+            vm.booth = Some(p.id.clone());
+        }
+        let imp = ui.button("Import a recording…");
+        ctx.auto(&format!("mfx.vm.row.{}.how.import", p.id), &imp, "Import a recording");
+        if imp.clicked() {
+            pick_recording(ctx, &p.id);
+        }
+    });
 }
 
 fn lane_actions(ctx: &mut MfxCtx, vm: &mut Vm, out: lanes::LaneOut) {

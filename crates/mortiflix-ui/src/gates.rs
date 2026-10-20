@@ -122,15 +122,28 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
             ui.add(egui::Label::new(RichText::new(text).size(13.0).color(if *ok { t.text } else { t.text_dim })).wrap());
         });
     }
+    // on Voice the lines are OK'd in the Voice list itself: no second list here (owner, 2026-10-19)
+    let listed = stage != STAGE_VOICE;
     ui.add_space(10.0);
-    ui.label(RichText::new(format!("Check off the {}", gate.noun)).size(13.0).color(t.text).strong());
+    if listed {
+        ui.label(RichText::new(format!("Check off the {}", gate.noun)).size(13.0).color(t.text).strong());
+    }
     ui.add_space(2.0);
     // the list gets the room left above Next; on Music the score's Strudel gets its own box below
-    let list_h = if stage == STAGE_MUSIC { (ui.available_height() * 0.3).max(90.0) } else { (ui.available_height() - 120.0).max(80.0) };
+    let list_h = if !listed {
+        0.0
+    } else if stage == STAGE_MUSIC {
+        (ui.available_height() * 0.3).max(90.0)
+    } else {
+        (ui.available_height() - 120.0).max(80.0)
+    };
     let strudel_h = if stage == STAGE_MUSIC { (ui.available_height() - list_h - 130.0).max(120.0) } else { 0.0 };
     let mut decide: Option<(String, &'static str)> = None;
     let mut select: Option<String> = None;
     egui::ScrollArea::vertical().id_salt(("mfx-gate", stage)).max_height(list_h).auto_shrink([false, true]).show(ui, |ui| {
+        if !listed {
+            return;
+        }
         if list.is_empty() {
             ui.label(RichText::new(format!("No {} yet: they're made once the gate before this one passed.", gate.noun)).size(12.0).color(t.text_faint));
         }
