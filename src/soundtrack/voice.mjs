@@ -66,6 +66,10 @@ export async function makeVoice({ work, key, voice = 'Tracy K', voiceId = null, 
     const from = Math.max(0, a - Math.round(LEAD * RATE)); const to = Math.min(x.length, z + 1 + Math.round(TAIL * RATE));
     clips.push({ line: l, samples: x.subarray(from, to), words: words.map((w) => ({ text: w.text, start: w.start - from / RATE, end: w.end - from / RATE })) });
   }
+  // each line on its own too, the same samples: the Voice lane plays and checks lines one by one (voice/clips/<id>.wav,
+  // where the canvas looks; without them every line showed "making" though the voice was done, owner 2026-10-19)
+  mkdirSync(join(work, 'voice', 'clips'), { recursive: true });
+  for (const c of clips) writeWav(join(work, 'voice', 'clips', `${c.line.id}.wav`), [c.samples], RATE);
   // join with the script's gaps
   const total = clips.reduce((s, c) => s + c.samples.length + Math.round((c.line.gap_after ?? 0.3) * RATE), 0);
   const out = new Float32Array(total);
