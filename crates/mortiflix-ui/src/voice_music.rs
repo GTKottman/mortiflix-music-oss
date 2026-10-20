@@ -88,6 +88,8 @@ struct Vm {
     voice_only: bool,
     /// The voice being made now, from the service's `voice` activity (which line, which engine).
     live: Option<Live>,
+    /// The selected line's "More" (takes, timing, level, Fix, Cut it) is open.
+    more: bool,
 }
 
 /// One `voice` activity: "Recording line 3-1 (2 of 4) on ElevenLabs, Tracy K".
@@ -364,6 +366,11 @@ fn header(ui: &mut egui::Ui, ctx: &mut MfxCtx, vm: &mut Vm) {
 /// The selected line or cue, or the whole video's summary.
 fn detail(ui: &mut egui::Ui, ctx: &mut MfxCtx, vm: &mut Vm) {
     let piece = vm.sel.as_ref().and_then(|(k, id)| vm.tl.find(*k, id)).cloned();
+    // on Voice the selected line opens in place under its row in the list (owner, 2026-10-19)
+    if vm.voice_only && piece.as_ref().is_none_or(|p| p.kind == Kind::Line) {
+        summary(ui, ctx, vm);
+        return;
+    }
     match piece {
         Some(p) if p.kind == Kind::Line => line_panel(ui, ctx, vm, &p),
         Some(p) if p.kind == Kind::Cue => cue_panel(ui, ctx, vm, &p),
@@ -1108,12 +1115,182 @@ fn line_rows(ui: &mut egui::Ui, ctx: &mut MfxCtx, vm: &mut Vm, recording: Option
             });
         });
         if sel {
-            let r = row.response.rect;
-            ui.painter().rect_filled(egui::Rect::from_min_max(r.min - vec2(6.0, 0.0), egui::pos2(r.min.x - 3.0, r.max.y)), 1.0, t.text);
+            let top = row.response.rect.min;
+            let inner = ui.indent(("mfx-vm-open", &p.id), |ui| line_inline(ui, ctx, vm, p, &info));
+            let bottom = inner.response.rect.max.y;
+            ui.painter().rect_filled(egui::Rect::from_min_max(top - vec2(6.0, 0.0), egui::pos2(top.x - 3.0, bottom)), 1.0, t.text);
+            ui.add_space(6.0);
         }
     }
     if let Some(id) = pick {
         select(ctx, vm, Kind::Line, &id, true);
+    }
+}
+
+/// The selected line, open under its row: its words, then New take · ● Record yourself · Import, and "More" with the
+/// takes, timing, level, Fix and Cut it (collapsed at first, remembered while the app is open).
+fn line_inline(ui: &mut egui::Ui, ctx: &mut MfxCtx, vm: &mut Vm, p: &Piece, info: &model::LineInfo) {
+    let t = ctx.theme;
+    if p.state == PieceState::Failed {
+        ui.horizontal_wrapped(|ui| {
+            ui.colored_label(t.error, if p.error.is_empty() { "Couldn't make this line." } else { p.error.as_str() });
+            let again = ui.button("Try again");
+            ctx.auto("mfx.vm.retry", &again, "Try again");
+            if again.clicked() {
+                send(
+                    ctx,
+                    vm,
+                    "node.edit",
+                    json!({"node": p.id, "action": "fix", "text": "Try again: the last attempt couldn't make this line."}),
+                    format!("Line {}: trying again.", p.label),
+                );
+            }
+        });
+    }
+    // the words (the script changes with them)
+    let mut words = vm.words.as_ref().filter(|w| w.0 == p.id).map_or(info.words.clone(), |w| w.1.clone());
+    ui.horizontal(|ui| {
+        let r = ui.add(egui::TextEdit::singleline(&mut words).desired_width((ui.available_width() - 110.0).max(80.0)));
+        ctx.auto("mfx.vm.words", &r, "Words");
+        let changed = words.trim() != info.words.trim() && !words.trim().is_empty();
+        let remake = ui.add_enabled(changed, egui::Button::new("Remake line")).on_hover_text("The script changes with it");
+        ctx.auto("mfx.vm.remake", &remake, "Remake line");
+        if remake.clicked() {
+            send(
+                ctx,
+                vm,
+                "voice.line.words",
+                json!({"line": p.id, "text": words.trim()}),
+                format!("Line {} is remade with the new words. The script changes with it.", p.label),
+            );
+            vm.words = None;
+        } else if changed {
+            vm.words = Some((p.id.clone(), words.clone()));
+        } else {
+            vm.words = None;
+        }
+    });
+    heard_row(ui, ctx, info);
+    // another take, or your own: recording yourself is always one click away
+    ui.horizontal(|ui| {
+        let new = ui.button("New take");
+        ctx.auto("mfx.vm.newTake", &new, "New take");
+        if new.clicked() {
+            send(ctx, vm, "voice.line.take", json!({"line": p.id}), format!("Line {}: a new take is being made. Every take is kept.", p.label));
+        }
+        let rec = ui.button("● Record yourself");
+        ctx.auto("mfx.vm.record", &rec, "Record yourself");
+        if rec.clicked() {
+            vm.booth = Some(p.id.clone());
+        }
+        let imp = ui.button("Import…").on_hover_text("A recording from your computer (or drag one onto the line on the Voice lane)");
+        ctx.auto("mfx.vm.import", &imp, "Import a recording");
+        if imp.clicked() {
+            pick_recording(ctx, &p.id);
+        }
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let takes = info.takes.len();
+            let label = if vm.more {
+                "Less".to_string()
+            } else if takes > 1 {
+                format!("More · {takes} takes")
+            } else {
+                "More".to_string()
+            };
+            let more = ui.add(egui::Button::new(RichText::new(label).color(t.text_dim)).frame(false));
+            ctx.auto("mfx.vm.more", &more, "More");
+            if more.clicked() {
+                vm.more = !vm.more;
+            }
+        });
+    });
+    if !vm.more {
+        return;
+    }
+    // takes
+    ui.horizontal_wrapped(|ui| {
+        ui.colored_label(t.text_dim, "Takes");
+        for take in &info.takes {
+            let playing = info.take.as_deref() == Some(take.id.as_str());
+            let label = if playing { format!("{} · playing", take.label) } else { take.label.clone() };
+            let label = if take.own { format!("● {label}") } else { label };
+            let r = ui.selectable_label(playing, label);
+            ctx.auto(&format!("mfx.vm.take.{}", take.id), &r, &take.label);
+            if r.clicked() && !playing {
+                use_take(ctx, vm, p, take);
+            }
+        }
+    });
+    // timing
+    ui.horizontal(|ui| {
+        ui.colored_label(t.text_dim, format!("Starts {}", fmt_time(p.start)));
+        let minus = ui.add_enabled(vm.tl.has_view, egui::Button::new("−0.1 s"));
+        ctx.auto("mfx.vm.nudgeBack", &minus, "-0.1 s");
+        let plus = ui.add_enabled(vm.tl.has_view, egui::Button::new("+0.1 s"));
+        ctx.auto("mfx.vm.nudgeOn", &plus, "+0.1 s");
+        for (r, by) in [(&minus, -0.1), (&plus, 0.1)] {
+            if r.clicked() {
+                send(
+                    ctx,
+                    vm,
+                    "mix.set",
+                    json!({"node": p.id, "nudge_sec": by}),
+                    format!("Line {} starts 0.1 s {}.", p.label, if by < 0.0 { "earlier" } else { "later" }),
+                );
+            }
+        }
+        if info.moved {
+            let back = ui.small_button("Back to the script's timing");
+            ctx.auto("mfx.vm.timing.reset", &back, "Back to the script's timing");
+            if back.clicked() {
+                send(ctx, vm, "mix.set", json!({"node": p.id, "start_sec": null}), format!("Line {} is back at the script's timing.", p.label));
+            }
+        }
+    });
+    // level
+    ui.horizontal(|ui| {
+        ui.colored_label(t.text_dim, "Level");
+        if let Some(db) = level_slider(ui, ctx, vm, &p.id, "lineLevel", info.gain_db, -30.0..=12.0) {
+            send(ctx, vm, "mix.set", json!({"node": p.id, "gain_db": db}), format!("Line {} level {}.", p.label, fmt_db(db)));
+        }
+    });
+    // Fix (tell Mortiflix what to change) and Cut it, quiet: the row's OK is the main thing
+    ui.horizontal(|ui| {
+        let fix = ui.button("Fix…");
+        ctx.auto("mfx.vm.fix", &fix, "Fix");
+        if fix.clicked() {
+            vm.fix = Some((p.id.clone(), String::new()));
+        }
+        let (cut_label, cut_action) = if p.state == PieceState::Cut { ("Put it back", "clear") } else { ("Cut it", "cut") };
+        let cut = ui.button(cut_label);
+        ctx.auto("mfx.vm.cut", &cut, cut_label);
+        if cut.clicked() {
+            let done = if cut_action == "cut" {
+                format!("Line {} is cut. It stays in the project, out of the video.", p.label)
+            } else {
+                format!("Line {} is back in the video.", p.label)
+            };
+            send(ctx, vm, "node.edit", json!({"node": p.id, "action": cut_action}), done);
+        }
+    });
+    if let Some((id, mut text)) = vm.fix.clone().filter(|f| f.0 == p.id) {
+        ui.horizontal(|ui| {
+            let r = ui.add(
+                egui::TextEdit::singleline(&mut text)
+                    .hint_text(format!("Tell Mortiflix what to change in line {}…", p.label))
+                    .desired_width((ui.available_width() - 70.0).max(80.0)),
+            );
+            ctx.auto("mfx.vm.fix.text", &r, "What to change");
+            let go = ui.add_enabled(!text.trim().is_empty(), egui::Button::new("Send"));
+            ctx.auto("mfx.vm.fix.send", &go, "Send");
+            let enter = r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+            if (go.clicked() || enter) && !text.trim().is_empty() {
+                send(ctx, vm, "node.edit", json!({"node": id, "action": "fix", "text": text.trim()}), format!("Sent: only line {} is remade.", p.label));
+                vm.fix = None;
+            } else {
+                vm.fix = Some((id, text));
+            }
+        });
     }
 }
 
