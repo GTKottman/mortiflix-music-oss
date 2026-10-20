@@ -259,7 +259,8 @@ fn status_icon(p: &egui::Painter, c: Pos2, st: &StageStatus, t: &crate::MfxTheme
     }
 }
 
-/// "2 still need you" (doc 30): Next asked first. Show them closes; Go on anyway moves on.
+/// "2 still need you" (doc 30): Next asked first. ✕ and Close close; Show them shows them; Approve … and move on
+/// moves on.
 fn confirm_popup(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     let Some(mut c) = ctx.state.confirm_next.clone() else { return };
     let now = ui.input(|i| i.time);
@@ -275,23 +276,55 @@ fn confirm_popup(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(120));
     }
     let what = if c.need == 1 { "1 piece still needs you".to_string() } else { format!("{} pieces still need you", c.need) };
+    // owner, 2026-10-19: ✕ top right; Close · Show them · the blue approve button, centred
+    let approve = format!("Approve {} and move on", stage_name(c.stage).to_lowercase());
     let modal = egui::Modal::new(egui::Id::new("mfx-confirm-next")).show(ui.ctx(), |ui| {
-        ui.set_width(380.0);
-        ui.heading(&what);
+        ui.set_width(420.0);
+        ui.horizontal(|ui| {
+            ui.heading(&what);
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                // drawn: the UI font has no ✕
+                let (rect, x) = ui.allocate_exact_size(vec2(18.0, 18.0), egui::Sense::click());
+                let col = if x.hovered() { ctx.theme.text } else { ctx.theme.text_dim };
+                let r = rect.shrink(4.5);
+                ui.painter().line_segment([r.left_top(), r.right_bottom()], Stroke::new(1.5, col));
+                ui.painter().line_segment([r.right_top(), r.left_bottom()], Stroke::new(1.5, col));
+                let x = x.on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_text("Close");
+                ctx.auto("mfx.stagebar.confirm.x", &x, "Close");
+                if x.clicked() {
+                    ctx.state.confirm_next = None;
+                }
+            });
+        });
         ui.label("Going on keeps every piece as it is now.");
         ui.add_space(8.0);
+        // centred: the row's width from the last frame decides the space before it
+        let row = egui::Id::new("mfx-confirm-next-row");
+        let width: f32 = ui.data(|d| d.get_temp(row)).unwrap_or(0.0);
         ui.horizontal(|ui| {
+            ui.add_space(((ui.available_width() - width) / 2.0).max(0.0));
+            let start = ui.cursor().min.x;
+            let close = ui.button("Close");
+            ctx.auto("mfx.stagebar.confirm.close", &close, "Close");
+            if close.clicked() {
+                ctx.state.confirm_next = None;
+            }
             let show = ui.button("Show them");
             ctx.auto("mfx.stagebar.confirm.show", &show, "Show them");
             if show.clicked() {
                 ctx.state.confirm_next = None;
                 ctx.command("mortiflix.showNeedsYou", json!({"stage": c.stage}));
             }
-            let go = ui.add(egui::Button::new(egui::RichText::new("Go on anyway").color(Color32::WHITE)).fill(ctx.theme.accent));
-            ctx.auto("mfx.stagebar.confirm.goOn", &go, "Go on anyway");
+            let go = ui.add(egui::Button::new(egui::RichText::new(&approve).color(Color32::WHITE)).fill(ctx.theme.accent));
+            ctx.auto("mfx.stagebar.confirm.goOn", &go, &approve);
             if go.clicked() {
                 ctx.state.confirm_next = None;
                 ctx.command(if c.to_render { "stages.getVideo" } else { "stages.next" }, json!({"force": true}));
+            }
+            let used = go.rect.max.x - start;
+            if (used - width).abs() > 0.5 {
+                ui.data_mut(|d| d.insert_temp(row, used));
+                ui.ctx().request_repaint();
             }
         });
     });

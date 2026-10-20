@@ -26,6 +26,7 @@ use egui::{Align, Color32, FontId, Key, Layout, Rect, RichText, Sense, Stroke, U
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
+use crate::nodes::model::NodeState;
 use crate::state::MfxState;
 use crate::{MfxCtx, Service};
 
@@ -924,7 +925,7 @@ pub fn gate(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
             if !written || status.need == 0 {
                 "Every scene is OK'd".into()
             } else {
-                format!("{} scenes wait for your OK (Next OKs them as they are)", status.need)
+                format!("{} scenes wait for your OK: press OK beside each scene (Next OKs them as they are)", status.need)
             },
         ),
     ];
@@ -1110,6 +1111,9 @@ fn beat_block(ui: &mut egui::Ui, ctx: &mut MfxCtx, scope: &str, beat: &Beat, com
                             dot(ui, t.warn);
                         }
                     }
+                    if !compact {
+                        ok_button(ui, ctx, scope, beat);
+                    }
                 });
                 let lines: Vec<&Line> = if compact && !open { beat.lines.iter().take(1).collect() } else { beat.lines.iter().collect() };
                 let hidden = beat.lines.len().saturating_sub(lines.len());
@@ -1144,6 +1148,31 @@ fn beat_block(ui: &mut egui::Ui, ctx: &mut MfxCtx, scope: &str, beat: &Beat, com
     // the beat's colour bar down its left edge (the number beside it: never colour alone)
     let bar = Rect::from_min_max(pos2(top.x, top.y + 2.0), pos2(top.x + 3.0, inner.rect.max.y - 2.0));
     ui.painter().rect_filled(bar, 1.0, colour);
+}
+
+/// OK a scene as it is, on the right of its name, so the OKs run down the Script box (owner, 2026-10-19: the
+/// gate asked for OKs and nothing showed where to give them). Pressed again it takes the OK back.
+fn ok_button(ui: &mut egui::Ui, ctx: &mut MfxCtx, scope: &str, beat: &Beat) {
+    let t = ctx.theme;
+    let Some(node) = ctx.state.nodes.graph.get(&beat.id) else { return };
+    let ok = node.state == NodeState::Ok;
+    let writing = ctx.state.script.script.writing || ctx.state.work.stage() == Some(0);
+    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+        let b = if ok {
+            egui::Button::new(RichText::new("✓ OK'd").size(12.0).color(t.ok))
+        } else {
+            egui::Button::new(RichText::new("OK").size(12.0).color(Color32::WHITE)).fill(t.accent)
+        };
+        let r = ui.add_enabled(!writing, b.min_size(vec2(64.0, 22.0)).corner_radius(4.0));
+        let r = if ok { r.on_hover_text("Take the OK back") } else { r.on_hover_text("OK this scene as it is") };
+        ctx.auto(&format!("mfx.script.{scope}.ok.{}", beat.id), &r, if ok { "OK'd" } else { "OK" });
+        if r.clicked() {
+            let MfxCtx { state, service, .. } = ctx;
+            if let Err(e) = state.nodes.decide(service, &beat.id, if ok { "clear" } else { "ok" }, "", true) {
+                state.nodes.error = e;
+            }
+        }
+    });
 }
 
 /// Saved deletes right after `after` (None = top of the beat): the words struck through, "deleted ·
