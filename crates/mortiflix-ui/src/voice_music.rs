@@ -86,6 +86,19 @@ struct Vm {
     status_set: Option<StageStatus>,
     /// Drawn on the Voice stage: the voice lines only.
     voice_only: bool,
+    /// The voice being made now, from the service's `voice` activity (which line, which engine).
+    live: Option<Live>,
+}
+
+/// One `voice` activity: "Recording line 3-1 (2 of 4) on ElevenLabs, Tracy K".
+#[derive(Clone, Default)]
+struct Live {
+    text: String,
+    /// The line being recorded (None once a scene or the voice is done).
+    line: Option<String>,
+    failed: bool,
+    /// When it came (egui time).
+    at: f64,
 }
 
 fn key() -> egui::Id {
@@ -204,6 +217,15 @@ fn sync(ui: &egui::Ui, ctx: &mut MfxCtx, vm: &mut Vm) {
         vm.seq = vm.seq.max(*seq);
         if matches!(ev.get("event").and_then(Value::as_str), Some("node.changed" | "status")) {
             changed = true;
+        }
+        let data = ev.get("data").unwrap_or(&Value::Null);
+        if ev.get("event").and_then(Value::as_str) == Some("activity") && data.get("kind").and_then(Value::as_str) == Some("voice") {
+            let state = data.get("state").and_then(Value::as_str).unwrap_or("");
+            let line = data.get("line").and_then(Value::as_str).filter(|_| state == "recording").map(|l| l.chars().take(24).collect());
+            let text = data.get("text").and_then(Value::as_str).unwrap_or("").chars().take(300).collect();
+            vm.live = Some(Live { text, line, failed: state == "failed", at: now });
+            // a recorded line shows on the lane at once
+            changed |= state != "recording";
         }
     }
     if vm.project != ctx.state.project_id {
@@ -883,6 +905,9 @@ fn shot_panel(ui: &mut egui::Ui, ctx: &mut MfxCtx, vm: &mut Vm, p: &Piece) {
 
 fn summary(ui: &mut egui::Ui, ctx: &mut MfxCtx, vm: &mut Vm) {
     let t = ctx.theme;
+    if vm.voice_only {
+        voice_now(ui, ctx, vm);
+    }
     ui.label(RichText::new("The whole video").color(t.text).strong());
     if vm.voice_only {
         ui.colored_label(t.text_dim, "Click a line on the Voice lane below to hear it, change its words or its voice, and OK it. Double-click plays it.");
@@ -931,6 +956,109 @@ fn summary(ui: &mut egui::Ui, ctx: &mut MfxCtx, vm: &mut Vm) {
         let more = if not_ok.len() > shown.len() { format!(" and {} more", not_ok.len() - shown.len()) } else { String::new() };
         ui.colored_label(t.text_dim, format!("No OK yet: {}{more}. You can still go on: they go in as they are now.", shown.join(", ")));
     }
+}
+
+/// What makes the voice and what it's doing now, then every line with its state (owner, 2026-10-19: "we should be
+/// able to see which voice line is being rendered, how it's being rendered, if it's being rendered locally, if it's
+/// being rendered on 11 labs").
+fn voice_now(ui: &mut egui::Ui, ctx: &mut MfxCtx, vm: &mut Vm) {
+    let t = ctx.theme;
+    let now = ui.input(|i| i.time);
+    let s = |k: &str| vm.voices.get(k).and_then(Value::as_str).unwrap_or("").chars().take(60).collect::<String>();
+    let (speaker, model) = (s("speaker"), s("model"));
+    let how = match vm.tl.narration.as_str() {
+        "elevenlabs" => format!(
+            "ElevenLabs{}{} · online: each line is sent to ElevenLabs and paid per character",
+            if speaker.is_empty() { String::new() } else { format!(", {speaker}") },
+            if model.is_empty() { String::new() } else { format!(" ({model})") }
+        ),
+        "qwen" => format!(
+            "{} on this computer{} · local: nothing leaves the PC, nothing to pay",
+            if model.is_empty() { "Qwen3-TTS".to_string() } else { model },
+            if speaker.is_empty() { String::new() } else { format!(", voice {speaker}") }
+        ),
+        "own" => "Your own voice, recorded line by line in the booth".to_string(),
+        "none" => "No narration".to_string(),
+        _ => "Not set up yet".to_string(),
+    };
+    ui.horizontal_wrapped(|ui| {
+        ui.label(RichText::new("Made by").color(t.text_faint));
+        ui.label(RichText::new(how).color(t.text));
+    });
+    // now: a line being recorded (activity in the last 2 minutes), the voice step running, or nothing
+    let step = ctx.state.work.stage() == Some(1);
+    let live = vm.live.clone().filter(|l| now - l.at < 120.0);
+    let made = vm.tl.lines.iter().filter(|p| !matches!(p.state, PieceState::Making | PieceState::Planned | PieceState::Failed)).count();
+    let total = vm.tl.lines.len();
+    ui.horizontal_wrapped(|ui| {
+        ui.label(RichText::new("Now").color(t.text_faint));
+        match &live {
+            Some(l) if l.line.is_some() || step => {
+                ui.add(egui::Spinner::new().size(12.0).color(t.accent));
+                ui.label(RichText::new(&l.text).color(t.text));
+            }
+            Some(l) if l.failed => {
+                ui.label(RichText::new(&l.text).color(t.error));
+            }
+            _ if step => {
+                ui.add(egui::Spinner::new().size(12.0).color(t.accent));
+                let line = if ctx.state.ai_line.is_empty() { "Making the voice…".to_string() } else { ctx.state.ai_line.chars().take(200).collect() };
+                ui.label(RichText::new(line).color(t.text));
+            }
+            Some(l) => {
+                ui.label(RichText::new(format!("{} · {made} of {total} lines made", l.text)).color(t.text_dim));
+            }
+            None => {
+                ui.label(
+                    RichText::new(if total > 0 && made == total {
+                        format!("Nothing is being made: all {total} lines are made")
+                    } else {
+                        format!("Nothing is being made: {made} of {total} lines made")
+                    })
+                    .color(t.text_dim),
+                );
+            }
+        }
+    });
+    if step || live.as_ref().is_some_and(|l| l.line.is_some()) {
+        ui.ctx().request_repaint_after(std::time::Duration::from_millis(250));
+    }
+    // every line: its state, number, words and length
+    ui.add_space(6.0);
+    let recording = live.as_ref().and_then(|l| l.line.clone());
+    let mut pick = None;
+    for p in vm.tl.lines.iter().take(400) {
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 6.0;
+            let (mark, col) = if recording.as_deref() == Some(p.id.as_str()) {
+                ("recording", t.accent)
+            } else {
+                match p.state {
+                    PieceState::Ok => ("✓ OK", t.ok),
+                    PieceState::Ready => ("made", t.text_dim),
+                    PieceState::Remaking => ("remaking", t.accent),
+                    PieceState::Failed => ("failed", t.error),
+                    PieceState::Making | PieceState::Planned => ("waiting", t.text_faint),
+                    PieceState::Cut => ("cut", t.text_faint),
+                }
+            };
+            ui.add_sized(vec2(64.0, 16.0), egui::Label::new(RichText::new(mark).size(11.0).color(col)));
+            if let Some(c) = p.colour {
+                ui.label(RichText::new("▌").color(c));
+            }
+            let len = if matches!(p.state, PieceState::Making | PieceState::Planned) { String::new() } else { format!(" · {}", fmt_secs(p.secs())) };
+            let words = p.line.as_ref().map(|l| l.words.as_str()).filter(|w| !w.is_empty()).unwrap_or(&p.title);
+            let r = ui.add(egui::Label::new(RichText::new(format!("{}  {words}{len}", p.label)).size(12.0).color(t.text)).truncate().sense(Sense::click()));
+            ctx.auto(&format!("mfx.vm.now.{}", p.id), &r, &p.label);
+            if r.clicked() {
+                pick = Some(p.id.clone());
+            }
+        });
+    }
+    if let Some(id) = pick {
+        select(ctx, vm, Kind::Line, &id, true);
+    }
+    ui.add_space(8.0);
 }
 
 fn lane_actions(ctx: &mut MfxCtx, vm: &mut Vm, out: lanes::LaneOut) {
