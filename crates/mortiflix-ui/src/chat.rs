@@ -1010,6 +1010,23 @@ fn message(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, i: usize, m: &M
     } else {
         None
     };
+    // what Mortiflix says sits in its own bubble on the left, like a chat (owner, 2026-10-19); your words are on the right
+    if m.role != Role::Action {
+        let w = ui.available_width();
+        let inner =
+            egui::Frame::new().fill(t.field_bg).stroke(Stroke::new(1.0, t.separator)).corner_radius(12.0).inner_margin(egui::Margin::symmetric(10, 6)).show(
+                ui,
+                |ui| {
+                    ui.set_max_width((w * 0.85).max(80.0) - 20.0);
+                    message_body(ui, ctx, st, i, m, now);
+                },
+            );
+        if let Some(c) = rule {
+            let r = inner.response.rect;
+            ui.painter().rect_filled(Rect::from_min_max(pos2(r.min.x, r.min.y + 8.0), pos2(r.min.x + 3.0, r.max.y - 8.0)), 1.0, c);
+        }
+        return;
+    }
     let inner = ui.scope(|ui| {
         if ruled {
             ui.add_space(2.0);
