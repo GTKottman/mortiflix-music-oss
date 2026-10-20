@@ -97,11 +97,26 @@ pub struct Detail {
     pub pulled: Vec<Pulled>,
 }
 
+/// What the voice used (`tokens.runs` `voice`): ElevenLabs characters, or this computer's lines and time.
+#[derive(Clone, Debug, Default, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct VoiceUse {
+    pub engine: String,
+    pub voice: Option<String>,
+    pub model: Option<String>,
+    pub characters: u64,
+    pub lines: u64,
+    pub recordings: u64,
+    pub seconds: u64,
+    pub last: Option<String>,
+}
+
 /// The panel's state (egui memory: nothing here is saved).
 #[derive(Clone, Debug, Default)]
 struct Tokens {
     project: Option<String>,
     runs: Vec<Run>,
+    voice: Vec<VoiceUse>,
     loaded: bool,
     error: String,
     selected: Option<String>,
@@ -196,6 +211,8 @@ fn poll(ctx: &mut MfxCtx, st: &mut Tokens, now: f64) {
         st.runs_req = None;
         if r.ok {
             st.runs = r.result.get("runs").cloned().and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default();
+            st.voice = r.result.get("voice").cloned().and_then(|v| serde_json::from_value::<Vec<VoiceUse>>(v).ok()).unwrap_or_default();
+            st.voice.truncate(8);
             st.loaded = true;
             st.error.clear();
             // the newest run is shown until you pick another
@@ -250,6 +267,9 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     ui.ctx().request_repaint_after(std::time::Duration::from_secs_f64(if running { POLL_RUNNING } else { POLL_IDLE }));
 
     ui.label(RichText::new("Token usage").strong().color(t.text));
+    if ctx.state.project_id.is_some() && st.error.is_empty() {
+        voice_use(ui, &st.voice, &t);
+    }
     legend(ui, &t);
     if ctx.state.project_id.is_none() {
         ui.label(RichText::new("Open a project to see what its Claude runs used.").color(t.text_dim));
@@ -266,6 +286,34 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
         detail(ui, ctx, &mut st, &t);
     }
     ui.ctx().data_mut(|d| d.insert_temp(key(), st));
+}
+
+/// The voice beside the Claude runs (owner, 2026-10-19: ElevenLabs listed here, or the local voice model's use):
+/// "ElevenLabs · Tracy K (eleven_v4)", "Voice: 760 characters · 13 lines, 14 recordings", "online, billed by characters".
+fn voice_use(ui: &mut egui::Ui, list: &[VoiceUse], t: &MfxTheme) {
+    if list.is_empty() {
+        return;
+    }
+    ui.add_space(4.0);
+    for v in list {
+        let who = [v.voice.as_deref(), v.model.as_deref().map(|m| if v.engine == "elevenlabs" { format!("({m})") } else { m.to_string() }).as_deref()]
+            .into_iter()
+            .flatten()
+            .filter(|x| !x.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ");
+        let (name, amount, how) = if v.engine == "elevenlabs" {
+            ("ElevenLabs".to_string(), format!("{} characters", v.characters), "online, billed by characters".to_string())
+        } else {
+            ("This computer".to_string(), format!("{}:{:02} of work", v.seconds / 60, v.seconds % 60), "local voice model, nothing to pay".to_string())
+        };
+        ui.add(egui::Label::new(RichText::new(if who.is_empty() { name.clone() } else { format!("{name} · {who}") }).color(t.text)).wrap());
+        let last = if v.last.is_some() { format!(" · last {}", when(v.last.as_deref())) } else { String::new() };
+        ui.add(egui::Label::new(RichText::new(format!("Voice: {amount} · {} lines, {} recordings", v.lines, v.recordings)).small().color(t.text)).wrap());
+        ui.add(egui::Label::new(RichText::new(format!("{how}{last}")).small().color(t.text_dim)).wrap());
+        ui.add_space(2.0);
+    }
+    ui.separator();
 }
 
 fn legend(ui: &mut egui::Ui, t: &MfxTheme) {
