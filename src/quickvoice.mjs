@@ -224,7 +224,8 @@ async function soundtrackVoice({ root, id, view, work, script, lines, env, onAct
   onActivity({ kind: 'info', text: `Recording the narration: ${lines.length} lines from ElevenLabs, lossless, nothing done to it.` });
   let v;
   try {
-    v = await makeVoice({ work, key, voice: el.voice_name || 'the studio voice', voiceId: el.voice_id, model: el.model_id, stability: el.stability, similarity: el.similarity_boost, speakerBoost: el.use_speaker_boost !== false, log: (t) => onActivity({ kind: 'info', text: t }) });
+    v = await makeVoice({ work, key, voice: el.voice_name || 'the studio voice', voiceId: el.voice_id, model: el.model_id, stability: el.stability, similarity: el.similarity_boost, speakerBoost: el.use_speaker_boost !== false,
+      log: (t, at) => onActivity(at ? { kind: 'voice', engine: 'ElevenLabs', voice: el.voice_name || null, line: at.line, n: at.n, of: at.of, state: 'recording', text: `Recording line ${at.line.replace(/^b0*/, '')} (${at.n} of ${at.of}) on ElevenLabs${el.voice_name ? `, ${el.voice_name}` : ''}` } : { kind: 'info', text: t }) });
   } catch (e) { return give(`ElevenLabs: ${e.message}`); }
   const timing = v.timing;
   writeFileSync(join(work, 'voice', 'timing.json'), JSON.stringify(timing, null, 2));

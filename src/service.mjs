@@ -406,7 +406,8 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
     'presets.get': (p) => getPreset(root, String(p?.slug || bad('presets.get needs a slug'))),
     'presets.save': (p) => savePresetFull(root, p || {}),
     'presets.delete': (p) => deletePreset(root, String(p?.slug || bad('presets.delete needs a slug'))),
-    'voice.list': () => { const v = voiceOverview(root); return { engine: v.engine, voice: v.voice ?? null, engines: ['none', 'elevenlabs', 'qwen', 'own'], presets: v.presets, elevenlabs_key: v.elevenlabs_key, local: v.local }; },
+    // speaker + model: the Voice stage says what makes the voice (owner, 2026-10-19: "if it's being rendered locally, if it's being rendered on 11 labs")
+    'voice.list': () => { const v = voiceOverview(root); return { engine: v.engine, voice: v.voice ?? null, speaker: v.engine === 'elevenlabs' ? v.elevenlabs.voice_name : v.engine === 'qwen' ? v.qwen.voice : null, model: v.engine === 'elevenlabs' ? v.elevenlabs.model_id : v.engine === 'qwen' ? `Qwen3-TTS ${v.qwen.model}` : null, engines: ['none', 'elevenlabs', 'qwen', 'own'], presets: v.presets, elevenlabs_key: v.elevenlabs_key, local: v.local }; },
     // Settings › Mortiflix › Narration: which engine narrates new lines (ElevenLabs is paid; This computer is local)
     'voice.set': (p) => {
       const engine = String(p?.engine || '');
