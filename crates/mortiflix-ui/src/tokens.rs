@@ -3,7 +3,8 @@
 //! split into input, cache and output (so a cheap, cache-heavy step never looks like the most expensive one),
 //! with why it ran (the AI's own words) and where it pulled its information from. Under the bars, what was
 //! pulled into the context and how many later calls re-read it: the place to look when token-optimizing a
-//! pipeline.
+//! pipeline. A run can use several models (owner, 2026-10-20: reviews and fixes on Sonnet and Haiku, writing on
+//! Opus): each run and each bar says which, and a run's detail splits its tokens by model.
 //!
 //! The service reads the transcripts (`tokens.runs`, `tokens.run`, see the service protocol doc); this panel
 //! keeps the last answers, asks again only while it is on screen (every 5 s while a run is going, else every
@@ -39,6 +40,20 @@ pub struct Run {
     pub cache_read: u64,
     pub output: u64,
     pub total: u64,
+    pub models: Vec<ModelUse>,
+}
+
+/// One model's share of a run.
+#[derive(Clone, Debug, Default, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct ModelUse {
+    pub model: String,
+    pub calls: u64,
+    pub input: u64,
+    pub cache_write: u64,
+    pub cache_read: u64,
+    pub output: u64,
+    pub total: u64,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq)]
@@ -60,6 +75,7 @@ pub struct Bar {
     pub total: u64,
     pub examples: Vec<Example>,
     pub why: String,
+    pub models: Vec<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq)]
@@ -149,6 +165,11 @@ fn split_bar(p: &egui::Painter, r: Rect, input: u64, cache: u64, output: u64, fu
             x = seg.max.x;
         }
     }
+}
+
+/// "Opus 237 k · Sonnet 80 k": each model with its tokens, biggest first (the service sorts them).
+pub fn models_line(models: &[ModelUse]) -> String {
+    models.iter().map(|m| format!("{} {}", m.model, short(m.total))).collect::<Vec<_>>().join(" · ")
 }
 
 fn split_text(input: u64, cache_write: u64, cache_read: u64, output: u64) -> String {
@@ -280,17 +301,24 @@ fn runs_list(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut Tokens, t: &MfxTheme)
             p.text(inner.right_top(), egui::Align2::RIGHT_TOP, short(run.total), egui::FontId::proportional(12.5), t.text);
             let bar = Rect::from_min_size(pos2(inner.min.x, inner.min.y + 17.0), vec2(inner.width(), BAR_H - 2.0));
             split_bar(p, bar, run.input, run.cache_write.saturating_add(run.cache_read), run.output, biggest, t);
-            let why = if run.why.is_empty() { format!("{} calls", run.calls) } else { format!("{} calls · {}", run.calls, run.why) };
+            let models = if run.models.len() > 1 { format!("{} · ", models_line(&run.models)) } else { String::new() };
+            let why = if run.why.is_empty() { format!("{models}{} calls", run.calls) } else { format!("{models}{} calls · {}", run.calls, run.why) };
             let g = crate::nodes::canvas::line(p, &why, 11.0, t.text_dim, inner.width());
             p.galley(pos2(inner.min.x, bar.max.y + 3.0), g, t.text_dim);
             let cost = run.cost_usd.map(|c| format!(" · list price ${c:.2}")).unwrap_or_default();
+            let per_model: String = run
+                .models
+                .iter()
+                .map(|m| format!("\n{} ({} calls): {}", m.model, m.calls, split_text(m.input, m.cache_write, m.cache_read, m.output)))
+                .collect();
             let resp = resp.on_hover_text(format!(
-                "{}\n{} · {}{}\n{}",
+                "{}\n{} · {}{}\n{}{}",
                 when(run.started.as_deref()),
                 if run.model.is_empty() { "Claude" } else { run.model.as_str() },
                 run.backend,
                 cost,
-                split_text(run.input, run.cache_write, run.cache_read, run.output)
+                split_text(run.input, run.cache_write, run.cache_read, run.output),
+                if run.models.len() > 1 { per_model } else { String::new() }
             ));
             ctx.auto(&format!("mfx.tokens.run.{}", run.id), &resp, &when(run.started.as_deref()));
             if resp.clicked() {
@@ -316,6 +344,29 @@ fn detail(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut Tokens, t: &MfxTheme) {
     let r = &d.run;
     ui.label(RichText::new(format!("{} · {} calls · {}", when(r.started.as_deref()), r.calls, short(r.total))).strong().color(t.text));
     ui.label(RichText::new(split_text(r.input, r.cache_write, r.cache_read, r.output)).small().color(t.text_dim));
+    // by model: one row each, on the same scale as the run
+    if !r.models.is_empty() {
+        ui.add_space(4.0);
+        ui.label(RichText::new("By model").color(t.text_dim));
+        let most = r.models.first().map_or(1, |m| m.total);
+        for m in &r.models {
+            let (row, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 18.0), Sense::hover());
+            let p = ui.painter();
+            let inner = row.shrink2(vec2(6.0, 1.0));
+            let name = p.layout_no_wrap(format!("{} · {}×", m.model, m.calls), egui::FontId::proportional(11.5), t.text);
+            let numbers = p.layout_no_wrap(short(m.total), egui::FontId::proportional(11.5), t.text_dim);
+            let label_w = 130.0_f32.min(inner.width() * 0.45);
+            p.galley(pos2(inner.min.x, inner.center().y - name.size().y / 2.0), name, t.text);
+            let bar = Rect::from_min_max(
+                pos2(inner.min.x + label_w, inner.center().y - BAR_H / 2.0),
+                pos2((inner.max.x - numbers.size().x - 8.0).max(inner.min.x + label_w + 20.0), inner.center().y + BAR_H / 2.0),
+            );
+            split_bar(p, bar, m.input, m.cache_write.saturating_add(m.cache_read), m.output, most, t);
+            p.galley(pos2(inner.max.x - numbers.size().x, inner.center().y - numbers.size().y / 2.0), numbers, t.text_dim);
+            let resp = resp.on_hover_text(format!("{} · {} calls\n{}", m.model, m.calls, split_text(m.input, m.cache_write, m.cache_read, m.output)));
+            ctx.auto(&format!("mfx.tokens.model.{}", m.model), &resp, &m.model);
+        }
+    }
     let biggest = d.bars.first().map_or(1, |b| b.total);
     egui::ScrollArea::vertical().id_salt("mfx-tokens-detail").auto_shrink([false, false]).show(ui, |ui| {
         ui.add_space(4.0);
@@ -338,7 +389,8 @@ fn detail(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut Tokens, t: &MfxTheme) {
             p.add(egui::Shape::convex_polygon(tri, t.text_dim, Stroke::NONE));
             let g = crate::nodes::canvas::line(p, &b.key, 12.0, t.text, inner.width() - 14.0);
             p.galley(pos2(inner.min.x + 12.0, inner.min.y), g, t.text);
-            let numbers = p.layout_no_wrap(format!("{} · {}×", short(b.total), b.calls), egui::FontId::proportional(11.5), t.text_dim);
+            let on = if b.models.is_empty() { String::new() } else { format!(" · {}", b.models.join(", ")) };
+            let numbers = p.layout_no_wrap(format!("{} · {}×{on}", short(b.total), b.calls), egui::FontId::proportional(11.5), t.text_dim);
             let bar_w = (inner.width() - numbers.size().x - 8.0).max(20.0);
             let bar = Rect::from_min_size(pos2(inner.min.x, inner.max.y - BAR_H - 2.0), vec2(bar_w, BAR_H));
             split_bar(p, bar, b.input, b.cache_write.saturating_add(b.cache_read), b.output, biggest, t);
@@ -427,5 +479,20 @@ mod tests {
         assert_eq!(d.bars.len(), 1);
         assert_eq!(d.pulled.first().map(|p| p.carried), Some(0));
         assert!(serde_json::from_value::<Detail>(json!({"run": {"total": -3}})).is_err());
+    }
+
+    /// A run on several models: the per-model split and each bar's models come through; old replies without them
+    /// still parse.
+    #[test]
+    fn models_parse_and_read() {
+        let d: Detail = serde_json::from_value(json!({
+            "run": {"id": "x", "model": "Sonnet 5.5 + Opus 5.5", "models": [{"model": "Sonnet 5.5", "calls": 2, "total": 80_290}, {"model": "Opus 5.5", "calls": 1, "total": 12_000}]},
+            "bars": [{"key": "Read files", "models": ["Sonnet 5.5"]}]
+        }))
+        .unwrap();
+        assert_eq!(models_line(&d.run.models), "Sonnet 5.5 80 k · Opus 5.5 12 k");
+        assert_eq!(d.bars.first().map(|b| b.models.clone()), Some(vec!["Sonnet 5.5".to_string()]));
+        let old: Run = serde_json::from_value(json!({"id": "y", "model": "claude-opus-5-5"})).unwrap();
+        assert!(old.models.is_empty());
     }
 }
