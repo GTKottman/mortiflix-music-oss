@@ -10,6 +10,7 @@
 //   4. the studio submits the panels and BOARD.md with the checks.
 // A transition pack the owner picked (its own code), the owner's notes on a version, or a board that keeps failing
 // go to a session.
+import { runAs } from './models.mjs';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, appendFileSync, rmSync, copyFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -248,8 +249,8 @@ export async function quickTransitions({ root, id, view, run, runArgs, config, o
   const usage = { input_tokens: 0, output_tokens: 0 };
   const dir = join(paths(root).run, 'quick', id);
   mkdirSync(dir, { recursive: true });
-  const call = async (prompt, schema, tools = 'Read') => {
-    const r = await run({ ...runArgs, workdir: dir, prompt, config: { ...config, claudeArgs: ['--tools', tools, ...(tools ? ['--allowedTools', tools] : []), '--json-schema', JSON.stringify(schema)] } });
+  const call = async (prompt, schema, tools = 'Read', role = 'write') => {
+    const r = await runAs(run, role, { ...runArgs, workdir: dir, prompt, config: { ...config, claudeArgs: ['--tools', tools, ...(tools ? ['--allowedTools', tools] : []), '--json-schema', JSON.stringify(schema)] } });
     usage.input_tokens += r.usage?.input_tokens || 0;
     usage.output_tokens += r.usage?.output_tokens || 0;
     return r;
@@ -322,7 +323,7 @@ export async function quickTransitions({ root, id, view, run, runArgs, config, o
       return give(`still not passing after ${MAX_ROUNDS} rounds: ${lastProblems.join('; ').slice(0, 300)}`);
     }
     onActivity({ kind: 'info', text: renderError ? 'The board didn\'t render: changing the cuts.' : `Checking the board (round ${round}).` });
-    const rv = await call(reviewPrompt(c, cuts, sheetName, checkOut, renderError), REVIEW_SCHEMA, renderError ? '' : 'Read');
+    const rv = await call(reviewPrompt(c, cuts, sheetName, checkOut, renderError), REVIEW_SCHEMA, renderError ? '' : 'Read', renderError ? 'codefix' : 'review');
     if (runArgs.signal?.aborted) return { ok: false, error: 'stopped', usage };
     const s = rv.ok ? rv.structured : null;
     if (!s) return give(rv.error || 'the check call gave no answer');

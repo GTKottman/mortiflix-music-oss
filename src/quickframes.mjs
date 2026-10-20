@@ -9,6 +9,7 @@
 //      files (a render error goes back the same way); at most a few rounds;
 //   4. the studio writes design/frames.json and submits with the checks.
 // Anything it can't finish (the owner's notes on a version, a render that keeps failing) goes to a session.
+import { runAs } from './models.mjs';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, copyFileSync, rmSync } from 'node:fs';
 import { join, dirname, normalize } from 'node:path';
@@ -193,8 +194,8 @@ export async function quickFrames({ root, id, view, run, runArgs, config, onActi
   const usage = { input_tokens: 0, output_tokens: 0 };
   const dir = join(paths(root).run, 'quick', id);
   mkdirSync(dir, { recursive: true });
-  const call = async (prompt, schema, tools = '') => {
-    const r = await run({ ...runArgs, workdir: dir, prompt, config: { ...config, claudeArgs: ['--tools', tools, ...(tools ? ['--allowedTools', tools] : []), '--json-schema', JSON.stringify(schema)] } });
+  const call = async (prompt, schema, tools = '', role = 'write') => {
+    const r = await runAs(run, role, { ...runArgs, workdir: dir, prompt, config: { ...config, claudeArgs: ['--tools', tools, ...(tools ? ['--allowedTools', tools] : []), '--json-schema', JSON.stringify(schema)] } });
     usage.input_tokens += r.usage?.input_tokens || 0;
     usage.output_tokens += r.usage?.output_tokens || 0;
     return r;
@@ -233,7 +234,7 @@ export async function quickFrames({ root, id, view, run, runArgs, config, onActi
     if (!r.ok) {
       if (++fixes > MAX_FIX) return give('the frames kept failing to render');
       onActivity({ kind: 'info', text: 'The frames didn\'t render: fixing the code.' });
-      rv = await call(reviewPrompt(c, state, null, r.error), REVIEW_SCHEMA);
+      rv = await call(reviewPrompt(c, state, null, r.error), REVIEW_SCHEMA, '', 'codefix');
     } else {
       const name = `sheet-${reviewed + 1}.png`;
       if (!sheet(c.work, state.frames.length, join(dir, name))) return give('could not make the contact sheet');
@@ -241,7 +242,7 @@ export async function quickFrames({ root, id, view, run, runArgs, config, onActi
       state.contrast = measurePairs(state.pairs);
       if (++reviewed > MAX_REVIEW) break;
       onActivity({ kind: 'info', text: `Checking the style frames (round ${reviewed}).` });
-      rv = await call(reviewPrompt(c, state, name, null), REVIEW_SCHEMA, 'Read');
+      rv = await call(reviewPrompt(c, state, name, null), REVIEW_SCHEMA, 'Read', 'review');
     }
     if (runArgs.signal?.aborted) return { ok: false, error: 'stopped', usage };
     const s = rv.ok ? rv.structured : null;

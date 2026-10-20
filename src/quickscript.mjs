@@ -5,6 +5,7 @@
 // (web search allowed, for the facts); the studio writes script.md and script/beats.json, counts the length itself,
 // and submits. Anything it can't do honestly (an owner's own script in input/, a check it can't report, a length
 // that won't fit) goes to a normal session, as before.
+import { runAs } from './models.mjs';
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { paths, writeJson } from './studio.mjs';
@@ -149,7 +150,7 @@ export async function quickScript({ root, id, view, run, runArgs, config, onActi
   let tooLong = null;
   onActivity({ kind: 'info', text: 'Writing the script in one call.' });
   for (let attempt = 0; attempt < 2; attempt++) {
-    const r = await run({ ...runArgs, workdir: dir, prompt: scriptPrompt(root, id, view, { targetSec, tooLong }), config: quickConfig });
+    const r = await runAs(run, 'script', { ...runArgs, workdir: dir, prompt: scriptPrompt(root, id, view, { targetSec, tooLong }), config: quickConfig });
     last = r;
     if (runArgs.signal?.aborted) return r;
     total = { input_tokens: total.input_tokens + (r.usage?.input_tokens || 0), output_tokens: total.output_tokens + (r.usage?.output_tokens || 0) };
@@ -213,7 +214,7 @@ export function quickBriefStep(root, id, config) {
   return runnable[0];
 }
 
-const BRIEF_SCHEMA = {
+export const BRIEF_SCHEMA = {
   type: 'object',
   required: ['note', 'questions'],
   properties: {
@@ -263,7 +264,7 @@ export async function quickBrief({ root, id, view, run, runArgs, config, onActiv
   const dir = join(paths(root).run, 'quick');
   mkdirSync(dir, { recursive: true });
   onActivity({ kind: 'info', text: 'Reading the brief in one call.' });
-  const r = await run({ ...runArgs, workdir: dir, prompt: briefPrompt(root, id, view), config: { ...config, claudeArgs: ['--tools', 'WebSearch WebFetch', '--allowedTools', 'WebSearch WebFetch', '--json-schema', JSON.stringify(BRIEF_SCHEMA)] } });
+  const r = await runAs(run, 'brief', { ...runArgs, workdir: dir, prompt: briefPrompt(root, id, view), config: { ...config, claudeArgs: ['--tools', 'WebSearch WebFetch', '--allowedTools', 'WebSearch WebFetch', '--json-schema', JSON.stringify(BRIEF_SCHEMA)] } });
   if (runArgs.signal?.aborted) return r;
   const s = r.ok ? r.structured : null;
   const why = !r.ok ? r.error || 'no answer' : !s?.note?.trim() || !Array.isArray(s.questions) || !s.questions.length ? 'no questions came back' : null;

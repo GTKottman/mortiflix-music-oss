@@ -9,6 +9,7 @@
 //      (render errors go back the same way); blocking problems must be fixed, polish after 3 rounds goes to the owner;
 //   4. the studio writes out/scenes.json (one scene per beat, from the voice's times) and submits.
 // The owner's notes on a version, a motion or rule pack, or an animatic that keeps failing go to a session.
+import { runAs } from './models.mjs';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, copyFileSync } from 'node:fs';
 import { join, dirname, normalize } from 'node:path';
@@ -176,8 +177,8 @@ export async function quickAnimatic({ root, id, view, run, runArgs, config, onAc
   const usage = { input_tokens: 0, output_tokens: 0 };
   const dir = join(paths(root).run, 'quick', id);
   mkdirSync(dir, { recursive: true });
-  const call = async (prompt, schema, tools) => {
-    const r = await run({ ...runArgs, workdir: dir, prompt, config: { ...config, claudeArgs: ['--tools', tools, ...(tools ? ['--allowedTools', tools] : []), '--json-schema', JSON.stringify(schema)] } });
+  const call = async (prompt, schema, tools, role = 'write') => {
+    const r = await runAs(run, role, { ...runArgs, workdir: dir, prompt, config: { ...config, claudeArgs: ['--tools', tools, ...(tools ? ['--allowedTools', tools] : []), '--json-schema', JSON.stringify(schema)] } });
     usage.input_tokens += r.usage?.input_tokens || 0;
     usage.output_tokens += r.usage?.output_tokens || 0;
     return r;
@@ -231,7 +232,7 @@ export async function quickAnimatic({ root, id, view, run, runArgs, config, onAc
     onActivity({ kind: 'info', text: r.ok ? `Checking the animatic (round ${round}).` : 'The animatic didn\'t render: fixing the code.' });
     // every file the video is built from (cuts.ts read-only: the approved board)
     const shown = [...FILES, 'src/cuts.ts', 'src/scenes/board.tsx'];
-    const rv = await call(reviewPrompt(c, shown, sheetName, r.ok ? qcOut.text : '', r.ok ? null : r.error), REVIEW_SCHEMA, r.ok ? 'Read' : '');
+    const rv = await call(reviewPrompt(c, shown, sheetName, r.ok ? qcOut.text : '', r.ok ? null : r.error), REVIEW_SCHEMA, r.ok ? 'Read' : '', r.ok ? 'review' : 'codefix');
     if (runArgs.signal?.aborted) return { ok: false, error: 'stopped', usage };
     const s = rv.ok ? rv.structured : null;
     if (!s) return give(rv.error || 'the check call gave no answer');

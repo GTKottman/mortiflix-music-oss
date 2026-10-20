@@ -10,6 +10,7 @@
 //      render queue, the studio mixes it under the voice (sidechain, two-pass loudnorm) onto the animatic and submits.
 // A plan the engine refuses goes back to a fresh call with only the errors. The owner's notes on a version, a reference
 // track, or anything the studio can't finish goes to a session.
+import { runAs } from './models.mjs';
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -192,7 +193,7 @@ export async function planAndCompose({ c, cuts, call, config = {}, env = {}, onA
     if (round > MAX_FIXES) return { ok: false, error: `the plan still fails: ${fix.errors.join('; ').slice(0, 300)}` };
     // config._reusePlan (tests): the plan already written (music/plan.json) instead of a new call, first round only
     const saved = !round && config._reusePlan ? readJsonOr(join(mu, 'plan.json'), null) : null;
-    const r = saved ? { ok: true, structured: saved } : await call(planPrompt(c, c.scenes, cuts, fix), PLAN_SCHEMA);
+    const r = saved ? { ok: true, structured: saved } : await call(planPrompt(c, c.scenes, cuts, fix), PLAN_SCHEMA, fix ? 'fix' : 'plan');
     if (stopped()) return { ok: false, stopped: true };
     plan = r.ok ? r.structured : null;
     if (!plan) return { ok: false, error: r.error || 'the plan call gave no answer' };
@@ -239,8 +240,8 @@ export async function quickMusic({ root, id, view, run, runArgs, config, onActiv
   const usage = { input_tokens: 0, output_tokens: 0 };
   const dir = join(paths(root).run, 'quick', id);
   mkdirSync(dir, { recursive: true });
-  const call = async (prompt, schema) => {
-    const r = await run({ ...runArgs, workdir: dir, prompt, config: { ...config, claudeArgs: ['--tools', '', '--json-schema', JSON.stringify(schema)] } });
+  const call = async (prompt, schema, role = 'plan') => {
+    const r = await runAs(run, role, { ...runArgs, workdir: dir, prompt, config: { ...config, claudeArgs: ['--tools', '', '--json-schema', JSON.stringify(schema)] } });
     usage.input_tokens += r.usage?.input_tokens || 0;
     usage.output_tokens += r.usage?.output_tokens || 0;
     return r;

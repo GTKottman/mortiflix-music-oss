@@ -11,6 +11,7 @@
 //
 // Everything lands in <work>/sound/ (and the engine's music/, out/music/): mix.wav (lossless), mix.mp3 (320 kbps, plays
 // anywhere), REPORT.md.
+import { runAs } from '../models.mjs';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { REPO } from '../studio.mjs';
@@ -83,8 +84,8 @@ export async function makeSoundtrack({ root, id, run, runArgs = {}, config = {},
   // 2. the music
   if (stages.includes('music')) {
     const qdir = join(root, 'run', 'quick', id); mkdirSync(qdir, { recursive: true });
-    const call = async (prompt, schema) => {
-      const r = await run({ ...runArgs, workdir: qdir, prompt, config: { ...config, claudeArgs: ['--tools', '', '--json-schema', JSON.stringify(schema)] } });
+    const call = async (prompt, schema, role = 'plan') => {
+      const r = await runAs(run, role, { ...runArgs, workdir: qdir, prompt, config: { ...config, claudeArgs: ['--tools', '', '--json-schema', JSON.stringify(schema)] } });
       usage.input_tokens += r.usage?.input_tokens || 0; usage.output_tokens += r.usage?.output_tokens || 0;
       return r;
     };

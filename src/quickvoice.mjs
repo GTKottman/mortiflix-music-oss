@@ -5,6 +5,7 @@
 // only to re-spell a line that keeps failing, `vo.mjs build` (clips trimmed to their words), the track set to -14
 // LUFS, a clip per scene, and the submission. A line nothing could check (a voice with no speech-to-text) is marked
 // for the owner to listen to: the Voice stage shows what was heard for every line, or that nobody listened yet.
+import { runAs } from './models.mjs';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, appendFileSync, copyFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -97,9 +98,9 @@ function master(src, dst) {
 
 // One AI call for lines that keep failing the check: the spoken spelling (numbers, names, abbreviations as said),
 // same words. `ask` is the claude-code run with no tools and a schema.
-const RESPELL_SCHEMA = { type: 'object', required: ['lines'], properties: { lines: { type: 'array', items: { type: 'object', required: ['id', 'text'], properties: { id: { type: 'string' }, text: { type: 'string', description: 'what the voice reads: the same words, spelled the way they are said' } } } } } };
+export const RESPELL_SCHEMA = { type: 'object', required: ['lines'], properties: { lines: { type: 'array', items: { type: 'object', required: ['id', 'text'], properties: { id: { type: 'string' }, text: { type: 'string', description: 'what the voice reads: the same words, spelled the way they are said' } } } } } };
 
-function respellPrompt(engine, bad) {
+export function respellPrompt(engine, bad) {
   return [`These narration lines failed a speech-to-text check after several takes (${engine === 'elevenlabs' ? 'ElevenLabs Eleven v4: you may use IPA between slashes inside quotes, "/ˈkoʊmæl/", for a hard name' : 'a local voice that reads plain words: spell hard names the way they sound'}).`,
     'For each, write `text` so the voice says exactly the script\'s words: numbers, dates, units and abbreviations written the way they are said, a long sentence split with a comma or ellipsis where a breath goes. Never change, add or drop words of the script. Answer with the JSON asked for, nothing else.',
     ...bad.map((b) => `- ${b.id}\n  script: ${b.script}\n  heard: ${b.transcript ?? '(nothing)'}\n  problems: ${(b.problems || []).join('; ')}`)].join('\n\n');
@@ -142,7 +143,7 @@ export async function quickVoice({ root, id, view, run, runArgs, config, onActiv
     onActivity({ kind: 'info', text: `${bad.length} line${bad.length === 1 ? '' : 's'} didn't say the script's words: re-spelling ${bad.length === 1 ? 'it' : 'them'}.` });
     const dir = join(paths(root).run, 'quick');
     mkdirSync(dir, { recursive: true });
-    const r = await run({ ...runArgs, workdir: dir, prompt: respellPrompt(engine, bad.map((b) => ({ ...b, script: lines.find((l) => l.id === b.id)?.script }))), config: { ...config, claudeArgs: ['--tools', '', '--json-schema', JSON.stringify(RESPELL_SCHEMA)] } });
+    const r = await runAs(run, 'respell', { ...runArgs, workdir: dir, prompt: respellPrompt(engine, bad.map((b) => ({ ...b, script: lines.find((l) => l.id === b.id)?.script }))), config: { ...config, claudeArgs: ['--tools', '', '--json-schema', JSON.stringify(RESPELL_SCHEMA)] } });
     usage.input_tokens += r.usage?.input_tokens || 0;
     usage.output_tokens += r.usage?.output_tokens || 0;
     const fixes = (r.structured?.lines || []).filter((f) => lines.some((l) => l.id === f.id) && String(f.text || '').trim());
