@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { tokenRuns, tokenRun, redact, describe, _forget } from '../src/svc/tokens.mjs';
+import { tokenRuns, tokenRun, redact, describe, modelName, _forget } from '../src/svc/tokens.mjs';
 
 const P = '261018-test-tokens-0001';
 function studio() {
@@ -81,6 +81,22 @@ test('API runs, reading only what was added, and newest first', () => {
   ({ runs } = tokenRuns(root, P));
   assert.equal(runs[0].calls, 3);
   assert.equal(runs[0].output, 13);
+});
+
+test('one run on several models (a cheaper one for reviews): split per model, and per bar', () => {
+  _forget();
+  const root = studio();
+  const f = join(root, 'state', P, 'sessions', '2026-10-20T09-00-00-000Z.jsonl');
+  const call = (model, input, output, tool) => J({ type: 'assistant', model, usage: { input_tokens: input, output_tokens: output }, content: tool ? [{ type: 'tool_use', id: `t${input}`, name: 'Read', input: { file_path: tool } }] : [] });
+  writeFileSync(f, call('claude-opus-5-5', 1000, 500) + call('claude-sonnet-5-5', 3000, 40, 'sheet.png') + call('claude-haiku-5-5', 200, 60));
+  const [run] = tokenRuns(root, P).runs;
+  assert.equal(run.model, 'Sonnet 5.5 + Opus 5.5 + Haiku 5.5');
+  assert.deepEqual(run.models.map((m) => [m.model, m.calls, m.total]), [['Sonnet 5.5', 1, 3040], ['Opus 5.5', 1, 1500], ['Haiku 5.5', 1, 260]]);
+  const { bars } = tokenRun(root, P, run.id);
+  assert.deepEqual(bars.find((b) => b.key !== 'Thinking and answering (no tool)').models, ['Sonnet 5.5']);
+  assert.deepEqual(bars.find((b) => b.key === 'Thinking and answering (no tool)').models.sort(), ['Haiku 5.5', 'Opus 5.5']);
+  assert.equal(modelName('claude-haiku-4-5-20251001'), 'Haiku 4.5');
+  assert.equal(modelName(''), 'Claude');
 });
 
 test('hostile input: run and project ids, junk lines, labels', () => {

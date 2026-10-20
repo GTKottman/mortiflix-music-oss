@@ -354,14 +354,35 @@ export function tokenRuns(root, projectId, { running = null, limit = 200 } = {})
   return { runs };
 }
 
+// "claude-sonnet-5-5" -> "Sonnet 5.5"; other ids as they are. One run can use several models (a cheaper one for reviews
+// and fixes, src/models.mjs; Claude Code's own helper calls): the split shows which did what.
+export function modelName(id) {
+  const m = /^claude-(opus|sonnet|haiku|fable)-(\d+)(?:-(\d+))?/.exec(String(id || ''));
+  if (!m) return String(id || '') || 'Claude';
+  return `${m[1][0].toUpperCase()}${m[1].slice(1)} ${m[2]}${m[3] && m[3].length <= 2 ? `.${m[3]}` : ''}`;
+}
+
+function byModel(st, calls) {
+  const g = new Map();
+  for (const c of calls) {
+    const name = modelName(c.model || st.model);
+    const x = g.get(name) || { model: name, calls: 0, input: 0, cache_write: 0, cache_read: 0, output: 0 };
+    x.calls += 1; x.input += c.input; x.cache_write += c.cacheWrite; x.cache_read += c.cacheRead; x.output += outputOf(st, c);
+    g.set(name, x);
+  }
+  return [...g.values()].map((x) => ({ ...x, total: x.input + x.cache_write + x.cache_read + x.output })).sort((a, b) => b.total - a.total);
+}
+
 function summary(dir, id, st, running) {
+  const models = byModel(st, st.calls);
   return {
     id,
     started: startedAt(id),
     ended: st.mtimeMs ? new Date(st.mtimeMs).toISOString() : null,
     running: running === id,
     backend: st.backend || 'claude-code',
-    model: st.model,
+    model: models.map((m) => m.model).join(' + ') || modelName(st.model),
+    models,
     calls: st.calls.length,
     cost_usd: st.cost,
     why: reasonOf(dir, id),
@@ -385,10 +406,11 @@ export function tokenRun(root, projectId, runId, { running = null, bars: maxBars
     const key = agent ? clip(agent.label, 80) : c.tools[0]?.group || 'Thinking and answering (no tool)';
     let g = groups.get(key);
     if (!g) {
-      g = { key, calls: 0, input: 0, cache_write: 0, cache_read: 0, output: 0, examples: new Map(), why: '' };
+      g = { key, calls: 0, input: 0, cache_write: 0, cache_read: 0, output: 0, examples: new Map(), why: '', models: new Set() };
       groups.set(key, g);
     }
     g.calls += 1;
+    g.models.add(modelName(c.model || st.model));
     g.input += c.input;
     g.cache_write += c.cacheWrite;
     g.cache_read += c.cacheRead;
@@ -407,6 +429,7 @@ export function tokenRun(root, projectId, runId, { running = null, bars: maxBars
       total: g.input + g.cache_write + g.cache_read + g.output,
       examples: [...g.examples.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([label, times]) => ({ label, times })),
       why: g.why,
+      models: [...g.models],
     }))
     .sort((a, b) => b.total - a.total)
     .slice(0, Math.max(1, Math.min(500, Number(maxBars) || 60)));
