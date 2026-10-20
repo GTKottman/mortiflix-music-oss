@@ -6,6 +6,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { writeWav } from './wav.mjs';
+import { logVoiceUse } from '../voiceusage.mjs';
 
 const RATE = 48000;
 const FORMAT = 'pcm_48000'; // lossless; the best ElevenLabs gives on the Creator plan (44.1 kHz PCM needs Pro)
@@ -61,6 +62,7 @@ export async function recordLines({ work, key, lines, voice = 'Tracy K', voiceId
     const j = await r.json();
     writeFileSync(join(dir, 'lines', `${l.id}.pcm`), Buffer.from(j.audio_base64, 'base64'));
     writeFileSync(join(dir, 'lines', `${l.id}.json`), JSON.stringify({ id: l.id, text: l.text, voice, voice_id: id, model, format: FORMAT, alignment: j.alignment }, null, 1));
+    logVoiceUse(work, { engine: 'elevenlabs', voice, model, line: l.id, characters: l.text.length });
     recorded.push(l.id);
   }
   return { id, recorded };

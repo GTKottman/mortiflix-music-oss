@@ -16,6 +16,7 @@ import { scriptView } from './svc/script.mjs';
 import { voiceConfig } from './voice/index.mjs';
 import { lengthSeconds } from './quickscript.mjs';
 import { makeVoice } from './soundtrack/voice.mjs';
+import { logVoiceUse } from './voiceusage.mjs';
 
 const CHECKS = ['loudness', 'sync', 'music-source'];
 const LUFS = -14;
@@ -129,7 +130,10 @@ export async function quickVoice({ root, id, view, run, runArgs, config, onActiv
   if (engine === 'elevenlabs') return soundtrackVoice({ root, id, view, work, script, lines, env, onActivity, give, usage });
   onActivity({ kind: 'info', text: `Recording the narration: ${lines.length} lines, checked as they're made.` });
 
+  const spoke = Date.now();
   let sp = vo(work, env, ['speak', 'voice/lines.json']);
+  const local = voiceConfig(root).qwen;
+  logVoiceUse(work, { engine: 'qwen', voice: local.voice, model: `Qwen3-TTS ${local.model}`, lines: lines.length, seconds: (Date.now() - spoke) / 1000 });
   if (runArgs.signal?.aborted) return { ok: false, error: 'stopped', usage };
   const reportOf = () => { try { return JSON.parse(readFileSync(join(work, 'voice', 'speak-report.json'), 'utf8')); } catch { return []; } };
   let report = reportOf();
@@ -150,7 +154,9 @@ export async function quickVoice({ root, id, view, run, runArgs, config, onActiv
     for (const f of fixes) lines.find((l) => l.id === f.id).text = String(f.text).trim();
     if (fixes.length) {
       writeFileSync(join(work, 'voice', 'lines.json'), JSON.stringify(lines, null, 2));
+      const again0 = Date.now();
       sp = vo(work, env, ['speak', 'voice/lines.json', '--only', fixes.map((f) => f.id).join(',')]);
+      logVoiceUse(work, { engine: 'qwen', voice: local.voice, model: `Qwen3-TTS ${local.model}`, lines: fixes.length, seconds: (Date.now() - again0) / 1000 });
       // --only rewrites the report with those lines: put them back among the rest
       const again = reportOf();
       report = report.map((x) => again.find((y) => y.id === x.id) || x);

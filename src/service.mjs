@@ -15,6 +15,7 @@ import { Runner } from './runner.mjs';
 import { findPipeline } from './pipelines.mjs';
 import { canvasView, nodeAction, canvasPaths } from './canvas.mjs';
 import { voiceOnOk } from './voiceonok.mjs';
+import { voiceUsage } from './voiceusage.mjs';
 import * as gates from './gates.mjs';
 import { RenderQueue } from './renderq.mjs';
 import { voiceOverview, saveVoice } from './voice/index.mjs';
@@ -367,7 +368,8 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
     'project.cancel': (p) => { const id = needProject(p); gates.cancel(root, id); runner?.stopProject(id); poke(); return { cancelled: true }; },
     'project.events': (p) => readEvents(root, needProject(p), { limit: Math.min(2000, Number(p?.limit) || 200) }),
     // Token usage (owner, 2026-10-18): every Claude run newest first, and one run's bars and what it pulled in.
-    'tokens.runs': (p) => { const id = needProject(p); const pr = loadProject(root, id); return tokenRuns(root, id, { running: pr.session?.running ? pr.session.id : null, limit: p?.limit }); },
+    // voice: what ElevenLabs or this computer's voice used (src/voiceusage.mjs), beside the Claude runs
+    'tokens.runs': (p) => { const id = needProject(p); const pr = loadProject(root, id); return { ...tokenRuns(root, id, { running: pr.session?.running ? pr.session.id : null, limit: p?.limit }), voice: voiceUsage(projectPaths(root, id).work) }; },
     'tokens.run': (p) => {
       const id = needProject(p);
       const pr = loadProject(root, id);
