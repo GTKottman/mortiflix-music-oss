@@ -45,12 +45,9 @@ pub fn header(ui: &mut egui::Ui, area: &mut NodeArea, rect: Rect, maximised: boo
     let c = area.graph.counts();
     // each count is a link to Highlight that group
     let parts: Vec<(String, Option<Highlight>)> = {
-        // on Voice the count is of voice lines (the shots come later)
+        // on Voice: how many lines, nothing more (the OKs are counted once, in the gate and the stage bar)
         let line = if area.voice_view() {
-            let lines: Vec<_> = area.graph.nodes.iter().filter(|n| n.kind == super::model::Kind::Line && !n.missing).collect();
-            let made = lines.iter().filter(|n| !n.versions.is_empty()).count();
-            let ok = lines.iter().filter(|n| n.state == super::model::NodeState::Ok).count();
-            format!("{} voice lines · made {made} of {} · OK'd {ok}", lines.len(), lines.len())
+            format!("{} voice lines", area.graph.nodes.iter().filter(|n| n.kind == super::model::Kind::Line && !n.missing).count())
         } else {
             c.line()
         };
@@ -195,34 +192,38 @@ pub fn toolbar(ui: &mut egui::Ui, area: &mut NodeArea, rect: Rect, t: &MfxTheme,
     });
     out.auto.push(("mfx.nodes.highlight".into(), hl.response, "Highlight".into()));
     // + Add ▾
-    let add = ui.menu_button("+ Add", |ui| {
-        if button(ui, out, "add.shot", "New shot…", false, t).clicked() {
-            area.add_open = true;
-            ui.close();
-        }
-        let has_shot = area.primary().and_then(|s| area.graph.get(s)).is_some_and(|n| n.kind == Kind::Shot);
-        if ui.add_enabled_ui(has_shot, |ui| button(ui, out, "add.duplicate", "Duplicate the selected shot", false, t)).inner.clicked() {
-            out.cmds.push(("nodes.duplicate".into(), json!({})));
-            ui.close();
-        }
-        if button(ui, out, "add.line", "Voice line…", false, t).clicked() {
-            area.add_open = true;
-            area.add_text = "A voice line: ".into();
-            ui.close();
-        }
-        if button(ui, out, "add.transition", "Transition on the selected cut", false, t).clicked() {
-            let cut = area.primary().and_then(|s| {
-                let i = area.graph.film_index(s)?;
-                area.graph.cuts.iter().find(|c| area.graph.film_index(&c.to) == Some(i)).map(|c| c.id.clone())
-            });
-            if let Some(c) = cut {
-                area.select_only(&c);
+    // on Voice: no shots to add or follow yet
+    let voice = area.voice_view();
+    if !voice {
+        let add = ui.menu_button("+ Add", |ui| {
+            if button(ui, out, "add.shot", "New shot…", false, t).clicked() {
+                area.add_open = true;
+                ui.close();
             }
-            ui.close();
-        }
-        ui.label(RichText::new("Your own files: the Assets tab beside the chat").color(t.text_faint));
-    });
-    out.auto.push(("mfx.nodes.add".into(), add.response, "+ Add".into()));
+            let has_shot = area.primary().and_then(|s| area.graph.get(s)).is_some_and(|n| n.kind == Kind::Shot);
+            if ui.add_enabled_ui(has_shot, |ui| button(ui, out, "add.duplicate", "Duplicate the selected shot", false, t)).inner.clicked() {
+                out.cmds.push(("nodes.duplicate".into(), json!({})));
+                ui.close();
+            }
+            if button(ui, out, "add.line", "Voice line…", false, t).clicked() {
+                area.add_open = true;
+                area.add_text = "A voice line: ".into();
+                ui.close();
+            }
+            if button(ui, out, "add.transition", "Transition on the selected cut", false, t).clicked() {
+                let cut = area.primary().and_then(|s| {
+                    let i = area.graph.film_index(s)?;
+                    area.graph.cuts.iter().find(|c| area.graph.film_index(&c.to) == Some(i)).map(|c| c.id.clone())
+                });
+                if let Some(c) = cut {
+                    area.select_only(&c);
+                }
+                ui.close();
+            }
+            ui.label(RichText::new("Your own files: the Assets tab beside the chat").color(t.text_faint));
+        });
+        out.auto.push(("mfx.nodes.add".into(), add.response, "+ Add".into()));
+    }
     ui.separator();
     if button(ui, out, "zoomOut", "−", false, t).on_hover_text("Zoom out (-)").clicked() {
         out.cmds.push(("nodes.zoomOut".into(), json!({})));
@@ -238,6 +239,9 @@ pub fn toolbar(ui: &mut egui::Ui, area: &mut NodeArea, rect: Rect, t: &MfxTheme,
     }
     if button(ui, out, "frameAll", "Frame all  \\", false, t).clicked() {
         out.cmds.push(("nodes.frameAll".into(), json!({})));
+    }
+    if voice {
+        return;
     }
     let f = ui.selectable_label(area.follow_playhead, "Follow the playhead");
     out.auto.push(("mfx.nodes.follow".into(), f.clone(), "Follow the playhead".into()));
@@ -573,6 +577,11 @@ fn piece(ui: &mut egui::Ui, area: &mut NodeArea, n: &Node, t: &MfxTheme, out: &m
                 super::canvas::play(out, area, &n.id, scope);
             }
         });
+        // on Voice a line is OK'd, fixed and re-taken in the Voice list: the node area is the map (owner, 2026-10-19)
+        if area.voice_view() && n.kind == Kind::Line {
+            ui.label(RichText::new("OK it, change it or record it yourself in the Voice list above.").color(t.text_faint));
+            return;
+        }
         decisions(ui, area, n, t, out);
     }
     // Versions

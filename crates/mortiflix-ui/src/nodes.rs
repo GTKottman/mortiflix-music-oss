@@ -113,6 +113,7 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     canvas::show(ui, area, &t, canvas_rect, &mut out);
     // no shot made yet: say what comes first, over the plans
     if area.graph.counts().made == 0
+        && !area.voice_view()
         && let Some(first) = before_shots_line(&area.work)
     {
         let p = ui.painter_at(canvas_rect);

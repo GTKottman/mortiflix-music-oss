@@ -192,9 +192,10 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     ui.add(egui::Label::new(RichText::new(gate.next).size(12.0).color(t.text_dim)).wrap());
     ui.add_space(8.0);
     if stage != STAGE_MUSIC {
+        let quiet = stage == STAGE_VOICE && oks < total;
         let b = ui.add(
-            egui::Button::new(RichText::new(format!("Pass the gate: Next: {next}")).size(13.0).color(Color32::WHITE))
-                .fill(t.accent)
+            egui::Button::new(RichText::new(format!("Pass the gate: Next: {next}")).size(13.0).color(if quiet { t.text } else { Color32::WHITE }))
+                .fill(if quiet { t.hover } else { t.accent })
                 .min_size(vec2(0.0, 28.0))
                 .corner_radius(4.0),
         );

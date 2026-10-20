@@ -45,7 +45,7 @@ pub struct LaneOut {
 
 /// The lanes' height for the current timeline.
 pub fn height(tl: &Timeline) -> f32 {
-    let mut h = TOP_H + RULER_H + SHOT_H + 6.0;
+    let mut h = TOP_H + RULER_H + if tl.voice_only { 0.0 } else { SHOT_H } + 6.0;
     if !tl.voice_only && (!tl.cues.is_empty() || tl.has_music || tl.has_view) {
         h += ROW_H;
     }
@@ -71,6 +71,10 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx, tl: &Timeline, st: &mut LaneUi,
         };
         ui.colored_label(t.text_faint, counts);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if tl.voice_only {
+                st.zoom = 0;
+                return;
+            }
             let zin = ui.add_enabled(st.zoom + 1 < ZOOMS.len(), egui::Button::new("Zoom +").small());
             ctx.auto("mfx.vm.zoom.in", &zin, "Zoom");
             if zin.clicked() {
@@ -91,7 +95,8 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx, tl: &Timeline, st: &mut LaneUi,
     });
 
     let rows: Vec<(&str, f32)> = {
-        let mut r = vec![("shots", SHOT_H)];
+        // on Voice the shots aren't made yet: no Scenes lane (owner, 2026-10-19)
+        let mut r = if tl.voice_only { Vec::new() } else { vec![("shots", SHOT_H)] };
         if !tl.voice_only && (!tl.cues.is_empty() || tl.has_music || tl.has_view) {
             r.push(("music", ROW_H));
         }

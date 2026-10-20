@@ -1272,6 +1272,7 @@ fn details(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &ChatUi) {
 
 fn moves_row(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, info: Option<&NodeInfo>) {
     let t = ctx.theme;
+    let info = info.filter(|n| !(ctx.state.stage == crate::STAGE_VOICE && n.kind == "line"));
     let now = ui.input(|i| i.time);
     ui.allocate_ui_with_layout(vec2(ui.available_width(), MOVES_H), Layout::left_to_right(Align::Center), |ui| {
         ui.spacing_mut().item_spacing.x = 6.0;

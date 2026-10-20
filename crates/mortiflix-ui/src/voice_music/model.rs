@@ -370,7 +370,9 @@ pub fn build(graph: &Value, view: Option<&Value>) -> Timeline {
     for b in of("beat") {
         let id = short(s(b, "id"), 40);
         let Some(no) = uint(b.get("beat_no")).or(beat_no(&id)) else { continue };
-        tl.beats.push(Beat { id, no, title: short(s(b, "title"), 200), colour: colour_of(b) });
+        // the scene's name when it has one ("An idea, finished"), else its words
+        let title = if s(b, "name").trim().is_empty() { s(b, "title") } else { s(b, "name") };
+        tl.beats.push(Beat { id, no, title: short(title, 200), colour: colour_of(b) });
     }
     let beat_title = |beat: &Option<String>| beat.as_ref().and_then(|b| tl.beats.iter().find(|x| &x.id == b)).map(|b| b.title.clone()).unwrap_or_default();
     let beat_of = |n: &Value| n.get("beat").and_then(Value::as_str).map(|b| short(b, 40));
