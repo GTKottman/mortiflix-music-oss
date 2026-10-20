@@ -14,6 +14,7 @@ import { createProject, loadProject, projectPaths, listProjects, startProject, r
 import { Runner } from './runner.mjs';
 import { findPipeline } from './pipelines.mjs';
 import { canvasView, nodeAction, canvasPaths } from './canvas.mjs';
+import { voiceOnOk } from './voiceonok.mjs';
 import * as gates from './gates.mjs';
 import { RenderQueue } from './renderq.mjs';
 import { voiceOverview, saveVoice } from './voice/index.mjs';
@@ -606,7 +607,10 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
       if (!p?.node) bad('node.edit needs a node');
       const id = needProject(p);
       const r = nodeAction(root, id, String(p.node), { action, text: p.text, bars: p.bars ?? null, part: p.part ?? null });
-      const label = canvasView(root, id).nodes[String(p.node)]?.label || String(p.node);
+      const node = canvasView(root, id).nodes[String(p.node)];
+      const label = node?.label || String(p.node);
+      // an OK'd scene starts its voice at once (src/voiceonok.mjs)
+      if (action === 'ok' && node?.kind === 'beat') voiceOnOk(root, id, String(p.node), onActivity);
       chatRow(id, { role: 'action', text: actionText(action, label, action === 'fix' ? p.text : null), refs: [String(p.node)], ...(r.edit ? { edit: r.edit.id } : {}) });
       if (r.edit) runner?.wake();
       poke();

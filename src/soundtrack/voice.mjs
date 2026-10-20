@@ -35,27 +35,54 @@ export function wordsFrom(alignment) {
   return words.filter((w) => /[\p{L}\p{N}]/u.test(w.text));
 }
 
-export async function makeVoice({ work, key, voice = 'Tracy K', voiceId = null, model = 'eleven_v4', stability = 0.5, similarity = 0.75, speakerBoost = true, log = () => {} }) {
-  const lines = JSON.parse(readFileSync(join(work, 'voice', 'lines.json'), 'utf8'));
+// Record the lines that have no take of their exact text, voice and model yet (sound/voice/lines/<id>.pcm + .json);
+// a line already recorded is kept (owner, 2026-10-19: the voice starts when a scene is OK'd, lines recorded before
+// stay). Returns the ids recorded now.
+export async function recordLines({ work, key, lines, voice = 'Tracy K', voiceId = null, model = 'eleven_v4', stability = 0.5, similarity = 0.75, speakerBoost = true, log = () => {} }) {
   const dir = join(work, 'sound', 'voice');
   mkdirSync(join(dir, 'lines'), { recursive: true });
+  const stale = (l, id) => {
+    const pcm = join(dir, 'lines', `${l.id}.pcm`); const meta = join(dir, 'lines', `${l.id}.json`);
+    const had = existsSync(meta) ? JSON.parse(readFileSync(meta, 'utf8')) : null;
+    return !existsSync(pcm) || !had || had.text !== l.text || (id && had.voice_id !== id) || had.model !== model;
+  };
+  const todo = lines.filter((l) => stale(l, voiceId));
+  if (!todo.length) return { id: voiceId, recorded: [] };
   const id = voiceId || await findVoice(key, voice);
+  const recorded = [];
+  for (const [n, l] of todo.entries()) {
+    if (!stale(l, id)) continue;
+    log(`ElevenLabs: ${l.id}`, { line: l.id, n: n + 1, of: todo.length, voice, model });
+    const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${id}/with-timestamps?output_format=${FORMAT}`, {
+      method: 'POST', headers: { 'xi-api-key': key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: l.text, model_id: model, voice_settings: { stability, similarity_boost: similarity, use_speaker_boost: speakerBoost } }),
+    });
+    if (!r.ok) throw new Error(`ElevenLabs ${r.status} on ${l.id}: ${(await r.text()).slice(0, 200)}`);
+    const j = await r.json();
+    writeFileSync(join(dir, 'lines', `${l.id}.pcm`), Buffer.from(j.audio_base64, 'base64'));
+    writeFileSync(join(dir, 'lines', `${l.id}.json`), JSON.stringify({ id: l.id, text: l.text, voice, voice_id: id, model, format: FORMAT, alignment: j.alignment }, null, 1));
+    recorded.push(l.id);
+  }
+  return { id, recorded };
+}
+
+export async function makeVoice({ work, key, voice = 'Tracy K', voiceId = null, model = 'eleven_v4', stability = 0.5, similarity = 0.75, speakerBoost = true, log = () => {} }) {
+  const dir = join(work, 'sound', 'voice');
+  const read = () => JSON.parse(readFileSync(join(work, 'voice', 'lines.json'), 'utf8'));
+  const opts = { work, key, voice, model, stability, similarity, speakerBoost, log };
+  let lines = read();
+  let id = (await recordLines({ ...opts, lines, voiceId })).id || voiceId;
+  // words changed while recording (owner, 2026-10-19: line 7 edited 7 s after the voice started was recorded with the
+  // old words): record again from the newest lines until they hold still
+  for (let round = 0; round < 3; round++) {
+    const now = read();
+    if (JSON.stringify(now) === JSON.stringify(lines)) break;
+    lines = now;
+    id = (await recordLines({ ...opts, lines, voiceId: id })).id || id;
+  }
   const clips = [];
   for (const l of lines) {
     const pcm = join(dir, 'lines', `${l.id}.pcm`); const meta = join(dir, 'lines', `${l.id}.json`);
-    // a line is recorded again whenever its text, voice or model changed (the cache is never stale)
-    const had = existsSync(meta) ? JSON.parse(readFileSync(meta, 'utf8')) : null;
-    if (!existsSync(pcm) || !had || had.text !== l.text || had.voice_id !== id || had.model !== model) {
-      log(`ElevenLabs: ${l.id}`);
-      const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${id}/with-timestamps?output_format=${FORMAT}`, {
-        method: 'POST', headers: { 'xi-api-key': key, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: l.text, model_id: model, voice_settings: { stability, similarity_boost: similarity, use_speaker_boost: speakerBoost } }),
-      });
-      if (!r.ok) throw new Error(`ElevenLabs ${r.status} on ${l.id}: ${(await r.text()).slice(0, 200)}`);
-      const j = await r.json();
-      writeFileSync(pcm, Buffer.from(j.audio_base64, 'base64'));
-      writeFileSync(meta, JSON.stringify({ id: l.id, text: l.text, voice, voice_id: id, model, format: FORMAT, alignment: j.alignment }, null, 1));
-    }
     const buf = readFileSync(pcm);
     const x = new Float32Array(buf.length / 2);
     for (let i = 0; i < x.length; i++) x[i] = buf.readInt16LE(i * 2) / 32768;
