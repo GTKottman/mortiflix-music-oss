@@ -45,7 +45,15 @@ pub fn header(ui: &mut egui::Ui, area: &mut NodeArea, rect: Rect, maximised: boo
     let c = area.graph.counts();
     // each count is a link to Highlight that group
     let parts: Vec<(String, Option<Highlight>)> = {
-        let line = c.line();
+        // on Voice the count is of voice lines (the shots come later)
+        let line = if area.voice_view() {
+            let lines: Vec<_> = area.graph.nodes.iter().filter(|n| n.kind == super::model::Kind::Line && !n.missing).collect();
+            let made = lines.iter().filter(|n| !n.versions.is_empty()).count();
+            let ok = lines.iter().filter(|n| n.state == super::model::NodeState::Ok).count();
+            format!("{} voice lines · made {made} of {} · OK'd {ok}", lines.len(), lines.len())
+        } else {
+            c.line()
+        };
         line.split(" · ")
             .map(|s| {
                 let h = if s.ends_with("OK") {
@@ -86,7 +94,7 @@ pub fn header(ui: &mut egui::Ui, area: &mut NodeArea, rect: Rect, maximised: boo
         area.error.clone()
     } else if area.positions_local || area.order_local {
         "This studio can't keep node places yet: they stay here until you close the app.".to_string()
-    } else if c.shots > 0 && c.ok == c.shots {
+    } else if c.shots > 0 && c.ok == c.shots && !area.voice_view() {
         format!("All {} shots OK.", c.shots)
     } else {
         String::new()
@@ -449,6 +457,17 @@ fn breadcrumb(ui: &mut egui::Ui, area: &mut NodeArea, n: Option<&Node>, out: &mu
 }
 
 fn nothing(ui: &mut egui::Ui, area: &NodeArea, t: &MfxTheme) {
+    if area.voice_view() {
+        let lines: Vec<&Node> = area.graph.nodes.iter().filter(|n| n.kind == super::model::Kind::Line && !n.missing).collect();
+        let secs: f64 = lines.iter().filter_map(|n| n.start_sec.zip(n.end_sec)).map(|(a, b)| (b - a).max(0.0)).filter(|s| s.is_finite()).sum();
+        ui.label(RichText::new("The voice").strong().color(t.text));
+        ui.label(RichText::new(format!("{} lines · {} spoken", lines.len(), clock(secs))).color(t.text_dim));
+        ui.add_space(8.0);
+        ui.label(RichText::new("Click a line to hear it and check it on the Voice stage. Double-click plays it.").color(t.text_faint));
+        ui.add_space(8.0);
+        ui.label(RichText::new("The shots join here once the style frames are drawn.").small().color(t.text_faint));
+        return;
+    }
     let c = area.graph.counts();
     let total: f64 = starts(area).values().map(|(_, l)| *l).sum();
     ui.label(RichText::new("Whole film").strong().color(t.text));

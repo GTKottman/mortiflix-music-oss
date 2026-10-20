@@ -174,6 +174,11 @@ pub fn show(parent: &mut egui::Ui, area: &mut NodeArea, t: &MfxTheme, rect: Rect
     let mut child = parent.new_child(egui::UiBuilder::new().max_rect(rect).id_salt("mfx-nodes-canvas-ui"));
     child.set_clip_rect(rect.intersect(parent.clip_rect()));
     let ui = &mut child;
+    if area.voice_view() {
+        area.canvas = [rect.min.x, rect.min.y, rect.width(), rect.height()];
+        voice_view(ui, area, t, rect, out);
+        return;
+    }
     area.canvas = [rect.min.x, rect.min.y, rect.width(), rect.height()];
     // node places are worked out once for this pass (see `area::Memo`)
     area.memo_on();
@@ -685,6 +690,118 @@ pub fn show(parent: &mut egui::Ui, area: &mut NodeArea, t: &MfxTheme, rect: Rect
 
 /// Play in the loose preview (part 36's `mortiflix.preview.play {node, scope}`, scopes all / from /
 /// shot / beat). A cut plays from the shot before it; a voice line plays its shot; a cue its beat.
+/// Where each voice line sits in the voice view (world units): film order left to right, as wide as it is long,
+/// a wider gap between scenes. (id, beat, rect).
+fn voice_layout(area: &NodeArea) -> Vec<(String, Option<String>, Rect)> {
+    let mut lines: Vec<&Node> = area.graph.nodes.iter().filter(|n| n.kind == Kind::Line && !n.missing).take(2000).collect();
+    let beat_at = |n: &Node| n.beat.as_deref().and_then(|b| area.graph.beats.iter().position(|x| x == b)).unwrap_or(usize::MAX);
+    lines.sort_by(|a, b| beat_at(a).cmp(&beat_at(b)).then(a.order.cmp(&b.order)).then_with(|| a.id.cmp(&b.id)));
+    let mut x = 0.0f32;
+    let mut prev: Option<&str> = None;
+    let mut out = Vec::with_capacity(lines.len());
+    for n in lines {
+        if prev.is_some() {
+            x += if prev == n.beat.as_deref() { 24.0 } else { 64.0 };
+        }
+        let secs = match (n.start_sec, n.end_sec) {
+            (Some(a), Some(b)) if b > a && (b - a).is_finite() => (b - a) as f32,
+            _ => 2.0,
+        };
+        let w = (60.0 + secs * 30.0).clamp(150.0, 380.0);
+        out.push((n.id.clone(), n.beat.clone(), Rect::from_min_size(pos2(x, 0.0), vec2(w, 84.0))));
+        x += w;
+        prev = n.beat.as_deref();
+    }
+    out
+}
+
+/// The node area on Voice: every voice line as a card in film order, joined in the order they're said, under
+/// its scene's coloured label. Click selects (the Voice stage shows it), double-click or ▶ plays.
+fn voice_view(ui: &mut egui::Ui, area: &mut NodeArea, t: &MfxTheme, rect: Rect, out: &mut Out) {
+    let ctx = ui.ctx().clone();
+    let layout = voice_layout(area);
+    let bounds = layout.iter().fold(Rect::NOTHING, |r, (_, _, n)| r.union(*n));
+    // framing: any frame (and the first look) shows the whole voice, or the selection
+    if let Some(f) = area.want_frame.take() {
+        let sel = layout.iter().filter(|(id, _, _)| area.selection.contains(id)).fold(Rect::NOTHING, |r, (_, _, n)| r.union(*n));
+        let r = if matches!(f, Frame::Selected | Frame::Node(_) | Frame::Reveal(_)) && sel != Rect::NOTHING { sel } else { bounds };
+        if r != Rect::NOTHING && r.is_finite() {
+            area.frame_rect(r.expand2(vec2(24.0, 0.0)).with_min_y(r.min.y - 40.0));
+        }
+    }
+    let bg = ui.interact(rect, egui::Id::new("mfx-nodes-canvas"), Sense::click_and_drag());
+    out.auto("mfx.nodes.canvas".into(), &bg, "Node canvas");
+    if let Some(p) = ctx.pointer_hover_pos().filter(|p| rect.contains(*p)) {
+        wheel(ui, area, p);
+    }
+    if bg.dragged() {
+        area.pan_by(bg.drag_delta());
+        area.follow_playhead = false;
+    }
+    if bg.clicked() {
+        area.selection.clear();
+    }
+    let p = ui.painter_at(rect);
+    p.rect_filled(rect, 0.0, t.field_bg);
+    grid(&p, area, rect, t);
+    if layout.is_empty() {
+        p.text(rect.center(), Align2::CENTER_CENTER, "The voice lines appear here as they're made.", FontId::proportional(13.0), t.text_dim);
+        return;
+    }
+    let z = area.zoom;
+    let lod = Lod::of(z);
+    let found = area.found();
+    // the order they're said: one line from each card to the next
+    for pair in layout.windows(2) {
+        if let [(_, _, a), (_, _, b)] = pair {
+            let (sa, sb) = (area.to_screen(pos2(a.max.x, a.center().y)), area.to_screen(pos2(b.min.x, b.center().y)));
+            p.line_segment([sa, sb], Stroke::new((1.5 * z).clamp(1.0, 2.0), t.text_dim.gamma_multiply(0.8)));
+        }
+    }
+    // each scene's label over its lines
+    let mut i = 0;
+    while i < layout.len() {
+        let beat = layout.get(i).and_then(|l| l.1.clone());
+        let mut r = Rect::NOTHING;
+        while let Some(l) = layout.get(i).filter(|l| l.1 == beat) {
+            r = r.union(l.2);
+            i += 1;
+        }
+        let Some(beat) = beat else { continue };
+        let sr = area.rect_to_screen(r);
+        let (num, name) = area.graph.beat_title(&beat);
+        let chip = area.graph.get(&beat).and_then(|b| b.colour).map_or(t.text_dim, |c| c.chip);
+        let y = sr.min.y - 10.0;
+        p.line_segment([pos2(sr.min.x, y), pos2(sr.max.x, y)], Stroke::new(3.0, chip));
+        let size = text_size(z, 12.0);
+        let chip_r = Rect::from_min_size(pos2(sr.min.x, y - 6.0 - size - 2.0), vec2(size + 6.0, size + 2.0));
+        p.rect_filled(chip_r, 2.0, chip);
+        p.text(chip_r.center(), Align2::CENTER_CENTER, num.to_string(), FontId::proportional(size - 1.0), Color32::BLACK);
+        let g = line(&p, &name, size, t.text_dim, (sr.width() - chip_r.width() - 8.0).max(60.0));
+        p.galley(pos2(chip_r.max.x + 6.0, chip_r.center().y - g.size().y / 2.0), g, t.text);
+    }
+    // the cards
+    let view = area.view_world().expand(40.0);
+    for (id, _, r) in &layout {
+        if !view.intersects(*r) {
+            continue;
+        }
+        let Some(n) = area.graph.get(id).cloned() else { continue };
+        let sr = area.rect_to_screen(*r);
+        let resp = ui.interact(sr, egui::Id::new(("mfx-voice-node", id)), Sense::click());
+        out.auto(format!("mfx.nodes.node.{id}"), &resp, &n.display_name());
+        if resp.clicked() {
+            area.select_only(id);
+        }
+        if resp.double_clicked() {
+            play(out, area, id, "shot");
+        }
+        let sel = area.selection.contains(id);
+        let dim = area.dimmed(&n, &found);
+        line_node(ui, &p, area, &n, sr, lod, dim, sel, t, out);
+    }
+}
+
 pub fn play(out: &mut Out, area: &NodeArea, id: &str, scope: &str) {
     let (node, scope) = if let Some(c) = area.graph.cuts.iter().find(|c| c.id == id) {
         (c.from.clone(), "from")
