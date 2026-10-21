@@ -398,3 +398,40 @@ fn add_chapter_marker_asks_for_a_name() {
     assert_eq!(after.len(), n);
     assert!(after.contains(&(format!("Chapter {n}"), String::new())), "{after:?}");
 }
+
+/// #14: Clip ▸ Rename… opens a box with the selected clip's name to edit (as in Premiere Pro)
+/// instead of running `clip.rename` without a name ("need `name`"); Cancel and an empty name
+/// change nothing, OK renames the clip.
+#[test]
+fn clip_rename_asks_for_the_new_name() {
+    let mut d = Driver::new();
+    let c = d.app().session.active_sequence().unwrap().video_tracks[0].items[0].id.0;
+    let name = |d: &mut Driver| -> String {
+        let q = d.app().session.active_sequence().unwrap();
+        q.find_item(mortiflix_engine::project::ClipId(c)).unwrap().1.name.clone()
+    };
+    let before = name(&mut d);
+    d.exec("project.select", json!({"items": []}));
+    d.exec("timeline.select", json!({"clips": [c]}));
+    assert_eq!(d.menu("clip.rename")["dialog"], "clipRename");
+    for id in ["clipRename.name", "clipRename.ok", "clipRename.cancel"] {
+        assert!(d.has(id), "{id}");
+    }
+    // the box starts with the clip's current name; nothing changes until OK
+    assert_eq!(d.app().ui.extras.dialog.as_ref().unwrap().params["name"], json!(before));
+    d.click("clipRename.cancel");
+    assert!(!d.dialog_open());
+    assert_eq!(name(&mut d), before);
+    // an empty name keeps the box open with an error
+    d.menu("clip.rename");
+    d.ok("ui.set", json!({"menuDialog": {"name": "  "}}));
+    d.click("clipRename.ok");
+    assert!(d.dialog_open());
+    assert_eq!(name(&mut d), before);
+    // OK renames the clip
+    d.ok("ui.set", json!({"menuDialog": {"name": "Sunset Opener"}}));
+    d.click("clipRename.ok");
+    assert!(!d.dialog_open());
+    assert_eq!(name(&mut d), "Sunset Opener");
+    assert!(!d.app().ui.status.contains("need `name`"), "{}", d.app().ui.status);
+}

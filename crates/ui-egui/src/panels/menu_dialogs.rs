@@ -1,8 +1,8 @@
 //! Menu long tail (M3.11): the dialogs of Find, Create Search Bin, Project Settings (General /
 //! Scratch Disks / Ingest Settings), Get Media File Properties, Edit Offline, Source Settings,
 //! Update Metadata, Automate to Sequence, Scene Edit Detection, Normalize Mix Track, Simplify
-//! Sequence, Transcribe Sequence, Save as Template, Add Chapter Marker, Add Flash Cue Marker and the
-//! System Compatibility Report; plus the frontend side of Edit Original / Reveal Log Files (the OS
+//! Sequence, Transcribe Sequence, Save as Template, Add Chapter Marker, Add Flash Cue Marker, Clip
+//! ▸ Rename… and the System Compatibility Report; plus the frontend side of Edit Original / Reveal Log Files (the OS
 //! opener), Reveal in Finder, Generate Audio Waveform (the timeline's peak cache), Import from
 //! Media Browser (the Media Browser selection) and View ▸ Dynamic Audio Waveforms.
 //!
@@ -59,6 +59,7 @@ fn meta(command: &str) -> Option<(&'static str, &'static str, &'static str)> {
         "project.settings" => (tl!("Project Settings"), "projectSettings", tl!("OK")),
         "file.mediaProperties" => (tl!("Properties"), "properties", tl!("Close")),
         "clip.editOffline" => (tl!("Edit Offline File"), "editOffline", tl!("OK")),
+        "clip.rename" => (tl!("Rename"), "clipRename", tl!("OK")),
         "clip.sourceSettings" => (tl!("Source Settings"), "sourceSettings", tl!("OK")),
         "clip.updateMetadata" => (tl!("Update Metadata"), "updateMetadata", tl!("OK")),
         "clip.automateToSequence" => (tl!("Automate To Sequence"), "automate", tl!("OK")),
@@ -84,6 +85,7 @@ fn dialog_command(id: &str) -> Option<&'static str> {
         "file.newSearchBin" => "file.newSearchBin",
         "file.mediaProperties" => "file.mediaProperties",
         "clip.editOffline" => "clip.editOffline",
+        "clip.rename" => "clip.rename",
         "clip.sourceSettings" => "clip.sourceSettings",
         "clip.updateMetadata" => "clip.updateMetadata",
         "clip.automateToSequence" => "clip.automateToSequence",
@@ -327,6 +329,20 @@ fn defaults(app: &mut StudioApp, cmd: &str, id: &str) -> Result<(Value, Value), 
                 }
             }
             (p, Value::Null)
+        }
+        // the selected timeline clip (the Project panel's selected item when that panel has focus
+        // and an item is selected there, or no clip is selected), with its current name to edit
+        "clip.rename" => {
+            let project = app.ui.focused == PanelKind::Project && !s.state.project_selection.is_empty();
+            let clip = if project { None } else { s.state.selection.first().copied() }
+                .and_then(|c| s.active_sequence().and_then(|q| q.find_item(c)).map(|(_, it)| (c, it.name.clone())));
+            match clip {
+                Some((c, name)) => (json!({"clip": c.0, "name": name}), Value::Null),
+                None => {
+                    let it = s.state.project_selection.first().and_then(|i| s.project.item(*i)).ok_or("select a clip to rename")?;
+                    (json!({"item": it.id.0, "name": it.name}), Value::Null)
+                }
+            }
         }
         "clip.sourceSettings" => (json!({}), s.execute("clip.sourceSettings", json!({})).map_err(|e| e.to_string())?),
         "clip.updateMetadata" => {
@@ -690,6 +706,7 @@ pub fn show(app: &mut StudioApp, ctx: &egui::Context) {
                 text(ui, &mut elems, pre, p, "shot", tl!("Shot/Take:"), 220.0);
                 text(ui, &mut elems, pre, p, "logNote", tl!("Log Note:"), 220.0);
             }
+            "clip.rename" => text(ui, &mut elems, pre, p, "name", tl!("Clip Name:"), 260.0),
             "clip.sourceSettings" => {
                 ui.label(tlf!("Codec: {codec}", codec = d.info["codec"].as_str().unwrap_or_default()));
                 ui.label(RichText::new(d.info["message"].as_str().unwrap_or_default()).weak());
@@ -908,6 +925,16 @@ fn run(app: &mut StudioApp, d: &ClipDialogDraft) -> Result<Option<String>, Strin
         "clip.sceneEditDetection" => {
             s.execute(&d.command, p.clone()).map_err(|e| e.to_string())?;
             app.ui.status = tl!("Scene Edit Detection: analysing in the background (see Progress)").into();
+            Ok(None)
+        }
+        "clip.rename" => {
+            let name = p["name"].as_str().unwrap_or_default().trim();
+            if name.is_empty() {
+                return Err("enter a name".into());
+            }
+            let mut q = p.clone();
+            q["name"] = json!(name);
+            s.execute("clip.rename", q).map_err(|e| e.to_string())?;
             Ok(None)
         }
         cmd => {
