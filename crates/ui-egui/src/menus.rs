@@ -221,6 +221,49 @@ pub fn hidden(app: &StudioApp, id: &str) -> bool {
     editor_hidden(app) && editor_only(id)
 }
 
+/// Why a menu item can't run right now although the engine enables it. These commands take
+/// their target in the parameters (a caller names it), so the engine can't grey them; picked
+/// from a menu or a key there are no parameters and the target is the selection. `Some(reason)`:
+/// greyed in the menus, and the reason in the status bar when a key runs it anyway.
+pub fn needs_selection(app: &StudioApp, id: &str) -> Option<&'static str> {
+    let s = &app.session;
+    match id {
+        // the selected captions, else the one under the playhead (#9)
+        "graphics.upgradeCaption" if !has_caption_to_upgrade(s) => Some("Select a caption to upgrade it to a graphic"),
+        _ => None,
+    }
+}
+
+/// What Upgrade Caption to Graphic with no parameters works on: the selected captions, else the
+/// caption under the playhead.
+fn has_caption_to_upgrade(s: &mortiflix_engine::Session) -> bool {
+    let Some(q) = s.active_sequence() else { return false };
+    if s.state.caption_selection.is_empty() {
+        let t = s.playhead();
+        return q.caption_tracks.iter().any(|tr| tr.caption_at(t).is_some());
+    }
+    q.caption_tracks.iter().any(|tr| tr.captions.iter().any(|c| s.state.caption_selection.contains(&c.id)))
+}
+
+/// What the status bar shows for a message: an engine error loses its internal wording
+/// ("invalid parameters for `sequence.closeGap`: …", "command `…` is not available right now:
+/// …") and keeps the reason, as a sentence. Callers of the control channel still get the full
+/// error, which names the command (#7, #8, #9).
+pub fn status_text(status: &str) -> std::borrow::Cow<'_, str> {
+    let reason = status
+        .strip_prefix("invalid parameters for `")
+        .and_then(|rest| rest.split_once("`: "))
+        .or_else(|| status.strip_prefix("command `").and_then(|rest| rest.split_once("` is not available right now: ")))
+        .filter(|(id, _)| !id.contains(char::is_whitespace))
+        .map(|(_, why)| why.trim());
+    let Some(why) = reason.filter(|w| !w.is_empty()) else { return status.into() };
+    let mut chars = why.chars();
+    match chars.next() {
+        Some(first) => format!("{}{}", first.to_uppercase(), chars.as_str()).into(),
+        None => status.into(),
+    }
+}
+
 pub fn panel_command_id(p: PanelKind) -> String {
     format!("window.panel.{}", p.id())
 }
@@ -238,6 +281,12 @@ pub fn targets_source(app: &StudioApp, params: &Value) -> bool {
 pub fn invoke(app: &mut StudioApp, ctx: &egui::Context, id: &str, mut params: Value) -> Result<Value, String> {
     if id == "edit.selectAll" && (crate::panels::graphics::select_all_edited_text(app) || crate::panels::effect_controls::select_all_keyframes(app)) {
         return Ok(Value::Null);
+    }
+    if params.as_object().is_some_and(serde_json::Map::is_empty)
+        && let Some(why) = needs_selection(app, id)
+    {
+        app.ui.status = why.into();
+        return Err(why.into());
     }
     if mortiflix_engine::source_monitor::source_command(id) && targets_source(app, &params) && params.get("target").is_none() {
         let object = params.as_object_mut().ok_or("command parameters must be an object")?;
@@ -779,6 +828,7 @@ pub fn all_menu_items(app: &StudioApp) -> Vec<MenuItem> {
             it.checked = crate::panels::monitor_view::checked(app, &it.id).or(crate::panels::menu_dialogs::checked(app, &it.id));
             it.enabled &= crate::panels::monitor_view::enabled(app, &it.id);
         }
+        it.enabled &= needs_selection(app, &it.id).is_none();
     }
     crate::panels::workspaces::menu(app, &mut v);
     crate::mortiflix::menu(app, &mut v);

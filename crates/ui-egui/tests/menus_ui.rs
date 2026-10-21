@@ -467,3 +467,43 @@ fn sequence_and_marker_toggles_show_a_check_mark() {
     d.exec("sequence.snap", json!({"on": true}));
     assert_eq!(checked(&mut d, "sequence.snap"), Some(true));
 }
+
+/// Whether a menu item is enabled in the menus right now.
+fn menu_enabled(d: &mut Driver, id: &str) -> bool {
+    let menus = d.ok("ui.menu.list", json!({}));
+    let it = menus.as_array().unwrap().iter().find(|m| m["id"] == id).cloned().unwrap_or_else(|| panic!("{id} not in menus"));
+    it["enabled"].as_bool().unwrap()
+}
+
+/// The status bar after a menu item failed: a plain reason, never the command's internal name.
+fn assert_plain_status(d: &mut Driver, id: &str) {
+    let status = d.app().ui.status.clone();
+    let shown = mortiflix_ui_egui::menus::status_text(&status).into_owned();
+    assert!(!shown.is_empty(), "{id}: no reason in the status bar");
+    assert!(!shown.contains(id) && !shown.contains("invalid parameters") && !shown.contains("not available right now"), "{id}: {shown:?}");
+}
+
+/// #9: Graphics and Titles ▸ Upgrade Caption to Graphic was enabled with no caption selected and
+/// the status bar read "invalid parameters for `graphics.upgradeCaption`: select captions to
+/// upgrade". It is greyed until there is a caption to upgrade (the selected ones, else the one
+/// under the playhead), and the status bar shows an engine error's reason as a plain sentence.
+#[test]
+fn upgrade_caption_is_greyed_without_a_caption_and_errors_read_plainly() {
+    let mut d = Driver::new();
+    // a caption far from the playhead, and nothing selected
+    let cap = d.exec("captions.add", json!({"text": "Later", "seconds": 600, "durationSeconds": 2}))["caption"].clone();
+    d.exec("captions.select", json!({"captions": []}));
+    assert!(!menu_enabled(&mut d, "graphics.upgradeCaption"), "greyed with no caption selected or under the playhead");
+    let r = d.call("ui.menu.invoke", json!({"id": "graphics.upgradeCaption"}));
+    assert_eq!(r["ok"], false, "{r}");
+    assert_plain_status(&mut d, "graphics.upgradeCaption");
+    // selected: usable, and it upgrades
+    d.exec("captions.select", json!({"captions": [cap]}));
+    assert!(menu_enabled(&mut d, "graphics.upgradeCaption"));
+    assert_eq!(d.menu("graphics.upgradeCaption")["upgraded"], 1);
+    // the status bar's sentence for an engine error
+    use mortiflix_ui_egui::menus::status_text;
+    assert_eq!(status_text("invalid parameters for `graphics.upgradeCaption`: select captions to upgrade"), "Select captions to upgrade");
+    assert_eq!(status_text("command `clip.rename` is not available right now: no clips selected"), "No clips selected");
+    assert_eq!(status_text("Opened https://example.com"), "Opened https://example.com");
+}
