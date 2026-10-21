@@ -435,3 +435,35 @@ fn clip_rename_asks_for_the_new_name() {
     assert_eq!(name(&mut d), "Sunset Opener");
     assert!(!d.app().ui.status.contains("need `name`"), "{}", d.app().ui.status);
 }
+
+/// #10: the Sequence and Markers toggles (Snap in Timeline, Linked Selection, Selection Follows
+/// Playhead, Show Through Edits, Ripple Sequence Markers, Copy Paste Includes Sequence Markers)
+/// showed no check mark in either state; the menu now shows whether each one is on.
+#[test]
+fn sequence_and_marker_toggles_show_a_check_mark() {
+    let mut d = Driver::new();
+    let checked = |d: &mut Driver, id: &str| -> Option<bool> {
+        let menus = d.ok("ui.menu.list", json!({}));
+        let it = menus.as_array().unwrap().iter().find(|m| m["id"] == id).cloned().unwrap_or_else(|| panic!("{id} not in menus"));
+        it["checked"].as_bool()
+    };
+    for id in [
+        "sequence.snap",
+        "sequence.linkedSelection",
+        "sequence.selectionFollowsPlayhead",
+        "sequence.showThroughEdits",
+        "markers.rippleSequenceMarkers",
+        "markers.copyPasteIncludesSequenceMarkers",
+    ] {
+        let before = checked(&mut d, id).unwrap_or_else(|| panic!("{id} shows no check state"));
+        d.menu(id);
+        assert_eq!(checked(&mut d, id), Some(!before), "{id} after one click");
+        d.menu(id);
+        assert_eq!(checked(&mut d, id), Some(before), "{id} after two clicks");
+    }
+    // the state follows the engine, whoever changes it
+    d.exec("sequence.snap", json!({"on": false}));
+    assert_eq!(checked(&mut d, "sequence.snap"), Some(false));
+    d.exec("sequence.snap", json!({"on": true}));
+    assert_eq!(checked(&mut d, "sequence.snap"), Some(true));
+}

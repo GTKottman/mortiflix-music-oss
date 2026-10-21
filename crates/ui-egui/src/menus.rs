@@ -769,7 +769,11 @@ pub fn all_menu_items(app: &StudioApp) -> Vec<MenuItem> {
             "app.language.indonesian" => it.checked = Some(app.ui.language == crate::i18n::Language::Id),
             "app.language.italian" => it.checked = Some(app.ui.language == crate::i18n::Language::It),
             "app.language.korean" => it.checked = Some(app.ui.language == crate::i18n::Language::Ko),
-            _ => {}
+            id => {
+                if let Some(on) = session_toggle(&app.session, id) {
+                    it.checked = Some(on);
+                }
+            }
         }
         if it.id.starts_with("view.") {
             it.checked = crate::panels::monitor_view::checked(app, &it.id).or(crate::panels::menu_dialogs::checked(app, &it.id));
@@ -780,6 +784,21 @@ pub fn all_menu_items(app: &StudioApp) -> Vec<MenuItem> {
     crate::mortiflix::menu(app, &mut v);
     open_recent(&mut v, &app.session, |n| app.ui.language.tr(n).to_string());
     v
+}
+
+/// The on/off state of the Sequence and Markers toggles (Snap in Timeline, Linked Selection, …),
+/// so the menu shows a check mark while one is on (#10).
+fn session_toggle(session: &mortiflix_engine::Session, id: &str) -> Option<bool> {
+    let st = &session.state;
+    match id {
+        "sequence.snap" => Some(st.snapping),
+        "sequence.linkedSelection" => Some(st.linked_selection),
+        "sequence.selectionFollowsPlayhead" => Some(st.selection_follows_playhead),
+        "sequence.showThroughEdits" => Some(st.show_through_edits),
+        "markers.rippleSequenceMarkers" => Some(st.ripple_sequence_markers),
+        "markers.copyPasteIncludesSequenceMarkers" => Some(st.copy_paste_sequence_markers),
+        _ => None,
+    }
 }
 
 /// File ▸ Open Recent, after Open Project…: the recent projects (General ▸ `recentProjects`),
