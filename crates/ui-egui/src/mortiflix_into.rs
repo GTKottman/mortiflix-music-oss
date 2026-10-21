@@ -82,7 +82,7 @@ pub fn frame(app: &mut StudioApp, ctx: &egui::Context) {
             into::Job::Swap(piece) => swap(app, &piece),
         }
     }
-    if app.mfx.core.state.stage == mfx::STAGE_EDIT && app.mfx.core.state.handoff.phase == into::Phase::Done {
+    if app.mfx.core.state.stage == mfx::edit_stage() && app.mfx.core.state.handoff.phase == into::Phase::Done {
         selection(app);
     }
 }
@@ -92,14 +92,14 @@ pub fn frame(app: &mut StudioApp, ctx: &egui::Context) {
 pub fn on_stage(app: &mut StudioApp, stage: u8) {
     // A project reopened on Render: Export renders the edit's timeline, so bring the video in quietly first (it showed
     // and would have rendered the app's demo sequence, 0:27, instead of the 26 min film).
-    if stage == mfx::STAGE_RENDER {
+    if stage == mfx::render_stage() {
         let core = &mut app.mfx.core;
         if core.state.handoff.phase == into::Phase::NotYet && core.state.project_id.is_some() && into::start(&mut core.state, &mut core.service, false) {
             core.state.handoff.quiet = true;
         }
         return;
     }
-    if stage != mfx::STAGE_EDIT {
+    if stage != mfx::edit_stage() {
         return;
     }
     if !app.ui.dock.contains(PanelKind::MfxStage) && !app.ui.floating.iter().any(|g| g.panels.contains(&PanelKind::MfxStage)) {
@@ -115,7 +115,7 @@ pub fn on_stage(app: &mut StudioApp, stage: u8) {
 
 fn go_to_edit(app: &mut StudioApp) {
     app.mfx.core.activate();
-    if app.mfx.core.state.stage != mfx::STAGE_EDIT
+    if app.mfx.core.state.stage != mfx::edit_stage()
         && let Some(Nav::Moved { to, .. }) = app.mfx.core.navigate("edit", true)
     {
         crate::mortiflix::apply_stage(app, to);

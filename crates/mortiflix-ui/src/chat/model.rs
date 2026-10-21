@@ -124,7 +124,7 @@ fn field(m: &Map<String, Value>, key: &str) -> Option<String> {
 /// A stage given as a number (0-7) or a key (`styleFrames`).
 pub fn stage_of(v: &Value) -> Option<u8> {
     match v {
-        Value::Number(n) => n.as_u64().and_then(|n| u8::try_from(n).ok()).filter(|n| usize::from(*n) < crate::STAGES.len()),
+        Value::Number(n) => n.as_u64().and_then(|n| u8::try_from(n).ok()).filter(|n| usize::from(*n) < crate::stages().len()),
         Value::String(k) => crate::stage_by_key(k),
         _ => None,
     }

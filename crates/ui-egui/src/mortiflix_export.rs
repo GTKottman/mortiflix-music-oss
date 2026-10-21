@@ -117,7 +117,7 @@ pub fn frame(app: &mut StudioApp, ctx: &egui::Context) {
     }
     let host = &mut app.mfx.export;
     host.ui.poll_service(&mut app.mfx.core.service);
-    let watching = app.mfx.core.state.stage == mortiflix_ui::STAGE_RENDER || !host.jobs.is_empty();
+    let watching = app.mfx.core.state.stage == mortiflix_ui::render_stage() || !host.jobs.is_empty();
     if watching {
         host.ui.poll_jobs(&mut app.mfx.core.service, ctx.input(|i| i.time));
     }

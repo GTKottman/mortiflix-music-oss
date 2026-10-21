@@ -1229,7 +1229,7 @@ fn details(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &ChatUi) {
     let t = ctx.theme;
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 10.0;
-        for i in 0..crate::STAGES.len() {
+        for i in 0..crate::stages().len() {
             let Ok(s) = u8::try_from(i) else { break };
             let status = ctx.state.status(s);
             let mark = match status.kind {
@@ -1298,6 +1298,7 @@ fn moves_row(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, info: Option<
                     play(ctx, None);
                 }
                 let next: &[(&str, &str, &str)] = match ctx.state.stage {
+                    _ if crate::apps() => &[],
                     STAGE_ANIMATIC => &[("hearIt", "Go to the music", "stages.music")],
                     STAGE_MUSIC => &[("editVideo", "Edit the video", "stages.editVideo"), ("getVideo", "Get the video", "stages.getVideo")],
                     STAGE_EDIT => &[("export", "Go to Export", "stages.render")],

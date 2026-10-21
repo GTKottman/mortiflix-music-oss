@@ -185,7 +185,7 @@ pub fn bar_height(app: &StudioApp) -> f32 {
 /// The stages before Edit own the layout (doc 30). The editor's tabs, menus and shortcuts follow
 /// `menus::editor_hidden` (#16).
 pub fn hides_mode_tabs(app: &StudioApp) -> bool {
-    app.mfx.core.state.active && app.mfx.core.state.stage < mfx::STAGE_EDIT
+    app.mfx.core.state.active && app.mfx.core.state.stage < mfx::edit_stage()
 }
 
 /// Start of every frame: read the service, keep the stage in step with Mortiflix Studio's mode tabs.
@@ -206,7 +206,7 @@ pub fn frame_begin(app: &mut StudioApp, ctx: &egui::Context) {
     if !s.active {
         return;
     }
-    if s.stage < mfx::STAGE_EDIT && app.ui.mode == Mode::Edit {
+    if s.stage < mfx::edit_stage() && app.ui.mode == Mode::Edit {
         if app.ui.workspace != WORKSPACE {
             apply_stage(app, app.mfx.core.state.stage);
         }
@@ -214,8 +214,8 @@ pub fn frame_begin(app: &mut StudioApp, ctx: &egui::Context) {
     }
     let s = &app.mfx.core.state;
     let follow = match app.ui.mode {
-        Mode::Export if s.stage != mfx::STAGE_RENDER => Some("render"),
-        Mode::Edit if s.stage == mfx::STAGE_RENDER => Some("edit"),
+        Mode::Export if s.stage != mfx::render_stage() => Some("render"),
+        Mode::Edit if s.stage == mfx::render_stage() => Some("edit"),
         _ => None,
     };
     if let Some(key) = follow
@@ -324,7 +324,7 @@ pub fn panel(app: &mut StudioApp, ui: &mut egui::Ui, p: PanelKind, rect: egui::R
 /// centre panel carries the stage's name where it shows the stage's own work instead of the preview.
 pub fn tab_titles(app: &StudioApp) -> Vec<(PanelKind, String)> {
     let s = &app.mfx.core.state;
-    if !s.active || s.stage >= mfx::STAGE_EDIT {
+    if !s.active || s.stage >= mfx::edit_stage() {
         return Vec::new();
     }
     let name = mfx::stage_name(s.stage);
@@ -561,7 +561,7 @@ fn reveal(app: &mut StudioApp, ctx: &egui::Context, params: &Value) -> Result<Va
 /// Mortiflix parts (chat, Assets, New project) instead of Mortiflix Studio's Project panel.
 pub fn take_drop(app: &mut StudioApp, paths: &[String]) -> bool {
     let s = &app.mfx.core.state;
-    if !(s.show_new_project || (s.active && s.stage < mfx::STAGE_EDIT)) {
+    if !(s.show_new_project || (s.active && s.stage < mfx::edit_stage())) {
         return false;
     }
     app.mfx.core.state.push_files("drop", paths.to_vec());
@@ -656,7 +656,7 @@ pub fn keep_mortiflix_only(app: &mut StudioApp) -> Vec<PanelKind> {
 
 /// Switch Mortiflix Studio's layout and mode for a stage.
 pub fn apply_stage(app: &mut StudioApp, stage: u8) {
-    if stage < mfx::STAGE_EDIT {
+    if stage < mfx::edit_stage() {
         if app.ui.workspace != WORKSPACE {
             app.mfx.edit_workspace = app.ui.workspace.clone();
             app.set_workspace(WORKSPACE);
@@ -678,7 +678,7 @@ pub fn apply_stage(app: &mut StudioApp, stage: u8) {
             app.ui.status = e;
         }
     }
-    app.ui.mode = if stage >= mfx::STAGE_RENDER { Mode::Export } else { Mode::Edit };
+    app.ui.mode = if stage >= mfx::render_stage() { Mode::Export } else { Mode::Edit };
     crate::mortiflix_into::on_stage(app, stage);
 }
 

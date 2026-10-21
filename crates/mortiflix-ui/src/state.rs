@@ -112,11 +112,11 @@ pub struct MfxState {
     pub seen_connects: u64,
     pub project_id: Option<String>,
     pub project_title: String,
-    /// The stage on screen, 0-7 (see [`crate::STAGES`]).
+    /// The stage on screen, 0-7 (0-9 in the app studio; see [`crate::stages`]).
     pub stage: u8,
     /// The furthest stage reached; looking at an earlier one shows the "looking back" hint.
     pub furthest: u8,
-    pub statuses: [StageStatus; 8],
+    pub statuses: [StageStatus; 10],
     /// What the AI is doing now ("Making shot 9 of 14 · about 4 min left"), from status events.
     pub ai_line: String,
     pub selected_node: Option<String>,
@@ -223,7 +223,7 @@ impl MfxState {
     }
     /// Move to `to` (0-7); `done` marks the stage being left as done (Next). Returns the old stage.
     pub fn go_to(&mut self, to: u8, done: bool) -> Option<u8> {
-        if usize::from(to) >= crate::STAGES.len() {
+        if usize::from(to) >= crate::stages().len() {
             return None;
         }
         let from = self.stage;

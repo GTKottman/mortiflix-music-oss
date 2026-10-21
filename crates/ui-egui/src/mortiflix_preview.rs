@@ -100,7 +100,7 @@ pub fn frame(app: &mut StudioApp, ctx: &egui::Context) {
     let core = &mut app.mfx.core;
     let now = ctx.input(|i| i.time);
     pv::poll(&mut core.state, &mut core.service, now);
-    if core.state.stage >= mfx::STAGE_EDIT {
+    if core.state.stage >= mfx::edit_stage() {
         // Mortiflix Studio's own sequence is on the monitor now; the loose one stays in the bin
         app.mfx.preview.range = None;
         app.mfx.core.state.preview.player.ready = false;
@@ -493,7 +493,7 @@ fn state(app: &StudioApp) -> Value {
 /// `mortiflix.preview.<what>`.
 pub fn command(app: &mut StudioApp, what: &str, params: &Value) -> Result<Value, String> {
     let needs_player = matches!(what, "play" | "toggle" | "seek" | "prevShot" | "nextShot");
-    if needs_player && (!loose_active(app) || app.mfx.core.state.stage >= mfx::STAGE_EDIT) {
+    if needs_player && (!loose_active(app) || app.mfx.core.state.stage >= mfx::edit_stage()) {
         return Err(if app.mfx.core.state.preview.plan.shots.is_empty() {
             "Nothing to play yet: the preview fills in as soon as the script has its shots.".into()
         } else {

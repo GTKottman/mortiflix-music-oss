@@ -457,6 +457,10 @@ fn run_child(config: &ServiceConfig, script: &Path, cmd_rx: &Receiver<Value>, ou
     if let Some(bundle) = bundled_dir() {
         bundle_env(&mut cmd, &bundle);
     }
+    // the app studio's service: its own stages, pipelines and studio folder (service src/product.mjs)
+    if crate::apps() {
+        cmd.env("MFX_PRODUCT", "apps");
+    }
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt as _;

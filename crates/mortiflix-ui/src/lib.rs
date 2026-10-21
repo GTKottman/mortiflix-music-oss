@@ -13,6 +13,7 @@
 
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable))]
 
+pub mod app_stages;
 pub mod chat;
 pub mod export;
 pub mod gates;
@@ -53,6 +54,59 @@ pub const STAGES: [(&str, &str); 8] = [
     ("Edit", "edit"),
     ("Render", "render"),
 ];
+
+/// The app studio's ten stages in industry order (owner, 2026-10-21; Design Docs/App Studio - Plan v1.md).
+pub const APP_STAGES: [(&str, &str); 10] = [
+    ("Idea", "idea"),
+    ("Requirements", "requirements"),
+    ("Screens", "screens"),
+    ("Look", "look"),
+    ("Mockups", "mockups"),
+    ("Prototype", "prototype"),
+    ("Tech plan", "techPlan"),
+    ("Tasks", "tasks"),
+    ("Build", "build"),
+    ("Ship", "ship"),
+];
+
+/// Which studio this binary is (owner, 2026-10-21: "one code, two apps"). `Video` is Mortiflix Studio;
+/// `Apps` walks a full application through [`APP_STAGES`] on the same engine.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Product {
+    Video,
+    Apps,
+}
+
+/// `MFX_PRODUCT=apps`, else a binary whose name has "apps" in it, else Video. Decided once per run.
+pub fn product() -> Product {
+    static PRODUCT: std::sync::OnceLock<Product> = std::sync::OnceLock::new();
+    *PRODUCT.get_or_init(|| {
+        let by_env = std::env::var("MFX_PRODUCT").ok().map(|v| v.eq_ignore_ascii_case("apps"));
+        let by_name =
+            || std::env::current_exe().ok().and_then(|p| p.file_stem().map(|s| s.to_string_lossy().to_ascii_lowercase().contains("apps"))).unwrap_or(false);
+        if by_env.unwrap_or_else(by_name) { Product::Apps } else { Product::Video }
+    })
+}
+
+/// True in the app studio.
+pub fn apps() -> bool {
+    product() == Product::Apps
+}
+
+/// The stages of this studio: (name shown, command key). Index = `MfxState::stage`.
+pub fn stages() -> &'static [(&'static str, &'static str)] {
+    if apps() { &APP_STAGES } else { &STAGES }
+}
+
+/// The stage that opens Mortiflix Studio's Edit mode; none in the app studio (`u8::MAX`).
+pub fn edit_stage() -> u8 {
+    if apps() { u8::MAX } else { STAGE_EDIT }
+}
+
+/// The stage that opens Mortiflix Studio's Export mode; none in the app studio (`u8::MAX`).
+pub fn render_stage() -> u8 {
+    if apps() { u8::MAX } else { STAGE_RENDER }
+}
 
 /// Stage index of Voice (the voice per scene, as nodes).
 pub const STAGE_VOICE: u8 = 1;
@@ -194,9 +248,13 @@ impl Mortiflix {
             self.state.script.refresh();
             self.state.look.refresh();
         }
+        resume::tick(&mut self.state, &mut self.service);
+        // the video stages' own requests; the app studio's stages have none yet
+        if apps() {
+            return;
+        }
         script::tick(&mut self.state, &mut self.service);
         look::tick(&mut self.state, &mut self.service);
-        resume::tick(&mut self.state, &mut self.service);
         score::tick(&mut self.state, &mut self.service);
         motion_menu::tick(&mut self.state, &mut self.service);
         transitions::tick(&mut self.state, &mut self.service);
@@ -232,13 +290,16 @@ impl Mortiflix {
             true
         };
         let moved = |m: &mut Self, to: u8, done: bool| m.go_to(to, done).map_or(Nav::Stay, |from| Nav::Moved { from, to });
+        let last = u8::try_from(stages().len().saturating_sub(1)).unwrap_or(STAGE_RENDER);
         Some(match what {
+            // the app studio has no Get the video / Edit the video
+            "getVideo" | "editVideo" if apps() => Nav::Stay,
             "back" if stage == 0 => {
                 self.state.show_new_project = true;
                 Nav::Stay
             }
             "back" => moved(self, stage - 1, false),
-            "next" if stage >= STAGE_RENDER => Nav::Stay,
+            "next" if stage >= last => Nav::Stay,
             "next" if ask(&mut self.state, false) => Nav::Asked,
             "next" => moved(self, stage + 1, true),
             "getVideo" if ask(&mut self.state, true) => Nav::Asked,
@@ -260,29 +321,33 @@ impl Mortiflix {
 
 /// The stage's display name ("Style frames"), or "" out of range.
 pub fn stage_name(stage: u8) -> &'static str {
-    STAGES.get(usize::from(stage)).map_or("", |s| s.0)
+    stages().get(usize::from(stage)).map_or("", |s| s.0)
 }
 
 /// The stage's command key ("styleFrames"), or "" out of range.
 pub fn stage_key(stage: u8) -> &'static str {
-    STAGES.get(usize::from(stage)).map_or("", |s| s.1)
+    stages().get(usize::from(stage)).map_or("", |s| s.1)
 }
 
 /// The stage with this command key. The six-stage keys still work (`look`, `shots`, `voiceMusic`:
 /// agents and saved chats from before 2026-10-18).
 pub fn stage_by_key(key: &str) -> Option<u8> {
     let old = match key {
+        _ if apps() => None,
         "look" => Some(STAGE_STYLE_FRAMES),
         "shots" => Some(STAGE_ANIMATIC),
         "voiceMusic" => Some(STAGE_MUSIC),
         _ => None,
     };
-    old.or_else(|| STAGES.iter().position(|s| s.1.eq_ignore_ascii_case(key)).and_then(|i| u8::try_from(i).ok()))
+    old.or_else(|| stages().iter().position(|s| s.1.eq_ignore_ascii_case(key)).and_then(|i| u8::try_from(i).ok()))
 }
 
 /// PanelKind::MfxStage: the stage's gate on stages 1-6 (Script's own, then [`gates`]), then the
 /// Into Edit and Render parts.
 pub fn show_stage(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
+    if apps() {
+        return app_stages::show_stage(ui, ctx);
+    }
     match ctx.state.stage {
         0 => script::gate(ui, ctx),
         s if s < STAGE_EDIT => gates::show(ui, ctx),
@@ -296,6 +361,10 @@ pub fn show_stage(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
 /// Transitions, the motion menu on Animatic until the motion is picked; then the loose preview. True
 /// when the stage has its own centre (no video picture under it).
 pub fn show_centre(ui: &mut egui::Ui, ctx: &mut MfxCtx) -> bool {
+    if apps() {
+        app_stages::show_centre(ui, ctx);
+        return true;
+    }
     match ctx.state.stage {
         0 => script::show(ui, ctx),
         STAGE_VOICE => voice_music::show(ui, ctx),
@@ -313,7 +382,7 @@ pub fn show_centre(ui: &mut egui::Ui, ctx: &mut MfxCtx) -> bool {
 /// The stage has its own centre panel instead of the video preview (the Animatic while its motion
 /// menu shows).
 pub fn own_centre(state: &MfxState) -> bool {
-    matches!(state.stage, 0 | STAGE_VOICE | STAGE_STYLE_FRAMES | STAGE_TRANSITIONS) || (state.stage == STAGE_ANIMATIC && motion_menu::wanted(state))
+    apps() || matches!(state.stage, 0 | STAGE_VOICE | STAGE_STYLE_FRAMES | STAGE_TRANSITIONS) || (state.stage == STAGE_ANIMATIC && motion_menu::wanted(state))
 }
 
 /// The calm placeholder every part stub draws: the part's name and the doc that specifies it.

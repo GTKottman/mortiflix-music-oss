@@ -7,7 +7,7 @@ use egui::{Align2, Color32, FontId, Pos2, Rect, Sense, Stroke, pos2, vec2};
 use serde_json::json;
 
 use crate::state::{StageStatus, StatusKind};
-use crate::{MfxCtx, STAGE_MUSIC, STAGE_RENDER, STAGES, stage_name};
+use crate::{MfxCtx, STAGE_MUSIC, STAGE_RENDER, stage_name, stages};
 
 const BACK_W: f32 = 176.0;
 const STAGE_W: f32 = 150.0;
@@ -19,6 +19,9 @@ const MIN_HINT_W: f32 = 140.0;
 pub fn hint(ctx: &MfxCtx) -> String {
     if ctx.state.looking_back() {
         return "You're looking back. A change here only remakes what it touches.".into();
+    }
+    if crate::apps() {
+        return crate::app_stages::hint(ctx.state.stage).into();
     }
     match ctx.state.stage {
         0 => "Write and change the script. Nothing is made until you press Next.",
@@ -46,11 +49,11 @@ pub fn show(ui: &mut egui::Ui, rect: Rect, ctx: &mut MfxCtx) {
     p.rect_filled(rect, 0.0, t.header_bg);
     p.line_segment([rect.left_bottom(), rect.right_bottom()], Stroke::new(1.0, Color32::BLACK));
     let stage = ctx.state.stage;
-    let pair = stage == STAGE_MUSIC;
+    let pair = stage == STAGE_MUSIC && !crate::apps();
     // Widths: stages never change width with their status (nothing shifts); narrow windows scale
     // everything down together and drop the hint first.
     let right_w = if pair { PAIR_W } else { NEXT_W };
-    let full = BACK_W + STAGE_W * STAGES.len() as f32 + right_w;
+    let full = BACK_W + STAGE_W * stages().len() as f32 + right_w;
     let scale = if rect.width() < full { (rect.width() / full).max(0.3) } else { 1.0 };
     let (back_w, stage_w, right_w) = (BACK_W * scale, STAGE_W * scale, right_w * scale);
 
@@ -76,7 +79,7 @@ pub fn show(ui: &mut egui::Ui, rect: Rect, ctx: &mut MfxCtx) {
 
     // The eight stages
     let mut x = back.max.x;
-    for (i, (name, key)) in STAGES.iter().enumerate() {
+    for (i, (name, key)) in stages().iter().enumerate() {
         let Ok(i) = u8::try_from(i) else { break };
         let tab = Rect::from_min_size(pos2(x, rect.min.y), vec2(stage_w, rect.height()));
         x = tab.max.x;
@@ -160,13 +163,21 @@ pub fn show(ui: &mut egui::Ui, rect: Rect, ctx: &mut MfxCtx) {
         }
     } else {
         let next = Rect::from_min_size(pos2(right.min.x + 4.0, rect.min.y + 7.0), vec2(right.width() - 12.0, rect.height() - 14.0));
-        let label = if stage >= STAGE_RENDER { "Render the video".to_string() } else { format!("Next: {}", stage_name(stage.saturating_add(1))) };
-        let resp = button(ui, ctx, next, &label, ready, "mfx.stagebar.next");
-        if stage < STAGE_RENDER {
+        // the app studio's last stage: shipping comes in a later version (Design Docs/App Studio - Plan v1.md)
+        let apps_last = crate::apps() && usize::from(stage) + 1 >= stages().len();
+        let label = if apps_last {
+            "Ship the app".to_string()
+        } else if stage >= STAGE_RENDER && !crate::apps() {
+            "Render the video".to_string()
+        } else {
+            format!("Next: {}", stage_name(stage.saturating_add(1)))
+        };
+        let resp = button(ui, ctx, next, &label, ready && !apps_last, "mfx.stagebar.next");
+        if (stage < STAGE_RENDER || crate::apps()) && !apps_last {
             chevron(&p, pos2(next.max.x - 14.0, next.center().y), 1.0, if ready { Color32::WHITE } else { t.text_dim });
         }
-        if resp.clicked() {
-            ctx.command(if stage >= STAGE_RENDER { "mortiflix.renderVideo" } else { "stages.next" }, json!({}));
+        if resp.clicked() && !apps_last {
+            ctx.command(if stage >= STAGE_RENDER && !crate::apps() { "mortiflix.renderVideo" } else { "stages.next" }, json!({}));
         }
     }
 

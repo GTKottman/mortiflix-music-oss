@@ -23,13 +23,18 @@ pub fn show(app: &mut StudioApp, ui: &mut egui::Ui, rect: Rect) {
     ui.painter().text(
         left.min + vec2(24.0, 58.0),
         Align2::LEFT_CENTER,
-        tl!("Make a video from an idea, open one you made, or start from a pack."),
+        // the app studio (mortiflix_ui::apps): English only for now
+        if mortiflix_ui::apps() {
+            "Plan an app from an idea, step by step, then the AI builds it."
+        } else {
+            tl!("Make a video from an idea, open one you made, or start from a pack.")
+        },
         Tokens::ui(13.0),
         t.text_dim,
     );
     let ctx = ui.ctx().clone();
     let cards = [
-        (tl!("New video"), "mortiflix.newProject", tl!("Start from an idea"), crate::icons::Icon::Film),
+        (if mortiflix_ui::apps() { "New app" } else { tl!("New video") }, "mortiflix.newProject", tl!("Start from an idea"), crate::icons::Icon::Film),
         (tl!("Open project"), "file.open", tl!("Pick a saved .mortiflix"), crate::icons::Icon::Folder),
         (tl!("Import files"), "file.import", tl!("Movies, audio and stills"), crate::icons::Icon::Sequence),
         (tl!("Get packs"), "", tl!("Browse what's installed below"), crate::icons::Icon::Grid),

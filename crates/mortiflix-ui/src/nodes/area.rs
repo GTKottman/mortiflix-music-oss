@@ -326,16 +326,17 @@ pub enum Frame {
 }
 
 impl NodeArea {
-    /// Shots show their own pictures and play from the Animatic on, voice lines from Voice on.
+    /// Shots show their own pictures and play from the Animatic on, voice lines from Voice on. The app
+    /// studio has none of these video views (its Screens stage gets its own).
     pub fn shows_shots(&self) -> bool {
-        self.stage >= crate::STAGE_ANIMATIC
+        self.stage >= crate::STAGE_ANIMATIC && !crate::apps()
     }
     /// Shots show their look's still from Style frames on.
     pub fn shows_looks(&self) -> bool {
-        self.stage >= crate::STAGE_STYLE_FRAMES
+        self.stage >= crate::STAGE_STYLE_FRAMES && !crate::apps()
     }
     pub fn shows_lines(&self) -> bool {
-        self.stage >= crate::STAGE_VOICE
+        self.stage >= crate::STAGE_VOICE && !crate::apps()
     }
     /// On Voice (before any look exists) the node area is about the voice lines only: no shot boxes yet
     /// (owner, 2026-10-19: "Nodes technically shouldn't have the giant video box yet because we're only using the
@@ -344,7 +345,7 @@ impl NodeArea {
         self.shows_lines() && !self.shows_looks()
     }
     pub fn shows_transitions(&self) -> bool {
-        self.stage >= crate::STAGE_TRANSITIONS
+        self.stage >= crate::STAGE_TRANSITIONS && !crate::apps()
     }
 }
 

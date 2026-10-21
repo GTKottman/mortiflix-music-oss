@@ -214,7 +214,7 @@ pub fn editor_only(id: &str) -> bool {
 /// is on and the stage is not Edit. Mortiflix Studio without Mortiflix shows everything.
 pub fn editor_hidden(app: &StudioApp) -> bool {
     let s = &app.mfx.core.state;
-    s.active && s.stage != mortiflix_ui::STAGE_EDIT
+    s.active && s.stage != mortiflix_ui::edit_stage()
 }
 
 /// The one rule (#16): a command whose menu item and shortcut are off right now.
