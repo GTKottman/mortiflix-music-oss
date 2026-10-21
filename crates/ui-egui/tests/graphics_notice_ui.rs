@@ -117,7 +117,7 @@ fn the_notice_follows_the_interface_language() {
     let mut d = Driver::new(Some(notice));
     d.app().ui.language = mortiflix_ui_egui::i18n::Language::Es;
     d.frames(3);
-    assert_eq!(d.label("graphics.notice"), "Modo gráfico seguro: renderizado por software");
+    assert_eq!(d.label("graphics.notice"), "Modo gráfico seguro: procesamiento por software");
     assert_eq!(d.label("graphics.notice.reset"), "Usar gráficos predeterminados");
     mortiflix_ui_egui::i18n::set_current(mortiflix_ui_egui::i18n::Language::En);
 }

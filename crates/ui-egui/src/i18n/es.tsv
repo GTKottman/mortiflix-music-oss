@@ -1263,6 +1263,7 @@
 	59.94 fps Non Drop-Frame	59,94 fps sin eliminación de fotogramas
 	ASC CDL	ASC CDL
 	Accessible color contrast	Contraste de color accesible
+	Animate zoom, scrolling and menus	Animar el zoom, el desplazamiento y los menús
 	Action-Safe Margin	Margen seguro de acción
 	Active Monitor	Monitor activo
 	Add	Añadir
@@ -3714,3 +3715,9 @@
 	Browse what's installed below	Mira abajo lo que está instalado
 	Packs	Packs
 	Projects you open show here.	Aquí aparecen los proyectos que abres.
+# View ▸ Reset Interface Zoom (#2253).
+	Reset Interface Zoom	Restablecer zoom de la interfaz
+	Track Color	Color de pista
+	Open a sequence to search its graphics	Abre una secuencia para buscar en sus gráficos
+	No text graphics in this sequence. Add text with the Type tool.	Esta secuencia no tiene gráficos con texto. Añade texto con la herramienta Texto.
+	No matching text.	Ningún texto coincide.

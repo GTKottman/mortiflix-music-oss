@@ -1027,6 +1027,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "craft-docpath"
+version = "0.1.0"
+source = "git+https://github.com/storytold/craft-libs?rev=82a24b006eefa036b43c09a67fb9a3fbd17ffe63#82a24b006eefa036b43c09a67fb9a3fbd17ffe63"
+
+[[package]]
 name = "craft-ui"
 version = "0.1.0"
 source = "git+https://github.com/storytold/craft-libs?rev=5c874d51eeb3de70e735c8ce87a59a7dedd47675#5c874d51eeb3de70e735c8ce87a59a7dedd47675"
@@ -2969,7 +2974,7 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-aac"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "mortiflix-bitstream",
  "mortiflix-testkit",
@@ -2979,7 +2984,7 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-ac3"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "mortiflix-testkit",
  "thiserror 2.0.21",
@@ -2987,7 +2992,7 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-apv"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "mortiflix-bitstream",
  "mortiflix-testkit",
@@ -2997,14 +3002,14 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-audio-dsp"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "mortiflix-testkit",
 ]
 
 [[package]]
 name = "mortiflix-automation"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "base64 0.22.1",
  "image",
@@ -3020,7 +3025,7 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-av1"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "mortiflix-bitstream",
  "mortiflix-testkit",
@@ -3031,21 +3036,21 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-avi"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "mortiflix-testkit",
 ]
 
 [[package]]
 name = "mortiflix-bitstream"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "proptest",
 ]
 
 [[package]]
 name = "mortiflix-captions"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "mortiflix-color",
  "mortiflix-project",
@@ -3058,11 +3063,11 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-cfb"
-version = "0.8.0"
+version = "0.10.0"
 
 [[package]]
 name = "mortiflix-codecs"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "image",
  "log",
@@ -3100,7 +3105,7 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-color"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "proptest",
  "serde",
@@ -3108,7 +3113,7 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-dng"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "mortiflix-dng",
  "rayon",
@@ -3117,7 +3122,7 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-dnx"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "mortiflix-bitstream",
  "mortiflix-testkit",
@@ -3127,7 +3132,7 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-edit"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "mortiflix-geom",
  "mortiflix-media",
@@ -3140,8 +3145,9 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-engine"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
+ "craft-docpath",
  "image",
  "log",
  "mortiflix-audio-dsp",
@@ -3174,7 +3180,7 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-export"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "image",
  "mortiflix-aac",
@@ -3205,7 +3211,7 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-flac"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "mortiflix-bitstream",
  "mortiflix-testkit",
@@ -3214,7 +3220,7 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-format"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "log",
  "mortiflix-media",
@@ -3227,7 +3233,7 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-frame"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "mortiflix-color",
  "mortiflix-time",
@@ -3237,7 +3243,7 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-geom"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "proptest",
  "serde",
@@ -3245,7 +3251,7 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-golden"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "mortiflix-color",
  "mortiflix-frame",
@@ -3262,7 +3268,7 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-gpu"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "image",
  "log",
@@ -3281,7 +3287,7 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-h264"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "mortiflix-bitstream",
  "mortiflix-testkit",
@@ -3291,7 +3297,7 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-h264enc"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "mortiflix-bitstream",
  "mortiflix-testkit",
@@ -3301,7 +3307,7 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-hevc"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "mortiflix-bitstream",
  "mortiflix-testkit",
@@ -3311,7 +3317,7 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-interchange"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "mortiflix-cfb",
  "mortiflix-color",
@@ -3328,7 +3334,7 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-isobmff"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "mortiflix-bitstream",
  "mortiflix-testkit",
@@ -3339,7 +3345,7 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-matroska"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "mortiflix-testkit",
  "serde_json",
@@ -3347,7 +3353,7 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-media"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "image",
  "mortiflix-color",
@@ -3363,7 +3369,7 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-mpa"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "mortiflix-bitstream",
  "mortiflix-testkit",
@@ -3372,7 +3378,7 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-mpeg2v"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "mortiflix-testkit",
  "rayon",
@@ -3381,7 +3387,7 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-mpegts"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "mortiflix-testkit",
  "thiserror 2.0.21",
@@ -3389,28 +3395,28 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-mxf"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "mortiflix-testkit",
 ]
 
 [[package]]
 name = "mortiflix-ogg"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "mortiflix-testkit",
 ]
 
 [[package]]
 name = "mortiflix-opus"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "mortiflix-testkit",
 ]
 
 [[package]]
 name = "mortiflix-platform"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "libloading",
  "log",
@@ -3436,7 +3442,7 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-project"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "mortiflix-color",
  "mortiflix-geom",
@@ -3450,7 +3456,7 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-prores"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "mortiflix-bitstream",
  "mortiflix-testkit",
@@ -3460,7 +3466,7 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-render"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "image",
  "mortiflix-audio-dsp",
@@ -3480,7 +3486,7 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-scopes"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "mortiflix-color",
  "serde",
@@ -3489,7 +3495,7 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-speech"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "candle-core",
  "candle-nn",
@@ -3507,7 +3513,7 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-studio"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "arboard",
  "chrono",
@@ -3541,7 +3547,7 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-studio-cli"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "mortiflix-automation",
  "mortiflix-codecs",
@@ -3563,7 +3569,7 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-studio-web"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "eframe",
  "egui",
@@ -3587,14 +3593,14 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-testkit"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "png 0.18.1",
 ]
 
 [[package]]
 name = "mortiflix-text"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "harfrust",
  "mortiflix-color",
@@ -3606,7 +3612,7 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-time"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "proptest",
  "serde",
@@ -3614,7 +3620,7 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-tts"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "candle-core",
  "candle-nn",
@@ -3628,7 +3634,7 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-tts-text"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "serde",
  "thiserror 2.0.21",
@@ -3636,7 +3642,7 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-ui"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "egui",
  "image",
@@ -3648,7 +3654,7 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-ui-egui"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "cpu-time",
  "craft-ui",
@@ -3689,14 +3695,14 @@ dependencies = [
 
 [[package]]
 name = "mortiflix-vp8"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "thiserror 2.0.21",
 ]
 
 [[package]]
 name = "mortiflix-vp9"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "mortiflix-bitstream",
  "rayon",
@@ -7675,7 +7681,7 @@ checksum = "ec7a2a501ed189703dba8b08142f057e887dfc4b2cc4db2d343ac6376ba3e0b9"
 
 [[package]]
 name = "xtask"
-version = "0.8.0"
+version = "0.10.0"
 dependencies = [
  "mortiflix-testkit",
  "serde_json",

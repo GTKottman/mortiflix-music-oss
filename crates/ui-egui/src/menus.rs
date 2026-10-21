@@ -53,6 +53,7 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     uic!("view.zoomIn", "Zoom In", ["View"], Some("=")),
     uic!("view.zoomOut", "Zoom Out", ["View"], Some("-")),
     uic!("view.zoomToSequence", "Zoom to Sequence", ["View"], Some("\\")),
+    uic!("view.resetInterfaceZoom", "Reset Interface Zoom", ["View"], None),
     uic!("view.playbackRes.full", "Full", ["View", "Playback Resolution"], None),
     uic!("view.playbackRes.half", "1/2", ["View", "Playback Resolution"], None),
     uic!("view.playbackRes.quarter", "1/4", ["View", "Playback Resolution"], None),
@@ -417,6 +418,12 @@ pub fn invoke(app: &mut StudioApp, ctx: &egui::Context, id: &str, mut params: Va
         "view.zoomToSequence" => {
             app.ui.timeline.fit_pending = true;
             return Ok(Value::Null);
+        }
+        // the whole interface back to Settings ▸ Appearance ▸ UI Scale, after Ctrl+Plus or a mouse
+        // mapped to page zoom scaled it (#2253)
+        "view.resetInterfaceZoom" => {
+            let zoom = app.reset_ui_zoom(ctx);
+            return Ok(json!({"zoom": zoom}));
         }
         "mode.import" => {
             app.ui.mode = Mode::Import;
@@ -845,6 +852,16 @@ pub fn bindings(app: &StudioApp) -> Vec<KeyBinding> {
     let shifted: Vec<KeyBinding> =
         v.iter().filter(|b| b.0.shift).filter_map(|(m, k, id, p)| shifted_key(*k).map(|k2| (*m, k2, id.clone(), p.clone()))).collect();
     v.extend(shifted);
+    // `+` is the `=` key with Shift on US layouts and its own key on others and the keypad: a chord
+    // on `=` takes it too, unless something is bound to `+` itself. Otherwise Ctrl+Plus fell
+    // through to egui's interface zoom while Ctrl+- and Ctrl+0 were taken by Mortiflix Studio
+    // shortcuts, so the interface grew and could not shrink back (#2253).
+    let plus: Vec<KeyBinding> = v
+        .iter()
+        .filter(|(m, k, _, p)| *k == egui::Key::Equals && !v.iter().any(|(m2, k2, _, p2)| *k2 == egui::Key::Plus && m2 == m && p2 == p))
+        .map(|(m, _, id, p)| (*m, egui::Key::Plus, id.clone(), p.clone()))
+        .collect();
+    v.extend(plus);
     v.sort_by_key(|(m, ..)| std::cmp::Reverse(specificity(*m)));
     v
 }

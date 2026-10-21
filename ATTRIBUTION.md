@@ -28,7 +28,7 @@ iconography, images or other Adobe assets; open licences only; every asset attri
 | `docs/images/mortiflix-keyframes.png` | Upstream contributors (see NOTICE) | Original work: upstream screenshot; frames from Night of the Living Dead (1968, public domain) | MIT OR Apache-2.0; film frames public domain |
 | `docs/images/mortiflix-export.png` | Upstream contributors (see NOTICE) | Original work: upstream screenshot; frame from Night of the Living Dead (1968, public domain) | MIT OR Apache-2.0; film frames public domain |
 | `docs/images/mortiflix-assembly.png` | Upstream contributors (see NOTICE) | Original work: upstream screenshot; frames from Carnival of Souls (1962), Night of the Living Dead (1968), thumbnails of all demo media | MIT OR Apache-2.0; film frames public domain |
-| `docs/images/mortiflix-lumetri.png` | Upstream contributors (see NOTICE) | Original work: upstream UI crop (Lumetri Color panel) | MIT OR Apache-2.0 |
+| `docs/images/mortiflix-color-panel.png` | Upstream contributors (see NOTICE) | Original work: upstream UI crop (color grading panel) | MIT OR Apache-2.0 |
 | `docs/images/mortiflix-scopes.png` | Upstream contributors (see NOTICE) | Original work: upstream UI crop (scopes of a Charade (1963) frame, public domain) | MIT OR Apache-2.0 |
 | `docs/images/mortiflix-effects.png` | Upstream contributors (see NOTICE) | Original work: upstream screenshot crop; NASA Earth Views (US Government work, public domain) | MIT OR Apache-2.0; footage public domain |
 | `docs/images/mortiflix-timeline.png` | Upstream contributors (see NOTICE) | Original work: upstream UI crop; thumbnails from Night of the Living Dead (1968) and Carnival of Souls (1962), CC0 Chopin waveform | MIT OR Apache-2.0; film frames public domain |
