@@ -1495,6 +1495,9 @@ impl StudioApp {
         // across both scopes (the sort is stable, so the panel still wins a tie): otherwise the
         // Timeline's `Delete` (Clear) swallows the app-wide `Shift+Delete` (Ripple Delete) (#680).
         let focused = self.ui.focused.title();
+        // With Mortiflix on, the editor's shortcuts work only at the Edit stage (#16): their keys are
+        // left alone, not consumed, so the Mortiflix panels still get them.
+        let editor_hidden = menus::editor_hidden(self);
         let mut fire = Vec::new();
         ctx.input_mut(|i| {
             let modifiers = i.modifiers;
@@ -1525,7 +1528,7 @@ impl StudioApp {
             clipboard_events_as_keys(&mut i.events, modifiers);
             let panel = self.bindings.iter().filter(|b| b.3.as_deref() == Some(focused));
             let app_wide = self.bindings.iter().filter(|b| b.3.is_none());
-            let mut candidates: Vec<&menus::KeyBinding> = panel.chain(app_wide).collect();
+            let mut candidates: Vec<&menus::KeyBinding> = panel.chain(app_wide).filter(|b| !(editor_hidden && menus::editor_only(&b.2))).collect();
             candidates.sort_by_key(|b| std::cmp::Reverse(menus::specificity(b.0)));
             for (m, k, id, _) in candidates {
                 // With a text field focused, an unmodified key belongs to the field (and to the input
@@ -1772,7 +1775,8 @@ impl StudioApp {
         self.handle_drops(&ctx);
         if let Some(rx) = self.command_inbox.take() {
             while let Ok(id) = rx.try_recv() {
-                if self.control_input_only {
+                // a native menu item or key of the editor, sent while it is hidden (#16)
+                if self.control_input_only || menus::hidden(self, &id) {
                     continue;
                 }
                 if let Err(e) = menus::invoke(self, &ctx, &id, json!({})) {

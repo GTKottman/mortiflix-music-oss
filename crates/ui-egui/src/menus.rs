@@ -161,6 +161,66 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     uic!("app.settings.trim", "Trim…", ["Edit", "Preferences"], None),
 ];
 
+/// Commands about Mortiflix or the app in general (#16): every other command is only about the
+/// editor (timeline, clips, sequences, markers, graphics and titles, bins, editor panels, monitors,
+/// workspaces, exports of the edit…). Playback and playhead keys stay because they also drive the
+/// Mortiflix preview on the stages before Edit.
+const GENERAL_PREFIXES: &[&str] = &[
+    "app.",
+    "help.",
+    "stages.",
+    "mortiflix.",
+    "script.",
+    "nodes.",
+    "playback.",
+    "playhead.",
+    "view.theme.",
+    "view.appearanceMode.",
+    "window.panel.Mfx",
+    "file.openRecent.",
+];
+
+/// Single commands about the app in general: projects (new, open, close, save) and the window.
+const GENERAL_IDS: &[&str] = &[
+    "file.newProject",
+    "file.openDemoProject",
+    "file.open",
+    "file.clearRecent",
+    "file.closeProject",
+    "file.closeAllProjects",
+    "file.closeAllOtherProjects",
+    "file.save",
+    "file.saveAs",
+    "file.saveCopy",
+    "file.saveAsTemplate",
+    "file.saveAll",
+    "file.revert",
+    "file.recover",
+    "window.maximizeFrame",
+    "window.maximizeFrameUnderCursor",
+    "window.toggleFullScreen",
+    "window.nextPanel",
+    "window.prevPanel",
+];
+
+/// Whether a command is only about the editor. With Mortiflix on, its menu items, tabs, buttons
+/// and shortcuts are there only at the Edit stage (owner, #16); see [`editor_hidden`].
+pub fn editor_only(id: &str) -> bool {
+    !(GENERAL_IDS.contains(&id) || GENERAL_PREFIXES.iter().any(|p| id.starts_with(p)))
+}
+
+/// Whether the editor's own menus, tabs, buttons and shortcuts are hidden right now: Mortiflix
+/// is on and the stage is not Edit. Mortiflix Studio without Mortiflix shows everything.
+pub fn editor_hidden(app: &StudioApp) -> bool {
+    let s = &app.mfx.core.state;
+    s.active && s.stage != mortiflix_ui::STAGE_EDIT
+}
+
+/// The one rule (#16): a command whose menu item and shortcut are off right now.
+pub fn hidden(app: &StudioApp, id: &str) -> bool {
+    editor_hidden(app) && editor_only(id)
+}
+
 pub fn panel_command_id(p: PanelKind) -> String {
     format!("window.panel.{}", p.id())
 }
@@ -681,7 +741,18 @@ pub const MENUS: [&str; 10] = ["File", "Edit", "Clip", "Sequence", "Markers", "G
 /// the catalogs like menu labels (`apps/mortiflix-studio/src/native_menu.rs`).
 pub const NATIVE_APP_MENU: [&str; 4] = ["Settings", "Hide Mortiflix Studio", "Hide Others", "Quit Mortiflix Studio"];
 
+/// The menu bar as shown right now: the editor's items only at the Edit stage (#16).
 pub fn menu_items(app: &StudioApp) -> Vec<MenuItem> {
+    let mut v = all_menu_items(app);
+    if editor_hidden(app) {
+        v.retain(|it| !editor_only(&it.id));
+    }
+    v
+}
+
+/// Every menu item whatever the stage: the native macOS menu is built once from these, and the
+/// ones `menu_items` leaves out are greyed there.
+pub fn all_menu_items(app: &StudioApp) -> Vec<MenuItem> {
     let mut v = menu_items_for(&app.session);
     for it in &mut v {
         it.label = app.ui.language.tr(&it.label).to_string();
@@ -899,6 +970,10 @@ pub fn menu_bar(app: &mut StudioApp, ui: &mut egui::Ui) {
         let mut titles = Vec::with_capacity(MENUS.len());
         for top in MENUS {
             let mine: Vec<&MenuItem> = items.iter().filter(|i| i.path.first().map(String::as_str) == Some(top)).collect();
+            // Clip, Sequence, Markers, Graphics and Titles: only at the Edit stage (#16)
+            if mine.is_empty() && editor_hidden(app) {
+                continue;
+            }
             let r = ui.menu_button(app.ui.language.tr(top), |ui| {
                 ui.set_min_width(260.0);
                 if mine.is_empty() {

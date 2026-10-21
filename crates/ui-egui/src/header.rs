@@ -36,9 +36,10 @@ pub fn show(app: &mut StudioApp, ui: &mut egui::Ui, rect: Rect) {
         app.ui.mode = Mode::Import;
     }
     x = home.max.x + 16.0;
-    // Mode tabs (14 pt; active = primary text with a 2 pt underline under the label); Mortiflix
-    // Mortiflix Studio shows them only on stages 5-6 (doc 30)
-    let tabs: &[(Mode, &str, &str)] = if crate::mortiflix::hides_mode_tabs(app) {
+    // Mode tabs (14 pt; active = primary text with a 2 pt underline under the label); with Mortiflix
+    // on they are the editor's, so they show only at the Edit stage (#16)
+    let editor_hidden = crate::menus::editor_hidden(app);
+    let tabs: &[(Mode, &str, &str)] = if editor_hidden {
         &[]
     } else {
         &[(Mode::Import, "Import", tl!("Import")), (Mode::Edit, "Edit", tl!("Edit")), (Mode::Export, "Export", tl!("Export"))]
@@ -92,22 +93,28 @@ pub fn show(app: &mut StudioApp, ui: &mut egui::Ui, rect: Rect) {
         let fs = ui.ctx().input(|i| i.viewport().fullscreen.unwrap_or(false));
         ui.ctx().send_viewport_cmd(egui::ViewportCommand::Fullscreen(!fs));
     }
-    if btn(ui, Icon::Speaker, "volume", tl!("Volume"), app).clicked() {
-        app.ui.status = tl!("Master volume: use the Audio Track Mixer").into();
+    // Volume, Search, Progress, Quick Export and Workspaces are the editor's buttons: only at the
+    // Edit stage while Mortiflix is on (#16)
+    if editor_hidden {
+        app.ui.export.quick_open = false;
+    } else {
+        if btn(ui, Icon::Speaker, "volume", tl!("Volume"), app).clicked() {
+            app.ui.status = tl!("Master volume: use the Audio Track Mixer").into();
+        }
+        if btn(ui, Icon::Search, "search", tl!("Search"), app).clicked() {
+            app.show_panel(crate::dock::PanelKind::Effects);
+        }
+        if btn(ui, Icon::Bell, "notifications", tl!("Progress"), app).clicked() {
+            app.ui.mode = Mode::Export;
+        }
+        // Quick Export: a popup with File Name & Location, a preset list and Export (Premiere 26)
+        let qx = rect.max.x - 14.0 - 4.0 * 38.0; // the fifth button from the right
+        if btn(ui, Icon::Export, "quickExport", tl!("Quick Export"), app).clicked() {
+            app.ui.export.quick_open = !app.ui.export.quick_open;
+            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("quick-export-toggled"), true));
+        }
+        crate::panels::export_mode::quick_export(app, ui.ctx(), pos2(qx - 340.0, rect.max.y + 4.0));
     }
-    if btn(ui, Icon::Search, "search", tl!("Search"), app).clicked() {
-        app.show_panel(crate::dock::PanelKind::Effects);
-    }
-    if btn(ui, Icon::Bell, "notifications", tl!("Progress"), app).clicked() {
-        app.ui.mode = Mode::Export;
-    }
-    // Quick Export: a popup with File Name & Location, a preset list and Export (Premiere 26)
-    let qx = rect.max.x - 14.0 - 4.0 * 38.0; // the fifth button from the right
-    if btn(ui, Icon::Export, "quickExport", tl!("Quick Export"), app).clicked() {
-        app.ui.export.quick_open = !app.ui.export.quick_open;
-        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("quick-export-toggled"), true));
-    }
-    crate::panels::export_mode::quick_export(app, ui.ctx(), pos2(qx - 340.0, rect.max.y + 4.0));
     // Appearance Mode: click for the next one (Auto, Light, Dark); the icon shows the current one.
     let (icon, mode) = match app.session.prefs.appearance.appearance_mode.as_str() {
         "auto" => (Icon::Monitor, tl!("Sync with system")),
@@ -120,14 +127,19 @@ pub fn show(app: &mut StudioApp, ui: &mut egui::Ui, rect: Rect) {
     if appearance.clicked() {
         crate::panels::settings::cycle_appearance(app, ui.ctx());
     }
-    let ws_resp = btn(ui, Icon::Workspaces, "workspaces", tl!("Workspaces"), app);
-    // workspace name (caps)
-    let ws = crate::i18n::t(&app.ui.workspace).to_uppercase();
-    let wg = p.layout_no_wrap(ws.clone(), Tokens::ui(11.0), t.text_dim);
-    let wr = Rect::from_min_size(pos2(rx - wg.size().x + 10.0, rect.center().y - 10.0), vec2(wg.size().x + 8.0, 20.0));
-    let wresp = ui.interact(wr, egui::Id::new("hdr-ws-name"), Sense::click());
-    app.auto.add("header.workspaceName", wr, &ws);
-    p.galley_with_override_text_color(pos2(wr.min.x + 4.0, rect.center().y - wg.size().y / 2.0), wg, if wresp.hovered() { t.text } else { t.text_dim });
+    // the Workspaces button and the workspace name (caps); without them Discord sits where they start
+    let (ws_clicked, wr) = if editor_hidden {
+        (false, Rect::from_min_size(pos2(rx + 10.0, rect.center().y - 10.0), vec2(0.0, 20.0)))
+    } else {
+        let ws_resp = btn(ui, Icon::Workspaces, "workspaces", tl!("Workspaces"), app);
+        let ws = crate::i18n::t(&app.ui.workspace).to_uppercase();
+        let wg = p.layout_no_wrap(ws.clone(), Tokens::ui(11.0), t.text_dim);
+        let wr = Rect::from_min_size(pos2(rx - wg.size().x + 10.0, rect.center().y - 10.0), vec2(wg.size().x + 8.0, 20.0));
+        let wresp = ui.interact(wr, egui::Id::new("hdr-ws-name"), Sense::click());
+        app.auto.add("header.workspaceName", wr, &ws);
+        p.galley_with_override_text_color(pos2(wr.min.x + 4.0, rect.center().y - wg.size().y / 2.0), wg, if wresp.hovered() { t.text } else { t.text_dim });
+        (ws_resp.clicked() || wresp.clicked(), wr)
+    };
     // Community: a labelled Discord button, always one click away.
     {
         let label = "Discord";
@@ -161,7 +173,10 @@ pub fn show(app: &mut StudioApp, ui: &mut egui::Ui, rect: Rect) {
         }
     }
     let popup_id = egui::Id::new("workspaces-popup");
-    if ws_resp.clicked() || wresp.clicked() {
+    if editor_hidden {
+        ui.ctx().data_mut(|d| d.insert_temp(popup_id, false));
+    }
+    if ws_clicked {
         ui.ctx().data_mut(|d| d.insert_temp(popup_id, true));
     }
     let open = ui.ctx().data(|d| d.get_temp::<bool>(popup_id).unwrap_or(false));
@@ -185,7 +200,7 @@ pub fn show(app: &mut StudioApp, ui: &mut egui::Ui, rect: Rect) {
                 }
             });
         });
-        if area.response.clicked_elsewhere() && !(ws_resp.clicked() || wresp.clicked()) {
+        if area.response.clicked_elsewhere() && !ws_clicked {
             ui.ctx().data_mut(|d| d.insert_temp(popup_id, false));
         }
     }
