@@ -58,18 +58,44 @@
 
 ## Mortiflix
 
-You tell Mortiflix what the video is about. The AI writes it, voices it, draws it and scores it, but nothing moves on until you pass the gate for that stage, so you stay in the loop the whole way.
+You tell Mortiflix what the video is about. The AI writes it, voices it, draws it, animates it and scores it, but it works one stage at a time: each stage ends in a **gate**, and nothing after a gate is recorded, drawn or rendered until you pass it. You stay in the loop the whole way, and every part of the work has its own corner on screen.
 
-- **Eight stages:** Script · Voice · Style frames · Transitions · Animatic · Music · Edit · Render, on a stage bar across the top. Each stage has its own centre panel and a gate panel that lists what has to be true before you move on. Nothing is recorded, drawn or rendered before its gate.
-- **Mortiflix Chat:** talk to Mortiflix about the whole video or one scene. Questions never block: the AI asks, you answer when you're ready.
-- **Mortiflix Script:** the script appears scene by scene as it's written, with an OK button on every scene.
-- **Mortiflix Nodes:** every shot is a node, chained in order, with transition nodes between them. OK a shot, ask for a fix or cut it; each note goes out at once, so new versions are made while you keep walking the film.
-- **Voice:** one line per scene, recorded as soon as you OK it. Per line: an AI voice, record yourself, or import.
-- **Music and sound:** the soundtrack is planned per cue and mixed under the voice.
-- **Packs:** styles, transitions, motion, rules, music and voices come as packs you pick before anything is made.
-- **Mortiflix Tokens:** see what every Claude run in your project used: input, cache and output.
+### The steps
+
+**1. New project.** Pick a preset (Explainer video, Dry docs, or one of your own) and write the idea in your words. Then set as much or as little as you like; anything you leave empty, the AI picks:
+
+- **Length and shape:** how long the video runs and the screen it's made for (wide, vertical or a custom shape).
+- **Narration:** narrated, or told with on-screen text and music only; the voice and how it's spoken.
+- **Music:** an original score, music like a song you drop in (studied for its feel, tempo and instruments, never copied), or no music; instruments to use or leave out; a tempo fitted to the cuts or a fixed BPM.
+- **Pictures to match and assets:** pictures, logos, footage, sound, music, fonts and documents, each with a note on how to use it. Mortiflix sees them from the first step.
+- **Presets** are yours to change: save your own, with skills (a folder with a `SKILL.md`) copied in.
+
+**2. The brief.** Mortiflix Chat reads the idea and asks what it needs to know. Questions never block: it waits for your answers, shows its suggestion for each, and you can take the suggestion as is.
+
+**3. Script.** The script appears in the Mortiflix Script box scene by scene as it's written. Change the words of any line, delete a line or bring it back (Ctrl+Z, even after saving), and OK each scene. Saving only remakes the voice lines and shots that used the words you changed. The **Script gate** passes when the AI has finished, every scene has its words, every change is saved and every scene is OK'd.
+
+**4. Voice.** The script is read aloud, one voice line per scene, grouped under its scene with Play scene. A line is recorded as soon as you OK its scene. Each line shows how it's made: an AI voice, record yourself, or import a recording. You check each scene's voice before any picture is made.
+
+**5. Style frames.** Pick a style pack from the look menu (anything you change applies to this video only), then press Make the style frames. They're drawn in the voice's mood: the colours, characters and type of the video, not the shots yet. Check off the ones you want.
+
+**6. Transitions.** Pick a transition pack (or use the transitions library), then Make the transitions. Every cut between scenes gets its transition, drawn in the look you checked off. The cuts board shows each cut as scene before, transition, scene after: OK it, ask for a Fix, or change it.
+
+**7. Animatic.** Pick the motion (a motion pack, plus rule packs the AI follows in every step from here on), then Animate with this. Every scene is animated and timed to the voice, in the look, cut with your transitions. In **Mortiflix Nodes** every shot is a node, chained in order with transition nodes between them: OK a shot, ask for a Fix, or Cut it. Each note goes out at once, so new versions are made while you keep walking the film, and old versions are kept so you can go back.
+
+**8. Music.** The music is written to the animatic's timing in Strudel, with its MIDI under the animatic. You hear themes first and the one you use becomes the music's main idea. The soundtrack mixes the voice, the music (kept under the voice while it speaks) and sound effects matched to the cuts.
+
+**9. Edit.** Bring it into Edit: everything you OK'd is placed on one timeline (shots, voice, music, captions and a marker per scene) in the full video editor below. Or skip straight to the render.
+
+**10. Render.** Pick where the video goes and render it in the Export tab. Renders on your PC run one at a time so they never fight for memory; the best-quality copy is Apple ProRes 422 HQ with 24-bit sound. Posting goes out through Upload-Post or your own Postiz.
+
+### Around the steps
+
+- **Mortiflix Chat:** talk to Mortiflix about the whole video or one scene, at any stage, and attach files to the conversation.
+- **Stage bar:** the eight stages (Script · Voice · Style frames · Transitions · Animatic · Music · Edit · Render) across the top, each with its status. Stages past a gate you haven't passed stay grey until you pass it.
+- **Gate panel:** every stage lists what has to be true before you move on, with a count of what's made and checked off.
+- **Packs:** styles, transitions, motion, rules, music and voices come as packs, picked before anything is made. Get more from the Home screen.
+- **Mortiflix Tokens:** see what every Claude run in your project used (input, cache and output) and the voice characters recorded.
 - **Your own AI:** Mortiflix runs the AI through your own Claude Code on your own PC.
-- **Edit and Render:** everything you OK'd lands on one timeline in the full editor below, and you render from there.
 
 The editor underneath, everything from here down, is marked with a *.
 
