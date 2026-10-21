@@ -1,8 +1,8 @@
 //! Menu long tail (M3.11): the dialogs of Find, Create Search Bin, Project Settings (General /
 //! Scratch Disks / Ingest Settings), Get Media File Properties, Edit Offline, Source Settings,
 //! Update Metadata, Automate to Sequence, Scene Edit Detection, Normalize Mix Track, Simplify
-//! Sequence, Transcribe Sequence, Save as Template, Add Flash Cue Marker and the System
-//! Compatibility Report; plus the frontend side of Edit Original / Reveal Log Files (the OS
+//! Sequence, Transcribe Sequence, Transcript ▸ Transcribe…, Save as Template, Add Chapter Marker, Add Flash Cue Marker, Clip
+//! ▸ Rename… and the System Compatibility Report; plus the frontend side of Edit Original / Reveal Log Files (the OS
 //! opener), Reveal in Finder, Generate Audio Waveform (the timeline's peak cache), Import from
 //! Media Browser (the Media Browser selection) and View ▸ Dynamic Audio Waveforms.
 //!
@@ -59,6 +59,7 @@ fn meta(command: &str) -> Option<(&'static str, &'static str, &'static str)> {
         "project.settings" => (tl!("Project Settings"), "projectSettings", tl!("OK")),
         "file.mediaProperties" => (tl!("Properties"), "properties", tl!("Close")),
         "clip.editOffline" => (tl!("Edit Offline File"), "editOffline", tl!("OK")),
+        "clip.rename" => (tl!("Rename"), "clipRename", tl!("OK")),
         "clip.sourceSettings" => (tl!("Source Settings"), "sourceSettings", tl!("OK")),
         "clip.updateMetadata" => (tl!("Update Metadata"), "updateMetadata", tl!("OK")),
         "clip.automateToSequence" => (tl!("Automate To Sequence"), "automate", tl!("OK")),
@@ -66,7 +67,9 @@ fn meta(command: &str) -> Option<(&'static str, &'static str, &'static str)> {
         "sequence.normalizeMixTrack" => (tl!("Normalize Mix Track"), "normalizeMix", tl!("OK")),
         "sequence.simplify" => (tl!("Simplify Sequence"), "simplify", tl!("Simplify")),
         "sequence.transcribe" => (tl!("Transcribe Sequence"), "transcribe", tl!("Transcribe")),
+        "transcript.generate" => (tl!("Transcribe"), "transcript", tl!("Transcribe")),
         "file.saveAsTemplate" => (tl!("Save as Template"), "saveTemplate", tl!("Save")),
+        "markers.addChapter" => (tl!("Chapter Marker"), "chapter", tl!("OK")),
         "markers.addFlashCue" => (tl!("Flash Cue Marker"), "flashCue", tl!("OK")),
         "help.systemCompatibilityReport" => (tl!("System Compatibility Report"), "systemReport", tl!("Close")),
         "file.newColorMatte" => (tl!("New Color Matte"), "colorMatte", tl!("OK")),
@@ -83,6 +86,7 @@ fn dialog_command(id: &str) -> Option<&'static str> {
         "file.newSearchBin" => "file.newSearchBin",
         "file.mediaProperties" => "file.mediaProperties",
         "clip.editOffline" => "clip.editOffline",
+        "clip.rename" => "clip.rename",
         "clip.sourceSettings" => "clip.sourceSettings",
         "clip.updateMetadata" => "clip.updateMetadata",
         "clip.automateToSequence" => "clip.automateToSequence",
@@ -90,7 +94,9 @@ fn dialog_command(id: &str) -> Option<&'static str> {
         "sequence.normalizeMixTrack" => "sequence.normalizeMixTrack",
         "sequence.simplify" => "sequence.simplify",
         "sequence.transcribe" => "sequence.transcribe",
+        "transcript.generate" => "transcript.generate",
         "file.saveAsTemplate" => "file.saveAsTemplate",
+        "markers.addChapter" => "markers.addChapter",
         "markers.addFlashCue" => "markers.addFlashCue",
         "file.newColorMatte" => "file.newColorMatte",
         "project.matteColor" => "project.matteColor",
@@ -259,7 +265,10 @@ pub fn route(app: &mut StudioApp, ctx: &egui::Context, id: &str, params: &Value)
     }
     let (params, info) = match defaults(app, cmd, id) {
         Ok(x) => x,
-        Err(e) => return Some(Err(e)),
+        Err(e) => {
+            app.ui.status = e.clone();
+            return Some(Err(e));
+        }
     };
     app.ui.extras.dialog = Some(ClipDialogDraft { command: cmd.into(), params, info, error: String::new() });
     Some(Ok(json!({"dialog": meta(cmd).map(|m| m.1)})))
@@ -326,6 +335,20 @@ fn defaults(app: &mut StudioApp, cmd: &str, id: &str) -> Result<(Value, Value), 
             }
             (p, Value::Null)
         }
+        // the selected timeline clip (the Project panel's selected item when that panel has focus
+        // and an item is selected there, or no clip is selected), with its current name to edit
+        "clip.rename" => {
+            let project = app.ui.focused == PanelKind::Project && !s.state.project_selection.is_empty();
+            let clip = if project { None } else { s.state.selection.first().copied() }
+                .and_then(|c| s.active_sequence().and_then(|q| q.find_item(c)).map(|(_, it)| (c, it.name.clone())));
+            match clip {
+                Some((c, name)) => (json!({"clip": c.0, "name": name}), Value::Null),
+                None => {
+                    let it = s.state.project_selection.first().and_then(|i| s.project.item(*i)).ok_or("select a clip to rename")?;
+                    (json!({"item": it.id.0, "name": it.name}), Value::Null)
+                }
+            }
+        }
         "clip.sourceSettings" => (json!({}), s.execute("clip.sourceSettings", json!({})).map_err(|e| e.to_string())?),
         "clip.updateMetadata" => {
             let n = s.state.project_selection.len().max(s.state.selection.len());
@@ -348,8 +371,15 @@ fn defaults(app: &mut StudioApp, cmd: &str, id: &str) -> Result<(Value, Value), 
             let tracks: Vec<String> = s.active_sequence().map(|q| (1..=q.audio_tracks.len()).map(|i| format!("A{i}")).collect()).unwrap_or_default();
             (json!({"language": "auto", "track": "mix", "diarize": true}), json!({"tracks": tracks}))
         }
+        // Sequence ▸ Transcript ▸ Transcribe… (#8): the Project panel selection, else the sequence's sound
+        "transcript.generate" => {
+            if mortiflix_engine::transcript::targets(s, &json!({})).is_empty() {
+                return Err("Nothing to transcribe: select clips in the Project panel, or open a sequence with audio clips".into());
+            }
+            (json!({"language": "auto", "diarize": true}), Value::Null)
+        }
         "file.saveAsTemplate" => (json!({"name": s.project.name}), Value::Null),
-        "markers.addFlashCue" => (json!({"name": "", "comment": ""}), Value::Null),
+        "markers.addChapter" | "markers.addFlashCue" => (json!({"name": "", "comment": ""}), Value::Null),
         "file.newColorMatte" => {
             let st = s.active_sequence().map(|q| q.settings.clone()).unwrap_or_default();
             (json!({"color": "#000000", "name": "Color Matte", "width": st.width, "height": st.height, "seconds": 5.0}), Value::Null)
@@ -688,6 +718,7 @@ pub fn show(app: &mut StudioApp, ctx: &egui::Context) {
                 text(ui, &mut elems, pre, p, "shot", tl!("Shot/Take:"), 220.0);
                 text(ui, &mut elems, pre, p, "logNote", tl!("Log Note:"), 220.0);
             }
+            "clip.rename" => text(ui, &mut elems, pre, p, "name", tl!("Clip Name:"), 260.0),
             "clip.sourceSettings" => {
                 ui.label(tlf!("Codec: {codec}", codec = d.info["codec"].as_str().unwrap_or_default()));
                 ui.label(RichText::new(d.info["message"].as_str().unwrap_or_default()).weak());
@@ -768,6 +799,11 @@ pub fn show(app: &mut StudioApp, ctx: &egui::Context) {
                 combo(ui, &mut elems, "transcribe.track", tl!("Audio analysis:"), &mut p["track"], &tracks);
                 check(ui, &mut elems, pre, p, "diarize", tl!("Recognize when different speakers are talking"));
             }
+            "transcript.generate" => {
+                let langs = pairs(&["auto", "en", "es", "fr", "de", "it", "pt", "ja", "ko", "zh", "nl", "ru"]);
+                combo(ui, &mut elems, "transcript.language", tl!("Language:"), &mut p["language"], &langs);
+                check(ui, &mut elems, pre, p, "diarize", tl!("Recognize when different speakers are talking"));
+            }
             "file.saveAsTemplate" => text(ui, &mut elems, pre, p, "name", tl!("Template Name:"), 240.0),
             "file.newColorMatte" => {
                 color(ui, &mut elems, pre, p, "color", tl!("Color:"));
@@ -777,7 +813,7 @@ pub fn show(app: &mut StudioApp, ctx: &egui::Context) {
                 number(ui, &mut elems, pre, p, "seconds", tl!("Duration:"), 0.04..=36000.0, " s");
             }
             "project.matteColor" => color(ui, &mut elems, pre, p, "color", tl!("Color:")),
-            "markers.addFlashCue" => {
+            "markers.addChapter" | "markers.addFlashCue" => {
                 text(ui, &mut elems, pre, p, "name", tl!("Name:"), 220.0);
                 text(ui, &mut elems, pre, p, "comment", tl!("Comments:"), 220.0);
             }
@@ -908,12 +944,23 @@ fn run(app: &mut StudioApp, d: &ClipDialogDraft) -> Result<Option<String>, Strin
             app.ui.status = tl!("Scene Edit Detection: analysing in the background (see Progress)").into();
             Ok(None)
         }
+        "clip.rename" => {
+            let name = p["name"].as_str().unwrap_or_default().trim();
+            if name.is_empty() {
+                return Err("enter a name".into());
+            }
+            let mut q = p.clone();
+            q["name"] = json!(name);
+            s.execute("clip.rename", q).map_err(|e| e.to_string())?;
+            Ok(None)
+        }
         cmd => {
             let mut q = p.clone();
-            if cmd == "markers.addFlashCue" && q["name"].as_str().is_some_and(str::is_empty) {
+            // an empty name lets the engine number it ("Chapter 3", "Cue Point 2")
+            if matches!(cmd, "markers.addChapter" | "markers.addFlashCue") && q["name"].as_str().is_some_and(str::is_empty) {
                 q.as_object_mut().map(|m| m.remove("name"));
             }
-            if cmd == "sequence.transcribe" && q["language"] == "auto" {
+            if matches!(cmd, "sequence.transcribe" | "transcript.generate") && q["language"] == "auto" {
                 q.as_object_mut().map(|m| m.remove("language"));
             }
             s.execute(cmd, q).map_err(|e| e.to_string())?;

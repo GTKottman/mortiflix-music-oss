@@ -1,14 +1,15 @@
 //! Community and project links (Help menu, About dialog, header Discord button, Home screen).
 //!
-//! The Discord button and Help item go to the Mortiflix Discord server; the app's own page, and where to report an
-//! issue, is mortiflix.com.
+//! The Discord button and Help item go to the Mortiflix Discord server; the app's own page is mortiflix.com, and
+//! issues are reported on the mortiflix-oss GitHub issue tracker.
 
 /// The Mortiflix community Discord.
 pub const DISCORD: &str = "https://discord.gg/5xCB666rYk";
 /// Mortiflix Studio's own page.
 pub const APP_PAGE: &str = "https://mortiflix.com";
-/// Where to report an issue.
-pub const ISSUES: &str = "https://mortiflix.com";
+/// Where to report an issue (Help menu and About box): the mortiflix-oss issue tracker, which the app is moving
+/// into (owner, 2026-10-21, #6).
+pub const ISSUES: &str = "https://github.com/GTKottman/mortiflix-oss/issues";
 
 /// (command id, label, url) for every link, in menu order.
 // No ArtCraft links anywhere (owner, 2026-10-19 Help, 2026-10-21 About: Mortiflix only).
@@ -119,6 +120,10 @@ mod tests {
     #[test]
     fn urls_are_https_help_links() {
         assert_eq!(APP_PAGE, "https://mortiflix.com");
+        // #6: Report an Issue opens the issue tracker, not the home page
+        assert_eq!(ISSUES, "https://github.com/GTKottman/mortiflix-oss/issues");
+        assert_eq!(url_for("help.reportIssue"), Some(ISSUES));
+        assert_ne!(ISSUES, APP_PAGE);
         assert!(ALL.iter().all(|(id, _, u)| id.starts_with("help.") && u.starts_with("https://")));
         assert_eq!(url_for("help.discord"), Some(DISCORD));
         assert_eq!(url_for("help.nope"), None);

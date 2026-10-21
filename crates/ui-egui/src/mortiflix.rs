@@ -182,7 +182,8 @@ pub fn bar_height(app: &StudioApp) -> f32 {
     if app.mfx.core.state.active { mfx::STAGE_BAR_HEIGHT } else { 0.0 }
 }
 
-/// Mortiflix Studio's Import / Edit / Export tabs show only on stages 5 and 6 (doc 30).
+/// The stages before Edit own the layout (doc 30). The editor's tabs, menus and shortcuts follow
+/// `menus::editor_hidden` (#16).
 pub fn hides_mode_tabs(app: &StudioApp) -> bool {
     app.mfx.core.state.active && app.mfx.core.state.stage < mfx::STAGE_EDIT
 }

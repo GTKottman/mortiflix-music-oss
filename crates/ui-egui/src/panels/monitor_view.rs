@@ -245,6 +245,10 @@ fn set_display(app: &mut StudioApp, w: Which, d: &str) -> Result<Value, String> 
     }
     let (_, mode) = DISPLAY_NAMES.iter().find(|(n, _)| *n == d).ok_or_else(|| format!("unknown display mode `{d}`"))?;
     // Audio Waveform and the split view are Source Monitor modes, Comparison is a Program mode.
+    // With no clip in the Source Monitor there is no waveform to show (#12).
+    if matches!(mode, DisplayMode::AudioWaveform | DisplayMode::VideoAndWaveform) && app.session.state.source_item.is_none() {
+        return Err("Open a clip in the Source Monitor first: Audio Waveform shows the Source clip's sound".into());
+    }
     let w = match mode {
         DisplayMode::AudioWaveform | DisplayMode::VideoAndWaveform => Which::Source,
         DisplayMode::Comparison => Which::Program,
@@ -316,7 +320,11 @@ pub fn checked(app: &StudioApp, id: &str) -> Option<bool> {
 pub fn enabled(app: &StudioApp, id: &str) -> bool {
     let v = view(app, which_of(app, &Value::Null));
     match id {
-        "view.lockGuides" | "view.clearGuides" | "view.guideTemplates.save" => !v.guides.is_empty(),
+        // a checked Lock Guides always stays clickable, so locking can be undone even with no guides left (#13)
+        "view.lockGuides" => v.lock_guides || !v.guides.is_empty(),
+        "view.clearGuides" | "view.guideTemplates.save" => !v.guides.is_empty(),
+        // Source Monitor modes: greyed until a clip is open there, so picking one never does nothing (#12)
+        "view.display.audioWaveform" | "view.display.videoAndWaveform" => app.session.state.source_item.is_some(),
         _ => true,
     }
 }

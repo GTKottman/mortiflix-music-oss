@@ -1034,8 +1034,20 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
         };
     }
     let egui_ctx = ui.ctx().clone();
+    // Esc that closes a dropdown must not also close the window: note whether one was open first
+    let popup = egui::Popup::is_any_open(&egui_ctx);
     m.tick(&egui_ctx, ctx);
     draw(&mut m, ui, ctx);
+    // Settings (not the first-run steps): Esc closes it like Done, as in the editor's own dialogs (#4);
+    // not while a mouse button is held (that Esc cancels a drag)
+    if !m.first_run
+        && !popup
+        && !egui::Popup::is_any_open(&egui_ctx)
+        && !ui.input(|i| i.pointer.any_down())
+        && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape))
+    {
+        finish(&mut m, ctx);
+    }
 }
 
 fn draw(m: &mut Model, ui: &mut egui::Ui, ctx: &mut MfxCtx) {
@@ -2020,5 +2032,26 @@ esac"#,
         model(&ctx).lock().unwrap().page = Page::Narration;
         model(&ctx).lock().unwrap().voice = serde_json::json!({"engine": "qwen", "elevenlabs_key": null});
         assert_eq!(model(&ctx).lock().unwrap().page_state(Page::Narration), (true, "This computer".to_string()));
+    }
+
+    #[test]
+    fn escape_closes_settings_but_not_the_first_run_steps() {
+        // #4: Edit › Preferences › Mortiflix… stayed open on Esc; only Done or the x closed it
+        let escape = || egui::RawInput {
+            events: vec![egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE }],
+            ..Default::default()
+        };
+        for first_run in [false, true] {
+            let ctx = egui::Context::default();
+            let mut mfx = Mortiflix::default();
+            init(&ctx, &mut mfx, None, first_run);
+            mfx.state.show_setup = true;
+            let mut out = ctx.run_ui(escape(), |ui| {
+                let mut x = mfx.ctx(MfxTheme::default());
+                show(ui, &mut x);
+            });
+            out.textures_delta.clear();
+            assert_eq!(mfx.state.show_setup, first_run, "first run {first_run}");
+        }
     }
 }

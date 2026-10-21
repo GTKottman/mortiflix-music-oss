@@ -360,3 +360,222 @@ fn saved_projects_are_listed_in_home_and_open_recent() {
     assert!(!menus.as_array().unwrap().iter().any(|m| m["id"].as_str().is_some_and(|id| id.starts_with("file.openRecent."))));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// #15: Markers ▸ Add Chapter Marker… asks for the chapter's name and comments (like Add Flash
+/// Cue Marker…) instead of adding a marker at once; Cancel adds nothing, an empty name is
+/// numbered by the engine.
+#[test]
+fn add_chapter_marker_asks_for_a_name() {
+    use mortiflix_engine::project::MarkerKind;
+    let mut d = Driver::new();
+    let chapters = |d: &mut Driver| -> Vec<(String, String)> {
+        let q = d.app().session.active_sequence().unwrap();
+        q.markers.iter().filter(|m| m.kind == MarkerKind::Chapter).map(|m| (m.name.clone(), m.comment.clone())).collect()
+    };
+    let before = chapters(&mut d);
+    assert_eq!(d.menu("markers.addChapter")["dialog"], "chapter");
+    for id in ["chapter.name", "chapter.comment", "chapter.ok", "chapter.cancel"] {
+        assert!(d.has(id), "{id}");
+    }
+    // nothing is added until OK
+    assert_eq!(chapters(&mut d), before);
+    d.click("chapter.cancel");
+    assert!(!d.dialog_open());
+    assert_eq!(chapters(&mut d), before);
+    // named
+    d.menu("markers.addChapter");
+    d.ok("ui.set", json!({"menuDialog": {"name": "Opening", "comment": "cold open"}}));
+    d.click("chapter.ok");
+    assert!(!d.dialog_open());
+    let after = chapters(&mut d);
+    assert_eq!(after.len(), before.len() + 1);
+    assert!(after.contains(&("Opening".to_string(), "cold open".to_string())), "{after:?}");
+    // empty name: the engine numbers it
+    d.menu("markers.addChapter");
+    d.click("chapter.ok");
+    let n = before.len() + 2;
+    let after = chapters(&mut d);
+    assert_eq!(after.len(), n);
+    assert!(after.contains(&(format!("Chapter {n}"), String::new())), "{after:?}");
+}
+
+/// #14: Clip ▸ Rename… opens a box with the selected clip's name to edit (as in Premiere Pro)
+/// instead of running `clip.rename` without a name ("need `name`"); Cancel and an empty name
+/// change nothing, OK renames the clip.
+#[test]
+fn clip_rename_asks_for_the_new_name() {
+    let mut d = Driver::new();
+    let c = d.app().session.active_sequence().unwrap().video_tracks[0].items[0].id.0;
+    let name = |d: &mut Driver| -> String {
+        let q = d.app().session.active_sequence().unwrap();
+        q.find_item(mortiflix_engine::project::ClipId(c)).unwrap().1.name.clone()
+    };
+    let before = name(&mut d);
+    d.exec("project.select", json!({"items": []}));
+    d.exec("timeline.select", json!({"clips": [c]}));
+    assert_eq!(d.menu("clip.rename")["dialog"], "clipRename");
+    for id in ["clipRename.name", "clipRename.ok", "clipRename.cancel"] {
+        assert!(d.has(id), "{id}");
+    }
+    // the box starts with the clip's current name; nothing changes until OK
+    assert_eq!(d.app().ui.extras.dialog.as_ref().unwrap().params["name"], json!(before));
+    d.click("clipRename.cancel");
+    assert!(!d.dialog_open());
+    assert_eq!(name(&mut d), before);
+    // an empty name keeps the box open with an error
+    d.menu("clip.rename");
+    d.ok("ui.set", json!({"menuDialog": {"name": "  "}}));
+    d.click("clipRename.ok");
+    assert!(d.dialog_open());
+    assert_eq!(name(&mut d), before);
+    // OK renames the clip
+    d.ok("ui.set", json!({"menuDialog": {"name": "Sunset Opener"}}));
+    d.click("clipRename.ok");
+    assert!(!d.dialog_open());
+    assert_eq!(name(&mut d), "Sunset Opener");
+    assert!(!d.app().ui.status.contains("need `name`"), "{}", d.app().ui.status);
+}
+
+/// #10: the Sequence and Markers toggles (Snap in Timeline, Linked Selection, Selection Follows
+/// Playhead, Show Through Edits, Ripple Sequence Markers, Copy Paste Includes Sequence Markers)
+/// showed no check mark in either state; the menu now shows whether each one is on.
+#[test]
+fn sequence_and_marker_toggles_show_a_check_mark() {
+    let mut d = Driver::new();
+    let checked = |d: &mut Driver, id: &str| -> Option<bool> {
+        let menus = d.ok("ui.menu.list", json!({}));
+        let it = menus.as_array().unwrap().iter().find(|m| m["id"] == id).cloned().unwrap_or_else(|| panic!("{id} not in menus"));
+        it["checked"].as_bool()
+    };
+    for id in [
+        "sequence.snap",
+        "sequence.linkedSelection",
+        "sequence.selectionFollowsPlayhead",
+        "sequence.showThroughEdits",
+        "markers.rippleSequenceMarkers",
+        "markers.copyPasteIncludesSequenceMarkers",
+    ] {
+        let before = checked(&mut d, id).unwrap_or_else(|| panic!("{id} shows no check state"));
+        d.menu(id);
+        assert_eq!(checked(&mut d, id), Some(!before), "{id} after one click");
+        d.menu(id);
+        assert_eq!(checked(&mut d, id), Some(before), "{id} after two clicks");
+    }
+    // the state follows the engine, whoever changes it
+    d.exec("sequence.snap", json!({"on": false}));
+    assert_eq!(checked(&mut d, "sequence.snap"), Some(false));
+    d.exec("sequence.snap", json!({"on": true}));
+    assert_eq!(checked(&mut d, "sequence.snap"), Some(true));
+}
+
+/// Whether a menu item is enabled in the menus right now.
+fn menu_enabled(d: &mut Driver, id: &str) -> bool {
+    let menus = d.ok("ui.menu.list", json!({}));
+    let it = menus.as_array().unwrap().iter().find(|m| m["id"] == id).cloned().unwrap_or_else(|| panic!("{id} not in menus"));
+    it["enabled"].as_bool().unwrap()
+}
+
+/// The status bar after a menu item failed: a plain reason, never the command's internal name.
+fn assert_plain_status(d: &mut Driver, id: &str) {
+    let status = d.app().ui.status.clone();
+    let shown = mortiflix_ui_egui::menus::status_text(&status).into_owned();
+    assert!(!shown.is_empty(), "{id}: no reason in the status bar");
+    assert!(!shown.contains(id) && !shown.contains("invalid parameters") && !shown.contains("not available right now"), "{id}: {shown:?}");
+}
+
+/// #9: Graphics and Titles ▸ Upgrade Caption to Graphic was enabled with no caption selected and
+/// the status bar read "invalid parameters for `graphics.upgradeCaption`: select captions to
+/// upgrade". It is greyed until there is a caption to upgrade (the selected ones, else the one
+/// under the playhead), and the status bar shows an engine error's reason as a plain sentence.
+#[test]
+fn upgrade_caption_is_greyed_without_a_caption_and_errors_read_plainly() {
+    let mut d = Driver::new();
+    // a caption far from the playhead, and nothing selected
+    let cap = d.exec("captions.add", json!({"text": "Later", "seconds": 600, "durationSeconds": 2}))["caption"].clone();
+    d.exec("captions.select", json!({"captions": []}));
+    assert!(!menu_enabled(&mut d, "graphics.upgradeCaption"), "greyed with no caption selected or under the playhead");
+    let r = d.call("ui.menu.invoke", json!({"id": "graphics.upgradeCaption"}));
+    assert_eq!(r["ok"], false, "{r}");
+    assert_plain_status(&mut d, "graphics.upgradeCaption");
+    // selected: usable, and it upgrades
+    d.exec("captions.select", json!({"captions": [cap]}));
+    assert!(menu_enabled(&mut d, "graphics.upgradeCaption"));
+    assert_eq!(d.menu("graphics.upgradeCaption")["upgraded"], 1);
+    // the status bar's sentence for an engine error
+    use mortiflix_ui_egui::menus::status_text;
+    assert_eq!(status_text("invalid parameters for `graphics.upgradeCaption`: select captions to upgrade"), "Select captions to upgrade");
+    assert_eq!(status_text("command `clip.rename` is not available right now: no clips selected"), "No clips selected");
+    assert_eq!(status_text("Opened https://example.com"), "Opened https://example.com");
+}
+
+/// #8: Sequence ▸ Transcript ▸ Transcribe… showed "invalid parameters for `transcript.generate`:
+/// nothing to transcribe…" and no dialog, with a sequence full of audio open (and the sequence
+/// selected in the Project panel). It opens a Transcribe dialog (language, speakers) like
+/// Transcribe Sequence…, and OK transcribes the sequence's sound.
+#[test]
+fn transcript_transcribe_opens_a_dialog() {
+    use mortiflix_engine::project::{Transcript, Word};
+    use mortiflix_engine::time::Tick;
+    let mut d = Driver::new();
+    let a1 = d.app().session.active_sequence().unwrap().audio_tracks[0].items[0].clone();
+    let mut t = Transcript { language: "en".into(), ..Default::default() };
+    t.words.push(Word::new("Hello", a1.source_in, a1.source_in + Tick::from_seconds_f64(0.5)));
+    t.normalize();
+    d.app().session.transcriber = Some(std::sync::Arc::new(mortiflix_speech::FixedTranscriber { transcript: t, id: "fixed".into() }));
+    let seq = d.app().session.state.active_sequence.unwrap();
+    d.exec("project.select", json!({"items": [seq.0]}));
+    assert!(menu_enabled(&mut d, "transcript.generate"));
+    assert_eq!(d.menu("transcript.generate")["dialog"], "transcript");
+    for id in ["transcript.language", "transcript.diarize", "transcript.ok", "transcript.cancel"] {
+        assert!(d.has(id), "{id}");
+    }
+    assert!(!d.app().session.project.transcripts.contains_key(&a1.item), "nothing runs before OK");
+    d.click("transcript.ok");
+    assert!(!d.dialog_open(), "{:?}", d.app().ui.extras.dialog);
+    assert!(d.app().session.project.transcripts.contains_key(&a1.item));
+}
+
+/// #7: Sequence ▸ Close Gap with no gap selected put "invalid parameters for `sequence.closeGap`:
+/// select a gap or provide `track`" in the status bar; File ▸ Import from Media Browser with
+/// nothing selected there did the same. Both are greyed until there is something to act on (a
+/// gap selected in the Timeline, files selected in the Media Browser), say why in plain words
+/// when a key runs them anyway, and still run for a caller that names its target.
+#[test]
+fn close_gap_and_import_from_media_browser_wait_for_a_selection() {
+    let mut d = Driver::new();
+    for id in ["sequence.closeGap", "file.importFromMediaBrowser"] {
+        assert!(!menu_enabled(&mut d, id), "{id} greyed with nothing selected");
+        let r = d.call("ui.menu.invoke", json!({"id": id}));
+        assert_eq!(r["ok"], false, "{r}");
+        assert_plain_status(&mut d, id);
+    }
+    // lift a V1 clip to leave a gap, then select the gap: one with no overlay on V2 over it (an
+    // overlay that starts inside the gap can't move up), so only the score on A2 runs under it,
+    // and that music bed stays where it is (#7, as Ripple Delete does)
+    let c = {
+        let q = d.app().session.active_sequence().unwrap();
+        let clear = |c: &&mortiflix_engine::project::TrackItem| !q.video_tracks[1].items.iter().any(|o| o.range().overlaps(&c.range()));
+        q.video_tracks[0].items.iter().skip(1).find(clear).expect("a V1 clip with no overlay over it").clone()
+    };
+    let bed = d.app().session.active_sequence().unwrap().audio_tracks[1].items.clone();
+    d.exec("edit.clear", json!({"clips": [c.id.0]}));
+    let mid = c.start.0 + (c.end().0 - c.start.0) / 2;
+    d.exec("timeline.selectGap", json!({"track": "V1", "time": mid}));
+    assert!(menu_enabled(&mut d, "sequence.closeGap"), "usable with a gap selected");
+    d.menu("sequence.closeGap");
+    assert!(d.app().session.state.gap_selection.is_none(), "the gap is closed");
+    let q = d.app().session.active_sequence().unwrap();
+    assert!(q.video_tracks[0].item_at(c.start).is_some(), "the next clip moved up");
+    assert_eq!(q.audio_tracks[1].items, bed, "the score stays where it is");
+    // files selected in the Media Browser
+    let dir = std::env::temp_dir().join(format!("mfx-menu-mb-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("still.png");
+    image::RgbaImage::from_pixel(16, 9, image::Rgba([200, 40, 0, 255])).save(&path).unwrap();
+    let path = path.to_string_lossy().to_string();
+    d.exec("mediaBrowser.select", json!({"paths": [path]}));
+    assert!(menu_enabled(&mut d, "file.importFromMediaBrowser"), "usable with files selected");
+    let r = d.menu("file.importFromMediaBrowser");
+    assert_eq!(r["items"].as_array().map(Vec::len), Some(1), "{r}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
