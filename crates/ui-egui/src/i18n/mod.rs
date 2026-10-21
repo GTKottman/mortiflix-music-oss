@@ -1355,12 +1355,15 @@ mod tests {
         let mut output = ctx.run_ui(egui::RawInput::default(), |_| {});
         output.textures_delta.clear();
         ctx.fonts_mut(|fonts| {
-            // every theme family falls back to the craft-fonts (when built with them; no system
-            // font is added then) or to the system Japanese font
+            // every theme family falls back to the craft-fonts Japanese faces (when built with
+            // them; no system Japanese font is added then) or to the system Japanese font. (An
+            // installed Hebrew or Arabic face may still come after the craft-fonts faces: craft-fonts
+            // has none for some right-to-left scripts, see `rtl::install`.)
+            let jpan: Vec<String> = mortiflix_text::fonts::craft_japanese().map(|f| format!("craft:{} {}", f.family, f.style)).collect();
             for family in crate::theme::font_families() {
                 let stack = fonts.definitions().families.get(&family).cloned().unwrap_or_default();
                 if craft {
-                    assert!(stack.last().is_some_and(|n| n.starts_with("craft:")), "{family:?}: {stack:?}");
+                    assert!(jpan.iter().all(|n| stack.contains(n)), "{family:?}: {stack:?}");
                     assert!(!stack.iter().any(|n| n == JAPANESE_FONT), "{family:?}: {stack:?}");
                 } else {
                     assert_eq!(stack.last().map(String::as_str), Some(JAPANESE_FONT), "{family:?}: {stack:?}");

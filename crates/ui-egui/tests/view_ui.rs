@@ -491,6 +491,56 @@ fn magnification_pans_and_guides_from_rulers() {
     assert_eq!(d.program()["guides"].as_array().unwrap().len(), 2, "guide dropped on the ruler is removed");
 }
 
+/// #13: Lock Guides stayed checked and greyed out once the guides were gone, so it could not be unlocked.
+#[test]
+fn waveform_display_modes_wait_for_a_source_clip() {
+    // #12: with nothing in the Source Monitor, Audio Waveform / the split did nothing at all
+    let mut d = Driver::demo();
+    let item = |d: &mut Driver, id: &str| {
+        let menu = d.ok("ui.menu.list", json!({}));
+        menu.as_array().unwrap().iter().find(|m| m["id"] == id).cloned().unwrap_or_else(|| panic!("no menu item {id}"))
+    };
+    for id in ["view.display.audioWaveform", "view.display.videoAndWaveform"] {
+        assert_eq!(item(&mut d, id)["enabled"], false, "{id} greyed with an empty Source Monitor");
+        let r = d.call("ui.menu.invoke", json!({"id": id}));
+        assert_eq!(r["ok"], false, "{id} says why instead of doing nothing: {r}");
+    }
+    assert_eq!(d.ok("ui.inspect", json!({}))["ui"]["source"]["display"], "Composite");
+    let project = d.exec("project.inspect", json!({}));
+    let media = first_media_item(&project).expect("media item");
+    d.exec("source.open", json!({"item": media}));
+    d.frames(2);
+    for id in ["view.display.audioWaveform", "view.display.videoAndWaveform"] {
+        assert_eq!(item(&mut d, id)["enabled"], true, "{id} usable once a Source clip is open");
+    }
+    d.menu("view.display.audioWaveform");
+    d.frames(3);
+    assert!(d.try_rect("source.waveform").is_some(), "waveform drawn in the source monitor");
+}
+
+#[test]
+fn lock_guides_can_be_undone_after_the_guides_are_cleared() {
+    let mut d = Driver::demo();
+    let item = |d: &mut Driver, id: &str| {
+        let menu = d.ok("ui.menu.list", json!({}));
+        menu.as_array().unwrap().iter().find(|m| m["id"] == id).cloned().unwrap_or_else(|| panic!("no menu item {id}"))
+    };
+    d.ok("ui.menu.invoke", json!({"id": "view.addGuide", "params": {"orientation": "vertical", "position": 960}}));
+    d.frames(2);
+    d.menu("view.lockGuides");
+    let lock = item(&mut d, "view.lockGuides");
+    assert_eq!((lock["checked"].as_bool(), lock["enabled"].as_bool()), (Some(true), Some(true)));
+    assert_eq!(item(&mut d, "view.clearGuides")["enabled"], true, "Clear Guides usable while locked");
+    d.menu("view.clearGuides");
+    assert!(d.program()["guides"].as_array().unwrap().is_empty());
+    let lock = item(&mut d, "view.lockGuides");
+    assert_eq!((lock["checked"].as_bool(), lock["enabled"].as_bool()), (Some(true), Some(true)), "a checked Lock Guides can still be unchecked: {lock}");
+    d.menu("view.lockGuides");
+    assert_eq!(d.program()["lock_guides"], false, "unlocked");
+    let lock = item(&mut d, "view.lockGuides");
+    assert_eq!((lock["checked"].as_bool(), lock["enabled"].as_bool()), (Some(false), Some(false)), "no guides, not locked: nothing to lock");
+}
+
 #[test]
 fn snap_in_program_monitor_and_graphics_menu() {
     let mut d = Driver::demo();

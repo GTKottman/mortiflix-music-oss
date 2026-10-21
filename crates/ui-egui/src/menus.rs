@@ -161,6 +161,113 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     uic!("app.settings.trim", "Trim…", ["Edit", "Preferences"], None),
 ];
 
+/// Commands about Mortiflix or the app in general (#16): every other command is only about the
+/// editor (timeline, clips, sequences, markers, graphics and titles, bins, editor panels, monitors,
+/// workspaces, exports of the edit…). Playback and playhead keys stay because they also drive the
+/// Mortiflix preview on the stages before Edit.
+const GENERAL_PREFIXES: &[&str] = &[
+    "app.",
+    "help.",
+    "stages.",
+    "mortiflix.",
+    "script.",
+    "nodes.",
+    "playback.",
+    "playhead.",
+    "view.theme.",
+    "view.appearanceMode.",
+    "window.panel.Mfx",
+    "file.openRecent.",
+];
+
+/// Single commands about the app in general: projects (new, open, close, save) and the window.
+const GENERAL_IDS: &[&str] = &[
+    "file.newProject",
+    "file.openDemoProject",
+    "file.open",
+    "file.clearRecent",
+    "file.closeProject",
+    "file.closeAllProjects",
+    "file.closeAllOtherProjects",
+    "file.save",
+    "file.saveAs",
+    "file.saveCopy",
+    "file.saveAsTemplate",
+    "file.saveAll",
+    "file.revert",
+    "file.recover",
+    "window.maximizeFrame",
+    "window.maximizeFrameUnderCursor",
+    "window.toggleFullScreen",
+    "window.nextPanel",
+    "window.prevPanel",
+];
+
+/// Whether a command is only about the editor. With Mortiflix on, its menu items, tabs, buttons
+/// and shortcuts are there only at the Edit stage (owner, #16); see [`editor_hidden`].
+pub fn editor_only(id: &str) -> bool {
+    !(GENERAL_IDS.contains(&id) || GENERAL_PREFIXES.iter().any(|p| id.starts_with(p)))
+}
+
+/// Whether the editor's own menus, tabs, buttons and shortcuts are hidden right now: Mortiflix
+/// is on and the stage is not Edit. Mortiflix Studio without Mortiflix shows everything.
+pub fn editor_hidden(app: &StudioApp) -> bool {
+    let s = &app.mfx.core.state;
+    s.active && s.stage != mortiflix_ui::STAGE_EDIT
+}
+
+/// The one rule (#16): a command whose menu item and shortcut are off right now.
+pub fn hidden(app: &StudioApp, id: &str) -> bool {
+    editor_hidden(app) && editor_only(id)
+}
+
+/// Why a menu item can't run right now although the engine enables it. These commands take
+/// their target in the parameters (a caller names it), so the engine can't grey them; picked
+/// from a menu or a key there are no parameters and the target is the selection. `Some(reason)`:
+/// greyed in the menus, and the reason in the status bar when a key runs it anyway.
+pub fn needs_selection(app: &StudioApp, id: &str) -> Option<&'static str> {
+    let s = &app.session;
+    match id {
+        // the selected captions, else the one under the playhead (#9)
+        "graphics.upgradeCaption" if !has_caption_to_upgrade(s) => Some("Select a caption to upgrade it to a graphic"),
+        // the gap selected in the Timeline (#7)
+        "sequence.closeGap" if s.state.gap_selection.is_none() => Some("Select a gap in the Timeline to close it"),
+        // the files selected in the Media Browser
+        "file.importFromMediaBrowser" if s.browser.selection.is_empty() => Some("Select files in the Media Browser to import them"),
+        _ => None,
+    }
+}
+
+/// What Upgrade Caption to Graphic with no parameters works on: the selected captions, else the
+/// caption under the playhead.
+fn has_caption_to_upgrade(s: &mortiflix_engine::Session) -> bool {
+    let Some(q) = s.active_sequence() else { return false };
+    if s.state.caption_selection.is_empty() {
+        let t = s.playhead();
+        return q.caption_tracks.iter().any(|tr| tr.caption_at(t).is_some());
+    }
+    q.caption_tracks.iter().any(|tr| tr.captions.iter().any(|c| s.state.caption_selection.contains(&c.id)))
+}
+
+/// What the status bar shows for a message: an engine error loses its internal wording
+/// ("invalid parameters for `sequence.closeGap`: …", "command `…` is not available right now:
+/// …") and keeps the reason, as a sentence. Callers of the control channel still get the full
+/// error, which names the command (#7, #8, #9).
+pub fn status_text(status: &str) -> std::borrow::Cow<'_, str> {
+    let reason = status
+        .strip_prefix("invalid parameters for `")
+        .and_then(|rest| rest.split_once("`: "))
+        .or_else(|| status.strip_prefix("command `").and_then(|rest| rest.split_once("` is not available right now: ")))
+        .filter(|(id, _)| !id.contains(char::is_whitespace))
+        .map(|(_, why)| why.trim());
+    let Some(why) = reason.filter(|w| !w.is_empty()) else { return status.into() };
+    let mut chars = why.chars();
+    match chars.next() {
+        Some(first) => format!("{}{}", first.to_uppercase(), chars.as_str()).into(),
+        None => status.into(),
+    }
+}
+
 pub fn panel_command_id(p: PanelKind) -> String {
     format!("window.panel.{}", p.id())
 }
@@ -178,6 +285,12 @@ pub fn targets_source(app: &StudioApp, params: &Value) -> bool {
 pub fn invoke(app: &mut StudioApp, ctx: &egui::Context, id: &str, mut params: Value) -> Result<Value, String> {
     if id == "edit.selectAll" && (crate::panels::graphics::select_all_edited_text(app) || crate::panels::effect_controls::select_all_keyframes(app)) {
         return Ok(Value::Null);
+    }
+    if params.as_object().is_some_and(serde_json::Map::is_empty)
+        && let Some(why) = needs_selection(app, id)
+    {
+        app.ui.status = why.into();
+        return Err(why.into());
     }
     if mortiflix_engine::source_monitor::source_command(id) && targets_source(app, &params) && params.get("target").is_none() {
         let object = params.as_object_mut().ok_or("command parameters must be an object")?;
@@ -206,7 +319,7 @@ pub fn invoke(app: &mut StudioApp, ctx: &egui::Context, id: &str, mut params: Va
         if id == "app.language.chinese" && !crate::i18n::chinese_font_available() {
             return Err("no Chinese font is installed on this system (for example Noto Sans CJK SC or Microsoft YaHei); the interface stays in English".into());
         }
-        // Korean needs an installed Hangul font (none is bundled; see cjk.rs)
+        // Korean needs a Hangul font: craft-fonts (its Noto Sans CJK face) or an installed one (see cjk.rs)
         if id == "app.language.korean" && !crate::i18n::korean_font_available() {
             return Err("no Korean font is installed on this system (for example Malgun Gothic or Noto Sans CJK KR); the interface stays in English".into());
         }
@@ -681,7 +794,18 @@ pub const MENUS: [&str; 10] = ["File", "Edit", "Clip", "Sequence", "Markers", "G
 /// the catalogs like menu labels (`apps/mortiflix-studio/src/native_menu.rs`).
 pub const NATIVE_APP_MENU: [&str; 4] = ["Settings", "Hide Mortiflix Studio", "Hide Others", "Quit Mortiflix Studio"];
 
+/// The menu bar as shown right now: the editor's items only at the Edit stage (#16).
 pub fn menu_items(app: &StudioApp) -> Vec<MenuItem> {
+    let mut v = all_menu_items(app);
+    if editor_hidden(app) {
+        v.retain(|it| !editor_only(&it.id));
+    }
+    v
+}
+
+/// Every menu item whatever the stage: the native macOS menu is built once from these, and the
+/// ones `menu_items` leaves out are greyed there.
+pub fn all_menu_items(app: &StudioApp) -> Vec<MenuItem> {
     let mut v = menu_items_for(&app.session);
     for it in &mut v {
         it.label = app.ui.language.tr(&it.label).to_string();
@@ -698,17 +822,37 @@ pub fn menu_items(app: &StudioApp) -> Vec<MenuItem> {
             "app.language.indonesian" => it.checked = Some(app.ui.language == crate::i18n::Language::Id),
             "app.language.italian" => it.checked = Some(app.ui.language == crate::i18n::Language::It),
             "app.language.korean" => it.checked = Some(app.ui.language == crate::i18n::Language::Ko),
-            _ => {}
+            id => {
+                if let Some(on) = session_toggle(&app.session, id) {
+                    it.checked = Some(on);
+                }
+            }
         }
         if it.id.starts_with("view.") {
             it.checked = crate::panels::monitor_view::checked(app, &it.id).or(crate::panels::menu_dialogs::checked(app, &it.id));
             it.enabled &= crate::panels::monitor_view::enabled(app, &it.id);
         }
+        it.enabled &= needs_selection(app, &it.id).is_none();
     }
     crate::panels::workspaces::menu(app, &mut v);
     crate::mortiflix::menu(app, &mut v);
     open_recent(&mut v, &app.session, |n| app.ui.language.tr(n).to_string());
     v
+}
+
+/// The on/off state of the Sequence and Markers toggles (Snap in Timeline, Linked Selection, …),
+/// so the menu shows a check mark while one is on (#10).
+fn session_toggle(session: &mortiflix_engine::Session, id: &str) -> Option<bool> {
+    let st = &session.state;
+    match id {
+        "sequence.snap" => Some(st.snapping),
+        "sequence.linkedSelection" => Some(st.linked_selection),
+        "sequence.selectionFollowsPlayhead" => Some(st.selection_follows_playhead),
+        "sequence.showThroughEdits" => Some(st.show_through_edits),
+        "markers.rippleSequenceMarkers" => Some(st.ripple_sequence_markers),
+        "markers.copyPasteIncludesSequenceMarkers" => Some(st.copy_paste_sequence_markers),
+        _ => None,
+    }
 }
 
 /// File ▸ Open Recent, after Open Project…: the recent projects (General ▸ `recentProjects`),
@@ -899,6 +1043,10 @@ pub fn menu_bar(app: &mut StudioApp, ui: &mut egui::Ui) {
         let mut titles = Vec::with_capacity(MENUS.len());
         for top in MENUS {
             let mine: Vec<&MenuItem> = items.iter().filter(|i| i.path.first().map(String::as_str) == Some(top)).collect();
+            // Clip, Sequence, Markers, Graphics and Titles: only at the Edit stage (#16)
+            if mine.is_empty() && editor_hidden(app) {
+                continue;
+            }
             let r = ui.menu_button(app.ui.language.tr(top), |ui| {
                 ui.set_min_width(260.0);
                 if mine.is_empty() {

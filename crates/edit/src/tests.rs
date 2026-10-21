@@ -149,6 +149,62 @@ fn ripple_delete_and_conflict() {
     assert_eq!(fx.spans(v1), vec![(0, 10), (20, 10)], "unchanged on failure");
 }
 
+/// #5: a music bed on a sync-locked track that starts at or before the deleted clip and runs on
+/// stays where it is (Ripple Delete did nothing in the demo, whose score spans every cut); the
+/// clips after it on that track still move up, and refuse when they would land on the bed.
+#[test]
+fn ripple_delete_leaves_a_music_bed_in_place() {
+    let mut fx = Fx::new();
+    let (v1, v2, a1) = (fx.v(0), fx.v(1), fx.a(0));
+    fx.put(v1, 0, 10, 0);
+    let b = fx.put(v1, 10, 10, 0);
+    fx.put(v1, 20, 10, 0);
+    fx.put(a1, 0, 30, 0); // the bed, from the first frame
+    fx.put(v2, 5, 8, 0); // an overlay across the cut
+    assert_eq!(ripple_delete_items(&mut fx.seq, &[b]).unwrap(), vec![TimeRange::new(f(10), f(10))]);
+    assert_eq!((fx.spans(v1), fx.spans(a1), fx.spans(v2)), (vec![(0, 10), (10, 10)], vec![(0, 30)], vec![(5, 8)]));
+    fx.seq.check().unwrap();
+
+    // a later clip on the bed's track has no room to move up: refused, nothing changes
+    let mut fx = Fx::new();
+    let (v1, a1) = (fx.v(0), fx.a(0));
+    fx.put(v1, 0, 10, 0);
+    let b = fx.put(v1, 10, 10, 0);
+    fx.put(v1, 20, 10, 0);
+    fx.put(a1, 0, 15, 0);
+    fx.put(a1, 22, 5, 0);
+    assert_eq!(ripple_delete_items(&mut fx.seq, &[b]), Err(EditError::SyncLockConflict("A1".into())));
+    assert_eq!((fx.spans(v1), fx.spans(a1)), (vec![(0, 10), (10, 10), (20, 10)], vec![(0, 15), (22, 5)]), "unchanged on failure");
+    // with room it moves up by the deleted length, the bed stays
+    fx.seq.track_mut(a1).unwrap().items[1].start = f(26);
+    ripple_delete_items(&mut fx.seq, &[b]).unwrap();
+    assert_eq!((fx.spans(v1), fx.spans(a1)), (vec![(0, 10), (10, 10)], vec![(0, 15), (16, 5)]));
+}
+
+/// #5: Ripple Delete Head Frame leaves a music bed across the cut where it is too; the Ripple
+/// trim itself still refuses it.
+#[test]
+fn ripple_delete_head_leaves_a_music_bed_in_place() {
+    let mut fx = Fx::new();
+    let (v1, a1) = (fx.v(0), fx.a(0));
+    fx.put(v1, 0, 10, 0);
+    let b = fx.put(v1, 10, 10, 0);
+    fx.put(v1, 20, 10, 0);
+    fx.put(a1, 0, 30, 0);
+    let mut n = fx.next;
+    assert!(matches!(ripple_trim_group(&mut fx.seq, &[b], Edge::In, f(3), &mut Fx::ctx(&mut n)), Err(EditError::SyncLockConflict(_))));
+    assert_eq!(ripple_delete_head(&mut fx.seq, &[b], f(3), &mut Fx::ctx(&mut n)), Ok(f(3)));
+    assert_eq!((fx.spans(v1), fx.spans(a1)), (vec![(0, 10), (10, 7), (17, 10)], vec![(0, 30)]));
+    fx.seq.check().unwrap();
+    // material that starts inside the head still refuses
+    let mut fx = Fx::new();
+    let (v1, a1) = (fx.v(0), fx.a(0));
+    let b = fx.put(v1, 10, 10, 0);
+    fx.put(a1, 11, 5, 0);
+    let mut n = fx.next;
+    assert!(matches!(ripple_delete_head(&mut fx.seq, &[b], f(3), &mut Fx::ctx(&mut n)), Err(EditError::SyncLockConflict(_))));
+}
+
 #[test]
 fn ripple_delete_closes_the_time_free_on_every_track() {
     // four clips on V1 with their sounds on A1; the second sound starts 2 early and ends 2 late
@@ -232,6 +288,36 @@ fn close_gap_works() {
     fx.put(v1, 25, 10, 0);
     close_gap(&mut fx.seq, v1, f(15)).unwrap();
     assert_eq!(fx.spans(v1), vec![(0, 10), (10, 10)]);
+}
+
+/// #7: Close Gap follows Ripple Delete's rule on sync-locked tracks: a music bed or an overlay
+/// across the gap stays where it is (the demo's V2 overlay refused it), later clips move up, and
+/// a clip that starts inside the gap or has no room to move up still refuses.
+#[test]
+fn close_gap_leaves_a_music_bed_in_place() {
+    let mut fx = Fx::new();
+    let (v1, v2, a1) = (fx.v(0), fx.v(1), fx.a(0));
+    fx.put(v1, 0, 10, 0);
+    fx.put(v1, 20, 10, 0);
+    fx.put(a1, 0, 30, 0); // the bed
+    fx.put(v2, 5, 8, 0); // an overlay across the gap's start
+    fx.put(v2, 25, 3, 0);
+    close_gap(&mut fx.seq, v1, f(15)).unwrap();
+    assert_eq!((fx.spans(v1), fx.spans(a1), fx.spans(v2)), (vec![(0, 10), (10, 10)], vec![(0, 30)], vec![(5, 8), (15, 3)]));
+    fx.seq.check().unwrap();
+
+    // a clip that starts inside the gap, or one with no room to move up: refused, nothing changes
+    for (bed, (start, len)) in [(12, (13, 3)), (15, (22, 5))] {
+        let mut fx = Fx::new();
+        let (v1, a1) = (fx.v(0), fx.a(0));
+        fx.put(v1, 0, 10, 0);
+        fx.put(v1, 20, 10, 0);
+        fx.put(a1, 0, bed, 0);
+        fx.put(a1, start, len, 0);
+        let before = fx.seq.clone();
+        assert_eq!(close_gap(&mut fx.seq, v1, f(15)), Err(EditError::SyncLockConflict("A1".into())));
+        assert_eq!(fx.seq, before);
+    }
 }
 
 #[test]

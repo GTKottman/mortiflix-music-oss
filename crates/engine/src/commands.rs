@@ -1719,7 +1719,8 @@ fn build() -> Vec<CommandSpec> {
                         continue;
                     }
                     let start = live.iter().map(|(_, s, _)| *s).min().unwrap_or(ph);
-                    edit::ripple_trim_group(q, &ids, Edge::In, head, ctx)?;
+                    // a music bed across the cut stays put, as with Ripple Delete (#5)
+                    edit::ripple_delete_head(q, &ids, head, ctx)?;
                     if st.ripple_sequence_markers {
                         // the head [start, start + head) closes: later markers move back by it
                         crate::sequence_tools::ripple_markers(&mut q.markers, start + head, Tick::ZERO - head);

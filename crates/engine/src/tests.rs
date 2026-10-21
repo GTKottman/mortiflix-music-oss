@@ -132,11 +132,43 @@ fn trim_linked_and_ripple_delete() {
     assert_eq!(a.duration, q.video_tracks[0].items[0].duration, "linked audio trimmed too");
     s.execute("timeline.select", json!({"clips": [first.id.0]})).unwrap();
     assert_eq!(s.state.selection.len(), 2, "linked selection adds audio");
-    assert!(s.execute("edit.rippleDelete", json!({})).is_err(), "music on sync-locked A2 blocks the ripple");
-    s.execute("timeline.setTrack", json!({"track": "A2", "syncLock": false})).unwrap();
+    // #5: the music bed on sync-locked A2 starts with the clip and runs on: it stays where it is
+    let music = s.active_sequence().unwrap().audio_tracks[1].items[0].clone();
     s.execute("edit.rippleDelete", json!({})).unwrap();
     let q = s.active_sequence().unwrap();
     assert_eq!(q.video_tracks[0].items[0].start, s.sequence_rate().tick_of(12), "the trim gap remains");
+    assert_eq!((q.audio_tracks[1].items[0].start, q.audio_tracks[1].items[0].duration), (music.start, music.duration), "the music bed is untouched");
+    q.check().unwrap();
+}
+
+/// #5: in the demo (the score on sync-locked A2 under every cut, an overlay on V2 across the third
+/// shot's in point) Edit > Ripple Delete and Ripple Delete Head Frame on the selected third shot did
+/// nothing: both were refused as breaking sync. The bed and the overlay now stay where they are.
+#[test]
+fn ripple_delete_and_head_frame_work_over_the_demo_music_bed() {
+    let mut s = demo();
+    let music = |s: &Session| s.active_sequence().unwrap().audio_tracks[1].items.iter().map(|i| (i.start, i.duration)).collect::<Vec<_>>();
+    let bed = music(&s);
+    let shots = v1(&s);
+    let (city, next) = (shots[2], shots[3]);
+    s.execute("timeline.select", json!({"clips": [city.0]})).unwrap();
+    s.execute("edit.rippleDelete", json!({})).unwrap();
+    let after = v1(&s);
+    assert!(!after.iter().any(|c| c.0 == city.0), "the shot went");
+    assert_eq!(after.iter().find(|c| c.0 == next.0).map(|c| c.1), Some(city.1), "the next shot closed the gap");
+    assert_eq!(music(&s), bed, "the score stays where it is");
+    s.active_sequence().unwrap().check().unwrap();
+    assert_eq!(s.undo().as_deref(), Some("Ripple Delete"));
+
+    let head = s.sequence_rate().tick_of(48);
+    s.set_playhead(city.1 + head);
+    s.execute("timeline.select", json!({"clips": [city.0]})).unwrap();
+    s.execute("edit.rippleDeleteHead", json!({})).unwrap();
+    let after = v1(&s);
+    assert_eq!(after.iter().find(|c| c.0 == city.0).map(|c| (c.1, c.2)), Some((city.1, city.2 - head)), "the head went");
+    assert_eq!(after.iter().find(|c| c.0 == next.0).map(|c| c.1), Some(next.1 - head), "the next shot moved up");
+    assert_eq!(music(&s), bed, "the score stays where it is");
+    s.active_sequence().unwrap().check().unwrap();
 }
 
 #[test]

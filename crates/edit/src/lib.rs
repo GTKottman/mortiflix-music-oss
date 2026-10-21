@@ -440,6 +440,11 @@ fn merged(mut ranges: Vec<TimeRange>) -> Vec<TimeRange> {
 /// Ripple delete track items: remove them and close the resulting gaps. Returns the stretches
 /// that were closed, in time order. Refused when no gap can close (what stays on the items'
 /// tracks covers all of their time): that would be a plain delete.
+///
+/// A sync-locked track that loses nothing moves its later clips up too. A clip there that starts
+/// at or before a closed stretch and reaches into it (a music bed under the pictures, an overlay
+/// across the cut) stays where it is, as in Premiere Pro (#5); the edit is refused only when a
+/// clip starts inside the stretch, or a clip moving up would land on one that stays.
 pub fn ripple_delete_items(seq: &mut Sequence, items: &[ClipId]) -> Result<Vec<TimeRange>> {
     // Collect the tracks that lose an item; the gaps close right-to-left.
     let mut affected: Vec<TrackId> = Vec::new();
@@ -464,17 +469,41 @@ pub fn ripple_delete_items(seq: &mut Sequence, items: &[ClipId]) -> Result<Vec<T
             if !on_affected && !tr.sync_lock {
                 continue;
             }
-            if !on_affected && !track_range_empty(tr, *span) {
-                return Err(EditError::SyncLockConflict(track_label(seq, tr.id)));
-            }
-            shift_track_from(tr, span.end(), -span.duration);
+            close_stretch(seq, tr, *span, on_affected)?;
         }
     }
     *seq = work;
     Ok(spans)
 }
 
-/// Close the gap containing `t` on a track (Ripple Delete on a gap).
+/// Close `span` on one track of a ripple edit (Ripple Delete, Close Gap): later clips move up by
+/// its length. `source`: the track the stretch was taken from, which has nothing in it. On a
+/// sync-locked track that only follows, a clip that starts at or before the stretch and reaches
+/// into it (a music bed, an overlay across the cut) stays where it is (#5, #7); refused when a
+/// clip starts inside the stretch, or a clip moving up would land on one that stays. `seq` is the
+/// sequence before the edit, for the track's name in the error.
+fn close_stretch(seq: &Sequence, tr: &mut Track, span: TimeRange, source: bool) -> Result<()> {
+    // a clip that starts inside the stretch would have to move before its own start
+    if !source && tr.items.iter().any(|i| i.range().overlaps(&span) && i.start > span.start) {
+        return Err(EditError::SyncLockConflict(track_label(seq, tr.id)));
+    }
+    shift_track_from(tr, span.end(), -span.duration);
+    // a clip that stayed (it started before the stretch) leaves the later ones no room
+    if !source && has_overlaps(tr) {
+        return Err(EditError::SyncLockConflict(track_label(seq, tr.id)));
+    }
+    Ok(())
+}
+
+/// Whether two items on a track overlap, or one starts before the sequence does.
+fn has_overlaps(track: &Track) -> bool {
+    let mut ranges: Vec<(Tick, Tick)> = track.items.iter().map(|i| (i.start, i.end())).collect();
+    ranges.sort();
+    ranges.first().is_some_and(|r| r.0 < Tick::ZERO) || ranges.windows(2).any(|w| w[0].1 > w[1].0)
+}
+
+/// Close the gap containing `t` on a track (Ripple Delete on a gap). Sync-locked tracks follow
+/// as in [`ripple_delete_items`]: a music bed across the gap stays where it is (#7).
 pub fn close_gap(seq: &mut Sequence, track: TrackId, t: Tick) -> Result<()> {
     let tr = seq.track(track).ok_or(EditError::NoTrack(track))?;
     if tr.locked {
@@ -492,15 +521,11 @@ pub fn close_gap(seq: &mut Sequence, track: TrackId, t: Tick) -> Result<()> {
         if tr.locked {
             continue;
         }
-        if tr.id != track {
-            if !tr.sync_lock {
-                continue;
-            }
-            if !track_range_empty(tr, gap) {
-                return Err(EditError::SyncLockConflict(track_label(seq, tr.id)));
-            }
+        let source = tr.id == track;
+        if !source && !tr.sync_lock {
+            continue;
         }
-        shift_track_from(tr, gap.end(), -gap.duration);
+        close_stretch(seq, tr, gap, source)?;
     }
     *seq = work;
     Ok(())
@@ -779,6 +804,20 @@ pub fn trim(seq: &mut Sequence, clip: ClipId, edge: Edge, mode: TrimMode, delta:
 /// past it and is linked to a clip that shifts (a split edit). The edit is refused when it would
 /// overwrite material on a sync-locked track, or when such a linked clip has no room to follow.
 pub fn ripple_trim_group(seq: &mut Sequence, clips: &[ClipId], edge: Edge, delta: Tick, ctx: &mut EditCtx) -> Result<Tick> {
+    ripple_trim_group_with(seq, clips, edge, delta, ctx, false)
+}
+
+/// Ripple Delete Head Frame: take `head` off the start of a group of linked items and close the
+/// sequence up, as [`ripple_trim_group`] does with [`Edge::In`]. Like [`ripple_delete_items`], a
+/// clip on a sync-locked track that starts at or before the cut and reaches into the head (a
+/// music bed) stays where it is instead of refusing the edit (#5).
+pub fn ripple_delete_head(seq: &mut Sequence, clips: &[ClipId], head: Tick, ctx: &mut EditCtx) -> Result<Tick> {
+    ripple_trim_group_with(seq, clips, Edge::In, head, ctx, true)
+}
+
+/// [`ripple_trim_group`]; `beds_stay`: a clip on a sync-locked track that starts at or before the
+/// stretch that closes stays put rather than refusing the edit.
+fn ripple_trim_group_with(seq: &mut Sequence, clips: &[ClipId], edge: Edge, delta: Tick, ctx: &mut EditCtx, beds_stay: bool) -> Result<Tick> {
     let Some(&first) = clips.first() else { return Ok(Tick::ZERO) };
     for c in clips {
         unlocked_track(seq, *c)?;
@@ -854,7 +893,9 @@ pub fn ripple_trim_group(seq: &mut Sequence, clips: &[ClipId], edge: Edge, delta
             // a shorter head closes the stretch just after the cut, a shorter tail the one before it
             let closing = if edge == Edge::In { TimeRange::new(from - Tick(1), -shift) } else { TimeRange::new(from + shift, -shift) };
             let own = |i: &TrackItem| i.link.is_some_and(|l| own_links.contains(&l));
-            if tr.items.iter().any(|i| i.range().overlaps(&closing) && !follows(i) && !own(i) && !stays(i)) {
+            // (a clip that stays and is in the way of later ones refuses below)
+            let bed = |i: &TrackItem| beds_stay && i.start <= closing.start;
+            if tr.items.iter().any(|i| i.range().overlaps(&closing) && !follows(i) && !own(i) && !stays(i) && !bed(i)) {
                 return Err(EditError::SyncLockConflict(track_label(seq, tid)));
             }
         }

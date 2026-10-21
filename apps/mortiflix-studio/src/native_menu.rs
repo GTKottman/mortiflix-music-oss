@@ -4,7 +4,7 @@
 use std::sync::mpsc::{Receiver, channel};
 
 use mortiflix_ui_egui::StudioApp;
-use mortiflix_ui_egui::menus::{MENUS, MenuItem as Item, NATIVE_APP_MENU, menu_items};
+use mortiflix_ui_egui::menus::{MENUS, MenuItem as Item, NATIVE_APP_MENU, all_menu_items};
 use muda::accelerator::Accelerator;
 use muda::{Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu};
 
@@ -23,7 +23,8 @@ fn accel(s: &str) -> Option<Accelerator> {
 pub type MenuUpdater = Box<dyn FnMut(&[Item])>;
 
 pub fn install(app: &StudioApp, ctx: egui::Context) -> (Receiver<String>, MenuUpdater) {
-    let items = menu_items(app);
+    // every item, whatever the stage: the editor's are greyed (no shortcut) off the Edit stage (#16)
+    let items = all_menu_items(app);
     // each native item with the menu entry it currently shows, so updates touch only what changed
     let mut native: Vec<(Item, MenuItem)> = Vec::new();
     let mut titles: Vec<(String, Submenu)> = Vec::new();
@@ -148,7 +149,16 @@ pub fn install(app: &StudioApp, ctx: egui::Context) -> (Receiver<String>, MenuUp
             item.set_text(language.tr(label));
         }
         for (shown, mi) in &mut native {
-            let Some(it) = items.iter().find(|i| i.id == shown.id) else { continue };
+            let Some(it) = items.iter().find(|i| i.id == shown.id) else {
+                // left out of the menu bar (an editor item off the Edit stage, #16): greyed, its key off
+                if shown.enabled || shown.shortcut.is_some() {
+                    mi.set_enabled(false);
+                    let _ = mi.set_accelerator(None);
+                    shown.enabled = false;
+                    shown.shortcut = None;
+                }
+                continue;
+            };
             if it.label != shown.label {
                 // Settings entries drop the trailing ellipsis, as when the menu was built
                 mi.set_text(if it.id.starts_with("app.settings.") { it.label.trim_end_matches('…') } else { &it.label });
