@@ -290,6 +290,36 @@ fn close_gap_works() {
     assert_eq!(fx.spans(v1), vec![(0, 10), (10, 10)]);
 }
 
+/// #7: Close Gap follows Ripple Delete's rule on sync-locked tracks: a music bed or an overlay
+/// across the gap stays where it is (the demo's V2 overlay refused it), later clips move up, and
+/// a clip that starts inside the gap or has no room to move up still refuses.
+#[test]
+fn close_gap_leaves_a_music_bed_in_place() {
+    let mut fx = Fx::new();
+    let (v1, v2, a1) = (fx.v(0), fx.v(1), fx.a(0));
+    fx.put(v1, 0, 10, 0);
+    fx.put(v1, 20, 10, 0);
+    fx.put(a1, 0, 30, 0); // the bed
+    fx.put(v2, 5, 8, 0); // an overlay across the gap's start
+    fx.put(v2, 25, 3, 0);
+    close_gap(&mut fx.seq, v1, f(15)).unwrap();
+    assert_eq!((fx.spans(v1), fx.spans(a1), fx.spans(v2)), (vec![(0, 10), (10, 10)], vec![(0, 30)], vec![(5, 8), (15, 3)]));
+    fx.seq.check().unwrap();
+
+    // a clip that starts inside the gap, or one with no room to move up: refused, nothing changes
+    for (bed, (start, len)) in [(12, (13, 3)), (15, (22, 5))] {
+        let mut fx = Fx::new();
+        let (v1, a1) = (fx.v(0), fx.a(0));
+        fx.put(v1, 0, 10, 0);
+        fx.put(v1, 20, 10, 0);
+        fx.put(a1, 0, bed, 0);
+        fx.put(a1, start, len, 0);
+        let before = fx.seq.clone();
+        assert_eq!(close_gap(&mut fx.seq, v1, f(15)), Err(EditError::SyncLockConflict("A1".into())));
+        assert_eq!(fx.seq, before);
+    }
+}
+
 #[test]
 fn reversed_trim_uses_the_handle_its_playback_direction_consumes() {
     let mut fx = Fx::new();

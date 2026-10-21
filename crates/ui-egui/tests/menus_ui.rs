@@ -549,14 +549,24 @@ fn close_gap_and_import_from_media_browser_wait_for_a_selection() {
         assert_eq!(r["ok"], false, "{r}");
         assert_plain_status(&mut d, id);
     }
-    // lift a V1 clip to leave a gap, then select the gap
-    let c = d.app().session.active_sequence().unwrap().video_tracks[0].items[1].clone();
+    // lift a V1 clip to leave a gap, then select the gap: one with no overlay on V2 over it (an
+    // overlay that starts inside the gap can't move up), so only the score on A2 runs under it,
+    // and that music bed stays where it is (#7, as Ripple Delete does)
+    let c = {
+        let q = d.app().session.active_sequence().unwrap();
+        let clear = |c: &&mortiflix_engine::project::TrackItem| !q.video_tracks[1].items.iter().any(|o| o.range().overlaps(&c.range()));
+        q.video_tracks[0].items.iter().skip(1).find(clear).expect("a V1 clip with no overlay over it").clone()
+    };
+    let bed = d.app().session.active_sequence().unwrap().audio_tracks[1].items.clone();
     d.exec("edit.clear", json!({"clips": [c.id.0]}));
     let mid = c.start.0 + (c.end().0 - c.start.0) / 2;
     d.exec("timeline.selectGap", json!({"track": "V1", "time": mid}));
     assert!(menu_enabled(&mut d, "sequence.closeGap"), "usable with a gap selected");
     d.menu("sequence.closeGap");
     assert!(d.app().session.state.gap_selection.is_none(), "the gap is closed");
+    let q = d.app().session.active_sequence().unwrap();
+    assert!(q.video_tracks[0].item_at(c.start).is_some(), "the next clip moved up");
+    assert_eq!(q.audio_tracks[1].items, bed, "the score stays where it is");
     // files selected in the Media Browser
     let dir = std::env::temp_dir().join(format!("mfx-menu-mb-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
