@@ -1,0 +1,43 @@
+{
+  "slug": "app",
+  "name": "App",
+  "description": "A full application, planned the way the industry makes software: idea, requirements, screens, look, mockups, prototype, tech plan and tasks. The AI builds it last.",
+  "makes": "app",
+  "intake": [
+    { "id": "idea", "label": "What should your app do?", "type": "long", "required": true, "help": "The problem it solves and who uses it, in your own words." }
+  ],
+  "steps": [
+    { "key": "idea", "name": "Idea", "stage": "idea", "review": "document", "work": ["plan"],
+      "describe": "A one-page brief: the problem, who uses the app, what it must do and what it must never do." },
+    { "key": "requirements", "name": "Requirements", "stage": "requirements", "review": "document", "work": ["plan"],
+      "describe": "Every feature as a user story (As a ___, I want ___, so that ___) with its \"done when\" checks." },
+    { "key": "screens", "name": "Screens", "stage": "screens", "review": "document", "work": ["plan"],
+      "describe": "The sitemap and user flows: every screen and how you move between them." },
+    { "key": "look", "name": "Look", "stage": "look", "review": "document", "work": ["plan"],
+      "describe": "Three or four visual directions, then the picked one as a design system (colours, type, buttons)." },
+    { "key": "mockups", "name": "Mockups", "stage": "mockups", "review": "document", "work": ["plan"],
+      "describe": "Every screen drawn in the picked look." },
+    { "key": "prototype", "name": "Prototype", "stage": "prototype", "review": "document", "work": ["plan"],
+      "describe": "A clickable fake app made from the mockups." },
+    { "key": "tech-plan", "name": "Tech plan", "stage": "techPlan", "review": "document", "work": ["plan"],
+      "describe": "Stack, data model, API, folders and tests, with a plain-words summary on top." },
+    { "key": "tasks", "name": "Tasks", "stage": "tasks", "review": "document", "work": ["plan"],
+      "describe": "The build split into small tickets in order, each tied to its user stories and screens." },
+    { "key": "build", "name": "Build", "stage": "build", "review": "document", "work": ["plan"],
+      "describe": "The AI builds the app ticket by ticket and tests each one against its \"done when\" checks." },
+    { "key": "ship", "name": "Ship", "stage": "ship", "review": "document", "work": ["plan"], "delivers": true,
+      "describe": "Run it, package it, then an installer or a deploy." }
+  ],
+  "status_lines": {
+    "idea": "Writing the brief",
+    "requirements": "Writing the user stories",
+    "screens": "Mapping the screens",
+    "look": "Drawing the look",
+    "mockups": "Drawing the screens",
+    "prototype": "Making the prototype",
+    "tech-plan": "Planning the tech",
+    "tasks": "Splitting the build into tasks",
+    "build": "Building the app",
+    "ship": "Packaging the app"
+  }
+}

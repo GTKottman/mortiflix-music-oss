@@ -6,16 +6,18 @@
 import { loadProject, projectPipeline, update, event, now } from '../projects.mjs';
 import { stepView, respond, answerQuestion, reopen, GateError } from '../gates.mjs';
 import { canvasView, loadOwner, nodeAction } from '../canvas.mjs';
+import { APPS, VIDEO_STAGES, VIDEO_STAGE_NAMES, APP_STAGES, APP_STAGE_NAMES } from '../product.mjs';
 
-export const STAGES = ['script', 'voice', 'styleFrames', 'transitions', 'animatic', 'music', 'edit', 'render'];
-export const STAGE_NAMES = ['Script', 'Voice', 'Style frames', 'Transitions', 'Animatic', 'Music', 'Edit', 'Render'];
+// The app studio has its own ten stages (src/product.mjs) and none of the video's Music, Edit or Render.
+export const STAGES = APPS ? APP_STAGES : VIDEO_STAGES;
+export const STAGE_NAMES = APPS ? APP_STAGE_NAMES : VIDEO_STAGE_NAMES;
 // The six stages before 2026-10-18 (script, look, shots, voiceMusic, edit, render) → the eight: a project saved then
 // opens on the same work.
 export const OLD_STAGE = [0, 2, 4, 5, 6, 7];
 const OLD_DONE = { look: ['styleFrames'], shots: ['transitions', 'animatic'], voiceMusic: ['voice', 'music'] };
-export const STAGE_EDIT = 6;
-export const STAGE_RENDER = 7;
-export const STAGE_MUSIC = 5;
+export const STAGE_EDIT = APPS ? -1 : 6;
+export const STAGE_RENDER = APPS ? -1 : 7;
+export const STAGE_MUSIC = APPS ? -1 : 5;
 const DONE = ['approved', 'done', 'skipped'];
 
 const BY_KEY = {
@@ -31,12 +33,13 @@ const BY_KEY = {
 // The canvas pieces each stage shows (doc 35): the node kinds counted for its "made / total" (shots only on stage 3:
 // the transition board never inflates the shot count, owner's first run "0/8" → "3/11"), and the kinds whose pieces
 // can wait for the owner there.
-const KINDS = [['beat'], ['line'], ['frame'], ['transition'], ['shot'], ['cue'], [], []];
-const REVIEW_KINDS = [['beat'], ['line'], ['frame'], ['transition'], ['shot'], ['cue'], [], []];
-const NOUN = ['scenes', 'voice lines', 'style frames', 'transitions', 'shots', 'cues', '', ''];
+const KINDS = APPS ? STAGES.map(() => []) : [['beat'], ['line'], ['frame'], ['transition'], ['shot'], ['cue'], [], []];
+const REVIEW_KINDS = KINDS;
+const NOUN = APPS ? STAGES.map(() => '') : ['scenes', 'voice lines', 'style frames', 'transitions', 'shots', 'cues', '', ''];
 
 export function stageOf(step) {
   if (step.stage && STAGES.includes(step.stage)) return STAGES.indexOf(step.stage);
+  if (APPS) return 0;
   if (BY_KEY[step.key] !== undefined) return BY_KEY[step.key];
   if (step.delivers) return STAGE_RENDER;
   if (step.canvas === 'line') return 1;
@@ -54,6 +57,8 @@ export const stageIndex = (v) => (Number.isInteger(v) && v >= 0 && v < STAGES.le
 // A project's `mfx` saved with the six stages, in the eight (stage index and the stages pressed Next on). Idempotent.
 export function upgradeMfx(mfx) {
   if (!mfx || mfx.stages === STAGES.length) return false;
+  // app projects never had the six video stages
+  if (APPS) { mfx.stages = STAGES.length; return true; }
   if (Number.isInteger(mfx.stage)) mfx.stage = OLD_STAGE[mfx.stage] ?? 0;
   const done = {};
   for (const [k, at] of Object.entries(mfx.stages_done || {})) for (const n of OLD_DONE[k] || [k]) done[n] = at;
@@ -121,7 +126,7 @@ export function stageStatuses(root, id, { running = false, graph = null } = {}) 
 // OK are OK'd as they are; questions take their defaults). `then`: the stage the owner goes to.
 export function stageDone(root, id, from, { reason = 'Next' } = {}) {
   const i = stageIndex(from);
-  if (i < 0) throw new GateError('stage must be 0-7 or a stage key');
+  if (i < 0) throw new GateError(`stage must be 0-${STAGES.length - 1} or a stage key`);
   const pipeline = projectPipeline(root, id);
   const kept = [];
   const left = [];
@@ -181,7 +186,7 @@ export function handOverToApp(root, id, how) {
 // steps and pieces are made again.
 export function remakesIf(root, id, stage) {
   const i = stageIndex(stage);
-  if (i < 0) throw new GateError('stage must be 0-7 or a stage key');
+  if (i < 0) throw new GateError(`stage must be 0-${STAGES.length - 1} or a stage key`);
   const pipeline = projectPipeline(root, id);
   const view = stepView(loadProject(root, id), pipeline);
   const start = new Set(view.filter((s) => stageOf(s) === i).map((s) => s.key));
@@ -200,7 +205,7 @@ export function remakesIf(root, id, stage) {
 // and the stages from it on are no longer "done".
 export function reopenStage(root, id, stage, text) {
   const i = stageIndex(stage);
-  if (i < 0) throw new GateError('stage must be 0-7 or a stage key');
+  if (i < 0) throw new GateError(`stage must be 0-${STAGES.length - 1} or a stage key`);
   const pipeline = projectPipeline(root, id);
   const view = stepView(loadProject(root, id), pipeline).filter((s) => stageOf(s) === i && s.review !== 'internal' && ['approved', 'done'].includes(s.state));
   const step = view.at(-1);

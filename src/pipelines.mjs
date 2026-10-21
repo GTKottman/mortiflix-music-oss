@@ -13,6 +13,7 @@ import { join, relative } from 'node:path';
 import { createHash } from 'node:crypto';
 import { REPO, paths, readJson, UserError } from './studio.mjs';
 import { zip, unzip, dirEntries } from './zip.mjs';
+import { APPS, VIDEO_STAGES, APP_STAGES, forProduct } from './product.mjs';
 
 export const REVIEW_MODES = ['questions', 'document', 'frames', 'video', 'audio', 'internal'];
 export const WORK_KINDS = ['script', 'stills', 'motion', 'audio', 'music', 'research', 'plan', 'instruments'];
@@ -20,7 +21,7 @@ export const WORK_KINDS = ['script', 'stills', 'motion', 'audio', 'music', 'rese
 export const STEP_CONDITIONS = ['music', 'voice'];
 export const CANVAS_KINDS = ['beat', 'line', 'frame', 'transition', 'shot'];
 // The Mortiflix Studio stages a step can be shown under (`stage` on a step; otherwise worked out from its key).
-export const STAGE_KEYS = ['script', 'voice', 'styleFrames', 'transitions', 'animatic', 'music', 'edit', 'render'];
+export const STAGE_KEYS = APPS ? APP_STAGES : VIDEO_STAGES;
 const KEY = /^[a-z0-9][a-z0-9_-]{0,47}$/;
 
 export function builtInDir() {
@@ -37,6 +38,8 @@ export function listPipelines(root) {
       const dir = join(base, slug);
       if (!existsSync(join(dir, 'pipeline.json'))) continue;
       try {
+        // the app studio and Mortiflix Studio each see only their own pipelines (src/product.mjs)
+        if (!forProduct(readJson(join(dir, 'pipeline.json')).makes || 'video')) continue;
         found.set(slug, { ...loadPipeline(dir), dir, source: base === builtInDir() ? 'built-in' : 'studio' });
       } catch (e) {
         found.set(slug, { slug, dir, error: e.message, source: base === builtInDir() ? 'built-in' : 'studio' });

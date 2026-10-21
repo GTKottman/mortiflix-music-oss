@@ -10,6 +10,7 @@
 import { readFileSync } from 'node:fs';
 import { join, isAbsolute } from 'node:path';
 import { REPO, studioRoot, ensureStudio, loadConfig, paths, UserError } from './studio.mjs';
+import { APPS, PRODUCT } from './product.mjs';
 import { createProject, loadProject, projectPaths, listProjects, startProject, readEvents, projectPipeline, update as updateProject, event as projectEvent } from './projects.mjs';
 import { Runner } from './runner.mjs';
 import { findPipeline } from './pipelines.mjs';
@@ -311,7 +312,7 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
 
   const handlers = {
     hello: (p) => {
-      const result = { service: 'mortiflix-service', version: version(), protocol: PROTOCOL, studio: root, client: String(p?.client || ''), runner: Boolean(runner), runner_note: runnerNote || null, types: Object.keys(handlers).sort() };
+      const result = { service: 'mortiflix-service', version: version(), protocol: PROTOCOL, product: PRODUCT, studio: root, client: String(p?.client || ''), runner: Boolean(runner), runner_note: runnerNote || null, types: Object.keys(handlers).sort() };
       setImmediate(() => { status(true); if (projectId()) { try { refreshWork(projectId(), canvasView(root, projectId()), true); } catch { /* no canvas yet */ } } });
       return result;
     },
@@ -328,8 +329,10 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
       const ideaField = (pipeline.intake.find((q) => q.type === 'long' && q.required) || pipeline.intake.find((q) => q.type === 'long'))?.id;
       if (p?.idea !== undefined && ideaField) answers[ideaField] = String(p.idea).slice(0, 20_000);
       const assets = cleanAssetList(p);
-      const start = p?.start !== false;
-      if (start) {
+      const check = p?.start !== false;
+      // v1 of the app studio has the stages and gates only: nothing runs yet (Design Docs/App Studio - Plan v1.md)
+      const start = check && !APPS;
+      if (check) {
         for (const q of pipeline.intake.filter((x) => x.required)) {
           if (q.type === 'files' ? !assets.length : !String(answers[q.id] ?? '').trim()) bad(`${q.label || q.id}: ${q.type === 'files' ? 'add a file under Assets' : 'this is needed'}`);
         }
@@ -380,7 +383,7 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
     // ---- stages ----
     'stage.set': (p) => {
       const stage = stageIndex(Number.isInteger(p?.stage) ? p.stage : p?.key);
-      if (stage < 0) bad('stage must be 0-7 or a stage key');
+      if (stage < 0) bad(`stage must be 0-${STAGES.length - 1} or a stage key`);
       const from = stageIndex(p?.from);
       let out = {};
       const id = projectId();
