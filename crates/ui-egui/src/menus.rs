@@ -319,7 +319,7 @@ pub fn invoke(app: &mut StudioApp, ctx: &egui::Context, id: &str, mut params: Va
         if id == "app.language.chinese" && !crate::i18n::chinese_font_available() {
             return Err("no Chinese font is installed on this system (for example Noto Sans CJK SC or Microsoft YaHei); the interface stays in English".into());
         }
-        // Korean needs an installed Hangul font (none is bundled; see cjk.rs)
+        // Korean needs a Hangul font: craft-fonts (its Noto Sans CJK face) or an installed one (see cjk.rs)
         if id == "app.language.korean" && !crate::i18n::korean_font_available() {
             return Err("no Korean font is installed on this system (for example Malgun Gothic or Noto Sans CJK KR); the interface stays in English".into());
         }

@@ -28,6 +28,21 @@ pub(crate) fn craft_fonts() -> impl Iterator<Item = &'static mortiflix_text::fon
 const KOREAN_SAMPLE: &str = "한국어입력테스트";
 const KOREAN_PREFERRED: &[&str] = &["Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans CJK KR", "Noto Sans KR", "Source Han Sans K", "NanumGothic"];
 
+/// craft-fonts faces that draw Hangul. craft-fonts lists none for Korean (`Kore`), but the full
+/// Noto Sans CJK OTFs cover every CJK script, so its Simplified Chinese face does. Only installed
+/// faces were looked for, so without one the Korean interface was refused and its menu row drew
+/// as boxes (#3).
+pub(crate) fn craft_korean() -> &'static [&'static mortiflix_text::fonts::CraftFont] {
+    static FONTS: OnceLock<Vec<&'static mortiflix_text::fonts::CraftFont>> = OnceLock::new();
+    FONTS.get_or_init(|| {
+        let faces = mortiflix_text::fonts::all_faces();
+        let covers = |f: &mortiflix_text::fonts::CraftFont| {
+            faces.iter().any(|x| matches!(x.info.data, mortiflix_text::fonts::FaceData::Static(b) if std::ptr::eq(b, f.bytes)) && x.covers_text(KOREAN_SAMPLE))
+        };
+        mortiflix_text::fonts::CRAFT_FONTS.iter().filter(|f| covers(f)).collect()
+    })
+}
+
 fn system_font() -> Option<Arc<FontData>> {
     static FONT: OnceLock<Option<Arc<FontData>>> = OnceLock::new();
     FONT.get_or_init(|| find_system_font(SAMPLE, PREFERRED)).clone()
@@ -53,10 +68,10 @@ fn find_system_font(sample: &str, preferred: &[&str]) -> Option<Arc<FontData>> {
     Some(Arc::new(FontData { font: std::borrow::Cow::Owned(face.data()?), index: face.info.index, tweak: Default::default() }))
 }
 
-/// Whether [`install`] has a Hangul face to add (an installed system face; none is bundled).
-/// The Korean interface needs one.
+/// Whether [`install`] has a Hangul face to add: a craft-fonts face that covers it, or an
+/// installed system face (none is bundled). The Korean interface needs one.
 pub(crate) fn korean_available() -> bool {
-    korean_font().is_some()
+    !craft_korean().is_empty() || korean_font().is_some()
 }
 
 /// Whether [`install`] has a Chinese face to add: craft-fonts Hans/Hant faces, or an installed
@@ -70,12 +85,32 @@ pub(crate) fn available() -> bool {
 /// traditional hanzi in media and track names that Japanese fonts lack.
 pub(crate) fn install(fonts: &mut FontDefinitions) {
     install_chinese(fonts);
+    // Hangul: the craft-fonts faces that cover it (usually already added for Chinese), else one
+    // installed face
+    let korean = craft_korean();
+    for f in korean {
+        let name = craft_name(f);
+        if !fonts.font_data.contains_key(&name) {
+            fonts.font_data.insert(name.clone(), Arc::new(FontData::from_static(f.bytes)));
+            for stack in fonts.families.values_mut() {
+                stack.push(name.clone());
+            }
+        }
+    }
+    if !korean.is_empty() {
+        return;
+    }
     if let Some(font) = korean_font() {
         fonts.font_data.insert("system-korean".into(), font);
         for stack in fonts.families.values_mut() {
             stack.push("system-korean".into());
         }
     }
+}
+
+/// The egui font name of a craft-fonts face (as `theme` names the Japanese ones).
+fn craft_name(f: &mortiflix_text::fonts::CraftFont) -> String {
+    format!("craft:{} {}", f.family, f.style)
 }
 
 fn install_chinese(fonts: &mut FontDefinitions) {
@@ -89,14 +124,13 @@ fn install_chinese(fonts: &mut FontDefinitions) {
         }
         return;
     }
-    let name = |f: &mortiflix_text::fonts::CraftFont| format!("craft:{} {}", f.family, f.style);
     for f in &chinese {
-        fonts.font_data.insert(name(f), Arc::new(FontData::from_static(f.bytes)));
+        fonts.font_data.insert(craft_name(f), Arc::new(FontData::from_static(f.bytes)));
     }
     for (family, stack) in &mut fonts.families {
         let heavy = matches!(family, FontFamily::Name(n) if matches!(n.as_ref(), "semibold" | "medium"));
         let mut order = chinese.clone();
         order.sort_by_key(|f| (f.family.contains("Serif") && !f.family.contains("Sans"), (f.style == "Bold") != heavy));
-        stack.extend(order.iter().map(|f| name(f)));
+        stack.extend(order.iter().map(|f| craft_name(f)));
     }
 }

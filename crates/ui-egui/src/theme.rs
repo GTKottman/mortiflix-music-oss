@@ -660,6 +660,39 @@ mod tests {
         ctx.run_ui(egui::RawInput::default(), |_| {}).textures_delta.clear();
     }
 
+    /// #3: Korean comes from craft-fonts too (its Noto Sans CJK face covers Hangul), not only from
+    /// an installed font: Edit › Language › 한국어 drew as boxes and was refused without one.
+    #[test]
+    fn korean_renders_with_craft_fonts() {
+        const KOREAN: &str = "한국어 입력 테스트";
+        let craft = crate::cjk::craft_korean();
+        if craft.is_empty() {
+            eprintln!("SKIPPED: built without a craft-fonts face that covers Hangul (set CRAFT_FONTS_DIR to run)");
+            return;
+        }
+        assert!(crate::i18n::korean_font_available());
+        let ctx = installed();
+        ctx.fonts_mut(|fonts| {
+            let defs = fonts.definitions().clone();
+            for (family, stack) in &defs.families {
+                for f in craft {
+                    assert!(stack.contains(&craft_font_name(f)), "{} in {family:?}: {stack:?}", f.family);
+                }
+                assert!(!stack.iter().any(|n| n == "system-korean"), "{family:?}: {stack:?}");
+            }
+            for family in font_families() {
+                let font = FontId::new(13.0, family);
+                let missing = fonts.layout_no_wrap("\u{fffd}".into(), font.clone(), Color32::WHITE);
+                let missing_uv = missing.rows[0].glyphs[0].uv_rect;
+                let text = fonts.layout_no_wrap(KOREAN.into(), font.clone(), Color32::WHITE);
+                for glyph in text.rows.iter().flat_map(|r| &r.glyphs).filter(|g| g.chr != ' ') {
+                    assert_ne!(glyph.uv_rect, missing_uv, "missing {} in {font:?}", glyph.chr);
+                }
+            }
+        });
+        ctx.run_ui(egui::RawInput::default(), |_| {}).textures_delta.clear();
+    }
+
     /// Built with craft-fonts: every font family ends with the Japanese faces (BIZ UDPGothic
     /// first), and Japanese text gets real glyphs, not the replacement box.
     #[test]
@@ -697,7 +730,14 @@ mod tests {
     #[test]
     fn works_without_craft_fonts() {
         let ctx = installed();
-        let n = mortiflix_text::fonts::craft_japanese().count() + crate::cjk::craft_fonts().count() + crate::rtl::craft_fonts().count();
+        // (a face can serve two scripts: the Chinese one also draws Hangul, #3)
+        let names: std::collections::HashSet<String> = mortiflix_text::fonts::craft_japanese()
+            .chain(crate::cjk::craft_fonts())
+            .chain(crate::rtl::craft_fonts())
+            .chain(crate::cjk::craft_korean().iter().copied())
+            .map(craft_font_name)
+            .collect();
+        let n = names.len();
         ctx.fonts_mut(|fonts| {
             let defs = fonts.definitions().clone();
             assert_eq!(defs.font_data.keys().filter(|k| k.starts_with("craft:")).count(), n);
