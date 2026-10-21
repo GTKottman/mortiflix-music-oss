@@ -1,19 +1,17 @@
 //! Community and project links (Help menu, About dialog, header Discord button, Home screen).
 //!
-//! The Discord button and Help item go to the Mortiflix Discord server; the website link is ArtCraft's (the
-//! family of the editor this app is built on); the app's own page, and where to report an issue, is mortiflix.com.
+//! The Discord button and Help item go to the Mortiflix Discord server; the app's own page, and where to report an
+//! issue, is mortiflix.com.
 
 /// The Mortiflix community Discord.
 pub const DISCORD: &str = "https://discord.gg/5xCB666rYk";
-/// The ArtCraft website.
-pub const WEBSITE: &str = "https://getartcraft.com";
 /// Mortiflix Studio's own page.
 pub const APP_PAGE: &str = "https://mortiflix.com";
 /// Where to report an issue.
 pub const ISSUES: &str = "https://mortiflix.com";
 
 /// (command id, label, url) for every link, in menu order.
-// No ArtCraft Website item in Help (owner, 2026-10-19: no ArtCraft mentions); WEBSITE stays for the About box.
+// No ArtCraft links anywhere (owner, 2026-10-19 Help, 2026-10-21 About: Mortiflix only).
 pub const ALL: [(&str, &str, &str); 3] = [
     ("help.discord", "Join the Mortiflix Discord…", DISCORD),
     ("help.appPage", "Mortiflix Studio on mortiflix.com", APP_PAGE),

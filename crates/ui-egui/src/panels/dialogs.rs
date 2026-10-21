@@ -447,20 +447,16 @@ fn about(app: &mut StudioApp, ui: &mut egui::Ui) {
 /// About ▸ About: version, licence and the Mortiflix community links. Joining the Discord is the
 /// first, accented button.
 ///
-/// Automation ids: `about.discord`, `about.website`, `about.appPage`, `about.github`,
+/// Automation ids: `about.discord`, `about.appPage`, `about.github`,
 /// `about.reportIssue`.
 fn about_tab(app: &mut StudioApp, ui: &mut egui::Ui) {
     use crate::icons::{self, Icon};
     use crate::links;
     let t = app.tokens;
     ui.set_width(380.0);
-    // ArtCraft wordmark (first-party trademark, docs/brand/).
-    let (r, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 30.0), egui::Sense::hover());
-    crate::brand::paint_wordmark(ui, egui::pos2(r.min.x, r.center().y), 20.0, app.ui.dark);
-    ui.add_space(6.0);
     ui.heading("Mortiflix Studio");
     ui.label(tlf!("Version {version}", version = env!("CARGO_PKG_VERSION")));
-    ui.label(tl!("A clean-room, pure-Rust non-linear video editor. Part of the ArtCraft family."));
+    ui.label(tl!("A clean-room, pure-Rust non-linear video editor."));
     ui.add_space(10.0);
     let mut link = |ui: &mut egui::Ui, id: &str, icon: Icon, label: &str, url: &str, primary: bool| {
         let size = egui::vec2(ui.available_width(), if primary { 36.0 } else { 28.0 });
@@ -491,7 +487,6 @@ fn about_tab(app: &mut StudioApp, ui: &mut egui::Ui) {
     };
     link(ui, "discord", Icon::Chat, tl!("Join the Mortiflix Discord"), links::DISCORD, true);
     ui.add_space(6.0);
-    link(ui, "website", Icon::Globe, "getartcraft.com", links::WEBSITE, false);
     link(ui, "appPage", Icon::Globe, tl!("Mortiflix Studio on mortiflix.com"), links::APP_PAGE, false);
     link(ui, "reportIssue", Icon::Code, tl!("Report an issue"), links::ISSUES, false);
     ui.add_space(10.0);

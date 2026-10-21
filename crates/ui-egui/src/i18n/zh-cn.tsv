@@ -406,7 +406,7 @@
 	Delete Audio Tracks	删除音频轨道
 	All Empty Tracks	所有空轨道
 	Version {version}	版本 {version}
-	A clean-room, pure-Rust non-linear video editor. Part of the ArtCraft family.	一款净室实现的纯 Rust 非线性视频编辑器，属于 ArtCraft 家族。
+	A clean-room, pure-Rust non-linear video editor.	一款净室实现的纯 Rust 非线性视频编辑器。
 	Join the Mortiflix Discord	加入 Mortiflix Discord
 	Report an issue	报告问题
 	MIT OR Apache-2.0. Fonts: Inter, Noto Serif and JetBrains Mono (SIL OFL 1.1).	MIT 或 Apache-2.0。字体：Inter、Noto Serif 与 JetBrains Mono（SIL OFL 1.1）。

@@ -415,7 +415,7 @@
 	Delete Caption Track	Eliminar pista de subtítulos
 	Delete Empty Caption Tracks	Eliminar pistas de subtítulos vacías
 	Version {version}	Versión {version}
-	A clean-room, pure-Rust non-linear video editor. Part of the ArtCraft family.	Un editor de video no lineal en Rust puro, desarrollado en sala limpia. Parte de la familia ArtCraft.
+	A clean-room, pure-Rust non-linear video editor.	Un editor de video no lineal en Rust puro, desarrollado en sala limpia.
 	Join the Mortiflix Discord	Únete al Discord de Mortiflix
 	Report an issue	Informar de un problema
 	MIT OR Apache-2.0. Fonts: Inter, Noto Serif and JetBrains Mono (SIL OFL 1.1).	MIT OR Apache-2.0. Fuentes: Inter, Noto Serif y JetBrains Mono (SIL OFL 1.1).

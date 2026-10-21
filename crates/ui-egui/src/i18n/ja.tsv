@@ -412,7 +412,7 @@
 	Delete Audio Tracks	オーディオトラックを削除する
 	All Empty Tracks	すべての空のトラック
 	Version {version}	バージョン {version}
-	A clean-room, pure-Rust non-linear video editor. Part of the ArtCraft family.	Rust だけで書かれた、クリーンルーム設計のノンリニアビデオ編集ソフトです。ArtCraft ファミリーの一員です。
+	A clean-room, pure-Rust non-linear video editor.	Rust だけで書かれた、クリーンルーム設計のノンリニアビデオ編集ソフトです。
 	Join the Mortiflix Discord	Mortiflix の Discord に参加
 	Report an issue	問題を報告
 	MIT OR Apache-2.0. Fonts: Inter, Noto Serif and JetBrains Mono (SIL OFL 1.1).	MIT OR Apache-2.0。フォント: Inter、Noto Serif、JetBrains Mono (SIL OFL 1.1)。

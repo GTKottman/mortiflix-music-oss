@@ -62,7 +62,7 @@
 	59.94 fps Drop-Frame	59.94 fps 드롭 프레임
 	59.94 fps Non Drop-Frame	59.94 fps 논드롭 프레임
 	A boxed label with a round pointer; move the label and the pointer follows.	둥근 포인터가 있는 상자 레이블. 레이블을 옮기면 포인터가 따라갑니다.
-	A clean-room, pure-Rust non-linear video editor. Part of the ArtCraft family.	클린룸 방식의 순수 Rust 비선형 비디오 편집기. ArtCraft 제품군의 일부입니다.
+	A clean-room, pure-Rust non-linear video editor.	클린룸 방식의 순수 Rust 비선형 비디오 편집기.
 	A cut sequence with transitions, effects and music	전환, 효과, 음악이 포함된 편집 시퀀스
 	A file dialog is already open	파일 대화상자가 이미 열려 있습니다
 	A news-style line that crawls in from the right and leaves at the left.	오른쪽에서 흘러 들어와 왼쪽으로 사라지는 뉴스형 자막.

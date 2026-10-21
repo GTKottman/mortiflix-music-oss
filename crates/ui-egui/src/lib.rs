@@ -30,7 +30,6 @@ macro_rules! tlf {
 }
 
 pub mod automation;
-pub mod brand;
 pub mod calc;
 mod cjk;
 pub mod control;

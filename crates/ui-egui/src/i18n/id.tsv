@@ -422,7 +422,7 @@
 	Delete Caption Track	Hapus Trek Takarir
 	Delete Empty Caption Tracks	Hapus Trek Takarir Kosong
 	Version {version}	Versi {version}
-	A clean-room, pure-Rust non-linear video editor. Part of the ArtCraft family.	Editor video non-linear clean-room berbahasa Rust murni. Bagian dari keluarga ArtCraft.
+	A clean-room, pure-Rust non-linear video editor.	Editor video non-linear clean-room berbahasa Rust murni.
 	Join the Mortiflix Discord	Gabung ke Discord Mortiflix
 	Report an issue	Laporkan masalah
 	MIT OR Apache-2.0. Fonts: Inter, Noto Serif and JetBrains Mono (SIL OFL 1.1).	MIT OR Apache-2.0. Font: Inter, Noto Serif dan JetBrains Mono (SIL OFL 1.1).
