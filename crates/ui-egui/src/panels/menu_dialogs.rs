@@ -1,7 +1,7 @@
 //! Menu long tail (M3.11): the dialogs of Find, Create Search Bin, Project Settings (General /
 //! Scratch Disks / Ingest Settings), Get Media File Properties, Edit Offline, Source Settings,
 //! Update Metadata, Automate to Sequence, Scene Edit Detection, Normalize Mix Track, Simplify
-//! Sequence, Transcribe Sequence, Save as Template, Add Chapter Marker, Add Flash Cue Marker, Clip
+//! Sequence, Transcribe Sequence, Transcript ▸ Transcribe…, Save as Template, Add Chapter Marker, Add Flash Cue Marker, Clip
 //! ▸ Rename… and the System Compatibility Report; plus the frontend side of Edit Original / Reveal Log Files (the OS
 //! opener), Reveal in Finder, Generate Audio Waveform (the timeline's peak cache), Import from
 //! Media Browser (the Media Browser selection) and View ▸ Dynamic Audio Waveforms.
@@ -67,6 +67,7 @@ fn meta(command: &str) -> Option<(&'static str, &'static str, &'static str)> {
         "sequence.normalizeMixTrack" => (tl!("Normalize Mix Track"), "normalizeMix", tl!("OK")),
         "sequence.simplify" => (tl!("Simplify Sequence"), "simplify", tl!("Simplify")),
         "sequence.transcribe" => (tl!("Transcribe Sequence"), "transcribe", tl!("Transcribe")),
+        "transcript.generate" => (tl!("Transcribe"), "transcript", tl!("Transcribe")),
         "file.saveAsTemplate" => (tl!("Save as Template"), "saveTemplate", tl!("Save")),
         "markers.addChapter" => (tl!("Chapter Marker"), "chapter", tl!("OK")),
         "markers.addFlashCue" => (tl!("Flash Cue Marker"), "flashCue", tl!("OK")),
@@ -93,6 +94,7 @@ fn dialog_command(id: &str) -> Option<&'static str> {
         "sequence.normalizeMixTrack" => "sequence.normalizeMixTrack",
         "sequence.simplify" => "sequence.simplify",
         "sequence.transcribe" => "sequence.transcribe",
+        "transcript.generate" => "transcript.generate",
         "file.saveAsTemplate" => "file.saveAsTemplate",
         "markers.addChapter" => "markers.addChapter",
         "markers.addFlashCue" => "markers.addFlashCue",
@@ -263,7 +265,10 @@ pub fn route(app: &mut StudioApp, ctx: &egui::Context, id: &str, params: &Value)
     }
     let (params, info) = match defaults(app, cmd, id) {
         Ok(x) => x,
-        Err(e) => return Some(Err(e)),
+        Err(e) => {
+            app.ui.status = e.clone();
+            return Some(Err(e));
+        }
     };
     app.ui.extras.dialog = Some(ClipDialogDraft { command: cmd.into(), params, info, error: String::new() });
     Some(Ok(json!({"dialog": meta(cmd).map(|m| m.1)})))
@@ -365,6 +370,13 @@ fn defaults(app: &mut StudioApp, cmd: &str, id: &str) -> Result<(Value, Value), 
         "sequence.transcribe" => {
             let tracks: Vec<String> = s.active_sequence().map(|q| (1..=q.audio_tracks.len()).map(|i| format!("A{i}")).collect()).unwrap_or_default();
             (json!({"language": "auto", "track": "mix", "diarize": true}), json!({"tracks": tracks}))
+        }
+        // Sequence ▸ Transcript ▸ Transcribe… (#8): the Project panel selection, else the sequence's sound
+        "transcript.generate" => {
+            if mortiflix_engine::transcript::targets(s, &json!({})).is_empty() {
+                return Err("Nothing to transcribe: select clips in the Project panel, or open a sequence with audio clips".into());
+            }
+            (json!({"language": "auto", "diarize": true}), Value::Null)
         }
         "file.saveAsTemplate" => (json!({"name": s.project.name}), Value::Null),
         "markers.addChapter" | "markers.addFlashCue" => (json!({"name": "", "comment": ""}), Value::Null),
@@ -787,6 +799,11 @@ pub fn show(app: &mut StudioApp, ctx: &egui::Context) {
                 combo(ui, &mut elems, "transcribe.track", tl!("Audio analysis:"), &mut p["track"], &tracks);
                 check(ui, &mut elems, pre, p, "diarize", tl!("Recognize when different speakers are talking"));
             }
+            "transcript.generate" => {
+                let langs = pairs(&["auto", "en", "es", "fr", "de", "it", "pt", "ja", "ko", "zh", "nl", "ru"]);
+                combo(ui, &mut elems, "transcript.language", tl!("Language:"), &mut p["language"], &langs);
+                check(ui, &mut elems, pre, p, "diarize", tl!("Recognize when different speakers are talking"));
+            }
             "file.saveAsTemplate" => text(ui, &mut elems, pre, p, "name", tl!("Template Name:"), 240.0),
             "file.newColorMatte" => {
                 color(ui, &mut elems, pre, p, "color", tl!("Color:"));
@@ -943,7 +960,7 @@ fn run(app: &mut StudioApp, d: &ClipDialogDraft) -> Result<Option<String>, Strin
             if matches!(cmd, "markers.addChapter" | "markers.addFlashCue") && q["name"].as_str().is_some_and(str::is_empty) {
                 q.as_object_mut().map(|m| m.remove("name"));
             }
-            if cmd == "sequence.transcribe" && q["language"] == "auto" {
+            if matches!(cmd, "sequence.transcribe" | "transcript.generate") && q["language"] == "auto" {
                 q.as_object_mut().map(|m| m.remove("language"));
             }
             s.execute(cmd, q).map_err(|e| e.to_string())?;

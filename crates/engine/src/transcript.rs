@@ -86,25 +86,30 @@ fn ids_p(p: &Value, k: &str) -> Option<Vec<ItemId>> {
 
 /// Items to transcribe: `items` / `item`, else the Project panel selection, else the media of the
 /// active sequence's enabled audio clips. Subclips resolve to their media; duplicates are removed.
-fn targets(s: &Session, p: &Value) -> Vec<ItemId> {
-    let mut raw = ids_p(p, "items").or_else(|| u64_p(p, "item").map(|i| vec![ItemId(i)])).unwrap_or_default();
-    if raw.is_empty() {
-        raw = s.state.project_selection.clone();
-    }
-    if raw.is_empty()
-        && let Some(q) = s.active_sequence()
-    {
-        raw = q.audio_tracks.iter().flat_map(|t| t.items.iter()).filter(|it| it.enabled).map(|it| it.item).collect();
-    }
-    let mut out = Vec::new();
-    for i in raw {
-        if let Some(m) = media_item(s, i)
-            && !out.contains(&m)
-        {
-            out.push(m);
+/// A selection with nothing to transcribe in it (a sequence, a bin's graphic…) falls through to
+/// the sequence's sound, so Transcribe… with the sequence selected transcribes it (#8).
+pub fn targets(s: &Session, p: &Value) -> Vec<ItemId> {
+    let media = |raw: Vec<ItemId>| {
+        let mut out = Vec::new();
+        for i in raw {
+            if let Some(m) = media_item(s, i)
+                && !out.contains(&m)
+            {
+                out.push(m);
+            }
         }
+        out
+    };
+    let named = ids_p(p, "items").or_else(|| u64_p(p, "item").map(|i| vec![ItemId(i)])).unwrap_or_default();
+    if !named.is_empty() {
+        return media(named);
     }
-    out
+    let selected = media(s.state.project_selection.clone());
+    if !selected.is_empty() {
+        return selected;
+    }
+    let Some(q) = s.active_sequence() else { return Vec::new() };
+    media(q.audio_tracks.iter().flat_map(|t| t.items.iter()).filter(|it| it.enabled).map(|it| it.item).collect())
 }
 
 /// Mono 16 kHz audio of a media item (None: no audio).

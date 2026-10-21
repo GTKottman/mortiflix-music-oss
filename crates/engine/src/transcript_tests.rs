@@ -179,3 +179,17 @@ fn generate_without_a_transcriber() {
     let r = s.execute("transcript.generate", json!({})).unwrap();
     assert!(r["items"].as_array().unwrap().len() >= 2, "{r}");
 }
+
+/// #8: Sequence ▸ Transcript ▸ Transcribe… said "nothing to transcribe" with the open sequence
+/// full of audio when the Project panel selection held no media (the sequence itself). Such a
+/// selection now falls through to the sequence's sound; named items never do.
+#[test]
+fn a_selection_without_media_transcribes_the_sequence() {
+    let (mut s, item, _) = session();
+    let seq = s.state.active_sequence.unwrap();
+    s.execute("project.select", json!({"items": [seq.0]})).unwrap();
+    let r = s.execute("transcript.generate", json!({})).unwrap();
+    assert!(r["items"].as_array().unwrap().iter().any(|i| i["item"] == item.0), "{r}");
+    assert!(s.project.transcripts.contains_key(&item));
+    assert!(s.execute("transcript.generate", json!({"items": [seq.0]})).is_err(), "named items without media stay an error");
+}

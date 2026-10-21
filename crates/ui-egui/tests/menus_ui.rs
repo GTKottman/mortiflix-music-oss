@@ -507,3 +507,30 @@ fn upgrade_caption_is_greyed_without_a_caption_and_errors_read_plainly() {
     assert_eq!(status_text("command `clip.rename` is not available right now: no clips selected"), "No clips selected");
     assert_eq!(status_text("Opened https://example.com"), "Opened https://example.com");
 }
+
+/// #8: Sequence ▸ Transcript ▸ Transcribe… showed "invalid parameters for `transcript.generate`:
+/// nothing to transcribe…" and no dialog, with a sequence full of audio open (and the sequence
+/// selected in the Project panel). It opens a Transcribe dialog (language, speakers) like
+/// Transcribe Sequence…, and OK transcribes the sequence's sound.
+#[test]
+fn transcript_transcribe_opens_a_dialog() {
+    use mortiflix_engine::project::{Transcript, Word};
+    use mortiflix_engine::time::Tick;
+    let mut d = Driver::new();
+    let a1 = d.app().session.active_sequence().unwrap().audio_tracks[0].items[0].clone();
+    let mut t = Transcript { language: "en".into(), ..Default::default() };
+    t.words.push(Word::new("Hello", a1.source_in, a1.source_in + Tick::from_seconds_f64(0.5)));
+    t.normalize();
+    d.app().session.transcriber = Some(std::sync::Arc::new(mortiflix_speech::FixedTranscriber { transcript: t, id: "fixed".into() }));
+    let seq = d.app().session.state.active_sequence.unwrap();
+    d.exec("project.select", json!({"items": [seq.0]}));
+    assert!(menu_enabled(&mut d, "transcript.generate"));
+    assert_eq!(d.menu("transcript.generate")["dialog"], "transcript");
+    for id in ["transcript.language", "transcript.diarize", "transcript.ok", "transcript.cancel"] {
+        assert!(d.has(id), "{id}");
+    }
+    assert!(!d.app().session.project.transcripts.contains_key(&a1.item), "nothing runs before OK");
+    d.click("transcript.ok");
+    assert!(!d.dialog_open(), "{:?}", d.app().ui.extras.dialog);
+    assert!(d.app().session.project.transcripts.contains_key(&a1.item));
+}
