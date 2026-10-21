@@ -316,7 +316,9 @@ pub fn checked(app: &StudioApp, id: &str) -> Option<bool> {
 pub fn enabled(app: &StudioApp, id: &str) -> bool {
     let v = view(app, which_of(app, &Value::Null));
     match id {
-        "view.lockGuides" | "view.clearGuides" | "view.guideTemplates.save" => !v.guides.is_empty(),
+        // a checked Lock Guides always stays clickable, so locking can be undone even with no guides left (#13)
+        "view.lockGuides" => v.lock_guides || !v.guides.is_empty(),
+        "view.clearGuides" | "view.guideTemplates.save" => !v.guides.is_empty(),
         _ => true,
     }
 }
