@@ -839,6 +839,10 @@ pub fn all_menu_items(app: &StudioApp) -> Vec<MenuItem> {
             it.checked = crate::panels::monitor_view::checked(app, &it.id).or(crate::panels::menu_dialogs::checked(app, &it.id));
             it.enabled &= crate::panels::monitor_view::enabled(app, &it.id);
         }
+        // Window ▸ <panel>: checked while the panel is open, docked or floating (owner, 2026-10-21)
+        if let Some(p) = it.id.strip_prefix("window.panel.").and_then(PanelKind::from_name) {
+            it.checked = Some(app.ui.dock.contains(p) || app.ui.floating.iter().any(|group| group.panels.contains(&p)));
+        }
         it.enabled &= needs_selection(app, &it.id).is_none();
     }
     crate::panels::workspaces::menu(app, &mut v);
@@ -1254,6 +1258,21 @@ mod tests {
         let reset = ws.iter().position(|it| it.id == "window.workspace.reset");
         assert!(matches!((editing, reset), (Some(e), Some(r)) if e < r), "workspaces come before the layout commands");
         assert!(items.iter().any(|it| it.id == "file.save" && it.path == ["File"]));
+    }
+
+    /// Window ▸ <panel> is checked while that panel is open and unchecked once it is closed.
+    #[test]
+    fn window_menu_checks_open_panels() {
+        let mut app = StudioApp::new(mortiflix_engine::Session::default());
+        let checked = |app: &StudioApp, p: PanelKind| all_menu_items(app).into_iter().find(|it| it.id == panel_command_id(p)).and_then(|it| it.checked);
+        let mut open = Vec::new();
+        app.ui.dock.panels(&mut open);
+        let Some(&p) = open.first() else { panic!("the default layout has no panels") };
+        assert_eq!(checked(&app, p), Some(true), "{p:?} is open");
+        app.ui.dock.close(p);
+        assert_eq!(checked(&app, p), Some(false), "{p:?} is closed");
+        app.show_panel(p);
+        assert_eq!(checked(&app, p), Some(true), "{p:?} is open again");
     }
 
     /// #1500: like a native menu bar, while one menu is open hovering another title opens it.
