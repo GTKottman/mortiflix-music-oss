@@ -230,6 +230,10 @@ pub fn needs_selection(app: &StudioApp, id: &str) -> Option<&'static str> {
     match id {
         // the selected captions, else the one under the playhead (#9)
         "graphics.upgradeCaption" if !has_caption_to_upgrade(s) => Some("Select a caption to upgrade it to a graphic"),
+        // the gap selected in the Timeline (#7)
+        "sequence.closeGap" if s.state.gap_selection.is_none() => Some("Select a gap in the Timeline to close it"),
+        // the files selected in the Media Browser
+        "file.importFromMediaBrowser" if s.browser.selection.is_empty() => Some("Select files in the Media Browser to import them"),
         _ => None,
     }
 }

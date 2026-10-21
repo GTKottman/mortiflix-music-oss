@@ -534,3 +534,38 @@ fn transcript_transcribe_opens_a_dialog() {
     assert!(!d.dialog_open(), "{:?}", d.app().ui.extras.dialog);
     assert!(d.app().session.project.transcripts.contains_key(&a1.item));
 }
+
+/// #7: Sequence ▸ Close Gap with no gap selected put "invalid parameters for `sequence.closeGap`:
+/// select a gap or provide `track`" in the status bar; File ▸ Import from Media Browser with
+/// nothing selected there did the same. Both are greyed until there is something to act on (a
+/// gap selected in the Timeline, files selected in the Media Browser), say why in plain words
+/// when a key runs them anyway, and still run for a caller that names its target.
+#[test]
+fn close_gap_and_import_from_media_browser_wait_for_a_selection() {
+    let mut d = Driver::new();
+    for id in ["sequence.closeGap", "file.importFromMediaBrowser"] {
+        assert!(!menu_enabled(&mut d, id), "{id} greyed with nothing selected");
+        let r = d.call("ui.menu.invoke", json!({"id": id}));
+        assert_eq!(r["ok"], false, "{r}");
+        assert_plain_status(&mut d, id);
+    }
+    // lift a V1 clip to leave a gap, then select the gap
+    let c = d.app().session.active_sequence().unwrap().video_tracks[0].items[1].clone();
+    d.exec("edit.clear", json!({"clips": [c.id.0]}));
+    let mid = c.start.0 + (c.end().0 - c.start.0) / 2;
+    d.exec("timeline.selectGap", json!({"track": "V1", "time": mid}));
+    assert!(menu_enabled(&mut d, "sequence.closeGap"), "usable with a gap selected");
+    d.menu("sequence.closeGap");
+    assert!(d.app().session.state.gap_selection.is_none(), "the gap is closed");
+    // files selected in the Media Browser
+    let dir = std::env::temp_dir().join(format!("mfx-menu-mb-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("still.png");
+    image::RgbaImage::from_pixel(16, 9, image::Rgba([200, 40, 0, 255])).save(&path).unwrap();
+    let path = path.to_string_lossy().to_string();
+    d.exec("mediaBrowser.select", json!({"paths": [path]}));
+    assert!(menu_enabled(&mut d, "file.importFromMediaBrowser"), "usable with files selected");
+    let r = d.menu("file.importFromMediaBrowser");
+    assert_eq!(r["items"].as_array().map(Vec::len), Some(1), "{r}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
