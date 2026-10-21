@@ -1,8 +1,8 @@
 //! Menu long tail (M3.11): the dialogs of Find, Create Search Bin, Project Settings (General /
 //! Scratch Disks / Ingest Settings), Get Media File Properties, Edit Offline, Source Settings,
 //! Update Metadata, Automate to Sequence, Scene Edit Detection, Normalize Mix Track, Simplify
-//! Sequence, Transcribe Sequence, Save as Template, Add Flash Cue Marker and the System
-//! Compatibility Report; plus the frontend side of Edit Original / Reveal Log Files (the OS
+//! Sequence, Transcribe Sequence, Save as Template, Add Chapter Marker, Add Flash Cue Marker and the
+//! System Compatibility Report; plus the frontend side of Edit Original / Reveal Log Files (the OS
 //! opener), Reveal in Finder, Generate Audio Waveform (the timeline's peak cache), Import from
 //! Media Browser (the Media Browser selection) and View ▸ Dynamic Audio Waveforms.
 //!
@@ -67,6 +67,7 @@ fn meta(command: &str) -> Option<(&'static str, &'static str, &'static str)> {
         "sequence.simplify" => (tl!("Simplify Sequence"), "simplify", tl!("Simplify")),
         "sequence.transcribe" => (tl!("Transcribe Sequence"), "transcribe", tl!("Transcribe")),
         "file.saveAsTemplate" => (tl!("Save as Template"), "saveTemplate", tl!("Save")),
+        "markers.addChapter" => (tl!("Chapter Marker"), "chapter", tl!("OK")),
         "markers.addFlashCue" => (tl!("Flash Cue Marker"), "flashCue", tl!("OK")),
         "help.systemCompatibilityReport" => (tl!("System Compatibility Report"), "systemReport", tl!("Close")),
         "file.newColorMatte" => (tl!("New Color Matte"), "colorMatte", tl!("OK")),
@@ -91,6 +92,7 @@ fn dialog_command(id: &str) -> Option<&'static str> {
         "sequence.simplify" => "sequence.simplify",
         "sequence.transcribe" => "sequence.transcribe",
         "file.saveAsTemplate" => "file.saveAsTemplate",
+        "markers.addChapter" => "markers.addChapter",
         "markers.addFlashCue" => "markers.addFlashCue",
         "file.newColorMatte" => "file.newColorMatte",
         "project.matteColor" => "project.matteColor",
@@ -349,7 +351,7 @@ fn defaults(app: &mut StudioApp, cmd: &str, id: &str) -> Result<(Value, Value), 
             (json!({"language": "auto", "track": "mix", "diarize": true}), json!({"tracks": tracks}))
         }
         "file.saveAsTemplate" => (json!({"name": s.project.name}), Value::Null),
-        "markers.addFlashCue" => (json!({"name": "", "comment": ""}), Value::Null),
+        "markers.addChapter" | "markers.addFlashCue" => (json!({"name": "", "comment": ""}), Value::Null),
         "file.newColorMatte" => {
             let st = s.active_sequence().map(|q| q.settings.clone()).unwrap_or_default();
             (json!({"color": "#000000", "name": "Color Matte", "width": st.width, "height": st.height, "seconds": 5.0}), Value::Null)
@@ -777,7 +779,7 @@ pub fn show(app: &mut StudioApp, ctx: &egui::Context) {
                 number(ui, &mut elems, pre, p, "seconds", tl!("Duration:"), 0.04..=36000.0, " s");
             }
             "project.matteColor" => color(ui, &mut elems, pre, p, "color", tl!("Color:")),
-            "markers.addFlashCue" => {
+            "markers.addChapter" | "markers.addFlashCue" => {
                 text(ui, &mut elems, pre, p, "name", tl!("Name:"), 220.0);
                 text(ui, &mut elems, pre, p, "comment", tl!("Comments:"), 220.0);
             }
@@ -910,7 +912,8 @@ fn run(app: &mut StudioApp, d: &ClipDialogDraft) -> Result<Option<String>, Strin
         }
         cmd => {
             let mut q = p.clone();
-            if cmd == "markers.addFlashCue" && q["name"].as_str().is_some_and(str::is_empty) {
+            // an empty name lets the engine number it ("Chapter 3", "Cue Point 2")
+            if matches!(cmd, "markers.addChapter" | "markers.addFlashCue") && q["name"].as_str().is_some_and(str::is_empty) {
                 q.as_object_mut().map(|m| m.remove("name"));
             }
             if cmd == "sequence.transcribe" && q["language"] == "auto" {

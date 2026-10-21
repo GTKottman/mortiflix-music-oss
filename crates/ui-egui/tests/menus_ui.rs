@@ -360,3 +360,41 @@ fn saved_projects_are_listed_in_home_and_open_recent() {
     assert!(!menus.as_array().unwrap().iter().any(|m| m["id"].as_str().is_some_and(|id| id.starts_with("file.openRecent."))));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// #15: Markers ▸ Add Chapter Marker… asks for the chapter's name and comments (like Add Flash
+/// Cue Marker…) instead of adding a marker at once; Cancel adds nothing, an empty name is
+/// numbered by the engine.
+#[test]
+fn add_chapter_marker_asks_for_a_name() {
+    use mortiflix_engine::project::MarkerKind;
+    let mut d = Driver::new();
+    let chapters = |d: &mut Driver| -> Vec<(String, String)> {
+        let q = d.app().session.active_sequence().unwrap();
+        q.markers.iter().filter(|m| m.kind == MarkerKind::Chapter).map(|m| (m.name.clone(), m.comment.clone())).collect()
+    };
+    let before = chapters(&mut d);
+    assert_eq!(d.menu("markers.addChapter")["dialog"], "chapter");
+    for id in ["chapter.name", "chapter.comment", "chapter.ok", "chapter.cancel"] {
+        assert!(d.has(id), "{id}");
+    }
+    // nothing is added until OK
+    assert_eq!(chapters(&mut d), before);
+    d.click("chapter.cancel");
+    assert!(!d.dialog_open());
+    assert_eq!(chapters(&mut d), before);
+    // named
+    d.menu("markers.addChapter");
+    d.ok("ui.set", json!({"menuDialog": {"name": "Opening", "comment": "cold open"}}));
+    d.click("chapter.ok");
+    assert!(!d.dialog_open());
+    let after = chapters(&mut d);
+    assert_eq!(after.len(), before.len() + 1);
+    assert!(after.contains(&("Opening".to_string(), "cold open".to_string())), "{after:?}");
+    // empty name: the engine numbers it
+    d.menu("markers.addChapter");
+    d.click("chapter.ok");
+    let n = before.len() + 2;
+    let after = chapters(&mut d);
+    assert_eq!(after.len(), n);
+    assert!(after.contains(&(format!("Chapter {n}"), String::new())), "{after:?}");
+}
