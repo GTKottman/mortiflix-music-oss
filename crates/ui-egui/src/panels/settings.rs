@@ -801,6 +801,20 @@ fn custom(app: &mut StudioApp, ui: &mut Ui, d: &mut SettingsDraft, name: &str) {
     }
 }
 
+/// The app studio's (Mortifex) Preferences: General and Appearance only, and on General only what isn't about
+/// the editor (owner, 2026-10-21: no video or editing side).
+const APP_CATEGORIES: &[&str] = &["general", "appearance"];
+const APP_GENERAL_KEYS: &[&str] = &["general.interfaceLanguage", "general.showToolTips", "general.showRichToolTips"];
+
+/// Whether a Preferences row is about the editor, so the app studio leaves it out.
+fn editor_row(r: &Row) -> bool {
+    match r {
+        Row::Field(f) => f.key.starts_with("general.") && !APP_GENERAL_KEYS.contains(&f.key),
+        Row::Group(_, inner) => inner.iter().all(editor_row),
+        _ => false,
+    }
+}
+
 fn rows(app: &mut StudioApp, ui: &mut Ui, d: &mut SettingsDraft, list: &[Row]) {
     let t = app.tokens;
     for (i, r) in list.iter().enumerate() {
@@ -818,6 +832,7 @@ fn rows(app: &mut StudioApp, ui: &mut Ui, d: &mut SettingsDraft, list: &[Row]) {
             break;
         }
         match r {
+            _ if mortiflix_ui::apps() && editor_row(r) => continue,
             Row::Field(f) if APPEARANCE_KEYS.contains(&f.key) => continue,
             Row::Field(f) => draw_field(app, ui, d, f),
             Row::Group(title, inner) => group(ui, &t, title, |ui| rows(app, ui, d, inner)),
@@ -862,7 +877,7 @@ pub fn show(app: &mut StudioApp, ctx: &egui::Context) -> bool {
             // category list
             let (list, _) = ui.allocate_exact_size(vec2(LIST_W, BODY_H), Sense::hover());
             ui.painter().rect(list, 2.0, t.field_bg, Stroke::new(1.0, t.separator), egui::StrokeKind::Inside);
-            for (i, c) in settings::categories().iter().enumerate() {
+            for (i, c) in settings::categories().iter().filter(|c| !mortiflix_ui::apps() || APP_CATEGORIES.contains(&c.id)).enumerate() {
                 let row = Rect::from_min_size(list.min + vec2(1.0, 1.0 + i as f32 * ROW_H), vec2(LIST_W - 2.0, ROW_H));
                 let r = ui.interact(row, egui::Id::new(("settings-cat", c.id)), Sense::click());
                 let sel = d.page == c.id;

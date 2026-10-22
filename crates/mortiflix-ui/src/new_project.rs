@@ -437,7 +437,10 @@ fn main_page(ui: &mut egui::Ui, ctx: &mut MfxCtx, w: &mut Win, now: f64) {
     ui.horizontal(|ui| {
         row_label(ui, &t, "Name", None);
         let r = ui.add(
-            egui::TextEdit::singleline(&mut w.draft.name).hint_text("The Rise of AI").desired_width(MAIN_W - LABEL_W - 16.0).font(FontId::proportional(14.0)),
+            egui::TextEdit::singleline(&mut w.draft.name)
+                .hint_text(if crate::apps() { "Recipe Box" } else { "The Rise of AI" })
+                .desired_width(MAIN_W - LABEL_W - 16.0)
+                .font(FontId::proportional(14.0)),
         );
         if std::mem::take(&mut w.focus_name) {
             r.request_focus();
@@ -503,36 +506,10 @@ fn main_page(ui: &mut egui::Ui, ctx: &mut MfxCtx, w: &mut Win, now: f64) {
     // Assets (doc 32a)
     assets_section(ui, ctx, w, preset.as_ref(), hovering, now);
 
-    // Music (doc 33a-1)
-    ui.horizontal(|ui| {
-        row_label(ui, &t, "Music", None);
-        ui.vertical(|ui| {
-            ui.horizontal(|ui| {
-                ui.set_width(MAIN_W - LABEL_W - 16.0);
-                ui.label(RichText::new(w.draft.music.summary()).color(t.text).size(13.0));
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    let r = quiet_button(ui, &t, "Choose…");
-                    if r.clicked() {
-                        w.page = Page::Music;
-                        w.music_from = MusicFrom::Main;
-                    }
-                    ctx.auto("mfx.newProject.music.choose", &r, "Choose…");
-                });
-            });
-            let sub = if !w.draft.music.music {
-                "No music in this video. Turn it on in Choose… › More.".to_string()
-            } else if w.draft.music.ai_picks() {
-                if w.draft.music_touched || preset.as_ref().and_then(|p| p.music_theme.as_ref()).is_none() {
-                    "From the preset and your idea. You hear three themes after the look.".to_string()
-                } else {
-                    "From the preset's music theme.".to_string()
-                }
-            } else {
-                "Your theme. Anything you left empty, the AI picks.".to_string()
-            };
-            ui.label(RichText::new(sub).color(t.text_faint).size(11.5));
-        });
-    });
+    // Music (doc 33a-1); apps have none
+    if !crate::apps() {
+        music_row(ui, ctx, w, preset.as_ref());
+    }
 
     ui.separator();
     // ▸ Preset settings (folded)
@@ -604,6 +581,40 @@ fn main_page(ui: &mut egui::Ui, ctx: &mut MfxCtx, w: &mut Win, now: f64) {
     if create && !busy {
         try_create(ctx, w, preset.as_ref());
     }
+}
+
+/// The Music row (doc 33a-1): the theme so far and Choose….
+fn music_row(ui: &mut egui::Ui, ctx: &mut MfxCtx, w: &mut Win, preset: Option<&Preset>) {
+    let t = ctx.theme;
+    ui.horizontal(|ui| {
+        row_label(ui, &t, "Music", None);
+        ui.vertical(|ui| {
+            ui.horizontal(|ui| {
+                ui.set_width(MAIN_W - LABEL_W - 16.0);
+                ui.label(RichText::new(w.draft.music.summary()).color(t.text).size(13.0));
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    let r = quiet_button(ui, &t, "Choose…");
+                    if r.clicked() {
+                        w.page = Page::Music;
+                        w.music_from = MusicFrom::Main;
+                    }
+                    ctx.auto("mfx.newProject.music.choose", &r, "Choose…");
+                });
+            });
+            let sub = if !w.draft.music.music {
+                "No music in this video. Turn it on in Choose… › More.".to_string()
+            } else if w.draft.music.ai_picks() {
+                if w.draft.music_touched || preset.as_ref().and_then(|p| p.music_theme.as_ref()).is_none() {
+                    "From the preset and your idea. You hear three themes after the look.".to_string()
+                } else {
+                    "From the preset's music theme.".to_string()
+                }
+            } else {
+                "Your theme. Anything you left empty, the AI picks.".to_string()
+            };
+            ui.label(RichText::new(sub).color(t.text_faint).size(11.5));
+        });
+    });
 }
 
 fn try_create(ctx: &mut MfxCtx, w: &mut Win, preset: Option<&Preset>) {
@@ -721,7 +732,11 @@ fn assets_section(ui: &mut egui::Ui, ctx: &mut MfxCtx, w: &mut Win, preset: Opti
                 p.text(
                     egui::pos2(rect.min.x + 14.0, rect.center().y + 11.0),
                     egui::Align2::LEFT_CENTER,
-                    "Pictures, logos, footage, sound, music, fonts, documents",
+                    if crate::apps() {
+                        "Pictures, logos, fonts, documents, examples of apps you like"
+                    } else {
+                        "Pictures, logos, footage, sound, music, fonts, documents"
+                    },
                     FontId::proportional(11.0),
                     t.text_faint,
                 );
@@ -737,9 +752,11 @@ fn assets_section(ui: &mut egui::Ui, ctx: &mut MfxCtx, w: &mut Win, preset: Opti
             ctx.auto("mfx.newProject.assets.add", &add, "Add files…");
             if !has {
                 ui.label(
-                    RichText::new("Anything you attach, Mortiflix sees from the first step. Tell it how to use each one; you can add more later in Assets.")
-                        .color(t.text_faint)
-                        .size(11.5),
+                    RichText::new(crate::branded(
+                        "Anything you attach, Mortiflix sees from the first step. Tell it how to use each one; you can add more later in Assets.",
+                    ))
+                    .color(t.text_faint)
+                    .size(11.5),
                 );
                 return;
             }

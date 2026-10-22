@@ -18,8 +18,13 @@ pub fn show(app: &mut StudioApp, ui: &mut egui::Ui, rect: Rect) {
     let recent_w = RECENT_W.min((rect.width() * 0.35).max(220.0));
     let left = Rect::from_min_max(rect.min, pos2((rect.max.x - recent_w - 24.0).max(rect.min.x + 200.0), rect.max.y));
     let right = Rect::from_min_max(pos2(left.max.x + 8.0, rect.min.y), rect.max);
-    recent(app, ui, right);
-    ui.painter().text(left.min + vec2(24.0, 30.0), Align2::LEFT_CENTER, tl!("Mortiflix Studio"), Tokens::semibold(22.0), t.text);
+    if mortiflix_ui::apps() {
+        recent_apps(app, ui, right);
+    } else {
+        recent(app, ui, right);
+    }
+    let title = if mortiflix_ui::apps() { mortiflix_ui::app_name() } else { tl!("Mortiflix Studio") };
+    ui.painter().text(left.min + vec2(24.0, 30.0), Align2::LEFT_CENTER, title, Tokens::semibold(22.0), t.text);
     ui.painter().text(
         left.min + vec2(24.0, 58.0),
         Align2::LEFT_CENTER,
@@ -34,11 +39,18 @@ pub fn show(app: &mut StudioApp, ui: &mut egui::Ui, rect: Rect) {
     );
     let ctx = ui.ctx().clone();
     let cards = [
-        (if mortiflix_ui::apps() { "New app" } else { tl!("New video") }, "mortiflix.newProject", tl!("Start from an idea"), crate::icons::Icon::Film),
+        (
+            if mortiflix_ui::apps() { "New app" } else { tl!("New video") },
+            "mortiflix.newProject",
+            tl!("Start from an idea"),
+            if mortiflix_ui::apps() { crate::icons::Icon::NewItem } else { crate::icons::Icon::Film },
+        ),
         (tl!("Open project"), "file.open", tl!("Pick a saved .mortiflix"), crate::icons::Icon::Folder),
         (tl!("Import files"), "file.import", tl!("Movies, audio and stills"), crate::icons::Icon::Sequence),
         (tl!("Get packs"), "", tl!("Browse what's installed below"), crate::icons::Icon::Grid),
     ];
+    // the app studio opens no video project, imports no media and has no packs: New app only
+    let cards = if mortiflix_ui::apps() { &cards[..1] } else { &cards[..] };
     let cw = ((left.width() - 48.0 - 3.0 * 16.0) / 4.0).clamp(150.0, 260.0);
     for (i, (title, cmd, sub, icon)) in cards.iter().enumerate() {
         let r = Rect::from_min_size(left.min + vec2(24.0 + i as f32 * (cw + 16.0), 90.0), vec2(cw, 150.0));
@@ -88,6 +100,9 @@ pub fn show(app: &mut StudioApp, ui: &mut egui::Ui, rect: Rect) {
         }
         x = r.max.x + 12.0;
     }
+    if mortiflix_ui::apps() {
+        return;
+    }
     // Packs: every pack installed in the studio, in its category
     let ty = y + 18.0 + 34.0 + 34.0;
     ui.painter().text(left.min + vec2(24.0, ty), Align2::LEFT_CENTER, tl!("Packs"), Tokens::semibold(15.0), t.text);
@@ -98,6 +113,40 @@ pub fn show(app: &mut StudioApp, ui: &mut egui::Ui, rect: Rect) {
 }
 
 const RECENT_ROW_H: f32 = 28.0;
+
+/// The app studio's Recent column: the user's app projects (the chat's list), newest first; a click opens one.
+fn recent_apps(app: &mut StudioApp, ui: &mut egui::Ui, col: Rect) {
+    let t = app.tokens;
+    ui.painter().text(col.min + vec2(16.0, 30.0), Align2::LEFT_CENTER, "Recent", Tokens::semibold(15.0), t.text);
+    let row_h = RECENT_ROW_H + 14.0;
+    let fit = (((col.height() - 64.0) / row_h).floor().max(0.0)) as usize;
+    let projects: Vec<(String, String, String)> = mortiflix_ui::chat::listed_projects(ui.ctx()).into_iter().take(fit).collect();
+    if projects.is_empty() {
+        ui.painter().text(col.min + vec2(16.0, 58.0), Align2::LEFT_CENTER, "Apps you start show here.", Tokens::ui(12.0), t.text_faint);
+        return;
+    }
+    let mut open = None;
+    for (i, (id, title, at)) in projects.iter().enumerate() {
+        let row = Rect::from_min_size(col.min + vec2(8.0, 48.0 + i as f32 * row_h), vec2((col.width() - 24.0).max(0.0), row_h));
+        let resp = ui.interact(row, egui::Id::new(("imp-recent-app", i)), Sense::click());
+        app.auto.add(&format!("import.recent.{i}"), row, title);
+        if resp.hovered() {
+            ui.painter().rect_filled(row, 4.0, t.hover);
+        }
+        let p = ui.painter().with_clip_rect(row);
+        crate::icons::paint(&p, Rect::from_center_size(pos2(row.min.x + 16.0, row.min.y + 14.0), vec2(14.0, 14.0)), crate::icons::Icon::Folder, t.text_dim);
+        p.text(pos2(row.min.x + 32.0, row.min.y + 14.0), Align2::LEFT_CENTER, title, Tokens::ui(13.0), t.text);
+        p.text(pos2(row.min.x + 32.0, row.min.y + 30.0), Align2::LEFT_CENTER, at.get(..10).unwrap_or(""), Tokens::ui(11.0), t.text_faint);
+        if resp.clicked() {
+            open = Some(id.clone());
+        }
+    }
+    if let Some(id) = open {
+        let ctx = ui.ctx().clone();
+        let _ = crate::menus::invoke(app, &ctx, "mortiflix.request", json!({"type": "project.open", "params": {"id": id}}));
+        app.ui.mode = crate::state::Mode::Edit;
+    }
+}
 
 /// Home's Recent column in `col`: the recent projects (newest first, file name with its folder under
 /// it), as many as fit down the screen; a click opens one.

@@ -219,7 +219,32 @@ pub fn editor_hidden(app: &StudioApp) -> bool {
 
 /// The one rule (#16): a command whose menu item and shortcut are off right now.
 pub fn hidden(app: &StudioApp, id: &str) -> bool {
+    if mortiflix_ui::apps() {
+        return video_only(id);
+    }
+    // the app studio's stages
+    if id.strip_prefix("stages.").is_some_and(|k| mortiflix_ui::APP_STAGES.iter().any(|(_, key)| *key == k)) {
+        return true;
+    }
     editor_hidden(app) && editor_only(id)
+}
+
+/// The app studio (Mortifex) has no video or editing side (owner, 2026-10-21): the editor's commands, the
+/// edit project's files, playback, the video stages and the video preferences are off on every stage.
+pub fn video_only(id: &str) -> bool {
+    const KEEP_SETTINGS: &[&str] = &["app.settings.general", "app.settings.appearance"];
+    const VIDEO_PREFIXES: &[&str] = &["playback.", "playhead.", "script.", "mortiflix.preview.", "mortiflix.import.", "file.openRecent."];
+    if let Some(k) = id.strip_prefix("stages.") {
+        return !matches!(k, "back" | "next" | "set") && !mortiflix_ui::APP_STAGES.iter().any(|(_, key)| *key == k);
+    }
+    if id.starts_with("app.settings.") {
+        return !KEEP_SETTINGS.contains(&id);
+    }
+    // File ▸ New ▸ Project… is the app studio's New project window; the rest of File is the edit project's
+    if id.starts_with("file.") {
+        return id != "file.newProject";
+    }
+    editor_only(id) || VIDEO_PREFIXES.iter().any(|p| id.starts_with(p)) || matches!(id, "mortiflix.restartEdit" | "mortiflix.timelineEdit")
 }
 
 /// Why a menu item can't run right now although the engine enables it. These commands take
@@ -804,9 +829,7 @@ pub const NATIVE_APP_MENU: [&str; 4] = ["Settings", "Hide Mortiflix Studio", "Hi
 /// The menu bar as shown right now: the editor's items only at the Edit stage (#16).
 pub fn menu_items(app: &StudioApp) -> Vec<MenuItem> {
     let mut v = all_menu_items(app);
-    if editor_hidden(app) {
-        v.retain(|it| !editor_only(&it.id));
-    }
+    v.retain(|it| !hidden(app, &it.id));
     v
 }
 

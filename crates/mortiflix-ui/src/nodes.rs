@@ -36,6 +36,11 @@ const BIN_W: f32 = 210.0;
 
 /// The node area panel (PanelKind::MfxNodes), along the bottom on stages 1-4.
 pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
+    // the shots, voice lines and film order are the video studio's; the app studio's screens come at stage 3
+    if crate::apps() {
+        crate::app_stages::show_nodes(ui, ctx);
+        return;
+    }
     let now = ui.input(|i| i.time);
     let full = ui.max_rect();
     let t = ctx.theme;

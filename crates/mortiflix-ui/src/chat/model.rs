@@ -442,7 +442,7 @@ pub fn short(text: &str, max: usize) -> String {
 /// "Talking about" crumbs: (selection to go to, label, the node when it is one). The first is
 /// always (None, "The whole video").
 pub fn crumbs(graph: &Value, sel: Option<&str>) -> Vec<(Option<String>, String, Option<NodeInfo>)> {
-    let mut out = vec![(None, "The whole video".to_string(), None)];
+    let mut out = vec![(None, whole().to_string(), None)];
     let Some(id) = sel else { return out };
     let info = node(graph, id);
     if info.kind != "beat"
@@ -816,10 +816,15 @@ pub fn lower_name(name: &str) -> String {
     }
 }
 
+/// What the chat talks about when no node is picked: the whole video, or in the app studio the whole app.
+pub fn whole() -> &'static str {
+    if crate::apps() { "The whole app" } else { "The whole video" }
+}
+
 /// The composer's placeholder for a context.
 pub fn placeholder(info: Option<&NodeInfo>) -> String {
     let text: String = match info {
-        None => "Talk to Mortiflix about the whole video…".into(),
+        None => format!("Talk to Mortiflix about {}…", whole().to_lowercase()),
         Some(n) if n.kind == "beat" => format!("Talk to Mortiflix about {}…", n.name),
         Some(n) if moves(&n.kind).iter().any(|m| m.needs_words()) => format!("What should change in {}?", lower_name(&n.name)),
         Some(n) => format!("Talk to Mortiflix about {}…", lower_name(&n.name)),

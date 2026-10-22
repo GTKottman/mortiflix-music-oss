@@ -88,6 +88,35 @@ fn user_stories(ui: &mut egui::Ui, ctx: &MfxCtx) {
     });
 }
 
+/// The node area in the app studio, until stage 3 Screens fills it: what will show there.
+pub fn show_nodes(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
+    let t = ctx.theme;
+    ui.add_space(12.0);
+    ui.horizontal(|ui| {
+        ui.add_space(12.0);
+        ui.vertical(|ui| {
+            if crate::service_notice(ui, ctx) {
+                return;
+            }
+            let open = ctx.state.project_id.is_some();
+            let text = if open {
+                "Your app's screens appear here as nodes at 3 Screens. The noodles between them are how you move from screen to screen."
+            } else {
+                "No project open yet. Your app's screens appear here as nodes."
+            };
+            ui.add(egui::Label::new(RichText::new(text).size(13.0).color(t.text_dim)).wrap());
+            if !open {
+                ui.add_space(6.0);
+                let r = ui.button("New project…");
+                ctx.auto("mfx.nodes.newProject", &r, "New project…");
+                if r.clicked() {
+                    ctx.command("mortiflix.newProject", serde_json::json!({}));
+                }
+            }
+        });
+    });
+}
+
 /// The gate side of an app stage: one line on how to pass it.
 pub fn show_stage(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     let name = crate::stage_name(ctx.state.stage);

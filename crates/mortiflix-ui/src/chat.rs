@@ -133,6 +133,12 @@ fn ui_id() -> egui::Id {
     egui::Id::new("mfx-chat-ui")
 }
 
+/// The user's projects as the chat last listed them (id, title, last change), newest first; empty until
+/// the chat has listed them once.
+pub fn listed_projects(egui_ctx: &egui::Context) -> Vec<(String, String, String)> {
+    egui_ctx.data(|d| d.get_temp::<ChatUi>(ui_id())).map(|st| st.projects).unwrap_or_default()
+}
+
 /// The chat panel (PanelKind::MfxChat): left on stages 1-4, docked right in Edit on stage 5.
 pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     let mut st: ChatUi = ui.data_mut(|d| d.get_temp(ui_id())).unwrap_or_default();
@@ -722,11 +728,13 @@ fn context_bar(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, msgs: &[Msg
         {
             let ui = &mut side;
             if deep {
-                let x = ui.add(egui::Button::new(RichText::new("✕").size(12.0)).frame(false)).on_hover_text("Back to the whole video (Esc)");
+                let x = ui
+                    .add(egui::Button::new(RichText::new("✕").size(12.0)).frame(false))
+                    .on_hover_text(format!("Back to {} (Esc)", model::whole().to_lowercase()));
                 if x.clicked() {
                     ctx.state.selected_node = None;
                 }
-                ctx.auto("mfx.chat.context.back", &x, "Back to the whole video");
+                ctx.auto("mfx.chat.context.back", &x, &format!("Back to {}", model::whole().to_lowercase()));
             }
             let h = ui.add(egui::Button::new(RichText::new("History").size(12.0).color(t.text_dim)).frame(false));
             if h.clicked() {
@@ -853,7 +861,15 @@ fn empty_state(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, now: f64) {
                 }
             }
             ui.label(RichText::new(if st.projects.is_empty() { "No project yet." } else { "No project open." }).size(14.0).color(t.text));
-            ui.label(RichText::new(crate::branded("Start one and Mortiflix writes the script first.")).size(12.0).color(t.text_dim));
+            ui.label(
+                RichText::new(crate::branded(if crate::apps() {
+                    "Start one and Mortiflix writes the brief first."
+                } else {
+                    "Start one and Mortiflix writes the script first."
+                }))
+                .size(12.0)
+                .color(t.text_dim),
+            );
             ui.add_space(8.0);
             let b = small_button(ui, ctx, "mfx.chat.newProject", "New project…", true);
             if b.clicked() {
@@ -1292,6 +1308,8 @@ fn moves_row(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, info: Option<
                     }
                 }
             }
+            // the app studio has nothing to play yet, and no moves on the whole app
+            _ if crate::apps() => {}
             _ => {
                 ui.label(RichText::new("Moves").size(12.0).color(t.text_faint));
                 if small_button(ui, ctx, "mfx.chat.move.playAll", "▶ Play everything", false).clicked() {

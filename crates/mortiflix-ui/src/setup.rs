@@ -933,6 +933,14 @@ impl Model {
                     None => (false, "Checking…".into()),
                 }
             }
+            // the app studio's Tools page is only the service: its status came, so it runs
+            Page::Tools if crate::apps() => {
+                if self.status.get("tools").is_some() {
+                    (true, "Service running".into())
+                } else {
+                    (false, "Optional".into())
+                }
+            }
             Page::Tools => {
                 let Some(t) = self.status.get("tools") else { return (false, "Optional".into()) };
                 let found = [t.get("ffmpeg"), t.get("studio").and_then(|s| s.get("chrome")), t.get("engine")];
@@ -1056,8 +1064,12 @@ fn draw(m: &mut Model, ui: &mut egui::Ui, ctx: &mut MfxCtx) {
         ui.label(RichText::new(crate::branded("Welcome to Mortiflix Studio")).size(22.0).strong().color(theme.text));
         ui.add_space(4.0);
         ui.label(
-            RichText::new("Three quick steps to let the AI make videos with you. Skip any of them: Mortiflix Studio's editing works without all of this.")
-                .color(theme.text_dim),
+            RichText::new(if crate::apps() {
+                "Three quick steps to let the AI plan and build apps with you. Skip any of them and set them up later."
+            } else {
+                "Three quick steps to let the AI make videos with you. Skip any of them: Mortiflix Studio's editing works without all of this."
+            })
+            .color(theme.text_dim),
         );
         ui.add_space(ROW_GAP);
     }
@@ -1069,7 +1081,8 @@ fn draw(m: &mut Model, ui: &mut egui::Ui, ctx: &mut MfxCtx) {
             ui.set_width(RAIL_W);
             ui.set_min_height(body_h);
             // the first launch is three steps; Settings (the menu, later) also has Narration
-            let pages = if m.first_run { &PAGES[..3] } else { &PAGES[..] };
+            // the app studio has no narration (owner, 2026-10-21: no video side)
+            let pages = if m.first_run || crate::apps() { &PAGES[..3] } else { &PAGES[..] };
             for (i, (page, key, name)) in pages.iter().enumerate() {
                 let (done, state) = m.page_state(*page);
                 let selected = m.page == *page;
@@ -1526,6 +1539,12 @@ pub fn window_title(egui_ctx: &egui::Context) -> &'static str {
 
 fn tools_page(m: &mut Model, ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     let theme = ctx.theme;
+    if crate::apps() {
+        // the app studio needs only the service: ffmpeg and the voice and caption models are for videos
+        heading(ui, &theme, "Tools", "The Mortiflix service runs the AI's work on this computer.");
+        service_block(m, ui, ctx);
+        return;
+    }
     heading(ui, &theme, "Tools", "What making videos uses. Downloads always ask first and show how big they are.");
     service_block(m, ui, ctx);
     ui.add_space(ROW_GAP);
