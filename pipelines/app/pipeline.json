@@ -7,7 +7,9 @@
     { "id": "idea", "label": "What should your app do?", "type": "long", "required": true, "help": "The problem it solves and who uses it, in your own words." }
   ],
   "steps": [
-    { "key": "idea", "name": "Idea", "stage": "idea", "review": "document", "work": ["plan"],
+    { "key": "questions", "name": "Questions", "stage": "idea", "review": "questions", "work": ["plan"],
+      "describe": "The chat asks what problem the app solves, who uses it, what it must do and what it must never do, each with a suggested answer from the idea." },
+    { "key": "idea", "name": "Brief", "stage": "idea", "review": "document", "work": ["plan"],
       "describe": "A one-page brief: the problem, who uses the app, what it must do and what it must never do." },
     { "key": "requirements", "name": "Requirements", "stage": "requirements", "review": "document", "work": ["plan"],
       "describe": "Every feature as a user story (As a ___, I want ___, so that ___) with its \"done when\" checks." },
@@ -29,6 +31,7 @@
       "describe": "Run it, package it, then an installer or a deploy." }
   ],
   "status_lines": {
+    "questions": "Reading your idea",
     "idea": "Writing the brief",
     "requirements": "Writing the user stories",
     "screens": "Mapping the screens",

@@ -10,6 +10,7 @@ import { join, extname } from 'node:path';
 import { paths, readJson, writeJson, withLock, isInside, UserError } from './studio.mjs';
 import { checksForStep, WORK_KINDS } from './pipelines.mjs';
 import { sceneGaps, gapsText } from './scenes.mjs';
+import { APPS, APP_READY } from './product.mjs';
 import { projectPaths, projectPipeline, loadProject, update, event, safeName, now } from './projects.mjs';
 
 const DONE = ['approved', 'done', 'skipped'];
@@ -63,7 +64,7 @@ export function settle(project, pipeline) {
   if (project.canvas_edits > 0 || project.mfx?.samples_wanted) project.state = 'queued';
   else if (steps.every((s) => DONE.includes(s.state))) project.state = 'delivered';
   else if (project.questions.some((q) => !q.answered_at)) project.state = 'waiting';
-  else if (steps.some((s) => ['ready', 'working', 'changes'].includes(s.state))) project.state = 'queued';
+  else if (steps.some((s) => ['ready', 'working', 'changes'].includes(s.state) && (!APPS || APP_READY.includes(s.key)))) project.state = 'queued';
   else project.state = 'waiting';
   if (project.state === 'queued' && before !== 'queued') project.queued_at = now();
   if (project.state === 'delivered' && before !== 'delivered') project.delivered_at = now();

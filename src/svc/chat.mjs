@@ -11,7 +11,8 @@ import { projectPaths, projectPipeline, loadProject, readEvents } from '../proje
 import { loadConfig, paths } from '../studio.mjs';
 import { canvasView, nodeAction, readBeats } from '../canvas.mjs';
 import { beatNames } from './beatnames.mjs';
-import { submissions, answerQuestion } from '../gates.mjs';
+import { submissions, answerQuestion, respond, stepView } from '../gates.mjs';
+import { APPS } from '../product.mjs';
 import { PARENT_SESSION_VARS, leanArgs } from '../backends/claude-code.mjs';
 import { credentials, DEFAULT_MODEL } from '../backends/anthropic-api.mjs';
 import { stageOf, STAGE_NAMES } from './stages.mjs';
@@ -105,7 +106,7 @@ export function translateEvents(root, id) {
     switch (e.event) {
       case 'STARTED':
         say({ role: 'stage', text: STAGE_NAMES[0], stage: 0 });
-        say({ role: 'ai', text: `Starting "${project.title}" (${pipeline.name}). I'll go ahead with sensible defaults; change anything at any time.` });
+        say({ role: 'ai', text: APPS ? `Starting "${project.title}". First, four questions about your app.` : `Starting "${project.title}" (${pipeline.name}). I'll go ahead with sensible defaults; change anything at any time.` });
         break;
       case 'SUBMITTED': {
         if (!step) break;
@@ -116,6 +117,7 @@ export function translateEvents(root, id) {
         // Otherwise they wait: nothing is ticked for the owner, and the next step starts after the last answer.
         if (step.review === 'questions' && card?.kind === 'submission' && card.questions.length) card.waiting = true;
         const text = card?.waiting ? `A few questions first. Pick an answer to each one (the suggested one is marked): the ${(pipeline.steps.find((x) => (x.after || []).includes(step.key))?.name || 'next step').toLowerCase()} starts once they're all answered.`
+          : APPS && step.key === 'idea' ? `${e.version > 1 ? `Brief v${e.version}` : 'The brief'} is ready in the Idea panel. Read it, then press Next, or tell me what to change.`
           : card?.kind === 'script' ? `${e.version > 1 ? `Script v${e.version}` : 'The script'} is ready in the Mortiflix Script box: ${card.beats.length} scene${card.beats.length === 1 ? '' : 's'}.`
           : card?.kind === 'looks' ? `${card.frames.length} looks from the script: style samples (colours, characters, type), not the shots. I'm using ${card.frames.find((f) => f.id === card.using)?.name || card.frames[0]?.name || 'the first'}; pick another any time.`
             : card?.kind === 'shots' ? `${card.nodes.length} shots are in. Walk through them: OK, Fix or Cut it on each one.`
@@ -176,7 +178,7 @@ export const actionText = (action, label, text) => `${ACTIONS[action] || action}
 // The "talking about" target in words for the quick reply's brief.
 export function contextWords(context) {
   const c = String(context || 'video');
-  if (c === 'video') return 'the whole video';
+  if (c === 'video') return APPS ? 'the whole app' : 'the whole video';
   if (c.startsWith('cut:')) { const [, a, b] = c.split(':'); return `the cut between ${a.toUpperCase()} and ${b.toUpperCase()} (no transition picked yet)`; }
   if (c.startsWith('stage:')) return `the ${c.slice(6)} stage`;
   return c;
@@ -185,6 +187,7 @@ export function contextWords(context) {
 // The context the quick reply gets: short, from the graph and the project, never file contents.
 function briefFor(root, id, context) {
   const project = loadProject(root, id);
+  if (APPS) return appBriefFor(root, id, project, context);
   let g = { order: { beats: [], shots: [] }, nodes: {} };
   try { g = canvasView(root, id); } catch { /* nothing yet */ }
   const beats = g.order.beats.map((b, i) => `${i + 1}. ${b}: ${String(g.nodes[b].title || '').slice(0, 160)}`).join('\n');
@@ -193,6 +196,18 @@ function briefFor(root, id, context) {
   const recent = chatHistory(root, id, { limit: 12 }).map((r) => `${r.role}: ${r.text.slice(0, 300)}`).join('\n');
   return `Project "${project.title}" (${project.pipeline.name}), state ${project.state}.\nBeats:\n${beats || '(none yet)'}\nShots: ${shots || '(none yet)'}\nOpen questions:\n${open || '(none)'}\nTalking about: ${contextWords(context)}\nRecent chat:\n${recent}`;
 }
+
+// The app studio's (Mortifex) quick-reply context: the stage's steps, the brief so far, the open questions, the chat.
+function appBriefFor(root, id, project, context) {
+  const steps = stepView(project, projectPipeline(root, id)).map((s) => `${s.key} (${s.name}): ${s.state}${s.version ? ` v${s.version}` : ''}`).join('\n');
+  const f = join(projectPaths(root, id).work, 'brief.md');
+  const brief = existsSync(f) ? readFileSync(f, 'utf8').slice(0, 6000) : '(not written yet)';
+  const open = project.questions.filter((q) => !q.answered_at).map((q) => `${q.id}: ${q.text}${q.default ? ` (suggested: ${q.default})` : ''}`).join('\n');
+  const recent = chatHistory(root, id, { limit: 12 }).map((r) => `${r.role}: ${r.text.slice(0, 300)}`).join('\n');
+  return `App project "${project.title}", state ${project.state}.\nSteps:\n${steps}\nThe brief:\n${brief}\nOpen questions:\n${open || '(none)'}\nTalking about: ${contextWords(context)}\nRecent chat:\n${recent}`;
+}
+
+const APP_SYSTEM = `You are the Mortifex assistant inside an app-making studio: the owner plans an app stage by stage, and the AI builds it last. The owner typed a message about their app. Reply in one or two short plain sentences, in plain words with no jargon. If the message asks for a change to the brief while it waits for the owner (step idea in_review), also pick the change move. If it answers an open question, pick the answer move. Never post or publish anything. Answer ONLY with JSON: {"reply": "...", "move": null | {"kind": "change", "text": "<what to change in the brief>"} | {"kind": "answer", "question": "<q id>", "value": "<answer>"}}.`;
 
 const SYSTEM = `You are the Mortiflix assistant inside a video app. The owner typed a message about their video. Reply in one or two short plain sentences. If the message asks for a change to one piece, also pick a move. Never post or publish anything. Answer ONLY with JSON: {"reply": "...", "move": null | {"kind": "fix", "node": "<id>", "text": "<what to change>"} | {"kind": "answer", "question": "<q id>", "value": "<answer>"}}. Use node ids exactly as listed (b01, s03, t02, m01, sf01, line ids).`;
 
@@ -220,10 +235,10 @@ export async function quickReply(root, id, { text, context }) {
     if (!key) throw new Error('no Anthropic API key: link Claude Code in Setup, or add a key');
     const { default: Anthropic } = await import('@anthropic-ai/sdk');
     const client = new Anthropic({ apiKey: key, maxRetries: 2 });
-    const r = await client.messages.create({ model: config.chatModel || config.model || DEFAULT_MODEL, max_tokens: 600, system: SYSTEM, messages: [{ role: 'user', content: prompt }] });
+    const r = await client.messages.create({ model: config.chatModel || config.model || DEFAULT_MODEL, max_tokens: 600, system: APPS ? APP_SYSTEM : SYSTEM, messages: [{ role: 'user', content: prompt }] });
     return parseReply(r.content.filter((b) => b.type === 'text').map((b) => b.text).join(''));
   }
-  const out = await runClaude(config, ['-p', `${SYSTEM}\n\n${prompt}`, '--output-format', 'json', '--tools', '', '--no-session-persistence', ...(config.chatModel || config.model ? ['--model', config.chatModel || config.model] : [])], quickDir(root, config, id));
+  const out = await runClaude(config, ['-p', `${APPS ? APP_SYSTEM : SYSTEM}\n\n${prompt}`, '--output-format', 'json', '--tools', '', '--no-session-persistence', ...(config.chatModel || config.model ? ['--model', config.chatModel || config.model] : [])], quickDir(root, config, id));
   let j;
   try { j = JSON.parse(out); } catch { throw new Error('Claude Code answered something that is not JSON'); }
   if (j.is_error) throw new Error(String(j.result || j.error || 'Claude Code failed').slice(0, 300));
@@ -287,6 +302,13 @@ export function applyMove(root, id, move) {
     if (n.owner === 'ok') return { asked: true, row: { role: 'ai', text: `${n.label} is OK'd. Remake it anyway?`, context: n.id, question: { id: `remake:${n.id}`, choices: ['Remake it', 'Keep it'], default: 'Keep it', text: String(move.text) }, card: { kind: 'confirm', node: n.id, text: String(move.text) } } };
     const r = nodeAction(root, id, n.id, { action: 'fix', text: String(move.text) });
     return { kind: 'fix', node: n.id, edit: r.edit.id, row: { role: 'system', text: `Sent as Fix on ${n.label} (${r.edit.id}).`, context: n.id, edit: r.edit.id, refs: [n.id] } };
+  }
+  // The app studio: a change to the brief waiting for the owner sends it back with their words (src/quickidea.mjs).
+  if (move.kind === 'change' && APPS) {
+    const step = stepView(loadProject(root, id), projectPipeline(root, id)).find((x) => x.key === 'idea' && x.state === 'in_review');
+    if (!step || !String(move.text || '').trim()) return null;
+    respond(root, id, 'idea', step.version, { verdict: 'changes', overall: String(move.text).slice(0, 4000) });
+    return { kind: 'change', row: { role: 'system', text: `Sent as a change to the brief: ${String(move.text).slice(0, 200)}` } };
   }
   if (move.kind === 'answer') {
     const q = loadProject(root, id).questions.find((x) => x.id === move.question && !x.answered_at);

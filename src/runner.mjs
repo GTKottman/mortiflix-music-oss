@@ -18,6 +18,8 @@ import { quickFramesStep, quickFrames } from './quickframes.mjs';
 import { quickTransitionsStep, quickTransitions } from './quicktransitions.mjs';
 import { quickAnimaticStep, quickAnimatic } from './quickanimatic.mjs';
 import { quickMusicStep, quickMusic } from './quickmusic.mjs';
+import { quickIdeaStep, quickIdea } from './quickidea.mjs';
+import { APPS } from './product.mjs';
 import { RenderQueue } from './renderq.mjs';
 import * as claudeCode from './backends/claude-code.mjs';
 import * as anthropicApi from './backends/anthropic-api.mjs';
@@ -190,7 +192,7 @@ export class Runner extends EventEmitter {
       // tools setup installed (Strudel, Chrome, the studio's Blender) with the owner's music and asset choices.
       const sessionEnv = { ...readSessionEnv(root), ...sessionVoiceEnv(root), ...sessionToolsEnv(root), MFX_HOME: REPO };
       // The studio browser: up before the session (started if it can be), and this session's own browser-harness name.
-      if (sessionEnv.BU_CDP_URL) {
+      if (sessionEnv.BU_CDP_URL && !APPS) {
         const b = await ensureBrowser(root);
         if (b.started) this.addActivity(projectId, { kind: 'info', text: `Started the studio browser (${b.detail}).` });
         else if (!b.ok) this.addActivity(projectId, { kind: 'info', text: `The studio browser isn't answering (${b.detail}): the session works without it.` });
@@ -212,6 +214,8 @@ export class Runner extends EventEmitter {
       // The script alone is next: one quick call writes it (src/quickscript.mjs), a session only if that can't.
       // The brief alone is next: the same, one call (quickBrief).
       const quick = backendName === 'claude-code';
+      // The app studio: only the stages built so far run, each as small calls, never a whole session (src/quickidea.mjs).
+      const ideaView = APPS ? quickIdeaStep(root, projectId) : null;
       const scriptView = quick ? quickScriptStep(root, projectId, config) : null;
       const briefView = quick && !scriptView ? quickBriefStep(root, projectId, config) : null;
       // The voice is the studio's own work (quickvoice.mjs): no session, an AI call only to re-spell a failing line.
@@ -225,7 +229,8 @@ export class Runner extends EventEmitter {
       // The music, the same way: one call plans it, code writes the notes, the engine checks, the studio mixes it.
       const musicView = quick && !scriptView && !briefView && !voiceView && !framesView && !cutsView && !animaticView ? quickMusicStep(root, projectId, config) : null;
       const q = { root, id: projectId, run: backend.run, runArgs, config, onActivity: runArgs.onActivity, fallback: () => backend.run(runArgs) };
-      result = scriptView ? await quickScript({ ...q, view: scriptView })
+      result = APPS ? (ideaView ? await quickIdea({ ...q, view: ideaView }) : { ok: false, error: 'this stage\'s work comes in a later version' })
+        : scriptView ? await quickScript({ ...q, view: scriptView })
         : briefView ? await quickBrief({ ...q, view: briefView })
           : voiceView ? await quickVoice({ ...q, view: voiceView })
             : framesView ? await quickFrames({ ...q, view: framesView, renders: this.renders, sessionId })

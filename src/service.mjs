@@ -14,6 +14,7 @@ import { APPS, PRODUCT } from './product.mjs';
 import { createProject, loadProject, projectPaths, listProjects, startProject, readEvents, projectPipeline, update as updateProject, event as projectEvent } from './projects.mjs';
 import { Runner } from './runner.mjs';
 import { findPipeline } from './pipelines.mjs';
+import { ideaView } from './quickidea.mjs';
 import { canvasView, nodeAction, canvasPaths } from './canvas.mjs';
 import { voiceOnOk } from './voiceonok.mjs';
 import { voiceUsage } from './voiceusage.mjs';
@@ -329,10 +330,8 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
       const ideaField = (pipeline.intake.find((q) => q.type === 'long' && q.required) || pipeline.intake.find((q) => q.type === 'long'))?.id;
       if (p?.idea !== undefined && ideaField) answers[ideaField] = String(p.idea).slice(0, 20_000);
       const assets = cleanAssetList(p);
-      const check = p?.start !== false;
-      // v1 of the app studio has the stages and gates only: nothing runs yet (Design Docs/App Studio - Plan v1.md)
-      const start = check && !APPS;
-      if (check) {
+      const start = p?.start !== false;
+      if (start) {
         for (const q of pipeline.intake.filter((x) => x.required)) {
           if (q.type === 'files' ? !assets.length : !String(answers[q.id] ?? '').trim()) bad(`${q.label || q.id}: ${q.type === 'files' ? 'add a file under Assets' : 'this is needed'}`);
         }
@@ -554,6 +553,8 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
     },
     // ---- the script, line by line (Script panel + the chat's script card) ----
     'script.get': (p) => scriptView(root, needProject(p)),
+    // The app studio's Idea stage: the brief and where the stage is (src/quickidea.mjs).
+    'idea.get': (p) => ideaView(root, needProject(p)),
     // The app's unsaved script changes, kept per project (null clears them); script.get hands them back.
     'script.draft': (p) => saveDraft(root, needProject(p), p?.draft),
     // Saves the owner's edits into the script (and the voice lines), then remakes only the pieces that used the
@@ -691,7 +692,7 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
       const id = projectId() || p?.project;
       if (!id) {
         emit('chat.message', { role: 'user', text, at: new Date().toISOString() });
-        emit('chat.message', { role: 'system', text: 'Open or make a project first: the chat talks about one video.', at: new Date().toISOString() });
+        emit('chat.message', { role: 'system', text: `Open or make a project first: the chat talks about one ${APPS ? 'app' : 'video'}.`, at: new Date().toISOString() });
         return { queued: true };
       }
       const context = p?.context === undefined ? state.context : contextOf(p.context);

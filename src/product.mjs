@@ -10,5 +10,8 @@ export const VIDEO_STAGE_NAMES = ['Script', 'Voice', 'Style frames', 'Transition
 export const APP_STAGES = ['idea', 'requirements', 'screens', 'look', 'mockups', 'prototype', 'techPlan', 'tasks', 'build', 'ship'];
 export const APP_STAGE_NAMES = ['Idea', 'Requirements', 'Screens', 'Look', 'Mockups', 'Prototype', 'Tech plan', 'Tasks', 'Build', 'Ship'];
 
+// The app steps the studio can do so far (one stage per version); the others wait, so nothing runs a session for them.
+export const APP_READY = ['questions', 'idea'];
+
 // What a pipeline makes in this studio: the app studio lists only "app" pipelines, Mortiflix Studio never does.
 export const forProduct = (makes) => (APPS ? makes === 'app' : makes !== 'app');
