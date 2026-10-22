@@ -168,6 +168,9 @@ pub struct MfxState {
     /// Another project just opened: the stage it was last looked at, for the stage bar to go to.
     #[serde(skip)]
     pub open_stage: Option<u8>,
+    /// The app studio's Idea stage: the brief as the service last sent it.
+    #[serde(skip)]
+    pub idea: crate::app_stages::IdeaState,
 }
 
 impl Default for MfxState {
@@ -204,6 +207,7 @@ impl Default for MfxState {
             resume: crate::resume::ResumeState::default(),
             setup_page: None,
             open_stage: None,
+            idea: crate::app_stages::IdeaState::default(),
         }
     }
 }

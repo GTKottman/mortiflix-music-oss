@@ -249,6 +249,7 @@ impl Mortiflix {
             self.state.apply_service_message(&msg);
             self.state.script.on_message(&msg);
             self.state.look.on_message(&msg);
+            self.state.idea.on_message(&msg);
         }
         // A service that was restarted (it crashed or was stopped) has no project open: open the
         // one the app is on again, so the chat, nodes and preview carry on.
@@ -261,10 +262,12 @@ impl Mortiflix {
             }
             self.state.script.refresh();
             self.state.look.refresh();
+            self.state.idea.fetch_soon = true;
         }
         resume::tick(&mut self.state, &mut self.service);
-        // the video stages' own requests; the app studio's stages have none yet
+        // the app studio's stages have their own requests; the video stages' are below
         if apps() {
+            app_stages::tick(&mut self.state, &mut self.service);
             return;
         }
         script::tick(&mut self.state, &mut self.service);
