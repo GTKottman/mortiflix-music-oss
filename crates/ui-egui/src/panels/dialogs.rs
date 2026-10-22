@@ -33,7 +33,7 @@ pub fn show(app: &mut StudioApp, ctx: &egui::Context) {
     let mut open = true;
     match d {
         Dialog::About => {
-            egui::Window::new(tl!("About Mortiflix Studio"))
+            egui::Window::new(mortiflix_ui::branded(tl!("About Mortiflix Studio")).into_owned())
                 .id(egui::Id::new("About Mortiflix Studio"))
                 .open(&mut open)
                 .collapsible(false)
@@ -454,7 +454,7 @@ fn about_tab(app: &mut StudioApp, ui: &mut egui::Ui) {
     use crate::links;
     let t = app.tokens;
     ui.set_width(380.0);
-    ui.heading("Mortiflix Studio");
+    ui.heading(mortiflix_ui::app_name());
     ui.label(tlf!("Version {version}", version = env!("CARGO_PKG_VERSION")));
     ui.label(tl!("A clean-room, pure-Rust non-linear video editor."));
     ui.add_space(10.0);

@@ -174,9 +174,13 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx, rect: Rect) {
     let h = &ctx.state.home;
     if !h.loaded {
         ui.label(
-            RichText::new(if ctx.service.status().is_connected() { "Reading the packs…" } else { "The packs show once Mortiflix is running." })
-                .size(13.0)
-                .color(t.text_faint),
+            RichText::new(crate::branded(if ctx.service.status().is_connected() {
+                "Reading the packs…"
+            } else {
+                "The packs show once Mortiflix is running."
+            }))
+            .size(13.0)
+            .color(t.text_faint),
         );
         return;
     }

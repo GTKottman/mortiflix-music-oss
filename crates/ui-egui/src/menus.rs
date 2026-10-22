@@ -816,6 +816,10 @@ pub fn all_menu_items(app: &StudioApp) -> Vec<MenuItem> {
     let mut v = menu_items_for(&app.session);
     for it in &mut v {
         it.label = app.ui.language.tr(&it.label).to_string();
+        // the app studio's own name (Mortifex); Mortiflix's community links keep theirs
+        if !matches!(it.id.as_str(), "help.discord" | "help.appPage") {
+            it.label = mortiflix_ui::branded(&it.label).into_owned();
+        }
         match it.id.as_str() {
             "app.language.english" => it.checked = Some(app.ui.language == crate::i18n::Language::En),
             "app.language.japanese" => it.checked = Some(app.ui.language == crate::i18n::Language::Ja),

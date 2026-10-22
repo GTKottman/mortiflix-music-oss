@@ -818,12 +818,13 @@ pub fn lower_name(name: &str) -> String {
 
 /// The composer's placeholder for a context.
 pub fn placeholder(info: Option<&NodeInfo>) -> String {
-    match info {
+    let text: String = match info {
         None => "Talk to Mortiflix about the whole video…".into(),
         Some(n) if n.kind == "beat" => format!("Talk to Mortiflix about {}…", n.name),
         Some(n) if moves(&n.kind).iter().any(|m| m.needs_words()) => format!("What should change in {}?", lower_name(&n.name)),
         Some(n) => format!("Talk to Mortiflix about {}…", lower_name(&n.name)),
-    }
+    };
+    crate::branded(&text).into_owned()
 }
 
 #[cfg(test)]

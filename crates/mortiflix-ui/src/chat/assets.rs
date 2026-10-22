@@ -375,8 +375,12 @@ pub fn show_assets(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
             ui.vertical_centered(|ui| {
                 ui.label(RichText::new("No assets yet.").size(14.0).color(t.text));
                 ui.add(
-                    egui::Label::new(RichText::new("Drop files here or Add files…. Mortiflix uses them in the shots you choose.").size(12.0).color(t.text_dim))
-                        .wrap(),
+                    egui::Label::new(
+                        RichText::new(crate::branded("Drop files here or Add files…. Mortiflix uses them in the shots you choose."))
+                            .size(12.0)
+                            .color(t.text_dim),
+                    )
+                    .wrap(),
                 );
             });
             return;
@@ -398,7 +402,7 @@ pub fn show_assets(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
                 if group.is_empty() {
                     continue;
                 }
-                let head = if found { format!("Found by Mortiflix · {}", group.len()) } else { format!("Yours · {}", group.len()) };
+                let head = if found { format!("{} · {}", crate::branded("Found by Mortiflix"), group.len()) } else { format!("Yours · {}", group.len()) };
                 ui.label(RichText::new(head).size(11.0).color(t.text_faint));
                 for a in group {
                     if let Some(id) = row(ui, ctx, &graph, a, selected.as_ref().is_some_and(|s| s.id == a.id)) {
@@ -483,7 +487,7 @@ fn detail(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut AssetsUi, graph: &Value,
         ui.label(
             RichText::new(format!(
                 "{} · used in {} shot{}",
-                if a.source.is_empty() { "Found by Mortiflix" } else { &a.source },
+                crate::branded(if a.source.is_empty() { "Found by Mortiflix" } else { &a.source }),
                 a.used_in.len(),
                 if a.used_in.len() == 1 { "" } else { "s" }
             ))

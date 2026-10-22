@@ -60,14 +60,15 @@ impl ServiceStatus {
     }
     /// One calm line for the UI.
     pub fn line(&self) -> String {
-        match self {
+        let line: String = match self {
             ServiceStatus::Off => "Mortiflix service not running.".into(),
             ServiceStatus::NotConfigured { .. } => "Mortiflix service not running: it isn't set up yet.".into(),
             ServiceStatus::Starting => "Starting the Mortiflix service…".into(),
             ServiceStatus::Connected { version } => format!("Mortiflix service {version} connected."),
             ServiceStatus::Stopped { reason } => format!("Mortiflix service not running ({reason}). Trying again."),
             ServiceStatus::Unsupported => "Mortiflix service not available here.".into(),
-        }
+        };
+        crate::branded(&line).into_owned()
     }
 }
 

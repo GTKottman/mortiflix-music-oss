@@ -42,12 +42,13 @@ pub fn doc_title(app: &StudioApp) -> Option<String> {
         return None;
     }
     let name = s.project_title.trim();
-    Some(if name.is_empty() { "Mortiflix Studio".to_string() } else { format!("{name} \u{2013} Mortiflix Studio") })
+    let app_name = mfx::app_name();
+    Some(if name.is_empty() { app_name.to_string() } else { format!("{name} \u{2013} {app_name}") })
 }
 
 /// The OS window title follows the header's (Mortiflix Studio's unsaved mark kept).
 fn window_title(app: &mut StudioApp, ctx: &egui::Context) {
-    let base = doc_title(app).unwrap_or_else(|| "Mortiflix Studio".to_string());
+    let base = doc_title(app).unwrap_or_else(|| mfx::app_name().to_string());
     let title = if app.session.is_dirty() { tlf!("{name} - Edited", name = base) } else { base };
     if title != app.mfx.window_title {
         ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
@@ -330,7 +331,7 @@ pub fn tab_titles(app: &StudioApp) -> Vec<(PanelKind, String)> {
     let name = mfx::stage_name(s.stage);
     let mut titles = vec![(PanelKind::MfxStage, format!("{name} gate"))];
     if mfx::own_centre(s) {
-        titles.push((PanelKind::MfxPreview, format!("Mortiflix {name}")));
+        titles.push((PanelKind::MfxPreview, format!("{} {name}", mfx::branded("Mortiflix"))));
     }
     titles
 }

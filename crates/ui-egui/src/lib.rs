@@ -2035,7 +2035,7 @@ impl StudioApp {
     fn error_window(&mut self, ctx: &egui::Context) {
         let Some(msg) = self.ui_error.clone() else { return };
         let mut close = false;
-        egui::Window::new(tl!("Mortiflix Studio hit an error"))
+        egui::Window::new(mortiflix_ui::branded(tl!("Mortiflix Studio hit an error")).into_owned())
             .id(egui::Id::new("Mortiflix Studio hit an error"))
             .collapsible(false)
             .resizable(false)

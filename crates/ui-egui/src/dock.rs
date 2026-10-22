@@ -666,7 +666,8 @@ pub fn draw_group_chrome_details(ui: &mut egui::Ui, g: &Group, seqs: &SeqTabs, t
                 let name = seqs.open.iter().find(|(id, _)| seqs.active == Some(*id)).map(|(_, n)| n.clone());
                 tabs.push(Tab { panel: *p, seq: None, title: name.unwrap_or_else(|| tl!("Timeline: (no sequences)").into()), active });
             } else {
-                let title = seqs.titles.iter().find(|(k, _)| k == p).map_or_else(|| crate::i18n::t(p.title()).to_string(), |(_, s)| s.clone());
+                let title =
+                    seqs.titles.iter().find(|(k, _)| k == p).map_or_else(|| mortiflix_ui::branded(crate::i18n::t(p.title())).into_owned(), |(_, s)| s.clone());
                 tabs.push(Tab { panel: *p, seq: None, title, active });
             }
         }

@@ -40,7 +40,7 @@ mod window_raise;
 use args::{Cli, Launch};
 use chrono::TimeZone;
 use mortiflix_engine::Session;
-use mortiflix_engine::autosave::{AutosaveConfig, default_data_dir};
+use mortiflix_engine::autosave::AutosaveConfig;
 use mortiflix_ui_egui::StudioApp;
 use serde_json::json;
 use std::sync::Arc;
@@ -61,6 +61,22 @@ fn app_icon() -> egui::IconData {
     eframe::icon_data::from_png_bytes(png).unwrap_or_default()
 }
 
+/// The per-user data folder: Mortiflix Studio's, or for the app studio a folder of its own beside it
+/// (`mortifex` / `Mortifex`), so its settings, recent projects and auto-saves stay apart. A folder set with
+/// `MFX_STUDIO_DATA_DIR` or a portable install is used as it is.
+fn default_data_dir() -> Option<std::path::PathBuf> {
+    let dir = mortiflix_engine::autosave::default_data_dir()?;
+    if !mortiflix_ui::apps() {
+        return Some(dir);
+    }
+    let own = match dir.file_name().and_then(|n| n.to_str()) {
+        Some("mortiflix-studio") => "mortifex",
+        Some("Mortiflix Studio") => "Mortifex",
+        _ => return Some(dir),
+    };
+    Some(dir.with_file_name(own))
+}
+
 /// Print `text` (stdout, or stderr for an error). A Windows release build has no console
 /// (`windows_subsystem = "windows"`), so there it is also shown in a message box: otherwise `--help`
 /// would print nothing and a bad option would quit without a word.
@@ -73,7 +89,7 @@ fn tell(text: &str, error: bool) {
     #[cfg(all(target_os = "windows", not(debug_assertions)))]
     {
         let level = if error { rfd::MessageLevel::Error } else { rfd::MessageLevel::Info };
-        let _ = rfd::MessageDialog::new().set_level(level).set_title("Mortiflix Studio").set_description(text).show();
+        let _ = rfd::MessageDialog::new().set_level(level).set_title(mortiflix_ui::app_name()).set_description(text).show();
     }
 }
 
@@ -99,7 +115,7 @@ fn main() -> eframe::Result {
     };
     let data_root = launch.data_dir.clone().or_else(default_data_dir);
     let log_dir = data_root.as_ref().map(|d| d.join(logging::LOG_DIR));
-    log::info!("Mortiflix Studio {} ({} {})", env!("CARGO_PKG_VERSION"), std::env::consts::OS, std::env::consts::ARCH);
+    log::info!("{} {} ({} {})", mortiflix_ui::app_name(), env!("CARGO_PKG_VERSION"), std::env::consts::OS, std::env::consts::ARCH);
     // The log file lives next to the crash logs; opened after the arguments, so `--help`,
     // `--version` and usage errors leave no file behind. Records logged until now go in first.
     if let Some(logger) = logger {
@@ -136,7 +152,7 @@ fn main() -> eframe::Result {
         // Before eframe creates the wgpu instance (e.g. no OpenGL on Windows, see graphics.rs).
         graphics::apply(&mut options, graphics.mode(), backend_override);
         let app_created = Arc::new(AtomicBool::new(false));
-        let result = eframe::run_native("Mortiflix Studio", options, app_creator(launch.clone(), graphics.clone(), Arc::clone(&app_created)));
+        let result = eframe::run_native(mortiflix_ui::app_name(), options, app_creator(launch.clone(), graphics.clone(), Arc::clone(&app_created)));
         let app_created = app_created.load(Ordering::Relaxed);
         match &result {
             // wgpu reported the failure (no adapter, device creation failed) before the app
@@ -156,10 +172,10 @@ fn main() -> eframe::Result {
     // The window could not be created (no usable GPU / graphics driver, no display): say so
     // instead of exiting silently, and keep the reason in the crash log.
     if let Err(e) = &started {
-        let msg = format!("Mortiflix Studio could not start its window: {e}\n\nUpdating the graphics driver usually fixes this.");
+        let msg = format!("{} could not start its window: {e}\n\nUpdating the graphics driver usually fixes this.", mortiflix_ui::app_name());
         log::error!("{msg}");
         mortiflix_ui_egui::crash::record(&msg);
-        let _ = rfd::MessageDialog::new().set_title("Mortiflix Studio").set_description(&msg).set_level(rfd::MessageLevel::Error).show();
+        let _ = rfd::MessageDialog::new().set_title(mortiflix_ui::app_name()).set_description(&msg).set_level(rfd::MessageLevel::Error).show();
     }
     started
 }
@@ -168,7 +184,7 @@ fn main() -> eframe::Result {
 fn native_options(agent: bool) -> eframe::NativeOptions {
     eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_title("Mortiflix Studio")
+            .with_title(mortiflix_ui::app_name())
             .with_inner_size([1600.0, 980.0])
             .with_min_inner_size([900.0, 560.0])
             .with_drag_and_drop(true)

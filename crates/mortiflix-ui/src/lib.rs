@@ -93,6 +93,20 @@ pub fn apps() -> bool {
     product() == Product::Apps
 }
 
+/// The app's name on screen: the app studio is Mortifex (owner, 2026-10-21).
+pub fn app_name() -> &'static str {
+    if apps() { "Mortifex" } else { "Mortiflix Studio" }
+}
+
+/// `text` with the app studio's name in place of Mortiflix's; unchanged in the video studio. Mortiflix's own
+/// community links (the Discord) keep their name and don't go through this.
+pub fn branded(text: &str) -> std::borrow::Cow<'_, str> {
+    if !apps() || !text.contains("Mortiflix") {
+        return std::borrow::Cow::Borrowed(text);
+    }
+    std::borrow::Cow::Owned(text.replace("Mortiflix Studio", "Mortifex").replace("Mortiflix", "Mortifex"))
+}
+
 /// The stages of this studio: (name shown, command key). Index = `MfxState::stage`.
 pub fn stages() -> &'static [(&'static str, &'static str)] {
     if apps() { &APP_STAGES } else { &STAGES }

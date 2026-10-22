@@ -1005,9 +1005,9 @@ fn state_label(ui: &mut egui::Ui, theme: &MfxTheme, ok: Option<bool>, text: &str
 }
 
 fn heading(ui: &mut egui::Ui, theme: &MfxTheme, title: &str, lead: &str) {
-    ui.label(RichText::new(title).size(18.0).strong().color(theme.text));
+    ui.label(RichText::new(crate::branded(title)).size(18.0).strong().color(theme.text));
     ui.add_space(4.0);
-    ui.label(RichText::new(lead).color(theme.text_dim));
+    ui.label(RichText::new(crate::branded(lead)).color(theme.text_dim));
     ui.add_space(ROW_GAP);
 }
 
@@ -1015,7 +1015,7 @@ fn heading(ui: &mut egui::Ui, theme: &MfxTheme, title: &str, lead: &str) {
 fn field_label(ui: &mut egui::Ui, theme: &MfxTheme, text: &str) {
     ui.allocate_ui_with_layout(egui::vec2(LABEL_W, CONTROL_H), egui::Layout::left_to_right(egui::Align::Center), |ui| {
         ui.set_min_size(egui::vec2(LABEL_W, CONTROL_H));
-        ui.add(egui::Label::new(RichText::new(text).color(theme.text_dim)).truncate());
+        ui.add(egui::Label::new(RichText::new(crate::branded(text)).color(theme.text_dim)).truncate());
     });
 }
 
@@ -1053,7 +1053,7 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
 fn draw(m: &mut Model, ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     let theme = ctx.theme;
     if m.first_run {
-        ui.label(RichText::new("Welcome to Mortiflix Studio").size(22.0).strong().color(theme.text));
+        ui.label(RichText::new(crate::branded("Welcome to Mortiflix Studio")).size(22.0).strong().color(theme.text));
         ui.add_space(4.0);
         ui.label(
             RichText::new("Three quick steps to let the AI make videos with you. Skip any of them: Mortiflix Studio's editing works without all of this.")
@@ -1126,11 +1126,11 @@ fn draw(m: &mut Model, ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     ui.separator();
     ui.horizontal(|ui| {
         ui.label(
-            RichText::new(match (m.note.is_empty(), m.first_run) {
+            RichText::new(crate::branded(match (m.note.is_empty(), m.first_run) {
                 (false, _) => m.note.as_str(),
                 (true, true) => "Change any of this later: Edit › Preferences › Mortiflix…",
                 (true, false) => "Changes are saved as you make them.",
-            })
+            }))
             .small()
             .color(theme.text_faint),
         );
@@ -1178,7 +1178,7 @@ fn needs_service(m: &mut Model, ui: &mut egui::Ui, ctx: &mut MfxCtx, what: &str)
         return false;
     }
     ui.horizontal_wrapped(|ui| {
-        ui.label(RichText::new(format!("{what} needs the Mortiflix service, which isn't running.")).color(ctx.theme.warn));
+        ui.label(RichText::new(crate::branded(&format!("{what} needs the Mortiflix service, which isn't running.")).into_owned()).color(ctx.theme.warn));
         let go = ui.link("Set it up in Tools");
         if go.clicked() {
             m.page = Page::Tools;
@@ -1272,7 +1272,10 @@ fn claude_page(m: &mut Model, ui: &mut egui::Ui, ctx: &mut MfxCtx) {
         ui.add_space(ROW_GAP);
         ui.label(RichText::new("Test the chat").strong().color(theme.text));
         ui.add_space(4.0);
-        ui.label(RichText::new("Sends one short message through the Mortiflix service to your Claude Code, the way the chat will.").color(theme.text_dim));
+        ui.label(
+            RichText::new(crate::branded("Sends one short message through the Mortiflix service to your Claude Code, the way the chat will."))
+                .color(theme.text_dim),
+        );
         ui.add_space(8.0);
         if !needs_service(m, ui, ctx, "The test message") {
             let job = m.row_job("test").cloned();
@@ -1513,7 +1516,12 @@ fn narration_page(m: &mut Model, ui: &mut egui::Ui, ctx: &mut MfxCtx) {
 pub fn window_title(egui_ctx: &egui::Context) -> &'static str {
     let shared = model(egui_ctx);
     let m = shared.lock().unwrap_or_else(PoisonError::into_inner);
-    if m.first_run { "Mortiflix Setup" } else { "Mortiflix Settings" }
+    match (m.first_run, crate::apps()) {
+        (true, false) => "Mortiflix Setup",
+        (false, false) => "Mortiflix Settings",
+        (true, true) => "Mortifex Setup",
+        (false, true) => "Mortifex Settings",
+    }
 }
 
 fn tools_page(m: &mut Model, ui: &mut egui::Ui, ctx: &mut MfxCtx) {

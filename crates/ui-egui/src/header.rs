@@ -74,7 +74,9 @@ pub fn show(app: &mut StudioApp, ui: &mut egui::Ui, rect: Rect) {
     }
     // Document title, centred
     // A Mortiflix project open: "<its title> – Mortiflix Studio" (the unsaved mark kept)
-    let name = crate::mortiflix::doc_title(app).unwrap_or_else(|| app.session.project.name.clone());
+    // the app studio edits no video, so its own name stands in for the editor's project name
+    let name = crate::mortiflix::doc_title(app)
+        .unwrap_or_else(|| if mortiflix_ui::apps() { mortiflix_ui::app_name().to_string() } else { app.session.project.name.clone() });
     let title = if app.session.is_dirty() { tlf!("{name} - Edited", name = name) } else { name };
     // Right cluster: icons at ~38 pt pitch, then workspace name in caps.
     let mut rx = rect.max.x - 14.0;

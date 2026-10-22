@@ -196,9 +196,9 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
     region(ui, composer_r, |ui| composer(ui, ctx, &mut st, info.as_ref(), &msgs, now));
     region(ui, hint_r, |ui| {
         let text = if offline || !ctx.service.status().is_connected() {
-            "Enter sends · messages wait until Mortiflix is back"
+            crate::branded("Enter sends · messages wait until Mortiflix is back")
         } else {
-            "Enter sends · Shift+Enter new line · drop files here to attach them"
+            "Enter sends · Shift+Enter new line · drop files here to attach them".into()
         };
         ui.painter().text(
             pos2(ui.max_rect().min.x + 2.0, ui.max_rect().center().y),
@@ -791,14 +791,14 @@ fn thread(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, msgs: &[Msg], vi
             if let Pending::Send { text, .. } = q {
                 you_bubble(ui, ctx, text, &[]);
                 ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
-                    ui.label(RichText::new("Sends when Mortiflix is back").size(11.0).color(t.text_faint));
+                    ui.label(RichText::new(crate::branded("Sends when Mortiflix is back")).size(11.0).color(t.text_faint));
                 });
             }
         }
         if st.typing || st.awaiting.is_some() {
             ui.horizontal(|ui| {
                 let dots = ".".repeat(1 + ((now * 2.0) as usize % 3));
-                ui.label(RichText::new(format!("Mortiflix is replying{dots}")).size(12.0).color(t.text_faint));
+                ui.label(RichText::new(format!("{} is replying{dots}", crate::branded("Mortiflix"))).size(12.0).color(t.text_faint));
             });
             ui.ctx().request_repaint_after(std::time::Duration::from_millis(500));
         }
@@ -853,7 +853,7 @@ fn empty_state(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, now: f64) {
                 }
             }
             ui.label(RichText::new(if st.projects.is_empty() { "No project yet." } else { "No project open." }).size(14.0).color(t.text));
-            ui.label(RichText::new("Start one and Mortiflix writes the script first.").size(12.0).color(t.text_dim));
+            ui.label(RichText::new(crate::branded("Start one and Mortiflix writes the script first.")).size(12.0).color(t.text_dim));
             ui.add_space(8.0);
             let b = small_button(ui, ctx, "mfx.chat.newProject", "New project…", true);
             if b.clicked() {
@@ -890,7 +890,7 @@ fn empty_state(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, now: f64) {
 fn node_intro(ui: &mut egui::Ui, ctx: &mut MfxCtx, id: &str) {
     let t = ctx.theme;
     let n = model::node(&ctx.state.graph, id);
-    ui.label(RichText::new(format!("Mortiflix · {}", n.name)).size(11.0).color(t.text_faint));
+    ui.label(RichText::new(format!("{} · {}", crate::branded("Mortiflix"), n.name)).size(11.0).color(t.text_faint));
     let beat = n.beat.as_deref().filter(|_| n.kind != "beat").map(|b| model::node(&ctx.state.graph, b));
     let mut parts: Vec<String> = Vec::new();
     if n.kind == "beat" {
@@ -1057,7 +1057,7 @@ fn message_body(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, i: usize, 
                 (Some(_), _) => "Mortiflix · question",
                 _ => "Mortiflix",
             };
-            ui.label(RichText::new(who).size(11.0).color(t.text_faint));
+            ui.label(RichText::new(crate::branded(who)).size(11.0).color(t.text_faint));
             if !m.text.is_empty() {
                 ui.scope(|ui| {
                     ui.set_max_width(ui.available_width().min(460.0));
