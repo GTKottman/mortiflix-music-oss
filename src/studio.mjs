@@ -39,7 +39,7 @@ export const DEFAULT_CONFIG = {
 
 export function studioRoot(explicit) {
   // the app studio keeps its own folder, so app projects and videos never mix (src/product.mjs)
-  return resolve(explicit || process.env.MORTIFLIX_STUDIO || join(homedir(), process.env.MFX_PRODUCT === 'apps' ? 'MortiflixApps' : 'Mortiflix'));
+  return resolve(explicit || process.env.MORTIFLIX_STUDIO || join(homedir(), process.env.MFX_PRODUCT === 'apps' ? 'Mortifex' : 'Mortiflix'));
 }
 
 export function paths(root) {
