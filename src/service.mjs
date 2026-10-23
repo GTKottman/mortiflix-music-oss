@@ -392,7 +392,7 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
           out = stageDone(root, id, from);
           // Leaving Music: the app builds the edit (Edit the video) or renders straight away (Get the video).
           if (from === STAGE_MUSIC && stage >= STAGE_EDIT) out.handover = handOverToApp(root, id, stage === STAGE_RENDER ? 'get' : 'edit');
-          chatRow(id, { role: 'action', text: `Next: ${STAGE_NAMES[stage]} (${STAGE_NAMES[from]} kept as it is)` });
+          chatRow(id, { role: 'action', text: from === stage && from === STAGES.length - 1 ? `Finished: ${STAGE_NAMES[from]} approved.` : `Next: ${STAGE_NAMES[stage]} (${STAGE_NAMES[from]} kept as it is)` });
         } else state.stages[from] = { kind: 'done' };
       }
       if (id && stage !== state.stage) chatRow(id, { role: 'stage', text: STAGE_NAMES[stage], stage });
