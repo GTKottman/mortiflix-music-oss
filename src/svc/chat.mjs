@@ -12,7 +12,7 @@ import { loadConfig, paths } from '../studio.mjs';
 import { canvasView, nodeAction, readBeats } from '../canvas.mjs';
 import { beatNames } from './beatnames.mjs';
 import { submissions, answerQuestion, respond, stepView } from '../gates.mjs';
-import { APPS } from '../product.mjs';
+import { APPS, MIDI } from '../product.mjs';
 import { PARENT_SESSION_VARS, leanArgs } from '../backends/claude-code.mjs';
 import { credentials, DEFAULT_MODEL } from '../backends/anthropic-api.mjs';
 import { stageOf, STAGE_NAMES } from './stages.mjs';
@@ -106,7 +106,7 @@ export function translateEvents(root, id) {
     switch (e.event) {
       case 'STARTED':
         say({ role: 'stage', text: STAGE_NAMES[0], stage: 0 });
-        say({ role: 'ai', text: APPS ? `Starting "${project.title}". First, four questions about your app.` : `Starting "${project.title}" (${pipeline.name}). I'll go ahead with sensible defaults; change anything at any time.` });
+        say({ role: 'ai', text: APPS ? `Starting "${project.title}". First, four questions about your app.` : MIDI ? `Starting "${project.title}". The stages come one version at a time: nothing is made yet.` : `Starting "${project.title}" (${pipeline.name}). I'll go ahead with sensible defaults; change anything at any time.` });
         break;
       case 'SUBMITTED': {
         if (!step) break;
@@ -178,7 +178,7 @@ export const actionText = (action, label, text) => `${ACTIONS[action] || action}
 // The "talking about" target in words for the quick reply's brief.
 export function contextWords(context) {
   const c = String(context || 'video');
-  if (c === 'video') return APPS ? 'the whole app' : 'the whole video';
+  if (c === 'video') return APPS ? 'the whole app' : MIDI ? 'the whole song' : 'the whole video';
   if (c.startsWith('cut:')) { const [, a, b] = c.split(':'); return `the cut between ${a.toUpperCase()} and ${b.toUpperCase()} (no transition picked yet)`; }
   if (c.startsWith('stage:')) return `the ${c.slice(6)} stage`;
   return c;
@@ -187,7 +187,7 @@ export function contextWords(context) {
 // The context the quick reply gets: short, from the graph and the project, never file contents.
 function briefFor(root, id, context) {
   const project = loadProject(root, id);
-  if (APPS) return appBriefFor(root, id, project, context);
+  if (APPS || MIDI) return appBriefFor(root, id, project, context);
   let g = { order: { beats: [], shots: [] }, nodes: {} };
   try { g = canvasView(root, id); } catch { /* nothing yet */ }
   const beats = g.order.beats.map((b, i) => `${i + 1}. ${b}: ${String(g.nodes[b].title || '').slice(0, 160)}`).join('\n');
@@ -204,10 +204,12 @@ function appBriefFor(root, id, project, context) {
   const brief = existsSync(f) ? readFileSync(f, 'utf8').slice(0, 6000) : '(not written yet)';
   const open = project.questions.filter((q) => !q.answered_at).map((q) => `${q.id}: ${q.text}${q.default ? ` (suggested: ${q.default})` : ''}`).join('\n');
   const recent = chatHistory(root, id, { limit: 12 }).map((r) => `${r.role}: ${r.text.slice(0, 300)}`).join('\n');
-  return `App project "${project.title}", state ${project.state}.\nSteps:\n${steps}\nThe brief:\n${brief}\nOpen questions:\n${open || '(none)'}\nTalking about: ${contextWords(context)}\nRecent chat:\n${recent}`;
+  return `${MIDI ? 'Song' : 'App'} project "${project.title}", state ${project.state}.\nSteps:\n${steps}\nThe brief:\n${brief}\nOpen questions:\n${open || '(none)'}\nTalking about: ${contextWords(context)}\nRecent chat:\n${recent}`;
 }
 
 const APP_SYSTEM = `You are the Mortifex assistant inside an app-making studio: the owner plans an app stage by stage, and the AI builds it last. The owner typed a message about their app. Reply in one or two short plain sentences, in plain words with no jargon. If the message asks for a change to the brief while it waits for the owner (step idea in_review), also pick the change move. If it answers an open question, pick the answer move. Never post or publish anything. Answer ONLY with JSON: {"reply": "...", "move": null | {"kind": "change", "text": "<what to change in the brief>"} | {"kind": "answer", "question": "<q id>", "value": "<answer>"}}.`;
+
+const MIDI_SYSTEM = `You are the assistant inside a MIDI studio: the owner makes a song stage by stage (Idea, Genre, Song map, Chords, Shapes, Melody, Arrange, Feel, Export), and the studio hands over MIDI files at the end. The owner typed a message about their song. Reply in one or two short plain sentences, in plain words. If it answers an open question, pick the answer move. Never post or publish anything. Answer ONLY with JSON: {"reply": "...", "move": null | {"kind": "answer", "question": "<q id>", "value": "<answer>"}}.`;
 
 const SYSTEM = `You are the Mortiflix assistant inside a video app. The owner typed a message about their video. Reply in one or two short plain sentences. If the message asks for a change to one piece, also pick a move. Never post or publish anything. Answer ONLY with JSON: {"reply": "...", "move": null | {"kind": "fix", "node": "<id>", "text": "<what to change>"} | {"kind": "answer", "question": "<q id>", "value": "<answer>"}}. Use node ids exactly as listed (b01, s03, t02, m01, sf01, line ids).`;
 
@@ -235,10 +237,10 @@ export async function quickReply(root, id, { text, context }) {
     if (!key) throw new Error('no Anthropic API key: link Claude Code in Setup, or add a key');
     const { default: Anthropic } = await import('@anthropic-ai/sdk');
     const client = new Anthropic({ apiKey: key, maxRetries: 2 });
-    const r = await client.messages.create({ model: config.chatModel || config.model || DEFAULT_MODEL, max_tokens: 600, system: APPS ? APP_SYSTEM : SYSTEM, messages: [{ role: 'user', content: prompt }] });
+    const r = await client.messages.create({ model: config.chatModel || config.model || DEFAULT_MODEL, max_tokens: 600, system: APPS ? APP_SYSTEM : MIDI ? MIDI_SYSTEM : SYSTEM, messages: [{ role: 'user', content: prompt }] });
     return parseReply(r.content.filter((b) => b.type === 'text').map((b) => b.text).join(''));
   }
-  const out = await runClaude(config, ['-p', `${APPS ? APP_SYSTEM : SYSTEM}\n\n${prompt}`, '--output-format', 'json', '--tools', '', '--no-session-persistence', ...(config.chatModel || config.model ? ['--model', config.chatModel || config.model] : [])], quickDir(root, config, id));
+  const out = await runClaude(config, ['-p', `${APPS ? APP_SYSTEM : MIDI ? MIDI_SYSTEM : SYSTEM}\n\n${prompt}`, '--output-format', 'json', '--tools', '', '--no-session-persistence', ...(config.chatModel || config.model ? ['--model', config.chatModel || config.model] : [])], quickDir(root, config, id));
   let j;
   try { j = JSON.parse(out); } catch { throw new Error('Claude Code answered something that is not JSON'); }
   if (j.is_error) throw new Error(String(j.result || j.error || 'Claude Code failed').slice(0, 300));

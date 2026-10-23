@@ -6,18 +6,19 @@
 import { loadProject, projectPipeline, update, event, now } from '../projects.mjs';
 import { stepView, respond, answerQuestion, reopen, GateError } from '../gates.mjs';
 import { canvasView, loadOwner, nodeAction } from '../canvas.mjs';
-import { APPS, VIDEO_STAGES, VIDEO_STAGE_NAMES, APP_STAGES, APP_STAGE_NAMES } from '../product.mjs';
+import { APPS, MIDI, STAGED, VIDEO_STAGES, VIDEO_STAGE_NAMES, APP_STAGES, APP_STAGE_NAMES, MIDI_STAGES, MIDI_STAGE_NAMES } from '../product.mjs';
 
-// The app studio has its own ten stages (src/product.mjs) and none of the video's Music, Edit or Render.
-export const STAGES = APPS ? APP_STAGES : VIDEO_STAGES;
-export const STAGE_NAMES = APPS ? APP_STAGE_NAMES : VIDEO_STAGE_NAMES;
+// The app studio has its own ten stages and the MIDI studio its own nine (src/product.mjs), and neither has the video's
+// Music, Edit or Render.
+export const STAGES = APPS ? APP_STAGES : MIDI ? MIDI_STAGES : VIDEO_STAGES;
+export const STAGE_NAMES = APPS ? APP_STAGE_NAMES : MIDI ? MIDI_STAGE_NAMES : VIDEO_STAGE_NAMES;
 // The six stages before 2026-10-18 (script, look, shots, voiceMusic, edit, render) → the eight: a project saved then
 // opens on the same work.
 export const OLD_STAGE = [0, 2, 4, 5, 6, 7];
 const OLD_DONE = { look: ['styleFrames'], shots: ['transitions', 'animatic'], voiceMusic: ['voice', 'music'] };
-export const STAGE_EDIT = APPS ? -1 : 6;
-export const STAGE_RENDER = APPS ? -1 : 7;
-export const STAGE_MUSIC = APPS ? -1 : 5;
+export const STAGE_EDIT = STAGED ? -1 : 6;
+export const STAGE_RENDER = STAGED ? -1 : 7;
+export const STAGE_MUSIC = STAGED ? -1 : 5;
 const DONE = ['approved', 'done', 'skipped'];
 
 const BY_KEY = {
@@ -33,13 +34,13 @@ const BY_KEY = {
 // The canvas pieces each stage shows (doc 35): the node kinds counted for its "made / total" (shots only on stage 3:
 // the transition board never inflates the shot count, owner's first run "0/8" → "3/11"), and the kinds whose pieces
 // can wait for the owner there.
-const KINDS = APPS ? STAGES.map(() => []) : [['beat'], ['line'], ['frame'], ['transition'], ['shot'], ['cue'], [], []];
+const KINDS = STAGED ? STAGES.map(() => []) : [['beat'], ['line'], ['frame'], ['transition'], ['shot'], ['cue'], [], []];
 const REVIEW_KINDS = KINDS;
-const NOUN = APPS ? STAGES.map(() => '') : ['scenes', 'voice lines', 'style frames', 'transitions', 'shots', 'cues', '', ''];
+const NOUN = STAGED ? STAGES.map(() => '') : ['scenes', 'voice lines', 'style frames', 'transitions', 'shots', 'cues', '', ''];
 
 export function stageOf(step) {
   if (step.stage && STAGES.includes(step.stage)) return STAGES.indexOf(step.stage);
-  if (APPS) return 0;
+  if (STAGED) return 0;
   if (BY_KEY[step.key] !== undefined) return BY_KEY[step.key];
   if (step.delivers) return STAGE_RENDER;
   if (step.canvas === 'line') return 1;
@@ -58,7 +59,7 @@ export const stageIndex = (v) => (Number.isInteger(v) && v >= 0 && v < STAGES.le
 export function upgradeMfx(mfx) {
   if (!mfx || mfx.stages === STAGES.length) return false;
   // app projects never had the six video stages
-  if (APPS) { mfx.stages = STAGES.length; return true; }
+  if (STAGED) { mfx.stages = STAGES.length; return true; }
   if (Number.isInteger(mfx.stage)) mfx.stage = OLD_STAGE[mfx.stage] ?? 0;
   const done = {};
   for (const [k, at] of Object.entries(mfx.stages_done || {})) for (const n of OLD_DONE[k] || [k]) done[n] = at;

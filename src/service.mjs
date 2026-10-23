@@ -10,7 +10,7 @@
 import { readFileSync } from 'node:fs';
 import { join, isAbsolute } from 'node:path';
 import { REPO, studioRoot, ensureStudio, loadConfig, paths, UserError } from './studio.mjs';
-import { APPS, PRODUCT } from './product.mjs';
+import { APPS, MIDI, PRODUCT } from './product.mjs';
 import { createProject, loadProject, projectPaths, listProjects, startProject, readEvents, projectPipeline, update as updateProject, event as projectEvent } from './projects.mjs';
 import { Runner } from './runner.mjs';
 import { findPipeline } from './pipelines.mjs';
@@ -692,7 +692,7 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
       const id = projectId() || p?.project;
       if (!id) {
         emit('chat.message', { role: 'user', text, at: new Date().toISOString() });
-        emit('chat.message', { role: 'system', text: `Open or make a project first: the chat talks about one ${APPS ? 'app' : 'video'}.`, at: new Date().toISOString() });
+        emit('chat.message', { role: 'system', text: `Open or make a project first: the chat talks about one ${APPS ? 'app' : MIDI ? 'song' : 'video'}.`, at: new Date().toISOString() });
         return { queued: true };
       }
       const context = p?.context === undefined ? state.context : contextOf(p.context);
