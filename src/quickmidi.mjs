@@ -5,7 +5,7 @@
 // Export are code only (no tokens). Every call's tokens are added to the project's usage; a song stops at its budget.
 import { runAs } from './models.mjs';
 import { execFile } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync, appendFileSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, appendFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { paths } from './studio.mjs';
 import { loadProject, projectPaths, projectPipeline } from './projects.mjs';
@@ -45,7 +45,7 @@ export function quickMidiStep(root, id) {
 
 function ownerWords(root, id) {
   const project = loadProject(root, id);
-  const parts = [`## The owner's idea (the new-project form)\n${JSON.stringify(project.intake?.answers || {}, null, 1)}`];
+  const parts = [`## The song's title (the owner's: keep it exactly)\n${project.title}`, `## The owner's idea (the new-project form)\n${JSON.stringify(project.intake?.answers || {}, null, 1)}`];
   const chat = chatHistory(root, id, { limit: 500 }).filter((r) => ['user', 'action'].includes(r.role) && !r.edit).slice(-30);
   if (chat.length) parts.push(`## The owner's words in the chat (newest last; they win over the form)\n${chat.map((r) => `- ${r.text}`).join('\n')}`);
   const subs = submissions(root, id);
@@ -92,7 +92,7 @@ const QSCHEMA = { type: 'object', required: MIDI_QUESTIONS.map((q) => q.id), pro
 const BRIEF = {
   type: 'object', required: ['title', 'summary', 'purpose', 'genre', 'feel', 'length_sec', 'like', 'must', 'never', 'note'],
   properties: {
-    title: { type: 'string', description: 'the song\'s title: the owner\'s, or a working title' }, summary: { type: 'string', description: 'one sentence: what the song is' },
+    title: { type: 'string', description: 'the song\'s title exactly as the owner named it' }, summary: { type: 'string', description: 'one sentence: what the song is' },
     purpose: { type: 'string' }, genre: { type: 'string', description: 'the genre in a few words' }, feel: { type: 'string' },
     length_sec: { type: 'integer', minimum: 30, maximum: 600 }, like: { type: 'string', description: 'songs or artists it should sound like (never copy them)' },
     must: { type: 'array', items: { type: 'string' }, description: 'what the song must have' }, never: { type: 'array', items: { type: 'string' }, description: 'what it must never do' },
@@ -261,6 +261,7 @@ async function stepBrief(ctx) {
   const r = await ask(ctx, 'brief', [`You write the one-page brief for a song the owner is making in a MIDI studio. Every later stage (genre, song map, chords, shapes, melody) is planned from it. Plain words. Never copy a real song; "sounds like" means the feel. Answer with the JSON asked for, nothing else.`, ...ownerWords(root, id), ...changesAsked(root, id, view, join(d, 'brief.md'))].join('\n\n'), BRIEF);
   const s = r.ok ? r.structured : null;
   if (!s?.summary) return { ...r, ok: false, error: r.error || 'the brief call gave no brief' };
+  s.title = loadProject(root, id).title;
   writeFileSync(join(d, 'brief.json'), JSON.stringify(s, null, 1));
   const md = `# ${s.title} · Brief v${version}\n\n${s.summary}\n\n## What it's for\n\n${s.purpose}\n\n## Genre\n\n${s.genre}\n\n## The feel\n\n${s.feel}\n\n## Length\n\nAbout ${Math.round(s.length_sec / 60 * 10) / 10} minutes (${s.length_sec} s)\n\n## Sounds like\n\n${s.like}\n\n## It must\n\n${list(s.must)}\n\n## It must never\n\n${list(s.never)}\n`;
   submitDoc(root, id, 'idea', { file: writeDoc(root, id, 'brief.md', md), label: `Brief v${version}`, note: s.note || 'The brief.' });
@@ -319,6 +320,7 @@ async function stepSongMap(ctx) {
     if (f.ok && f.structured?.answer?.sections) { m = f.structured.answer; problems = mapProblems(m, { genre, brief, recent }); }
   }
   if (!m?.sections) return { ...r, ok: false, error: r.error || 'the song map call gave no map' };
+  m.title = loadProject(root, id).title;
   writeFileSync(join(d, 'songmap.json'), JSON.stringify(m, null, 1));
   const bars = m.sections.reduce((a, s) => a + s.bars, 0);
   const sec = Math.round(bars * (m.meter === '3/4' ? 3 : 4) * 60 / m.bpm);
@@ -605,7 +607,7 @@ async function stepExport(ctx) {
     if (r1.code) problems.push(`the preview didn't render: ${r1.out}`);
     else {
       const r2 = await sh('ffmpeg', ['-y', '-loglevel', 'error', '-i', wav, '-af', 'loudnorm=I=-14:TP=-1.5:LRA=11', '-ar', '44100', '-b:a', '256k', join(out, `${name}-preview.mp3`)]);
-      if (r2.code) problems.push(`the preview MP3 failed: ${r2.out}`); else preview = `midi/out/${name}-preview.mp3`;
+      if (r2.code) problems.push(`the preview MP3 failed: ${r2.out}`); else { preview = `midi/out/${name}-preview.mp3`; rmSync(wav, { force: true }); }
     }
   } else problems.push('no General MIDI soundfont for the preview');
   const recent = readJson(recentFile(root), []);
