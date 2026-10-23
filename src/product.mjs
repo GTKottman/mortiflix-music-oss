@@ -21,8 +21,8 @@ export const APP_READY = ['questions', 'idea'];
 export const MIDI_STAGES = ['idea', 'genre', 'songMap', 'chords', 'shapes', 'melody', 'arrange', 'feel', 'export'];
 export const MIDI_STAGE_NAMES = ['Idea', 'Genre', 'Song map', 'Chords', 'Shapes', 'Melody', 'Arrange', 'Feel', 'Export'];
 
-// The MIDI steps the studio can do so far: none in v1 (one stage per version).
-export const MIDI_READY = [];
+// The MIDI steps the studio can do (src/quickmidi.mjs): every stage since v2 (owner, 2026-10-23: "try 5 songs").
+export const MIDI_READY = ['questions', 'idea', 'genre', 'song-map', 'chords', 'shapes', 'melody', 'arrange', 'feel', 'export'];
 
 // The steps that may run in this studio's projects; the video studio runs them all.
 export const READY = APPS ? APP_READY : MIDI ? MIDI_READY : null;

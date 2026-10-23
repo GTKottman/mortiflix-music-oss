@@ -4,27 +4,116 @@
   "description": "A whole song as MIDI, made stage by stage: idea, genre, song map, chords, shapes, melody, arrange, feel and export. Each stage is OK'd before the next one starts.",
   "makes": "midi",
   "intake": [
-    { "id": "idea", "label": "What should your song be?", "type": "long", "required": true, "help": "What it's for, the feel, and a song it should sound like, in your own words." }
+    {
+      "id": "idea",
+      "label": "What should your song be?",
+      "type": "long",
+      "required": true,
+      "help": "What it's for, the feel, and a song it should sound like, in your own words."
+    }
   ],
   "steps": [
-    { "key": "idea", "name": "Brief", "stage": "idea", "review": "document", "work": ["plan"],
-      "describe": "The chat asks what the song is for, the feel, how long, and a song it should sound like; then a one-page brief." },
-    { "key": "genre", "name": "Genre", "stage": "genre", "review": "document", "work": ["plan"],
-      "describe": "A genre profile from sources: tempo range, keys, drum patterns, instruments, song form, signature moves." },
-    { "key": "song-map", "name": "Song map", "stage": "songMap", "review": "document", "work": ["plan"],
-      "describe": "The sections in order with their bars and energy, plus tempo, key, meter and the list of parts." },
-    { "key": "chords", "name": "Chords", "stage": "chords", "review": "document", "work": ["plan"],
-      "describe": "The chord progression per section, played on piano." },
-    { "key": "shapes", "name": "Shapes", "stage": "shapes", "review": "document", "work": ["plan"],
-      "describe": "Short shapes per part over the chords. Love, Like or Skip: loved shapes repeat most." },
-    { "key": "melody", "name": "Melody", "stage": "melody", "review": "document", "work": ["plan"],
-      "describe": "The lead over the chords, or the vocal melody when there are lyrics." },
-    { "key": "arrange", "name": "Arrange", "stage": "arrange", "review": "document", "work": ["plan"],
-      "describe": "The whole song built a part at a time from the picked shapes. Click bars and type a change: only those bars change." },
-    { "key": "feel", "name": "Feel", "stage": "feel", "review": "document", "work": ["plan"],
-      "describe": "Velocity, timing, swing and fills at section ends, with a before and after." },
-    { "key": "export", "name": "Export", "stage": "export", "review": "document", "work": ["plan"], "delivers": true,
-      "describe": "The song as one .mid, one per part and one per section, plus the steps to import it into the DAW." }
+    {
+      "key": "questions",
+      "name": "Questions",
+      "stage": "idea",
+      "review": "questions",
+      "work": [
+        "plan"
+      ],
+      "describe": "The chat asks what the song is for, the feel, how long, and a song it should sound like, each with a suggested answer from the idea."
+    },
+    {
+      "key": "idea",
+      "name": "Brief",
+      "stage": "idea",
+      "review": "document",
+      "work": [
+        "plan"
+      ],
+      "describe": "A one-page brief from the answers."
+    },
+    {
+      "key": "genre",
+      "name": "Genre",
+      "stage": "genre",
+      "review": "document",
+      "work": [
+        "plan"
+      ],
+      "describe": "A genre profile from sources: tempo range, keys, drum patterns, instruments, song form, signature moves."
+    },
+    {
+      "key": "song-map",
+      "name": "Song map",
+      "stage": "songMap",
+      "review": "document",
+      "work": [
+        "plan"
+      ],
+      "describe": "The sections in order with their bars and energy, plus tempo, key, meter and the list of parts."
+    },
+    {
+      "key": "chords",
+      "name": "Chords",
+      "stage": "chords",
+      "review": "document",
+      "work": [
+        "plan"
+      ],
+      "describe": "The chord progression per section, played on piano."
+    },
+    {
+      "key": "shapes",
+      "name": "Shapes",
+      "stage": "shapes",
+      "review": "document",
+      "work": [
+        "plan"
+      ],
+      "describe": "Short shapes per part over the chords. Love, Like or Skip: loved shapes repeat most."
+    },
+    {
+      "key": "melody",
+      "name": "Melody",
+      "stage": "melody",
+      "review": "document",
+      "work": [
+        "plan"
+      ],
+      "describe": "The lead over the chords, or the vocal melody when there are lyrics."
+    },
+    {
+      "key": "arrange",
+      "name": "Arrange",
+      "stage": "arrange",
+      "review": "document",
+      "work": [
+        "plan"
+      ],
+      "describe": "The whole song built a part at a time from the picked shapes. Click bars and type a change: only those bars change."
+    },
+    {
+      "key": "feel",
+      "name": "Feel",
+      "stage": "feel",
+      "review": "document",
+      "work": [
+        "plan"
+      ],
+      "describe": "Velocity, timing, swing and fills at section ends, with a before and after."
+    },
+    {
+      "key": "export",
+      "name": "Export",
+      "stage": "export",
+      "review": "document",
+      "work": [
+        "plan"
+      ],
+      "delivers": true,
+      "describe": "The song as one .mid, one per part and one per section, plus the steps to import it into the DAW."
+    }
   ],
   "status_lines": {
     "idea": "Writing the brief",
@@ -35,6 +124,7 @@
     "melody": "Writing the melody",
     "arrange": "Arranging the song",
     "feel": "Adding the feel",
-    "export": "Writing the MIDI files"
+    "export": "Writing the MIDI files",
+    "questions": "Reading your idea"
   }
 }

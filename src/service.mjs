@@ -15,6 +15,7 @@ import { createProject, loadProject, projectPaths, listProjects, startProject, r
 import { Runner } from './runner.mjs';
 import { findPipeline } from './pipelines.mjs';
 import { ideaView } from './quickidea.mjs';
+import { midiView } from './quickmidi.mjs';
 import { canvasView, nodeAction, canvasPaths } from './canvas.mjs';
 import { voiceOnOk } from './voiceonok.mjs';
 import { voiceUsage } from './voiceusage.mjs';
@@ -555,6 +556,7 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
     'script.get': (p) => scriptView(root, needProject(p)),
     // The app studio's Idea stage: the brief and where the stage is (src/quickidea.mjs).
     'idea.get': (p) => ideaView(root, needProject(p)),
+    'midi.get': (p) => midiView(root, needProject(p)),
     // The app's unsaved script changes, kept per project (null clears them); script.get hands them back.
     'script.draft': (p) => saveDraft(root, needProject(p), p?.draft),
     // Saves the owner's edits into the script (and the voice lines), then remakes only the pieces that used the

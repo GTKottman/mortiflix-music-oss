@@ -19,7 +19,8 @@ import { quickTransitionsStep, quickTransitions } from './quicktransitions.mjs';
 import { quickAnimaticStep, quickAnimatic } from './quickanimatic.mjs';
 import { quickMusicStep, quickMusic } from './quickmusic.mjs';
 import { quickIdeaStep, quickIdea } from './quickidea.mjs';
-import { APPS, STAGED } from './product.mjs';
+import { quickMidiStep, quickMidi } from './quickmidi.mjs';
+import { APPS, MIDI, STAGED } from './product.mjs';
 import { RenderQueue } from './renderq.mjs';
 import * as claudeCode from './backends/claude-code.mjs';
 import * as anthropicApi from './backends/anthropic-api.mjs';
@@ -216,6 +217,8 @@ export class Runner extends EventEmitter {
       const quick = backendName === 'claude-code';
       // The app studio: only the stages built so far run, each as small calls, never a whole session (src/quickidea.mjs).
       const ideaView = APPS ? quickIdeaStep(root, projectId) : null;
+      // the MIDI studio: every stage as small calls or code (src/quickmidi.mjs)
+      const midiView = MIDI ? quickMidiStep(root, projectId) : null;
       const scriptView = quick ? quickScriptStep(root, projectId, config) : null;
       const briefView = quick && !scriptView ? quickBriefStep(root, projectId, config) : null;
       // The voice is the studio's own work (quickvoice.mjs): no session, an AI call only to re-spell a failing line.
@@ -229,7 +232,7 @@ export class Runner extends EventEmitter {
       // The music, the same way: one call plans it, code writes the notes, the engine checks, the studio mixes it.
       const musicView = quick && !scriptView && !briefView && !voiceView && !framesView && !cutsView && !animaticView ? quickMusicStep(root, projectId, config) : null;
       const q = { root, id: projectId, run: backend.run, runArgs, config, onActivity: runArgs.onActivity, fallback: () => backend.run(runArgs) };
-      result = STAGED ? (ideaView ? await quickIdea({ ...q, view: ideaView }) : { ok: false, error: 'this stage\'s work comes in a later version' })
+      result = STAGED ? (ideaView ? await quickIdea({ ...q, view: ideaView }) : midiView ? await quickMidi({ ...q, view: midiView }) : { ok: false, error: 'this stage\'s work comes in a later version' })
         : scriptView ? await quickScript({ ...q, view: scriptView })
         : briefView ? await quickBrief({ ...q, view: briefView })
           : voiceView ? await quickVoice({ ...q, view: voiceView })

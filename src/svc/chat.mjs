@@ -106,7 +106,7 @@ export function translateEvents(root, id) {
     switch (e.event) {
       case 'STARTED':
         say({ role: 'stage', text: STAGE_NAMES[0], stage: 0 });
-        say({ role: 'ai', text: APPS ? `Starting "${project.title}". First, four questions about your app.` : MIDI ? `Starting "${project.title}". The stages come one version at a time: nothing is made yet.` : `Starting "${project.title}" (${pipeline.name}). I'll go ahead with sensible defaults; change anything at any time.` });
+        say({ role: 'ai', text: APPS ? `Starting "${project.title}". First, four questions about your app.` : MIDI ? `Starting "${project.title}". First, four questions about your song.` : `Starting "${project.title}" (${pipeline.name}). I'll go ahead with sensible defaults; change anything at any time.` });
         break;
       case 'SUBMITTED': {
         if (!step) break;
@@ -117,6 +117,7 @@ export function translateEvents(root, id) {
         // Otherwise they wait: nothing is ticked for the owner, and the next step starts after the last answer.
         if (step.review === 'questions' && card?.kind === 'submission' && card.questions.length) card.waiting = true;
         const text = card?.waiting ? `A few questions first. Pick an answer to each one (the suggested one is marked): the ${(pipeline.steps.find((x) => (x.after || []).includes(step.key))?.name || 'next step').toLowerCase()} starts once they're all answered.`
+          : MIDI && step.review === 'document' ? `${step.name} v${e.version} is ready in the stage panel. Read it, then press Next, or tell me what to change.`
           : APPS && step.key === 'idea' ? `${e.version > 1 ? `Brief v${e.version}` : 'The brief'} is ready in the Idea panel. Read it, then press Next, or tell me what to change.`
           : card?.kind === 'script' ? `${e.version > 1 ? `Script v${e.version}` : 'The script'} is ready in the Mortiflix Script box: ${card.beats.length} scene${card.beats.length === 1 ? '' : 's'}.`
           : card?.kind === 'looks' ? `${card.frames.length} looks from the script: style samples (colours, characters, type), not the shots. I'm using ${card.frames.find((f) => f.id === card.using)?.name || card.frames[0]?.name || 'the first'}; pick another any time.`
@@ -209,7 +210,7 @@ function appBriefFor(root, id, project, context) {
 
 const APP_SYSTEM = `You are the Mortifex assistant inside an app-making studio: the owner plans an app stage by stage, and the AI builds it last. The owner typed a message about their app. Reply in one or two short plain sentences, in plain words with no jargon. If the message asks for a change to the brief while it waits for the owner (step idea in_review), also pick the change move. If it answers an open question, pick the answer move. Never post or publish anything. Answer ONLY with JSON: {"reply": "...", "move": null | {"kind": "change", "text": "<what to change in the brief>"} | {"kind": "answer", "question": "<q id>", "value": "<answer>"}}.`;
 
-const MIDI_SYSTEM = `You are the assistant inside a MIDI studio: the owner makes a song stage by stage (Idea, Genre, Song map, Chords, Shapes, Melody, Arrange, Feel, Export), and the studio hands over MIDI files at the end. The owner typed a message about their song. Reply in one or two short plain sentences, in plain words. If it answers an open question, pick the answer move. Never post or publish anything. Answer ONLY with JSON: {"reply": "...", "move": null | {"kind": "answer", "question": "<q id>", "value": "<answer>"}}.`;
+const MIDI_SYSTEM = `You are the assistant inside a MIDI studio: the owner makes a song stage by stage (Idea, Genre, Song map, Chords, Shapes, Melody, Arrange, Feel, Export), and the studio hands over MIDI files at the end. The owner typed a message about their song. Reply in one or two short plain sentences, in plain words. If the message asks for a change to the stage waiting for the owner (a step in_review), also pick the change move. If it answers an open question, pick the answer move. Never post or publish anything. Answer ONLY with JSON: {"reply": "...", "move": null | {"kind": "change", "text": "<what to change>"} | {"kind": "answer", "question": "<q id>", "value": "<answer>"}}.`;
 
 const SYSTEM = `You are the Mortiflix assistant inside a video app. The owner typed a message about their video. Reply in one or two short plain sentences. If the message asks for a change to one piece, also pick a move. Never post or publish anything. Answer ONLY with JSON: {"reply": "...", "move": null | {"kind": "fix", "node": "<id>", "text": "<what to change>"} | {"kind": "answer", "question": "<q id>", "value": "<answer>"}}. Use node ids exactly as listed (b01, s03, t02, m01, sf01, line ids).`;
 
@@ -306,11 +307,11 @@ export function applyMove(root, id, move) {
     return { kind: 'fix', node: n.id, edit: r.edit.id, row: { role: 'system', text: `Sent as Fix on ${n.label} (${r.edit.id}).`, context: n.id, edit: r.edit.id, refs: [n.id] } };
   }
   // The app studio: a change to the brief waiting for the owner sends it back with their words (src/quickidea.mjs).
-  if (move.kind === 'change' && APPS) {
-    const step = stepView(loadProject(root, id), projectPipeline(root, id)).find((x) => x.key === 'idea' && x.state === 'in_review');
+  if (move.kind === 'change' && (APPS || MIDI)) {
+    const step = stepView(loadProject(root, id), projectPipeline(root, id)).find((x) => (MIDI ? x.review === 'document' : x.key === 'idea') && x.state === 'in_review');
     if (!step || !String(move.text || '').trim()) return null;
-    respond(root, id, 'idea', step.version, { verdict: 'changes', overall: String(move.text).slice(0, 4000) });
-    return { kind: 'change', row: { role: 'system', text: `Sent as a change to the brief: ${String(move.text).slice(0, 200)}` } };
+    respond(root, id, step.key, step.version, { verdict: 'changes', overall: String(move.text).slice(0, 4000) });
+    return { kind: 'change', row: { role: 'system', text: `Sent as a change to ${MIDI ? `the ${step.name.toLowerCase()}` : 'the brief'}: ${String(move.text).slice(0, 200)}` } };
   }
   if (move.kind === 'answer') {
     const q = loadProject(root, id).questions.find((x) => x.id === move.question && !x.answered_at);
