@@ -14,6 +14,7 @@
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable))]
 
 pub mod app_stages;
+pub mod midi_stages;
 pub mod chat;
 pub mod export;
 pub mod gates;
@@ -69,22 +70,48 @@ pub const APP_STAGES: [(&str, &str); 10] = [
     ("Ship", "ship"),
 ];
 
+/// The MIDI studio's nine stages, a song from idea to MIDI files (owner, 2026-10-23; Design Docs/MIDI Studio -
+/// Plan v1.md).
+pub const MIDI_STAGES: [(&str, &str); 9] = [
+    ("Idea", "idea"),
+    ("Genre", "genre"),
+    ("Song map", "songMap"),
+    ("Chords", "chords"),
+    ("Shapes", "shapes"),
+    ("Melody", "melody"),
+    ("Arrange", "arrange"),
+    ("Feel", "feel"),
+    ("Export", "export"),
+];
+
 /// Which studio this binary is (owner, 2026-10-21: "one code, two apps"). `Video` is Mortiflix Studio;
-/// `Apps` walks a full application through [`APP_STAGES`] on the same engine.
+/// `Apps` walks a full application through [`APP_STAGES`] on the same engine; `Midi` walks a song through
+/// [`MIDI_STAGES`] and ends in MIDI files.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Product {
     Video,
     Apps,
+    Midi,
 }
 
-/// `MFX_PRODUCT=apps`, else a binary whose name has "apps" in it, else Video. Decided once per run.
+/// `MFX_PRODUCT=apps` or `midi`, else a binary whose name has "apps" or "midi" in it, else Video. Decided once per run.
 pub fn product() -> Product {
     static PRODUCT: std::sync::OnceLock<Product> = std::sync::OnceLock::new();
     *PRODUCT.get_or_init(|| {
-        let by_env = std::env::var("MFX_PRODUCT").ok().map(|v| v.eq_ignore_ascii_case("apps"));
-        let by_name =
-            || std::env::current_exe().ok().and_then(|p| p.file_stem().map(|s| s.to_string_lossy().to_ascii_lowercase().contains("apps"))).unwrap_or(false);
-        if by_env.unwrap_or_else(by_name) { Product::Apps } else { Product::Video }
+        let pick = |s: &str| {
+            let s = s.to_ascii_lowercase();
+            if s.contains("apps") {
+                Some(Product::Apps)
+            } else if s.contains("midi") {
+                Some(Product::Midi)
+            } else {
+                None
+            }
+        };
+        match std::env::var("MFX_PRODUCT") {
+            Ok(v) => pick(&v).unwrap_or(Product::Video),
+            Err(_) => std::env::current_exe().ok().and_then(|p| p.file_stem().and_then(|s| pick(&s.to_string_lossy()))).unwrap_or(Product::Video),
+        }
     })
 }
 
@@ -93,33 +120,52 @@ pub fn apps() -> bool {
     product() == Product::Apps
 }
 
-/// The app's name on screen: the app studio is Mortifex (owner, 2026-10-21).
-pub fn app_name() -> &'static str {
-    if apps() { "Mortifex" } else { "Mortiflix Studio" }
+/// True in the MIDI studio.
+pub fn midi() -> bool {
+    product() == Product::Midi
 }
 
-/// `text` with the app studio's name in place of Mortiflix's; unchanged in the video studio. Mortiflix's own
+/// True in a studio that walks its own stages (the app studio, the MIDI studio): no video, no editing side.
+pub fn staged() -> bool {
+    product() != Product::Video
+}
+
+/// The app's name on screen: the app studio is Mortifex (owner, 2026-10-21). The MIDI studio's name isn't
+/// picked yet: "MIDI Studio" is the plan's working title.
+pub fn app_name() -> &'static str {
+    match product() {
+        Product::Video => "Mortiflix Studio",
+        Product::Apps => "Mortifex",
+        Product::Midi => "MIDI Studio",
+    }
+}
+
+/// `text` with this studio's name in place of Mortiflix's; unchanged in the video studio. Mortiflix's own
 /// community links (the Discord) keep their name and don't go through this.
 pub fn branded(text: &str) -> std::borrow::Cow<'_, str> {
-    if !apps() || !text.contains("Mortiflix") {
+    if !staged() || !text.contains("Mortiflix") {
         return std::borrow::Cow::Borrowed(text);
     }
-    std::borrow::Cow::Owned(text.replace("Mortiflix Studio", "Mortifex").replace("Mortiflix", "Mortifex"))
+    std::borrow::Cow::Owned(text.replace("Mortiflix Studio", app_name()).replace("Mortiflix", app_name()))
 }
 
 /// The stages of this studio: (name shown, command key). Index = `MfxState::stage`.
 pub fn stages() -> &'static [(&'static str, &'static str)] {
-    if apps() { &APP_STAGES } else { &STAGES }
+    match product() {
+        Product::Video => &STAGES,
+        Product::Apps => &APP_STAGES,
+        Product::Midi => &MIDI_STAGES,
+    }
 }
 
-/// The stage that opens Mortiflix Studio's Edit mode; none in the app studio (`u8::MAX`).
+/// The stage that opens Mortiflix Studio's Edit mode; none in the app or MIDI studio (`u8::MAX`).
 pub fn edit_stage() -> u8 {
-    if apps() { u8::MAX } else { STAGE_EDIT }
+    if staged() { u8::MAX } else { STAGE_EDIT }
 }
 
-/// The stage that opens Mortiflix Studio's Export mode; none in the app studio (`u8::MAX`).
+/// The stage that opens Mortiflix Studio's Export mode; none in the app or MIDI studio (`u8::MAX`).
 pub fn render_stage() -> u8 {
-    if apps() { u8::MAX } else { STAGE_RENDER }
+    if staged() { u8::MAX } else { STAGE_RENDER }
 }
 
 /// Stage index of Voice (the voice per scene, as nodes).
@@ -270,6 +316,10 @@ impl Mortiflix {
             app_stages::tick(&mut self.state, &mut self.service);
             return;
         }
+        // the MIDI studio's stages have no requests yet (v1)
+        if midi() {
+            return;
+        }
         script::tick(&mut self.state, &mut self.service);
         look::tick(&mut self.state, &mut self.service);
         score::tick(&mut self.state, &mut self.service);
@@ -362,7 +412,7 @@ pub fn stage_by_key(key: &str) -> Option<u8> {
 /// PanelKind::MfxStage: the stage's gate on stages 1-6 (Script's own, then [`gates`]), then the
 /// Into Edit and Render parts.
 pub fn show_stage(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
-    if apps() {
+    if staged() {
         return app_stages::show_stage(ui, ctx);
     }
     match ctx.state.stage {
@@ -380,6 +430,10 @@ pub fn show_stage(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
 pub fn show_centre(ui: &mut egui::Ui, ctx: &mut MfxCtx) -> bool {
     if apps() {
         app_stages::show_centre(ui, ctx);
+        return true;
+    }
+    if midi() {
+        midi_stages::show_centre(ui, ctx);
         return true;
     }
     match ctx.state.stage {

@@ -18,18 +18,20 @@ pub fn show(app: &mut StudioApp, ui: &mut egui::Ui, rect: Rect) {
     let recent_w = RECENT_W.min((rect.width() * 0.35).max(220.0));
     let left = Rect::from_min_max(rect.min, pos2((rect.max.x - recent_w - 24.0).max(rect.min.x + 200.0), rect.max.y));
     let right = Rect::from_min_max(pos2(left.max.x + 8.0, rect.min.y), rect.max);
-    if mortiflix_ui::apps() {
+    if mortiflix_ui::staged() {
         recent_apps(app, ui, right);
     } else {
         recent(app, ui, right);
     }
-    let title = if mortiflix_ui::apps() { mortiflix_ui::app_name() } else { tl!("Mortiflix Studio") };
+    let title = if mortiflix_ui::staged() { mortiflix_ui::app_name() } else { tl!("Mortiflix Studio") };
     ui.painter().text(left.min + vec2(24.0, 30.0), Align2::LEFT_CENTER, title, Tokens::semibold(22.0), t.text);
     ui.painter().text(
         left.min + vec2(24.0, 58.0),
         Align2::LEFT_CENTER,
         // the app studio (mortiflix_ui::apps): English only for now
-        if mortiflix_ui::apps() {
+        if mortiflix_ui::midi() {
+            "Make a song from an idea, stage by stage, and take it home as MIDI."
+        } else if mortiflix_ui::staged() {
             "Plan an app from an idea, step by step, then the AI builds it."
         } else {
             tl!("Make a video from an idea, open one you made, or start from a pack.")
@@ -40,17 +42,21 @@ pub fn show(app: &mut StudioApp, ui: &mut egui::Ui, rect: Rect) {
     let ctx = ui.ctx().clone();
     let cards = [
         (
-            if mortiflix_ui::apps() { "New app" } else { tl!("New video") },
+            match mortiflix_ui::product() {
+                mortiflix_ui::Product::Apps => "New app",
+                mortiflix_ui::Product::Midi => "New song",
+                mortiflix_ui::Product::Video => tl!("New video"),
+            },
             "mortiflix.newProject",
             tl!("Start from an idea"),
-            if mortiflix_ui::apps() { crate::icons::Icon::NewItem } else { crate::icons::Icon::Film },
+            if mortiflix_ui::staged() { crate::icons::Icon::NewItem } else { crate::icons::Icon::Film },
         ),
         (tl!("Open project"), "file.open", tl!("Pick a saved .mortiflix"), crate::icons::Icon::Folder),
         (tl!("Import files"), "file.import", tl!("Movies, audio and stills"), crate::icons::Icon::Sequence),
         (tl!("Get packs"), "", tl!("Browse what's installed below"), crate::icons::Icon::Grid),
     ];
     // the app studio opens no video project, imports no media and has no packs: New app only
-    let cards = if mortiflix_ui::apps() { &cards[..1] } else { &cards[..] };
+    let cards = if mortiflix_ui::staged() { &cards[..1] } else { &cards[..] };
     let cw = ((left.width() - 48.0 - 3.0 * 16.0) / 4.0).clamp(150.0, 260.0);
     for (i, (title, cmd, sub, icon)) in cards.iter().enumerate() {
         let r = Rect::from_min_size(left.min + vec2(24.0 + i as f32 * (cw + 16.0), 90.0), vec2(cw, 150.0));
@@ -100,7 +106,7 @@ pub fn show(app: &mut StudioApp, ui: &mut egui::Ui, rect: Rect) {
         }
         x = r.max.x + 12.0;
     }
-    if mortiflix_ui::apps() {
+    if mortiflix_ui::staged() {
         return;
     }
     // Packs: every pack installed in the studio, in its category
@@ -122,7 +128,7 @@ fn recent_apps(app: &mut StudioApp, ui: &mut egui::Ui, col: Rect) {
     let fit = (((col.height() - 64.0) / row_h).floor().max(0.0)) as usize;
     let projects: Vec<(String, String, String)> = mortiflix_ui::chat::listed_projects(ui.ctx()).into_iter().take(fit).collect();
     if projects.is_empty() {
-        ui.painter().text(col.min + vec2(16.0, 58.0), Align2::LEFT_CENTER, "Apps you start show here.", Tokens::ui(12.0), t.text_faint);
+        ui.painter().text(col.min + vec2(16.0, 58.0), Align2::LEFT_CENTER, if mortiflix_ui::midi() { "Songs you start show here." } else { "Apps you start show here." }, Tokens::ui(12.0), t.text_faint);
         return;
     }
     let mut open = None;

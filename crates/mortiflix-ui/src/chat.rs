@@ -862,7 +862,7 @@ fn empty_state(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, now: f64) {
             }
             ui.label(RichText::new(if st.projects.is_empty() { "No project yet." } else { "No project open." }).size(14.0).color(t.text));
             ui.label(
-                RichText::new(crate::branded(if crate::apps() {
+                RichText::new(crate::branded(if crate::staged() {
                     "Start one and Mortiflix writes the brief first."
                 } else {
                     "Start one and Mortiflix writes the script first."
@@ -1309,14 +1309,14 @@ fn moves_row(ui: &mut egui::Ui, ctx: &mut MfxCtx, st: &mut ChatUi, info: Option<
                 }
             }
             // the app studio has nothing to play yet, and no moves on the whole app
-            _ if crate::apps() => {}
+            _ if crate::staged() => {}
             _ => {
                 ui.label(RichText::new("Moves").size(12.0).color(t.text_faint));
                 if small_button(ui, ctx, "mfx.chat.move.playAll", "▶ Play everything", false).clicked() {
                     play(ctx, None);
                 }
                 let next: &[(&str, &str, &str)] = match ctx.state.stage {
-                    _ if crate::apps() => &[],
+                    _ if crate::staged() => &[],
                     STAGE_ANIMATIC => &[("hearIt", "Go to the music", "stages.music")],
                     STAGE_MUSIC => &[("editVideo", "Edit the video", "stages.editVideo"), ("getVideo", "Get the video", "stages.getVideo")],
                     STAGE_EDIT => &[("export", "Go to Export", "stages.render")],

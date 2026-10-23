@@ -818,7 +818,11 @@ pub fn lower_name(name: &str) -> String {
 
 /// What the chat talks about when no node is picked: the whole video, or in the app studio the whole app.
 pub fn whole() -> &'static str {
-    if crate::apps() { "The whole app" } else { "The whole video" }
+    match crate::product() {
+        crate::Product::Apps => "The whole app",
+        crate::Product::Midi => "The whole song",
+        crate::Product::Video => "The whole video",
+    }
 }
 
 /// The composer's placeholder for a context.

@@ -23,6 +23,9 @@ pub fn hint(ctx: &MfxCtx) -> String {
     if crate::apps() {
         return crate::app_stages::hint(ctx.state.stage).into();
     }
+    if crate::midi() {
+        return crate::midi_stages::hint(ctx.state.stage).into();
+    }
     match ctx.state.stage {
         0 => "Write and change the script. Nothing is made until you press Next.",
         1 => "Listen to each scene's voice: OK, Fix or change the voice.",
@@ -49,7 +52,7 @@ pub fn show(ui: &mut egui::Ui, rect: Rect, ctx: &mut MfxCtx) {
     p.rect_filled(rect, 0.0, t.header_bg);
     p.line_segment([rect.left_bottom(), rect.right_bottom()], Stroke::new(1.0, Color32::BLACK));
     let stage = ctx.state.stage;
-    let pair = stage == STAGE_MUSIC && !crate::apps();
+    let pair = stage == STAGE_MUSIC && !crate::staged();
     // Widths: stages never change width with their status (nothing shifts); narrow windows scale
     // everything down together and drop the hint first.
     let right_w = if pair { PAIR_W } else { NEXT_W };
@@ -164,20 +167,20 @@ pub fn show(ui: &mut egui::Ui, rect: Rect, ctx: &mut MfxCtx) {
     } else {
         let next = Rect::from_min_size(pos2(right.min.x + 4.0, rect.min.y + 7.0), vec2(right.width() - 12.0, rect.height() - 14.0));
         // the app studio's last stage: shipping comes in a later version (Design Docs/App Studio - Plan v1.md)
-        let apps_last = crate::apps() && usize::from(stage) + 1 >= stages().len();
+        let apps_last = crate::staged() && usize::from(stage) + 1 >= stages().len();
         let label = if apps_last {
             "Ship the app".to_string()
-        } else if stage >= STAGE_RENDER && !crate::apps() {
+        } else if stage >= STAGE_RENDER && !crate::staged() {
             "Render the video".to_string()
         } else {
             format!("Next: {}", stage_name(stage.saturating_add(1)))
         };
         let resp = button(ui, ctx, next, &label, ready && !apps_last, "mfx.stagebar.next");
-        if (stage < STAGE_RENDER || crate::apps()) && !apps_last {
+        if (stage < STAGE_RENDER || crate::staged()) && !apps_last {
             chevron(&p, pos2(next.max.x - 14.0, next.center().y), 1.0, if ready { Color32::WHITE } else { t.text_dim });
         }
         if resp.clicked() && !apps_last {
-            ctx.command(if stage >= STAGE_RENDER && !crate::apps() { "mortiflix.renderVideo" } else { "stages.next" }, json!({}));
+            ctx.command(if stage >= STAGE_RENDER && !crate::staged() { "mortiflix.renderVideo" } else { "stages.next" }, json!({}));
         }
     }
 

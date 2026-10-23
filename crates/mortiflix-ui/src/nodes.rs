@@ -41,6 +41,11 @@ pub fn show(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
         crate::app_stages::show_nodes(ui, ctx);
         return;
     }
+    // the MIDI studio's sections come at stage 3
+    if crate::midi() {
+        crate::midi_stages::show_nodes(ui, ctx);
+        return;
+    }
     let now = ui.input(|i| i.time);
     let full = ui.max_rect();
     let t = ctx.theme;

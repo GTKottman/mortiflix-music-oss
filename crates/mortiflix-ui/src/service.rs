@@ -462,6 +462,10 @@ fn run_child(config: &ServiceConfig, script: &Path, cmd_rx: &Receiver<Value>, ou
     if crate::apps() {
         cmd.env("MFX_PRODUCT", "apps");
     }
+    // the MIDI studio's the same way (owner, 2026-10-23)
+    if crate::midi() {
+        cmd.env("MFX_PRODUCT", "midi");
+    }
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt as _;

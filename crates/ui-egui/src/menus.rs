@@ -219,11 +219,11 @@ pub fn editor_hidden(app: &StudioApp) -> bool {
 
 /// The one rule (#16): a command whose menu item and shortcut are off right now.
 pub fn hidden(app: &StudioApp, id: &str) -> bool {
-    if mortiflix_ui::apps() {
+    if mortiflix_ui::staged() {
         return video_only(id);
     }
-    // the app studio's stages
-    if id.strip_prefix("stages.").is_some_and(|k| mortiflix_ui::APP_STAGES.iter().any(|(_, key)| *key == k)) {
+    // the app and MIDI studios' stages
+    if id.strip_prefix("stages.").is_some_and(|k| mortiflix_ui::APP_STAGES.iter().chain(&mortiflix_ui::MIDI_STAGES).any(|(_, key)| *key == k)) {
         return true;
     }
     editor_hidden(app) && editor_only(id)
@@ -235,7 +235,7 @@ pub fn video_only(id: &str) -> bool {
     const KEEP_SETTINGS: &[&str] = &["app.settings.general", "app.settings.appearance"];
     const VIDEO_PREFIXES: &[&str] = &["playback.", "playhead.", "script.", "mortiflix.preview.", "mortiflix.import.", "file.openRecent."];
     if let Some(k) = id.strip_prefix("stages.") {
-        return !matches!(k, "back" | "next" | "set") && !mortiflix_ui::APP_STAGES.iter().any(|(_, key)| *key == k);
+        return !matches!(k, "back" | "next" | "set") && !mortiflix_ui::stages().iter().any(|(_, key)| *key == k);
     }
     if id.starts_with("app.settings.") {
         return !KEEP_SETTINGS.contains(&id);

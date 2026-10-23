@@ -376,7 +376,9 @@ pub fn show_assets(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
                 ui.label(RichText::new("No assets yet.").size(14.0).color(t.text));
                 ui.add(
                     egui::Label::new(
-                        RichText::new(crate::branded(if crate::apps() {
+                        RichText::new(crate::branded(if crate::midi() {
+                            "Drop files here or Add files…: MIDI files, songs you like, or lyrics. Mortiflix uses them where you choose."
+                        } else if crate::apps() {
                             "Drop files here or Add files…: logos, pictures, fonts, or apps you like. Mortiflix uses them where you choose."
                         } else {
                             "Drop files here or Add files…. Mortiflix uses them in the shots you choose."

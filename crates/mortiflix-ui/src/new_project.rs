@@ -438,7 +438,11 @@ fn main_page(ui: &mut egui::Ui, ctx: &mut MfxCtx, w: &mut Win, now: f64) {
         row_label(ui, &t, "Name", None);
         let r = ui.add(
             egui::TextEdit::singleline(&mut w.draft.name)
-                .hint_text(if crate::apps() { "Recipe Box" } else { "The Rise of AI" })
+                .hint_text(match crate::product() {
+                    crate::Product::Apps => "Recipe Box",
+                    crate::Product::Midi => "Night Drive",
+                    crate::Product::Video => "The Rise of AI",
+                })
                 .desired_width(MAIN_W - LABEL_W - 16.0)
                 .font(FontId::proportional(14.0)),
         );
@@ -507,7 +511,7 @@ fn main_page(ui: &mut egui::Ui, ctx: &mut MfxCtx, w: &mut Win, now: f64) {
     assets_section(ui, ctx, w, preset.as_ref(), hovering, now);
 
     // Music (doc 33a-1); apps have none
-    if !crate::apps() {
+    if !crate::staged() {
         music_row(ui, ctx, w, preset.as_ref());
     }
 
@@ -732,7 +736,9 @@ fn assets_section(ui: &mut egui::Ui, ctx: &mut MfxCtx, w: &mut Win, preset: Opti
                 p.text(
                     egui::pos2(rect.min.x + 14.0, rect.center().y + 11.0),
                     egui::Align2::LEFT_CENTER,
-                    if crate::apps() {
+                    if crate::midi() {
+                        "MIDI files, songs you like, lyrics"
+                    } else if crate::apps() {
                         "Pictures, logos, fonts, documents, examples of apps you like"
                     } else {
                         "Pictures, logos, footage, sound, music, fonts, documents"
