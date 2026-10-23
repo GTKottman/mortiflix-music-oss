@@ -143,20 +143,7 @@ fn brief(ui: &mut egui::Ui, ctx: &MfxCtx) {
             ui.label(RichText::new(format!("Writing brief v{}…", idea.version + 1)).size(12.0).color(t.text_faint));
             ui.add_space(8.0);
         }
-        for line in idea.brief.lines() {
-            if let Some(title) = line.strip_prefix("# ") {
-                ui.label(RichText::new(title).font(FontId::proportional(22.0)).color(t.text));
-                ui.add_space(6.0);
-            } else if let Some(head) = line.strip_prefix("## ") {
-                ui.add_space(12.0);
-                ui.label(RichText::new(head).size(15.0).color(t.text));
-                ui.add_space(2.0);
-            } else if let Some(item) = line.strip_prefix("- ") {
-                ui.add(egui::Label::new(RichText::new(format!("•  {item}")).size(13.0).color(t.text_dim)).wrap());
-            } else if !line.trim().is_empty() {
-                ui.add(egui::Label::new(RichText::new(line).size(13.0).color(t.text_dim)).wrap());
-            }
-        }
+        crate::markdown::show(ui, &t, &idea.brief);
         ui.add_space(24.0);
         let hint = if idea.brief_state == "approved" { "The brief is OK'd." } else { "Press Next when the brief is right, or tell the chat what to change." };
         ui.label(RichText::new(hint).size(12.0).color(t.text_faint));

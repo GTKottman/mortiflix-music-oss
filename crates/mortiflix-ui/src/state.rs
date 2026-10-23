@@ -171,6 +171,9 @@ pub struct MfxState {
     /// The app studio's Idea stage: the brief as the service last sent it.
     #[serde(skip)]
     pub idea: crate::app_stages::IdeaState,
+    /// The MIDI studio's stages: each step's state and document as the service last sent them.
+    #[serde(skip)]
+    pub midi: crate::midi_stages::MidiState,
 }
 
 impl Default for MfxState {
@@ -208,6 +211,7 @@ impl Default for MfxState {
             setup_page: None,
             open_stage: None,
             idea: crate::app_stages::IdeaState::default(),
+            midi: crate::midi_stages::MidiState::default(),
         }
     }
 }

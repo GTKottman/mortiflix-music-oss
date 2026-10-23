@@ -14,7 +14,6 @@
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable))]
 
 pub mod app_stages;
-pub mod midi_stages;
 pub mod chat;
 pub mod export;
 pub mod gates;
@@ -22,6 +21,8 @@ pub mod home;
 pub mod into_edit;
 pub mod look;
 pub mod look_menu;
+pub mod markdown;
+pub mod midi_stages;
 pub mod motion_menu;
 pub mod new_project;
 pub mod nodes;
@@ -296,6 +297,7 @@ impl Mortiflix {
             self.state.script.on_message(&msg);
             self.state.look.on_message(&msg);
             self.state.idea.on_message(&msg);
+            self.state.midi.on_message(&msg);
         }
         // A service that was restarted (it crashed or was stopped) has no project open: open the
         // one the app is on again, so the chat, nodes and preview carry on.
@@ -309,6 +311,7 @@ impl Mortiflix {
             self.state.script.refresh();
             self.state.look.refresh();
             self.state.idea.fetch_soon = true;
+            self.state.midi.fetch_soon = true;
         }
         resume::tick(&mut self.state, &mut self.service);
         // the app studio's stages have their own requests; the video stages' are below
@@ -316,8 +319,9 @@ impl Mortiflix {
             app_stages::tick(&mut self.state, &mut self.service);
             return;
         }
-        // the MIDI studio's stages have no requests yet (v1)
+        // the MIDI studio's stages read their documents with one request; the video stages' are below
         if midi() {
+            midi_stages::tick(&mut self.state, &mut self.service);
             return;
         }
         script::tick(&mut self.state, &mut self.service);
