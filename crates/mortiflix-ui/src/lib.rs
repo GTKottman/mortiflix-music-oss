@@ -370,6 +370,12 @@ impl Mortiflix {
                 Nav::Stay
             }
             "back" => moved(self, stage - 1, false),
+            // the MIDI studio's last stage: Finish the song approves it where it is
+            "next" if stage >= last && midi() && ask(&mut self.state, false) => Nav::Asked,
+            "next" if stage >= last && midi() => {
+                self.service.request("stage.set", serde_json::json!({"stage": stage, "key": stage_key(stage), "from": stage, "done": true}));
+                Nav::Stay
+            }
             "next" if stage >= last => Nav::Stay,
             "next" if ask(&mut self.state, false) => Nav::Asked,
             "next" => moved(self, stage + 1, true),

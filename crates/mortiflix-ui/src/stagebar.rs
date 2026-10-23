@@ -166,9 +166,14 @@ pub fn show(ui: &mut egui::Ui, rect: Rect, ctx: &mut MfxCtx) {
         }
     } else {
         let next = Rect::from_min_size(pos2(right.min.x + 4.0, rect.min.y + 7.0), vec2(right.width() - 12.0, rect.height() - 14.0));
-        // the app studio's last stage: shipping comes in a later version (Design Docs/App Studio - Plan v1.md)
-        let apps_last = crate::staged() && usize::from(stage) + 1 >= stages().len();
-        let label = if apps_last {
+        // the app studio's last stage: shipping comes in a later version (Design Docs/App Studio - Plan v1.md);
+        // the MIDI studio's last stage finishes the song (approves Export)
+        let last = usize::from(stage) + 1 >= stages().len();
+        let midi_last = crate::midi() && last;
+        let apps_last = crate::staged() && last && !midi_last;
+        let label = if midi_last {
+            "Finish the song".to_string()
+        } else if apps_last {
             "Ship the app".to_string()
         } else if stage >= STAGE_RENDER && !crate::staged() {
             "Render the video".to_string()
@@ -176,7 +181,7 @@ pub fn show(ui: &mut egui::Ui, rect: Rect, ctx: &mut MfxCtx) {
             format!("Next: {}", stage_name(stage.saturating_add(1)))
         };
         let resp = button(ui, ctx, next, &label, ready && !apps_last, "mfx.stagebar.next");
-        if (stage < STAGE_RENDER || crate::staged()) && !apps_last {
+        if (stage < STAGE_RENDER || crate::staged()) && !apps_last && !midi_last {
             chevron(&p, pos2(next.max.x - 14.0, next.center().y), 1.0, if ready { Color32::WHITE } else { t.text_dim });
         }
         if resp.clicked() && !apps_last {
