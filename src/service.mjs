@@ -143,7 +143,7 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
     // Edit the video skips the AI's build and final (the app makes the video): nothing is delivered until Render.
     const inApp = p.state === 'delivered' && Object.values(p.steps || {}).some((s) => s?.state === 'skipped') && ['build', 'final'].every((k) => !p.steps?.[k] || p.steps[k].state === 'skipped');
     if (inApp) return 'The AI\'s part is done: finish in Edit, then Render.';
-    return { draft: 'Not started yet.', queued: 'Starting…', waiting: 'Waiting for you.', delivered: 'Done: the video is delivered.', cancelled: 'Cancelled.', paused: 'Paused.' }[p.state] || '';
+    return { draft: 'Not started yet.', queued: 'Starting…', waiting: 'Waiting for you.', delivered: `Done: the ${APPS ? 'app' : MIDI ? 'song' : 'video'} is delivered.`, cancelled: 'Cancelled.', paused: 'Paused.' }[p.state] || '';
   }
 
   function status(force = false) {
