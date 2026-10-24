@@ -665,7 +665,7 @@ const STEP_FN = { questions: stepQuestions, idea: stepBrief, genre: stepGenre, '
 export async function quickMidi({ root, id, view, run, runArgs, config, onActivity }) {
   const budget = config.midiTokenBudget || TOKEN_BUDGET;
   const used = usedTokens(root, id);
-  if (used >= budget) return { ok: false, error: `this song used ${used.toLocaleString('en')} tokens, its budget is ${budget.toLocaleString('en')}: raise midiTokenBudget to go on` };
+  if (used >= budget) return { ok: false, pause: true, error: `Stopped to save tokens: this song has used ${used.toLocaleString('en')} of its ${budget.toLocaleString('en')}. Raise the song's token limit (midiTokenBudget), then press Resume.` };
   const dir = join(paths(root).run, 'quick');
   mkdirSync(dir, { recursive: true });
   const ctx = { root, id, view, version: view.version + 1, run, runArgs: { ...runArgs, workdir: dir }, config, onActivity, spent: { input: 0, output: 0 }, calls: 0 };
@@ -686,6 +686,8 @@ export function midiView(root, id) {
   return {
     steps: steps.map((s) => ({ key: s.key, stage: s.stage, state: s.state, version: s.version || 0, doc: s.version && docs[s.key] && existsSync(join(d, docs[s.key])) ? readFileSync(join(d, docs[s.key]), 'utf8') : null })),
     usage: usedTokens(root, id),
+    // why the song stopped, while it waits for Resume
+    stopped: (() => { const p = loadProject(root, id); return p.state === 'paused' ? String(p.needs_you?.text || 'Paused.') : ''; })(),
     out: existsSync(join(d, 'out')) ? join(d, 'out') : null,
   };
 }

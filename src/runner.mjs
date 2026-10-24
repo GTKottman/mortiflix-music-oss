@@ -277,7 +277,9 @@ export class Runner extends EventEmitter {
       if (p.status?.key === '_render') p.status = null;
       settle(p, pipeline);
       if (p.state === 'queued' && !abort.signal.aborted) {
-        if (p.no_progress >= 2) pausedFor = `The last two sessions stopped without moving the project forward${result?.error ? ` (${result.error})` : ''}. Check the activity log, then resume.`;
+        // a stop the studio asked for itself (the MIDI studio's token budget) pauses at once, in its own words
+        if (result?.pause && result?.error) pausedFor = result.error;
+        else if (p.no_progress >= 2) pausedFor = `The last two sessions stopped without moving the project forward${result?.error ? ` (${result.error})` : ''}. Check the activity log, then resume.`;
         else if (p.without_gate >= MAX_SESSIONS_WITHOUT_GATE) pausedFor = `${MAX_SESSIONS_WITHOUT_GATE} sessions in a row ended without submitting or finishing a step. Check the journal, then resume.`;
         // `cause: login`: Claude Code's login expired or failed (the app offers Link Claude Code, then resumes)
         if (pausedFor) { p.state = 'paused'; p.needs_you = { text: pausedFor, at: now(), ...(loginTrouble(result?.error) ? { cause: 'login' } : {}) }; }
