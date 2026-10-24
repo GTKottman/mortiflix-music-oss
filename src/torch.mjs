@@ -8,12 +8,13 @@ import { REPO, paths } from './studio.mjs';
 import { projectPaths, loadProject, projectPipeline, readJournal, readEvents, listProjects } from './projects.mjs';
 import { openEdits, loadGraph } from './canvas.mjs';
 import { writeSkillsFile } from './skills.mjs';
-const { opening } = await import(join(REPO, 'pipelines', '_shared', 'skills', 'music', 'lib', 'variety.mjs'));
+const { opening } = await import(pathToFileURL(join(REPO, 'pipelines', '_shared', 'skills', 'music', 'lib', 'variety.mjs')).href);
 import { stepView, stepChecks, submissions } from './gates.mjs';
 import { finishesOwnMaster } from './music.mjs';
 import { blenderSkillDirs, blenderDocsDir, browserHarnessSkill, setupStatusSync, DAWS } from './setup.mjs';
 import { serviceBrief } from './svc/brief.mjs';
 import { mcpServers, craftMcpFile } from './craft.mjs';
+import { pathToFileURL } from 'node:url';
 
 // The owner's own words: their direction for this video (outranks the pipeline's defaults, never the gate rules).
 const fence = (label, text) => `<<<${label} (the owner's words)\n${text}\n${label}>>>`;
