@@ -104,7 +104,7 @@ jobs:
       - name: WiX
         run: |
           dotnet tool install --global wix --version 5.0.2
-          wix extension add -g WixToolset.UI.wixext/5.0.2 WixToolset.Util.wixext/5.0.2
+          wix extension add -g WixToolset.UI.wixext/5.0.2
       - uses: ilammy/msvc-dev-cmd@v1
       - name: Sound engine
         if: ${{ inputs.build-engine }}
@@ -128,19 +128,21 @@ jobs:
           $msi = Get-ChildItem dist/release/*.msi | Select-Object -First 1
           $p = Start-Process msiexec.exe -Wait -PassThru -ArgumentList '/i', $msi.FullName, '/qn', '/l*v', 'msi.log'
           if ($p.ExitCode -ne 0) { Get-Content msi.log -Tail 50; exit $p.ExitCode }
-          $dir = Join-Path ${env:ProgramFiles} 'Mortiflix Studio'
-          & (Join-Path $dir 'mortiflix-studio-cli.exe') --version
+          $dir = Join-Path ${env:ProgramFiles} 'Mortiflix Music'
+          & (Join-Path $dir 'mortiflix-music-cli.exe') --version
           $node = Join-Path $dir 'mortiflix\node\node.exe'
           $hello = '{"id":1,"type":"hello","params":{"client":"ci","protocol":1}}' | & $node (Join-Path $dir 'mortiflix\service\bin\mortiflix-service.mjs') | Select-Object -First 1
           Write-Output $hello
           if ($hello -notmatch '"ok":true') { exit 1 }
           & (Join-Path $dir 'mortiflix\bin\ffmpeg.exe') -hide_banner -version | Select-Object -First 1
-          # The default tools were downloaded by the MSI (as this user): list what the studio has now.
-          cmd /d /c "`"$(Join-Path $dir 'mortiflix\components.cmd')`" list"
-          Select-String -Path msi.log -Pattern 'MfxToolsRun|ok blender|!! ' | Select-Object -Last 20
+          # Mortiflix Music ships Strudel, the soundfont and FluidSynth (no tools step)
+          foreach ($f in 'mortiflix\strudel\node_modules\@strudel\core\package.json', 'mortiflix\soundfonts\GeneralUser-GS.sf2', 'mortiflix\bin\fluidsynth.exe') {
+            if (-not (Test-Path (Join-Path $dir $f))) { Write-Output "missing $f"; exit 1 }
+          }
+          & (Join-Path $dir 'mortiflix\bin\fluidsynth.exe') --version | Select-Object -First 1
       - uses: actions/upload-artifact@v4
         with:
-          name: mortiflix-studio-windows
+          name: mortiflix-music-windows
           path: |
             dist/release/*.msi
             dist/release/*.zip
