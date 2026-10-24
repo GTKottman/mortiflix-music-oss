@@ -82,6 +82,9 @@ test('MIDI flow: idea to MIDI files, every stage checked', { skip: !has && 'Stru
   const fin = JSON.parse(readFileSync(join(projectPaths(root, id).work, 'midi', 'final.json'), 'utf8'));
   assert.ok(fin.parts.lead.length > 10 && fin.parts.drums.length > 50);
   assert.ok(fin.parts.bass.every((n) => n.key >= 28 && n.key <= 55), 'bass inside its range');
+  // every bar the keys play has notes, the Fmaj7 bars too (Strudel voiced 'Fmaj7' to nothing before its names were used)
+  const tpb = fin.tpb;
+  for (let bar = 4; bar < 20; bar++) assert.ok(fin.parts.keys.some((n) => n.t >= bar * tpb - 40 && n.t < (bar + 1) * tpb), `keys silent in bar ${bar + 1}`);
   // a confirmed change to the approved song map reopens it and every later stage is made again, in order
   const r = reopenStage(root, id, 'songMap', 'one more chorus');
   assert.deepEqual(r.remade, ['Chords', 'Shapes', 'Melody', 'Arrange', 'Feel', 'Export']);

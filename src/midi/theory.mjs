@@ -50,4 +50,17 @@ export const inScale = (key, scale) => scale.includes(((key % 12) + 12) % 12);
 export function progressionChords(chords, barsPerChord = 1) {
   return chords.flatMap((c) => Array(barsPerChord).fill(c));
 }
-export const strudelProgression = (chords, barsPerChord = 1) => `<${chords.map((c) => (barsPerChord > 1 ? `${c}!${barsPerChord}` : c)).join(' ')}>`;
+// A chord symbol in Strudel's own names (its voicing dictionary): Cmaj7 → C^7, Cmaj9 → C^9, Csus4 → Csus, C7sus4 → C7sus,
+// Cdim7 → Co7, Cdim → Co, Cø7 → Ch7, Cmmaj7 → Cm^7, Csus2 → C2, Cadd2 → Cadd9, Cmaj6 → C6, C/E → C (Strudel has no slash
+// chords: the bass note is dropped). Standard names voice to nothing in Strudel (no error, silent bars).
+export function strudelChord(symbol) {
+  const m = /^([A-G][#b]?)(.*)$/.exec(String(symbol).trim());
+  if (!m) return String(symbol);
+  let q = m[2].replace('6/9', '69').split('/')[0];
+  q = q.replace(/^(m)?maj6/, '$16').replace(/^mmaj/, 'm^').replace(/^mM/, 'm^').replace(/^maj/, '^').replace(/^M(?=\d|$)/, '^')
+    .replace(/sus4/, 'sus').replace(/^sus2$/, '2').replace(/add2/, 'add9').replace(/^dim7/, 'o7').replace(/^dim/, 'o').replace(/^ø7?/, 'h7');
+  if (q === '^') q = '';
+  return `${m[1]}${q}`;
+}
+
+export const strudelProgression = (chords, barsPerChord = 1) => `<${chords.map(strudelChord).map((c) => (barsPerChord > 1 ? `${c}!${barsPerChord}` : c)).join(' ')}>`;

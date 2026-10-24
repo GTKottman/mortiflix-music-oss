@@ -14,7 +14,7 @@ import { chatHistory } from './svc/chat.mjs';
 import { createEvaluator } from './strudel/evaluator.mjs';
 import { strudelDirOf } from './song-store.mjs';
 import { writeSmf, PPQ } from './midi/smf.mjs';
-import { scaleOf, chordTones, inScale, strudelProgression, STRUDEL_MODE, MODES } from './midi/theory.mjs';
+import { scaleOf, chordTones, inScale, strudelProgression, strudelChord, STRUDEL_MODE, MODES } from './midi/theory.mjs';
 
 export const MIDI_STEPS = ['questions', 'idea', 'genre', 'song-map', 'chords', 'shapes', 'melody', 'arrange', 'feel', 'export'];
 // Tokens a song may use (input incl. cache reads + output) before the studio stops it; config.midiTokenBudget changes it.
@@ -124,7 +124,7 @@ const MAP = {
 const CHORDS = {
   type: 'object', required: ['kinds', 'note'],
   properties: {
-    kinds: { type: 'array', items: { type: 'object', required: ['kind', 'chords', 'bars_per_chord'], properties: { kind: { type: 'string' }, chords: { type: 'array', items: { type: 'string' }, description: 'chord symbols like Am7 Fmaj7 C G Dm9 E7 Bbmaj7 Gsus4' }, bars_per_chord: { type: 'integer', enum: [1, 2] }, borrowed: { type: 'array', items: { type: 'string' }, description: 'chords outside the key, on purpose' }, why: { type: 'string' } } } },
+    kinds: { type: 'array', items: { type: 'object', required: ['kind', 'chords', 'bars_per_chord'], properties: { kind: { type: 'string' }, chords: { type: 'array', items: { type: 'string' }, description: 'chord symbols like Am7 Fmaj7 C G Dm9 E7 Bbmaj7 Gsus4 (no slash chords: the bass note is dropped)' }, bars_per_chord: { type: 'integer', enum: [1, 2] }, borrowed: { type: 'array', items: { type: 'string' }, description: 'chords outside the key, on purpose' }, why: { type: 'string' } } } },
     note: { type: 'string' },
   },
 };
@@ -230,7 +230,7 @@ export async function voicedTones(root, symbols) {
   const out = {};
   for (const sym of new Set(symbols)) {
     if (!VOICED.has(sym)) {
-      const r = await evaluator(root).run(`chord("${sym}").voicing()`, { bars: 1, ms: 8000 }).catch(() => null);
+      const r = await evaluator(root).run(`chord("${strudelChord(sym)}").voicing()`, { bars: 1, ms: 8000 }).catch(() => null);
       VOICED.set(sym, r?.ok ? [...new Set(r.notes.map((n) => ((n.key % 12) + 12) % 12))] : []);
     }
     out[sym] = VOICED.get(sym);
@@ -377,18 +377,21 @@ async function stepChords(ctx) {
   const base = [`You write the chord progression for each kind of section (${kinds.join(', ')}) in ${map.tonic} ${map.mode}, true to the genre. A progression loops through its sections, so its length in bars must divide each of their lengths. Answer with the JSON asked for, nothing else.`, ...sofar(root, id, 'chords'), ...ownerWords(root, id), ...changesAsked(root, id, view, join(d, 'chords.md'))];
   const r = await ask(ctx, 'plan', base.join('\n\n'), CHORDS);
   let c = r.ok ? r.structured : null;
-  let problems = c ? chordProblems(c, map) : [];
+  // every chord must voice in Strudel (a name its dictionary doesn't know plays nothing, without an error)
+  const voiceProblems = async () => {
+    const out = [];
+    const tones = await voicedTones(root, c.kinds.flatMap((p) => p.chords));
+    for (const p of c.kinds) for (const x of new Set(p.chords)) if (!tones[x]?.length) out.push(`${p.kind}: Strudel has no voicing for ${x} (it would play nothing): use another spelling or chord`);
+    return out;
+  };
+  const allProblems = async () => (c?.kinds ? [...chordProblems(c, map), ...(await voiceProblems())] : []);
+  let problems = await allProblems();
   for (let i = 0; c && problems.length && i < MAX_FIXES; i++) {
     fixLog(ctx, 'Chords', problems);
     const f = await ask(ctx, 'fix', `The studio refused these chords. Fix only these problems and keep everything else. Answer with {"answer": <the whole corrected JSON>}.\n\nKey: ${map.tonic} ${map.mode}. Sections: ${JSON.stringify(map.sections.map((s) => ({ name: s.name, kind: s.kind, bars: s.bars })))}\n\n## Problems\n${list(problems)}\n\n## The chords\n${JSON.stringify(c)}`, FIX);
-    if (f.ok && f.structured?.answer?.kinds) { c = f.structured.answer; problems = chordProblems(c, map); }
+    if (f.ok && f.structured?.answer?.kinds) { c = f.structured.answer; problems = await allProblems(); }
   }
   if (!c?.kinds) return { ...r, ok: false, error: r.error || 'the chords call gave no chords' };
-  // every progression must run in Strudel
-  for (const p of c.kinds) {
-    const res = await notesOf(root, `chord("${strudelProgression(p.chords, p.bars_per_chord)}").voicing()`, { bars: p.chords.length * (p.bars_per_chord || 1), tpb: tpbOf(map.meter), drums: false });
-    if (res.error) problems.push(`${p.kind}: Strudel can't voice it (${res.error})`);
-  }
   writeFileSync(join(d, 'chords.json'), JSON.stringify(c, null, 1));
   const md = `# ${map.title} · Chords v${version}\n\n${map.tonic} ${map.mode}\n\n${c.kinds.map((p) => `## ${p.kind}\n\n${p.chords.map((x) => `**${x}**`).join(' · ')}${p.bars_per_chord > 1 ? ` (${p.bars_per_chord} bars each)` : ''}\n\n${p.why || ''}${p.borrowed?.length ? `\n\nBorrowed on purpose: ${p.borrowed.join(', ')}` : ''}`).join('\n\n')}\n\n${checksMd(['every chord read and voiced', 'every progression fits its sections'], problems)}`;
   submitDoc(root, id, 'chords', { file: writeDoc(root, id, 'chords.md', md), label: `Chords v${version}`, note: c.note || 'The chords.' });
@@ -665,7 +668,7 @@ const STEP_FN = { questions: stepQuestions, idea: stepBrief, genre: stepGenre, '
 export async function quickMidi({ root, id, view, run, runArgs, config, onActivity }) {
   const budget = config.midiTokenBudget || TOKEN_BUDGET;
   const used = usedTokens(root, id);
-  if (used >= budget) return { ok: false, pause: true, error: `Stopped to save tokens: this song has used ${used.toLocaleString('en')} of its ${budget.toLocaleString('en')}. Raise the song's token limit (midiTokenBudget), then press Resume.` };
+  if (used >= budget) return { ok: false, pause: true, error: `this song has used ${used.toLocaleString('en')} of its ${budget.toLocaleString('en')} tokens. Raise the song's token limit (midiTokenBudget), then press Resume.` };
   const dir = join(paths(root).run, 'quick');
   mkdirSync(dir, { recursive: true });
   const ctx = { root, id, view, version: view.version + 1, run, runArgs: { ...runArgs, workdir: dir }, config, onActivity, spent: { input: 0, output: 0 }, calls: 0 };
