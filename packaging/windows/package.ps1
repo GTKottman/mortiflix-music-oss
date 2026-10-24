@@ -1,11 +1,16 @@
 <#
 .SYNOPSIS
-  Build, sign and package Mortiflix Studio for Windows.
+  Build, sign and package Mortiflix Music for Windows.
 
 .DESCRIPTION
   Produces, in $env:DIST (default: dist/release):
-    mortiflix-studio-<version>-windows-<arch>.msi            per-machine installer (WiX v5)
-    mortiflix-studio-<version>-windows-<arch>-portable.zip   mortiflix-studio.exe + mortiflix-studio-cli.exe + portable.txt
+    mortiflix-music-<version>-windows-<arch>.msi            per-machine installer (WiX v5)
+    mortiflix-music-<version>-windows-<arch>-portable.zip   mortiflix-music.exe + mortiflix-music-cli.exe + portable.txt
+
+  Mortiflix Music installs beside an installed Mortiflix Studio without clashing: its own product,
+  UpgradeCode, folder (Program Files\Mortiflix Music), Start Menu entry and exe names, and no file
+  associations. cargo still builds mortiflix-studio(-cli).exe; they are renamed here, and the app
+  starts as Mortiflix Music because its exe name starts with mortiflix-music.
 
   The binaries link the C runtime statically (+crt-static), so neither the MSI nor the portable
   zip needs the Visual C++ redistributable. Signing is delegated to sign.ps1 (skipped with a
@@ -13,12 +18,12 @@
 
   Needs: Rust (MSVC toolchain + the target), the Windows SDK (rc.exe, signtool.exe),
   and WiX v5: dotnet tool install --global wix --version 5.0.2
-  (+ wix extension add -g WixToolset.UI.wixext/5.0.2 WixToolset.Util.wixext/5.0.2 for the Mortiflix tools)
+  (+ wix extension add -g WixToolset.UI.wixext/5.0.2 for the installer's wizard)
 
-  Mortiflix Studio: both also carry the Mortiflix bundle (the service, its own Node, ffmpeg,
-  the sound engine) in mortiflix\ beside mortiflix-studio.exe, made by packaging/mortiflix/bundle.sh
-  under Git Bash (env: MFX_SERVICE_SRC, MFX_ENGINE_BIN, NODE_VERSION, ...). -NoMortiflix leaves
-  it out.
+  Mortiflix Music: both also carry the Mortiflix bundle (the service, its own Node, ffmpeg,
+  Strudel, the GeneralUser GS soundfont, FluidSynth) in mortiflix\ beside mortiflix-music.exe, made
+  by packaging/mortiflix/bundle.sh under Git Bash (env: MFX_SERVICE_SRC, MFX_SERVICE_REF, NODE_VERSION,
+  ...). -NoMortiflix leaves it out. There is no tools step: nothing is downloaded at install time.
 
 .EXAMPLE
   pwsh packaging/windows/package.ps1 -Arch x64
@@ -60,7 +65,7 @@ New-Item -ItemType Directory -Force -Path $Dist | Out-Null
 if (-not $env:MFX_STUDIO_BUILD_SHA) { $env:MFX_STUDIO_BUILD_SHA = (git -C $Root rev-parse HEAD 2>$null) }
 if (-not $env:MFX_STUDIO_BUILD_DATE) { $env:MFX_STUDIO_BUILD_DATE = (Get-Date).ToUniversalTime().ToString('yyyy-MM-dd') }
 
-Write-Output "Mortiflix Studio $Version for Windows $Arch ($Target)"
+Write-Output "Mortiflix Music $Version for Windows $Arch ($Target)"
 
 if (-not $SkipBuild) {
   # Static CRT: no VC++ redistributable needed. Scoped to the target so host build scripts and
@@ -93,12 +98,21 @@ foreach ($check in @(@('mortiflix-studio.exe', 2), @('mortiflix-studio-cli.exe',
 $Stage = Join-Path $TargetDir "windows-package\$Arch"
 Remove-Item -Recurse -Force $Stage -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $Stage | Out-Null
-Copy-Item (Join-Path $Bin 'mortiflix-studio.exe'), (Join-Path $Bin 'mortiflix-studio-cli.exe') $Stage
+# Installed under Mortiflix Music's own names: the app picks the music product from its exe name
+# (crates/mortiflix-ui/src/lib.rs `product()`), and nothing clashes with an installed Mortiflix Studio.
+Copy-Item (Join-Path $Bin 'mortiflix-studio.exe') (Join-Path $Stage 'mortiflix-music.exe')
+Copy-Item (Join-Path $Bin 'mortiflix-studio-cli.exe') (Join-Path $Stage 'mortiflix-music-cli.exe')
 
-& (Join-Path $PSScriptRoot 'sign.ps1') (Join-Path $Stage 'mortiflix-studio.exe') (Join-Path $Stage 'mortiflix-studio-cli.exe')
+& (Join-Path $PSScriptRoot 'sign.ps1') (Join-Path $Stage 'mortiflix-music.exe') (Join-Path $Stage 'mortiflix-music-cli.exe')
+
+# The licence page of the wizard: the MIT licence, and where the bundle's licences are.
+$LicenseRtf = Join-Path $TargetDir "windows-package\license-$Arch.rtf"
+$mit = (Get-Content -Raw (Join-Path $Root 'LICENSE-MIT')) -replace '\\', '\\' -replace '\{', '\{' -replace '\}', '\}' -replace "`r?`n", "\par`n"
+Set-Content -Encoding ascii -Path $LicenseRtf -Value ("{\rtf1\ansi\deff0{\fonttbl{\f0 Segoe UI;}}\f0\fs18 " + $mit +
+  "\par\par The mortiflix\\ folder holds separate programs (Node, Strudel, FluidSynth, ffmpeg, the GeneralUser GS soundfont) with their own licences: see mortiflix\\LICENSES.}")
 
 # ---- Mortiflix bundle ----------------------------------------------------------------------------
-# Found by the app as mortiflix\ beside mortiflix-studio.exe (crates/mortiflix-ui/src/service.rs).
+# Found by the app as mortiflix\ beside mortiflix-music.exe (crates/mortiflix-ui/src/service.rs).
 $MfxDir = Join-Path $Stage 'mortiflix'
 $WixMfx = @()
 if (-not $NoMortiflix) {
@@ -109,44 +123,30 @@ if (-not $NoMortiflix) {
   Invoke-Native 'Mortiflix bundle' { & $Bash (Join-Path $Root 'packaging/mortiflix/bundle.sh') --os windows --arch $Arch --out ($MfxDir -replace '\\', '/') }
   $MfxExes = Get-ChildItem -Path $MfxDir -Recurse -Include '*.exe' | ForEach-Object { $_.FullName }
   if ($MfxExes) { & (Join-Path $PSScriptRoot 'sign.ps1') @MfxExes }
-  # The tool picker the MSI runs (cmd: PATH with the bundled Node and ffmpeg first).
-  Set-Content -Encoding ascii -Path (Join-Path $MfxDir 'components.cmd') -Value @(
-    '@echo off',
-    'rem Mortiflix components: the tools Mortiflix uses, installed for this user into their own studio.',
-    'rem   components.cmd list [--json] ^| install default^|all^|none^|id,id ^| choose',
-    'set "HERE=%~dp0"',
-    'set "PATH=%HERE%bin;%HERE%node;%PATH%"',
-    '"%HERE%node\node.exe" "%HERE%service\bin\mortiflix-components.mjs" %*'
-  )
-  # The licence page of the feature-tree UI: Mortiflix Studio's MIT licence, and where the bundle's licences are.
-  $LicenseRtf = Join-Path $TargetDir "windows-package\license-$Arch.rtf"
-  $mit = (Get-Content -Raw (Join-Path $Root 'LICENSE-MIT')) -replace '\\', '\\' -replace '\{', '\{' -replace '\}', '\}' -replace "`r?`n", "\par`n"
-  Set-Content -Encoding ascii -Path $LicenseRtf -Value ("{\rtf1\ansi\deff0{\fonttbl{\f0 Segoe UI;}}\f0\fs18 " + $mit +
-    "\par\par The Mortiflix tools folder (mortiflix\\) holds separate programs with their own licences: see mortiflix\\LICENSES.}")
-  $WixMfx = @('-d', "MfxDir=$MfxDir", '-d', "LicenseRtf=$LicenseRtf", '-ext', 'WixToolset.UI.wixext', '-ext', 'WixToolset.Util.wixext')
+  $WixMfx = @('-d', "MfxDir=$MfxDir")
 }
 
 # ---- MSI ---------------------------------------------------------------------------------------
-$Msi = Join-Path $Dist "mortiflix-studio-$Version-windows-$Arch.msi"
+$Msi = Join-Path $Dist "mortiflix-music-$Version-windows-$Arch.msi"
 Invoke-Native 'wix build' {
-  wix build (Join-Path $PSScriptRoot 'mortiflix-studio.wxs') -arch $Arch `
+  wix build (Join-Path $PSScriptRoot 'mortiflix-music.wxs') -arch $Arch `
     -d "Version=$MsiVersion" -d "BinDir=$Stage" -d "IconPath=$(Join-Path $Root 'assets\app-icon\mortiflix-studio.ico')" `
-    @WixMfx -o $Msi
+    -d "LicenseRtf=$LicenseRtf" -ext WixToolset.UI.wixext @WixMfx -o $Msi
 }
 # wix writes its debug symbols (.wixpdb) next to the MSI; keep them out of the release assets.
 Remove-Item -Force -ErrorAction SilentlyContinue ([IO.Path]::ChangeExtension($Msi, '.wixpdb'))
 & (Join-Path $PSScriptRoot 'sign.ps1') $Msi
 
 # ---- portable zip ------------------------------------------------------------------------------
-$Portable = Join-Path $TargetDir "windows-package\mortiflix-studio-$Version-windows-$Arch-portable"
+$Portable = Join-Path $TargetDir "windows-package\mortiflix-music-$Version-windows-$Arch-portable"
 Remove-Item -Recurse -Force $Portable -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $Portable | Out-Null
 Copy-Item (Join-Path $Stage '*.exe') $Portable
 if (Test-Path $MfxDir) { Copy-Item -Recurse $MfxDir (Join-Path $Portable 'mortiflix') }
-# The marker that makes Mortiflix Studio keep its data in .\data next to the exe instead of %APPDATA% (#139).
+# The marker that makes Mortiflix Music keep its data in .\data next to the exe instead of %APPDATA% (#139).
 Set-Content -Encoding ascii -Path (Join-Path $Portable 'portable.txt') -Value @(
-  'Mortiflix Studio portable: preferences, presets, logs and crash recovery are kept in the data folder',
-  'next to mortiflix-studio.exe. Delete this file to use %APPDATA%\Mortiflix Studio instead.'
+  'Mortiflix Music portable: preferences, presets, logs and crash recovery are kept in the data folder',
+  'next to mortiflix-music.exe. Delete this file to use %APPDATA%\Mortiflix Music instead.'
 )
 foreach ($f in 'README.md', 'LICENSE', 'LICENSE-MIT', 'LICENSE-APACHE') {
   $p = Join-Path $Root $f
@@ -158,7 +158,7 @@ if ($env:CRAFT_FONTS_DIR) {
     Copy-Item $lic.FullName (Join-Path $Portable "OFL-$($lic.Directory.Name).txt")
   }
 }
-$Zip = Join-Path $Dist "mortiflix-studio-$Version-windows-$Arch-portable.zip"
+$Zip = Join-Path $Dist "mortiflix-music-$Version-windows-$Arch-portable.zip"
 Remove-Item -Force $Zip -ErrorAction SilentlyContinue
 Compress-Archive -Path $Portable -DestinationPath $Zip
 
@@ -166,8 +166,8 @@ Compress-Archive -Path $Portable -DestinationPath $Zip
 # here; .github/workflows/windows-arm64.yml installs and runs it on ARM64 instead.
 $HostArch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant()
 if ($Arch -ne 'arm64' -or $HostArch -eq 'arm64') {
-  Invoke-Native 'mortiflix-studio-cli --version' { & (Join-Path $Stage 'mortiflix-studio-cli.exe') --version }
+  Invoke-Native 'mortiflix-music-cli --version' { & (Join-Path $Stage 'mortiflix-music-cli.exe') --version }
 } else {
-  Write-Output "skipping mortiflix-studio-cli --version: an $Arch build doesn't run on this $HostArch machine"
+  Write-Output "skipping mortiflix-music-cli --version: an $Arch build doesn't run on this $HostArch machine"
 }
 Get-Item $Msi, $Zip | Format-Table Name, Length

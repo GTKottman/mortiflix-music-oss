@@ -90,8 +90,8 @@ check the bundle and the DMG on your own Mac (`packaging/macos/package.sh`).
 `packaging/windows/package.ps1 -Arch x64|x86|arm64` builds with `+crt-static`, so neither the MSI
 nor the portable zip needs the Visual C++ redistributable.
 
-- `mortiflix-studio.wxs` (WiX) is a per-machine install into Program Files with a Start Menu shortcut and
-  an App Paths entry (Win+R `mortiflix-studio`). Same-version upgrades are allowed, so release candidates
+- `mortiflix-music.wxs` (WiX) is a per-machine install into Program Files\Mortiflix Music with a Start Menu
+  shortcut and an App Paths entry (Win+R `mortiflix-music`), beside an installed Mortiflix Studio. Same-version upgrades are allowed, so release candidates
   replace each other.
 - The ARM64 build is cross-compiled on the x64 runner. `.github/workflows/windows-arm64.yml`
   installs that MSI on a Windows 11 ARM64 runner, runs `mortiflix-studio-cli --version` natively and

@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Mortiflix Music MSI (WiX Toolset v5: `dotnet tool install -g wix`). Built by package.ps1:
+
+    wix build mortiflix-music.wxs -arch x64 -ext WixToolset.UI.wixext -d Version=1.2.3 -d BinDir=...
+      -d IconPath=... -d LicenseRtf=... -o out.msi
+
+  Per-machine install into Program Files\Mortiflix Music and a Start Menu shortcut. No file associations:
+  Mortiflix Music opens no project files. It installs beside an installed Mortiflix Studio without
+  clashing: its own UpgradeCode, product name, folder, exe names, component GUID and App Paths entry.
+
+  With -d MfxDir=<folder> it also installs the Mortiflix bundle (the service, its own Node, ffmpeg,
+  Strudel, the GeneralUser GS soundfont, FluidSynth; packaging/mortiflix/bundle.sh) into
+  INSTALLFOLDER\mortiflix, harvested with WiX v5's Files element. Nothing is downloaded at install time.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+  <Package
+      Name="Mortiflix Music"
+      Manufacturer="Mortiflix"
+      Version="$(var.Version)"
+      UpgradeCode="A365518A-A111-4567-93E7-9351776384FA"
+      Scope="perMachine"
+      Compressed="yes"
+      Language="1033">
+    <SummaryInformation Description="Mortiflix Music" Manufacturer="Mortiflix" />
+    <!-- Same-version upgrades let successive pre-releases of one X.Y.Z replace each other
+         (MSI versions are numeric, so 1.2.3-rc.1 and 1.2.3-rc.2 are both 1.2.3). -->
+    <MajorUpgrade AllowSameVersionUpgrades="yes"
+        DowngradeErrorMessage="A newer version of Mortiflix Music is already installed." />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <Icon Id="MusicIcon.ico" SourceFile="$(var.IconPath)" />
+    <Property Id="ARPPRODUCTICON" Value="MusicIcon.ico" />
+    <Property Id="ARPURLINFOABOUT" Value="https://mortiflix.com" />
+    <Property Id="ARPURLUPDATEINFO" Value="https://mortiflix.com" />
+    <Property Id="ARPHELPLINK" Value="https://mortiflix.com" />
+
+    <StandardDirectory Id="ProgramFiles6432Folder">
+      <Directory Id="INSTALLFOLDER" Name="Mortiflix Music">
+        <Directory Id="MFXFOLDER" Name="mortiflix" />
+      </Directory>
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder" />
+
+    <Feature Id="Main" Title="Mortiflix Music" Level="1">
+      <ComponentGroupRef Id="MusicFiles" />
+<?ifdef MfxDir?>
+      <ComponentGroupRef Id="MortiflixFiles" />
+<?endif?>
+    </Feature>
+
+    <!-- Licence, then the install folder, then install: no tools to pick. -->
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+    <ui:WixUI Id="WixUI_InstallDir" />
+    <WixVariable Id="WixUILicenseRtf" Value="$(var.LicenseRtf)" />
+  </Package>
+
+  <Fragment>
+    <ComponentGroup Id="MusicFiles" Directory="INSTALLFOLDER">
+      <Component Id="MusicApp" Guid="21A20618-AA5F-4461-A487-4679285A11BA">
+        <File Id="MusicExe" Source="$(var.BinDir)\mortiflix-music.exe" KeyPath="yes">
+          <Shortcut Id="StartMenuShortcut" Directory="ProgramMenuFolder" Name="Mortiflix Music"
+              Description="Mortiflix Music: make a song with AI, stage by stage, and take it home as MIDI" WorkingDirectory="INSTALLFOLDER" Advertise="yes"
+              Icon="MusicIcon.ico" IconIndex="0" />
+        </File>
+
+        <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\App Paths\mortiflix-music.exe" Value="[#MusicExe]" Type="string" />
+      </Component>
+
+      <Component Id="MusicCli">
+        <File Id="MusicCliExe" Source="$(var.BinDir)\mortiflix-music-cli.exe" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+<?ifdef MfxDir?>
+
+  <Fragment>
+    <ComponentGroup Id="MortiflixFiles" Directory="MFXFOLDER">
+      <Files Include="$(var.MfxDir)\**" />
+    </ComponentGroup>
+  </Fragment>
+<?endif?>
+</Wix>
