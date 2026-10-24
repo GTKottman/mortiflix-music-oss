@@ -147,6 +147,11 @@ const FIX = { type: 'object', required: ['answer'], properties: { answer: { type
 
 // ---- calls and budget ---------------------------------------------------------------------------------------------
 
+// What a fix round is about, in the journal (to see where tokens go).
+function fixLog(ctx, what, problems) {
+  appendFileSync(join(projectPaths(ctx.root, ctx.id).work, 'JOURNAL.md'), `\n- ${new Date().toISOString()} · ${what}: fix round for ${problems.length} problem${problems.length === 1 ? '' : 's'}: ${problems.slice(0, 8).join('; ').slice(0, 900)}\n`);
+}
+
 async function ask(ctx, role, prompt, schema) {
   const { run, runArgs, config } = ctx;
   if (config.backend !== 'claude-code') return { ok: false, error: 'the MIDI studio runs on Claude Code: link it in Setup' };
@@ -236,7 +241,8 @@ export async function voicedTones(root, symbols) {
 async function notesOf(root, code, { bars, tpb, drums }) {
   const r = await evaluator(root).run(code, { bars, tpb, drums, ms: 8000 });
   if (!r.ok) return { error: String(r.error || 'it did not run').slice(0, 300) };
-  return { notes: r.notes.map(({ t, len, key, vel }) => ({ t, len, key, vel })), problems: r.problems || [] };
+  // notes between grid ticks (triplets, quintuplets) are only rounded to the nearest tick: not a problem to fix
+  return { notes: r.notes.map(({ t, len, key, vel }) => ({ t, len, key, vel })), problems: (r.problems || []).filter((p) => !/off the \d+ grid/.test(p)) };
 }
 
 // ---- documents ----------------------------------------------------------------------------------------------------
@@ -331,6 +337,7 @@ async function stepSongMap(ctx) {
   let m = r.ok ? r.structured : null;
   let problems = m ? mapProblems(m, { genre, brief, recent }) : [];
   for (let i = 0; m && problems.length && i < MAX_FIXES; i++) {
+    fixLog(ctx, 'Song map', problems);
     const f = await ask(ctx, 'fix', `The studio refused this song map. Fix only these problems and keep everything else. Answer with {"answer": <the whole corrected song map>}.\n\n## Problems\n${list(problems)}\n\n## The song map\n${JSON.stringify(m)}`, FIX);
     if (f.ok && f.structured?.answer?.sections) { m = f.structured.answer; problems = mapProblems(m, { genre, brief, recent }); }
   }
@@ -372,6 +379,7 @@ async function stepChords(ctx) {
   let c = r.ok ? r.structured : null;
   let problems = c ? chordProblems(c, map) : [];
   for (let i = 0; c && problems.length && i < MAX_FIXES; i++) {
+    fixLog(ctx, 'Chords', problems);
     const f = await ask(ctx, 'fix', `The studio refused these chords. Fix only these problems and keep everything else. Answer with {"answer": <the whole corrected JSON>}.\n\nKey: ${map.tonic} ${map.mode}. Sections: ${JSON.stringify(map.sections.map((s) => ({ name: s.name, kind: s.kind, bars: s.bars })))}\n\n## Problems\n${list(problems)}\n\n## The chords\n${JSON.stringify(c)}`, FIX);
     if (f.ok && f.structured?.answer?.kinds) { c = f.structured.answer; problems = chordProblems(c, map); }
   }
@@ -423,6 +431,7 @@ async function stepShapes(ctx) {
   };
   let problems = await check();
   for (let i = 0; problems.length && i < MAX_FIXES; i++) {
+    fixLog(ctx, 'Shapes', problems);
     const f = await ask(ctx, 'fix', `The studio refused some of these shapes. Fix only the shapes named in the problems and keep everything else.\n\n${STRUDEL_RULES}\n\nKey ${map.tonic} ${map.mode}. Answer with {"answer": <the whole corrected JSON>}.\n\n## Problems\n${list(problems)}\n\n## The shapes\n${JSON.stringify(s)}`, FIX);
     if (f.ok && f.structured?.answer?.parts) { s = f.structured.answer; problems = await check(); }
   }
@@ -463,6 +472,7 @@ async function stepMelody(ctx) {
   };
   let problems = await check();
   for (let i = 0; problems.length && i < MAX_FIXES; i++) {
+    fixLog(ctx, 'Melody', problems);
     const f = await ask(ctx, 'fix', `The studio refused some of these melodies. Fix only what the problems name and keep everything else.\n\n${STRUDEL_RULES}\n\nKey ${map.tonic} ${map.mode}; chords per kind ${JSON.stringify(chords.kinds.map((c) => ({ kind: c.kind, chords: c.chords, bars_per_chord: c.bars_per_chord })))}. Answer with {"answer": <the whole corrected JSON>}.\n\n## Problems\n${list(problems)}\n\n## The melodies\n${JSON.stringify(m)}`, FIX);
     if (f.ok && f.structured?.answer?.kinds) { m = f.structured.answer; problems = await check(); }
   }
