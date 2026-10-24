@@ -313,7 +313,7 @@ export function applyMove(root, id, move) {
     const i = STAGES.indexOf(String(move.stage || ''));
     if (i < 0 || !String(move.text || '').trim()) return null;
     const r = reopenStage(root, id, i, String(move.text));
-    return { kind: 'reopen', edit: true, row: { role: 'system', text: `Reopened ${STAGE_NAMES[i]}: ${String(move.text).slice(0, 200)}. ${r.remade?.length ? `Made again after it: ${r.remade.join(', ')}.` : ''}`.trim() } };
+    return { kind: 'reopen', edit: true, row: { role: 'system', text: `Reopened ${STAGE_NAMES[i]}: ${String(move.text).slice(0, 200).replace(/[.!]+$/, "")}. ${r.remade?.length ? `Made again after it: ${r.remade.join(', ')}.` : ''}`.trim() } };
   }
   if (move.kind === 'change' && (APPS || MIDI)) {
     const step = stepView(loadProject(root, id), projectPipeline(root, id)).find((x) => (MIDI ? x.review === 'document' : x.key === 'idea') && x.state === 'in_review');
