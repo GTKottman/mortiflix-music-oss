@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Build and package Mortiflix Studio for Linux (<arch> is x86_64 or aarch64, or riscv64 when cross-compiling):
+# Build and package Mortiflix Music for Linux (<arch> is x86_64 or aarch64, or riscv64 when cross-compiling):
 #
-#   $DIST/mortiflix-studio-<version>-linux-<arch>.AppImage  any distro with glibc >= the build host's
-#   $DIST/mortiflix-studio-<version>-linux-<arch>.AppImage.zsync  delta updates (needs zsyncmake)
-#   $DIST/mortiflix-studio-<version>-linux-<arch>.deb       Debian, Ubuntu, Mint, Pop!_OS, ...
-#   $DIST/mortiflix-studio-<version>-linux-<arch>.rpm       Fedora, openSUSE, RHEL, ...
-#   $DIST/mortiflix-studio-<version>-linux-<arch>.tar.gz    plain FHS-style tree (bin/, lib/, share/)
+#   $DIST/mortiflix-music-<version>-linux-<arch>.AppImage  any distro with glibc >= the build host's
+#   $DIST/mortiflix-music-<version>-linux-<arch>.AppImage.zsync  delta updates (needs zsyncmake)
+#   $DIST/mortiflix-music-<version>-linux-<arch>.deb       Debian, Ubuntu, Mint, Pop!_OS, ...
+#   $DIST/mortiflix-music-<version>-linux-<arch>.rpm       Fedora, openSUSE, RHEL, ...
+#   $DIST/mortiflix-music-<version>-linux-<arch>.tar.gz    plain FHS-style tree (bin/, lib/, share/)
 #
 # Usage: packaging/linux/package.sh [--skip-build] [--formats "appimage deb rpm tar"] [--no-mortiflix]
 #
-# Mortiflix Studio: every format also carries the Mortiflix bundle (the service, its own Node,
-# ffmpeg, the sound engine) in lib/mortiflix-studio, made by packaging/mortiflix/bundle.sh (its
+# Mortiflix Music: every format also carries the Mortiflix bundle (the service, its own Node,
+# ffmpeg, the sound engine) in lib/mortiflix-music, made by packaging/mortiflix/bundle.sh (its
 # env: MFX_SERVICE_SRC, MFX_ENGINE_BIN, NODE_VERSION, ...). --no-mortiflix leaves it out.
 #
 # Needs: cargo; nfpm for deb/rpm (https://nfpm.goreleaser.com); appimagetool for the AppImage
@@ -25,7 +25,7 @@ set -euo pipefail
 # shellcheck source=../env.sh
 . "$(dirname "${BASH_SOURCE[0]}")/../env.sh"
 HERE="$ROOT/packaging/linux"
-APP_ID=com.mortiflix.studio
+APP_ID=com.mortiflix.music
 
 SKIP_BUILD=0
 MORTIFLIX=1
@@ -47,10 +47,10 @@ case "$ARCH" in
   aarch64 | arm64) ARCH=aarch64; DEB_ARCH=arm64 ;;
   *) echo "unsupported architecture $ARCH" >&2; exit 2 ;;
 esac
-export MFX_STUDIO_MAINTAINER="${MFX_STUDIO_MAINTAINER:-Mortiflix Studio maintainers <mortiflix-studio@storyteller.ai>}"
-BASENAME="mortiflix-studio-$VERSION-linux-$ARCH"
+export MFX_STUDIO_MAINTAINER="${MFX_STUDIO_MAINTAINER:-Mortiflix Music maintainers <mortiflix-music@storyteller.ai>}"
+BASENAME="mortiflix-music-$VERSION-linux-$ARCH"
 
-echo "==> Mortiflix Studio $VERSION for Linux $ARCH ($FORMATS)"
+echo "==> Mortiflix Music $VERSION for Linux $ARCH ($FORMATS)"
 
 if [ "$SKIP_BUILD" = 0 ]; then
   if [ -n "${CROSS_TARGET:-}" ]; then
@@ -65,10 +65,10 @@ STAGE="$WORK/root"
 rm -rf "$WORK"
 
 # ---- stage an FHS tree (shared by every format) -------------------------------------------------
-# Mortiflix Studio installs its own command names and ids, so it never clashes with upstream Mortiflix Studio.
-install -Dm755 "$BIN/mortiflix-studio" "$STAGE/usr/bin/mortiflix-studio"
-install -Dm755 "$BIN/mortiflix-studio-cli" "$STAGE/usr/bin/mortiflix-studio-cli"
-"${CROSS_COMPILE:-}strip" "$STAGE/usr/bin/mortiflix-studio" "$STAGE/usr/bin/mortiflix-studio-cli" 2>/dev/null || true
+# Mortiflix Music installs its own command names and ids, so it never clashes with upstream Mortiflix Music.
+install -Dm755 "$BIN/mortiflix-studio" "$STAGE/usr/bin/mortiflix-music"
+install -Dm755 "$BIN/mortiflix-studio-cli" "$STAGE/usr/bin/mortiflix-music-cli"
+"${CROSS_COMPILE:-}strip" "$STAGE/usr/bin/mortiflix-music" "$STAGE/usr/bin/mortiflix-music-cli" 2>/dev/null || true
 install -Dm644 "$HERE/$APP_ID.desktop" "$STAGE/usr/share/applications/$APP_ID.desktop"
 install -Dm644 "$HERE/$APP_ID.mime.xml" "$STAGE/usr/share/mime/packages/$APP_ID.xml"
 mkdir -p "$STAGE/usr/share/metainfo"
@@ -76,21 +76,21 @@ sed -e "s/@VERSION@/$VERSION/g" -e "s/@DATE@/$MFX_STUDIO_BUILD_DATE/g" \
   "$HERE/$APP_ID.metainfo.xml.in" >"$STAGE/usr/share/metainfo/$APP_ID.metainfo.xml"
 mkdir -p "$STAGE/usr/share/icons"
 cp -R "$ROOT/assets/app-icon/hicolor" "$STAGE/usr/share/icons/"
-# the icons keep Mortiflix Studio's file names in the repo; installed under this app's id
+# the icons keep Mortiflix Music's file names in the repo; installed under this app's id
 find "$STAGE/usr/share/icons/hicolor" -name 'com.mortiflix.studio.*' | while read -r f; do
   to="${f%/*}/$APP_ID.${f##*.}"
   [ "$f" = "$to" ] || mv "$f" "$to" # already named for the app id since the rename
 done
-mkdir -p "$STAGE/usr/share/doc/mortiflix-studio"
-copy_docs "$STAGE/usr/share/doc/mortiflix-studio"
+mkdir -p "$STAGE/usr/share/doc/mortiflix-music"
+copy_docs "$STAGE/usr/share/doc/mortiflix-music"
 
-# The Mortiflix bundle, found by the app at ../lib/mortiflix-studio from its binary. The folder
+# The Mortiflix bundle, found by the app at ../lib/mortiflix-music from its binary. The folder
 # always exists so nfpm's tree entry is valid without it.
-mkdir -p "$STAGE/usr/lib/mortiflix-studio"
+mkdir -p "$STAGE/usr/lib/mortiflix-music"
 if [ "$MORTIFLIX" = 1 ]; then
   case "$ARCH" in x86_64) MFX_ARCH=x64 ;; aarch64) MFX_ARCH=arm64 ;; *) MFX_ARCH="" ;; esac
   if [ -n "$MFX_ARCH" ]; then
-    "$ROOT/packaging/mortiflix/bundle.sh" --os linux --arch "$MFX_ARCH" --out "$STAGE/usr/lib/mortiflix-studio"
+    "$ROOT/packaging/mortiflix/bundle.sh" --os linux --arch "$MFX_ARCH" --out "$STAGE/usr/lib/mortiflix-music"
   else
     warn "no Mortiflix bundle for $ARCH (Node and ffmpeg builds exist for x86_64 and aarch64 only)"
   fi
@@ -128,14 +128,14 @@ fi
 
 # ---- AppImage -----------------------------------------------------------------------------------
 if has appimage; then
-  APPDIR="$WORK/MortiflixStudio.AppDir"
+  APPDIR="$WORK/MortiflixMusic.AppDir"
   cp -R "$STAGE" "$APPDIR"
   mv "$APPDIR/usr/share/doc" "$WORK/doc-unused"
-  # Mortiflix Studio: AppRun offers the Mortiflix tools on a first run from a terminal, then starts the app.
-  if [ -x "$APPDIR/usr/lib/mortiflix-studio/components.sh" ]; then
+  # Mortiflix Music: AppRun offers the Mortiflix tools on a first run from a terminal, then starts the app.
+  if [ -x "$APPDIR/usr/lib/mortiflix-music/components.sh" ]; then
     install -m755 "$ROOT/packaging/mortiflix/AppRun" "$APPDIR/AppRun"
   else
-    ln -s usr/bin/mortiflix-studio "$APPDIR/AppRun"
+    ln -s usr/bin/mortiflix-music "$APPDIR/AppRun"
   fi
   cp "$HERE/$APP_ID.desktop" "$APPDIR/$APP_ID.desktop"
   cp "$ROOT/assets/app-icon/hicolor/256x256/apps/com.mortiflix.studio.png" "$APPDIR/$APP_ID.png"
@@ -162,7 +162,7 @@ if has appimage; then
   # pre-release. The releases are GITHUB_REPOSITORY's; without it the AppImage carries no update information.
   REPO="${GITHUB_REPOSITORY:-}"
   UPDATE_ARGS=()
-  [ -n "$REPO" ] && UPDATE_ARGS=(-u "gh-releases-zsync|${REPO%%/*}|${REPO#*/}|latest|mortiflix-studio-*-linux-$ARCH.AppImage.zsync")
+  [ -n "$REPO" ] && UPDATE_ARGS=(-u "gh-releases-zsync|${REPO%%/*}|${REPO#*/}|latest|mortiflix-music-*-linux-$ARCH.AppImage.zsync")
   # Extract-and-run: works without FUSE (containers, CI). The output embeds the static runtime,
   # so users don't need libfuse2 either. With zsyncmake on the host (CI installs the zsync
   # package) appimagetool also writes the .zsync, into its working directory, hence the cd.
@@ -176,9 +176,9 @@ if has appimage; then
 fi
 
 if [ -z "${CROSS_TARGET:-}" ]; then
-  "$STAGE/usr/bin/mortiflix-studio-cli" --version
+  "$STAGE/usr/bin/mortiflix-music-cli" --version
 elif [ -n "${EMULATOR:-}" ]; then
-  "$EMULATOR" "$STAGE/usr/bin/mortiflix-studio-cli" --version
+  "$EMULATOR" "$STAGE/usr/bin/mortiflix-music-cli" --version
 fi
 echo "==> done"
 ls -lh "$DIST"

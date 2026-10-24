@@ -11,10 +11,10 @@ if command -v gtk-update-icon-cache >/dev/null 2>&1; then
   gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor || true
 fi
 
-# Mortiflix Studio: `mortiflix-components` (the tools Mortiflix uses), and on a fresh install with a
+# Mortiflix Music: `mortiflix-components` (the tools Mortiflix uses), and on a fresh install with a
 # terminal, the tool picker for the user who ran it (their own studio, never root's). deb passes
 # `configure <old version>` (none = fresh), rpm passes 1 for a fresh install; removal cleans the link.
-mfx=/usr/lib/mortiflix-studio/components.sh
+mfx=/usr/lib/mortiflix-music/components.sh
 if [ -x "$mfx" ]; then
   ln -sf "$mfx" /usr/bin/mortiflix-components
   fresh=0

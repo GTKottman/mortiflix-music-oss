@@ -3,7 +3,7 @@
 # exports VERSION and NFPM_ARCH.
 #
 #   nfpm package -f packaging/linux/nfpm.yaml -p deb -t dist/release/
-name: mortiflix-studio
+name: mortiflix-music
 arch: ${NFPM_ARCH}
 platform: linux
 version: ${VERSION}
@@ -17,14 +17,11 @@ vendor: Mortiflix (based on an open-source editor by Learning Machines LLC)
 homepage: https://mortiflix.com
 license: MIT OR Apache-2.0
 description: |-
-  Mortiflix Studio: make a video with AI step by step (node-based), then edit
-  and render it in a full video editor. Built on Mortiflix Studio (open-source, native
-  video editor: edit video, color and sound).
-  Timeline editing with source and program monitors, color grading and scopes,
-  effects and keyframes, titles and captions, audio mixing with loudness meters,
-  and export; GPU compositing (wgpu).
-  Includes mortiflix-studio-cli, a headless command runner, MCP server and exporter.
-  Installs its own command names, so it never clashes with upstream Mortiflix Studio.
+  Mortiflix Music: make a song with AI, stage by stage (idea, genre, song map,
+  chords, shapes, melody, arrange, feel, export), and take it home as MIDI files
+  for any DAW, with a General MIDI preview. Strudel and a General MIDI soundfont
+  ship inside; FluidSynth plays the preview.
+  Installs its own command names, so it never clashes with Mortiflix Studio.
 
 # The binaries link only glibc and libgcc_s directly. Windowing (X11/Wayland, xkbcommon) and the
 # GPU (Vulkan, EGL/GL) are loaded at runtime, so they are dependencies/recommendations here
@@ -46,7 +43,9 @@ overrides:
       - libxrandr2
       - mesa-vulkan-drivers
       - xdg-desktop-portal
-      # the sound engine (lib/mortiflix-studio/bin/mortiflix-engine)
+      # the song preview
+      - fluidsynth
+      # the sound engine (lib/mortiflix-music/bin/mortiflix-engine)
       - libfreetype6
       - libfontconfig1
       - libatomic1
@@ -66,24 +65,26 @@ overrides:
       - libXrandr
       - mesa-vulkan-drivers
       - xdg-desktop-portal
-      # the sound engine (lib/mortiflix-studio/bin/mortiflix-engine)
+      # the song preview
+      - fluidsynth
+      # the sound engine (lib/mortiflix-music/bin/mortiflix-engine)
       - freetype
       - fontconfig
       - libatomic
 
 contents:
-  - src: ${STAGE}/usr/bin/mortiflix-studio
-    dst: /usr/bin/mortiflix-studio
+  - src: ${STAGE}/usr/bin/mortiflix-music
+    dst: /usr/bin/mortiflix-music
     file_info: { mode: 0755 }
-  - src: ${STAGE}/usr/bin/mortiflix-studio-cli
-    dst: /usr/bin/mortiflix-studio-cli
+  - src: ${STAGE}/usr/bin/mortiflix-music-cli
+    dst: /usr/bin/mortiflix-music-cli
     file_info: { mode: 0755 }
   - src: ${STAGE}/usr/share/
     dst: /usr/share/
     type: tree
-  # Mortiflix Studio: the service, its Node, ffmpeg and the sound engine (packaging/mortiflix)
-  - src: ${STAGE}/usr/lib/mortiflix-studio/
-    dst: /usr/lib/mortiflix-studio/
+  # Mortiflix Music: the service, its Node, ffmpeg and the sound engine (packaging/mortiflix)
+  - src: ${STAGE}/usr/lib/mortiflix-music/
+    dst: /usr/lib/mortiflix-music/
     type: tree
 
 scripts:

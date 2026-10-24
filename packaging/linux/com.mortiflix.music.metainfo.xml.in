@@ -2,23 +2,25 @@
 <!-- AppStream metadata (software centres, Flathub). Template: package.sh and the Flatpak
      manifest substitute @VERSION@ and @DATE@ from Cargo.toml and the build date. -->
 <component type="desktop-application">
-  <id>com.mortiflix.studio</id>
+  <id>com.mortiflix.music</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT OR Apache-2.0</project_license>
-  <name>Mortiflix Studio</name>
-  <summary>Make a video with AI step by step, then edit and render it</summary>
+  <name>Mortiflix Music</name>
+  <summary>Make a song with AI, stage by stage, and take it home as MIDI</summary>
   <developer id="com.mortiflix">
     <name>Mortiflix</name>
   </developer>
   <description>
     <p>
-      Mortiflix Studio walks you through a video with node-based AI generation, then opens it in a full
-      video editor with every piece placed, ready for final edits and the render. It is built on an open-source video editor by
-      Learning Machines LLC (MIT OR Apache-2.0), whose notices and credits it keeps.
+      Mortiflix Music walks a song from an idea to MIDI files in nine stages: idea, genre, song map, chords, shapes,
+      melody, arrange, feel and export. The AI makes the musical decisions and the app writes and checks every note,
+      so each stage is played, checked and approved before the next one starts. Out come a whole-song MIDI file, one
+      per part and one per section, steps for FL Studio and REAPER, and a General MIDI preview. It is built on an
+      open-source video editor by Learning Machines LLC (MIT OR Apache-2.0), whose notices and credits it keeps.
     </p>
   </description>
-  <launchable type="desktop-id">com.mortiflix.studio.desktop</launchable>
-  <icon type="stock">com.mortiflix.studio</icon>
+  <launchable type="desktop-id">com.mortiflix.music.desktop</launchable>
+  <icon type="stock">com.mortiflix.music</icon>
   <!-- Only url types known to appstream 0.15 (Ubuntu 22.04, where CI validates): no vcs-browser. -->
   <url type="homepage">https://mortiflix.com</url>
   <url type="bugtracker">https://mortiflix.com</url>
@@ -26,15 +28,14 @@
   <url type="contact">https://discord.gg/5xCB666rYk</url>
   <categories>
     <category>AudioVideo</category>
-    <category>Video</category>
-    <category>AudioVideoEditing</category>
+    <category>Audio</category>
+    <category>Midi</category>
   </categories>
   <keywords>
-    <keyword>video</keyword>
-    <keyword>video editor</keyword>
-    <keyword>timeline</keyword>
-    <keyword>color grading</keyword>
-    <keyword>nle</keyword>
+    <keyword>music</keyword>
+    <keyword>midi</keyword>
+    <keyword>song</keyword>
+    <keyword>composer</keyword>
   </keywords>
   <branding>
     <color type="primary" scheme_preference="light">#9fd0ff</color>
@@ -49,8 +50,8 @@
     <control>tablet</control>
   </supports>
   <provides>
-    <binary>mortiflix-studio</binary>
-    <mediatype>application/x-mortiflix-studio</mediatype>
+    <binary>mortiflix-music</binary>
+    <mediatype>application/x-mortiflix-music</mediatype>
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>

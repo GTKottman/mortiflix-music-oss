@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Mortiflix Music opens no project files from the file manager (Mortiflix Studio owns *.mortiflix), so it
+     defines no MIME types; the file is kept so the packages install the same set of files. -->
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+</mime-info>

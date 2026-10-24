@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Mortiflix Music
+GenericName=Music Maker
+Comment=Make a song with AI, stage by stage, and take it home as MIDI
+Exec=mortiflix-music %F
+TryExec=mortiflix-music
+Icon=com.mortiflix.music
+Terminal=false
+StartupNotify=true
+StartupWMClass=com.mortiflix.music
+Categories=AudioVideo;Audio;Midi;Music;
+Keywords=music;midi;song;composer;ai;strudel;

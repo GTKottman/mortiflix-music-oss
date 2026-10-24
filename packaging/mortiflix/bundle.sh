@@ -147,6 +147,36 @@ fi
 echo "  node_modules: $(find "$OUT/service/node_modules" -maxdepth 2 -name package.json | wc -l | tr -d ' ') packages"
 cp "$OUT/service/LICENSE" "$OUT/LICENSES/mortiflix-service-AGPL-3.0.txt"
 
+# ---- Mortiflix Music: Strudel, the preview soundfont, FluidSynth on Windows ---------------------
+# The MIDI stages write and read every note with Strudel (service src/strudel), so it ships here instead of a
+# first-run download; the preview is a General MIDI render with FluidSynth. MFX_MUSIC=0 leaves them out.
+MUSIC_DESC=none
+if [ "${MFX_MUSIC:-1}" = 1 ]; then
+  strudel_version="$(sed -n "s/^export const STRUDEL_VERSION = '\(.*\)';/\1/p" "$OUT/service/src/setup.mjs")"
+  [ -n "$strudel_version" ] || { echo "error: no STRUDEL_VERSION in the service's src/setup.mjs" >&2; exit 1; }
+  mkdir -p "$OUT/strudel"
+  printf '{ "name": "mortiflix-strudel", "private": true, "license": "AGPL-3.0-or-later", "dependencies": { "@strudel/web": "%s" } }\n' "$strudel_version" >"$OUT/strudel/package.json"
+  (cd "$OUT/strudel" && "${NPM[@]}" install --omit=dev --ignore-scripts --no-audit --no-fund --loglevel=error)
+  [ -f "$OUT/strudel/node_modules/@strudel/core/package.json" ] || { echo "error: Strudel did not install" >&2; exit 1; }
+  echo "Strudel (@strudel/web $strudel_version, AGPL-3.0-or-later): https://codeberg.org/uzu/strudel" >"$OUT/LICENSES/strudel.txt"
+  # GeneralUser GS by S. Christian Collins (free to use and share; its licence ships with it)
+  GU_SHA=684543d5e5efaef08d02be50dcda8d552478fa60
+  sf="$(fetch "https://raw.githubusercontent.com/mrbumpy409/GeneralUser-GS/$GU_SHA/GeneralUser-GS.sf2" "GeneralUser-GS-$GU_SHA.sf2")"
+  check_sha "$sf" 9575028c7a1f589f5770fccc8cff2734566af40cd26ed836944e9a5152688cfe
+  install -Dm644 "$sf" "$OUT/soundfonts/GeneralUser-GS.sf2"
+  curl -fsSL --retry 3 -o "$OUT/LICENSES/GeneralUser-GS.txt" "https://raw.githubusercontent.com/mrbumpy409/GeneralUser-GS/$GU_SHA/documentation/LICENSE.txt"
+  MUSIC_DESC="strudel $strudel_version, GeneralUser GS $GU_SHA"
+  if [ "$OS-$ARCH" = windows-x64 ]; then
+    fz="$(fetch https://github.com/FluidSynth/fluidsynth/releases/download/v2.6.1/fluidsynth-v2.6.1-win10-x64-cpp11.zip fluidsynth-v2.6.1-win10-x64.zip)"
+    check_sha "$fz" fab7a2e4b85675b66970f97a39bbc239729c5e0f237198b5922a6a73cbc8677c
+    extract "$fz" "$TMP/fluidsynth"
+    for f in "$TMP"/fluidsynth/*/bin/*; do install -m755 "$f" "$OUT/bin/"; done
+    echo "FluidSynth 2.6.1 (LGPL-2.1-or-later) and its libraries, unmodified: https://github.com/FluidSynth/fluidsynth" >"$OUT/LICENSES/fluidsynth.txt"
+    MUSIC_DESC="$MUSIC_DESC, fluidsynth 2.6.1"
+  fi
+  echo "  music: $MUSIC_DESC"
+fi
+
 # ---- ffmpeg --------------------------------------------------------------------------------------
 FFMPEG_DESC=none
 if [ "$FFMPEG" = 1 ]; then
@@ -225,7 +255,8 @@ fi
 # ---- the components step -------------------------------------------------------------------------
 # The installers' tool picker (Blender, the 3D toolkits, Chrome, Strudel, transitions, uv, ComfyUI): the service's
 # own installers, run with the bundled Node. Windows runs the .mjs with node.exe directly.
-if [ "$OS" != windows ]; then install -m755 "$ROOT/packaging/mortiflix/components.sh" "$OUT/components.sh"; fi
+# Mortiflix Music needs none of the tools (Strudel and the soundfont are in the bundle): no components step.
+if [ "$OS" != windows ] && [ "${MFX_MUSIC:-1}" != 1 ]; then install -m755 "$ROOT/packaging/mortiflix/components.sh" "$OUT/components.sh"; fi
 [ -f "$OUT/service/bin/mortiflix-components.mjs" ] || warn "this service has no bin/mortiflix-components.mjs: the installers can't offer the tools"
 
 # ---- what went in --------------------------------------------------------------------------------
@@ -236,6 +267,7 @@ cat >"$OUT/BUNDLE.json" <<EOF
   "service": { "version": "$SERVICE_VERSION", "commit": "$SERVICE_SHA" },
   "node": "$NODE_VERSION",
   "ffmpeg": "$FFMPEG_DESC",
+  "music": "$MUSIC_DESC",
   "engine": $( [ "$ENGINE_DESC" = none ] && echo '"none"' || echo "$ENGINE_DESC" )
 }
 EOF

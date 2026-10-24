@@ -124,7 +124,8 @@ pub fn bundled_dir() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
     let dir = exe.parent()?;
     let up = dir.parent().unwrap_or(dir);
-    [dir.join("mortiflix"), up.join("lib").join("mortiflix-studio"), up.join("Resources").join("mortiflix")].into_iter().find(|d| has_service(d))
+    // lib/mortiflix-music: Mortiflix Music's Linux packages (beside an installed Mortiflix Studio's lib/mortiflix-studio)
+    [dir.join("mortiflix"), up.join("lib").join("mortiflix-music"), up.join("lib").join("mortiflix-studio"), up.join("Resources").join("mortiflix")].into_iter().find(|d| has_service(d))
 }
 
 /// How to start the service.

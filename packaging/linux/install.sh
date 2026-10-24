@@ -4,10 +4,10 @@ set -euo pipefail
 
 usage() {
   echo 'Usage: ./install.sh [--prefix /absolute/path] [--components default|all|none|id,id,...]'
-  echo 'Installs Mortiflix Studio (mortiflix-studio) and its desktop integration into ~/.local by default.'
+  echo 'Installs Mortiflix Music (mortiflix-music) and its desktop integration into ~/.local by default.'
   echo 'For all users: sudo ./install.sh --prefix /usr/local'
-  echo 'Then the Mortiflix tools (Blender + 3D toolkits, Chrome, Strudel, transitions, uv; ComfyUI off) are offered:'
-  echo 'asked one by one in a terminal, or chosen with --components (none = skip; install them later in setup).'
+  echo 'Everything it needs ships inside (its service, Node, Strudel, ffmpeg and a General MIDI soundfont).'
+  echo '--components only applies to a bundle that offers tools (Mortiflix Music has none to offer).'
 }
 fail() { echo "error: $*" >&2; exit 1; }
 prefix="${HOME:?HOME is not set}/.local"
@@ -31,32 +31,32 @@ prefix="$(realpath -m -- "$prefix")"
 [ "$prefix" != / ] || fail 'use /usr/local or a user directory, not /'
 source_dir="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)"
 case "$prefix/" in "$source_dir/"*) fail 'choose an installation prefix outside the extracted tarball' ;; esac
-app_id=com.mortiflix.studio
-for binary in mortiflix-studio mortiflix-studio-cli; do
+app_id=com.mortiflix.music
+for binary in mortiflix-music mortiflix-music-cli; do
   [ -f "$source_dir/bin/$binary" ] || fail "missing bin/$binary; extract the complete tarball first"
 done
 [ -f "$source_dir/share/applications/$app_id.desktop" ] || fail 'missing desktop entry; extract the complete tarball first'
 
 mkdir -p -- "$prefix/bin" "$prefix/share"
-install -m755 -- "$source_dir/bin/mortiflix-studio" "$prefix/bin/mortiflix-studio"
-install -m755 -- "$source_dir/bin/mortiflix-studio-cli" "$prefix/bin/mortiflix-studio-cli"
+install -m755 -- "$source_dir/bin/mortiflix-music" "$prefix/bin/mortiflix-music"
+install -m755 -- "$source_dir/bin/mortiflix-music-cli" "$prefix/bin/mortiflix-music-cli"
 cp -R -- "$source_dir/share/." "$prefix/share/"
-# Mortiflix Studio: the service, its Node, ffmpeg and the sound engine (found from bin/ as
-# ../lib/mortiflix-studio). A fresh copy, so files from an older version never linger.
-if [ -d "$source_dir/lib/mortiflix-studio" ]; then
-  rm -rf -- "$prefix/lib/mortiflix-studio"
+# Mortiflix Music: the service, its Node, ffmpeg and the sound engine (found from bin/ as
+# ../lib/mortiflix-music). A fresh copy, so files from an older version never linger.
+if [ -d "$source_dir/lib/mortiflix-music" ]; then
+  rm -rf -- "$prefix/lib/mortiflix-music"
   mkdir -p -- "$prefix/lib"
-  cp -R -- "$source_dir/lib/mortiflix-studio" "$prefix/lib/mortiflix-studio"
-  if [ -x "$prefix/lib/mortiflix-studio/components.sh" ]; then
-    ln -sf -- "../lib/mortiflix-studio/components.sh" "$prefix/bin/mortiflix-components"
+  cp -R -- "$source_dir/lib/mortiflix-music" "$prefix/lib/mortiflix-music"
+  if [ -x "$prefix/lib/mortiflix-music/components.sh" ]; then
+    ln -sf -- "../lib/mortiflix-music/components.sh" "$prefix/bin/mortiflix-components"
   fi
 fi
 
 # Use an absolute path so launching from the application menu does not depend on PATH.
 # Escape the Exec argument, then the desktop entry's string value (two separate layers).
 # https://specifications.freedesktop.org/desktop-entry/latest/exec-variables.html
-exec_path="$(printf '%s' "$prefix/bin/mortiflix-studio" | sed 's/[\\"`$]/\\&/g; s/\\/\\\\/g')"
-try_path="$(printf '%s' "$prefix/bin/mortiflix-studio" | sed 's/\\/\\\\/g')"
+exec_path="$(printf '%s' "$prefix/bin/mortiflix-music" | sed 's/[\\"`$]/\\&/g; s/\\/\\\\/g')"
+try_path="$(printf '%s' "$prefix/bin/mortiflix-music" | sed 's/\\/\\\\/g')"
 while IFS= read -r line || [ -n "$line" ]; do
   case "$line" in
     Exec=*) printf 'Exec="%s" %%F\n' "$exec_path" ;;
@@ -75,7 +75,7 @@ fi
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then
   gtk-update-icon-cache -q -t -f "$prefix/share/icons/hicolor" || echo 'warning: icon cache refresh failed' >&2
 fi
-printf 'Installed Mortiflix Studio in %s\nLaunch it from the application menu or run "%s/bin/mortiflix-studio".\n' "$prefix" "$prefix"
+printf 'Installed Mortiflix Music in %s\nLaunch it from the application menu or run "%s/bin/mortiflix-music".\n' "$prefix" "$prefix"
 case ":${PATH:-}:" in
   *":$prefix/bin:"*) ;;
   *) printf 'For terminal commands, add %s/bin to your PATH.\n' "$prefix" ;;
@@ -83,7 +83,7 @@ esac
 
 # ---- Mortiflix components: the tools Mortiflix uses, for the user (never system-wide) ----------------
 # Downloaded now with progress, each checked; one that fails or is skipped never fails this install.
-mfx_components="$prefix/lib/mortiflix-studio/components.sh"
+mfx_components="$prefix/lib/mortiflix-music/components.sh"
 if [ -x "$mfx_components" ]; then
   # Under sudo the tools belong to the user who ran it, in their own studio.
   as_user() {
