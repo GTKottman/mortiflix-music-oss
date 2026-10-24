@@ -154,7 +154,7 @@ function fixLog(ctx, what, problems) {
 
 async function ask(ctx, role, prompt, schema) {
   const { run, runArgs, config } = ctx;
-  if (config.backend !== 'claude-code') return { ok: false, error: 'the MIDI studio runs on Claude Code: link it in Setup' };
+  if (config.backend !== 'claude-code') return { ok: false, error: 'Mortiflix Music runs on Claude Code: link it in Setup' };
   const r = await runAs(run, role, { ...runArgs, prompt, config: { ...config, claudeArgs: ['--tools', '', '--json-schema', JSON.stringify(schema)] } });
   ctx.spent.input += r.usage?.input_tokens || 0;
   ctx.spent.output += r.usage?.output_tokens || 0;
