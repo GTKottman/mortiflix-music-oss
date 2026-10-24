@@ -1,28 +1,28 @@
-# Mortiflix Studio installers for anybody new: Linux (tarball, .deb, .rpm, AppImage, Flatpak),
-# Windows (.msi + portable zip) and macOS (.dmg). Each package carries the app, mortiflix-studio-cli and
+# Mortiflix Music installers for anybody new: Linux (tarball, .deb, .rpm, AppImage) and Windows (.msi +
+# portable zip); macOS comes later. Each package carries the app, mortiflix-music-cli and
 # the Mortiflix bundle (the service with its own Node, ffmpeg and the sound engine:
 # packaging/mortiflix/bundle.sh). Run by hand; the artifacts land on the run's page.
 #
 # Signing is optional and uses the same secrets as Mortiflix Studio's own release (packaging/macos/package.sh,
 # packaging/windows/sign.ps1). Without them the macOS build is ad-hoc signed and not notarized, and
 # the Windows files are unsigned: fine for testing, not for strangers.
-name: Mortiflix release
+name: Mortiflix Music release
 
 on:
   workflow_dispatch:
     inputs:
       service-repo:
-        description: "The Mortiflix service repository (mortiflix-oss)"
+        description: "The Mortiflix service repository (this repo: its service branch)"
         type: string
-        default: GTKottman/mortiflix-oss
+        default: GTKottman/mortiflix-music-oss
       service-ref:
         description: "Its branch, tag or commit"
         type: string
-        default: mfx-service/integration
+        default: service
       build-engine:
-        description: "Build the sound engine (mortiflix-engine: JUCE + Tracktion, ~20-40 min per OS)"
+        description: "Build the sound engine (mortiflix-engine: JUCE + Tracktion, ~20-40 min per OS; Mortiflix Music doesn't need it)"
         type: boolean
-        default: true
+        default: false
 
 permissions:
   contents: read
@@ -71,17 +71,13 @@ jobs:
           echo "MFX_ENGINE_BIN=$RUNNER_TEMP/studio/tools/daw-engine/mortiflix-engine" >>"$GITHUB_ENV"
       - name: Package
         run: packaging/linux/package.sh --formats "tar deb rpm appimage"
-      - name: Flatpak
-        continue-on-error: true
-        run: packaging/linux/flatpak-bundle.sh
-      - name: Fresh install with the default tools launches to first-run setup
-        run: >-
-          xvfb-run -a -s "-screen 0 1920x1080x24" python3 packaging/mortiflix/test_install.py
-          dist/release/mortiflix-studio-*-linux-x86_64.tar.gz --hide-host-tools --components default
-          --expect-installed blender,blender-addons,chrome,strudel,transitions,uv
+      - name: The tarball carries Strudel and the soundfont
+        run: |
+          tar -tzf dist/release/mortiflix-music-*-linux-x86_64.tar.gz | grep -q 'lib/mortiflix-music/strudel/node_modules/@strudel/core/package.json'
+          tar -tzf dist/release/mortiflix-music-*-linux-x86_64.tar.gz | grep -q 'lib/mortiflix-music/soundfonts/GeneralUser-GS.sf2'
       - uses: actions/upload-artifact@v4
         with:
-          name: mortiflix-studio-linux
+          name: mortiflix-music-linux
           path: dist/release/*
 
   windows:
@@ -148,53 +144,3 @@ jobs:
           path: |
             dist/release/*.msi
             dist/release/*.zip
-
-  macos:
-    runs-on: macos-14
-    env:
-      APPLE_ID: ${{ secrets.APPLE_ID }}
-      APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
-        with:
-          repository: ${{ inputs.service-repo }}
-          ref: ${{ inputs.service-ref }}
-          path: mortiflix-service
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - name: Rust targets
-        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
-      - name: Signing certificate (skipped without secrets)
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-        run: |
-          if [ -n "$APPLE_CERTIFICATE" ]; then packaging/macos/import-cert.sh; else echo "::warning::no APPLE_CERTIFICATE: ad-hoc signed, not notarized"; fi
-      - name: Sound engine (arm64)
-        if: ${{ inputs.build-engine }}
-        continue-on-error: true
-        run: |
-          brew install ninja
-          cd mortiflix-service && npm ci --omit=dev --ignore-scripts
-          MORTIFLIX_STUDIO="$RUNNER_TEMP/studio" node bin/mortiflix setup daw-engine --build
-          echo "MFX_ENGINE_BIN=$RUNNER_TEMP/studio/tools/daw-engine/mortiflix-engine" >>"$GITHUB_ENV"
-      - name: Package
-        run: packaging/macos/package.sh --arch universal
-      - name: Check the bundle
-        run: |
-          app="$(mktemp -d)"
-          hdiutil attach -nobrowse -mountpoint "$app" dist/release/*.dmg
-          mfx="$app/Mortiflix Studio.app/Contents/Resources/mortiflix"
-          lipo -info "$mfx/node/bin/node" "$mfx/bin/ffmpeg"
-          printf '%s\n' '{"id":1,"type":"hello","params":{"client":"ci","protocol":1}}' \
-            | "$mfx/node/bin/node" "$mfx/service/bin/mortiflix-service.mjs" | head -n1 | tee hello.json
-          grep -q '"ok":true' hello.json
-          hdiutil detach "$app"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: mortiflix-studio-macos
-          path: dist/release/*
