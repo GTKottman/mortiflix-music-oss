@@ -7,7 +7,7 @@ export const MODES = {
   'harmonic minor': [0, 2, 3, 5, 7, 8, 11],
 };
 // Strudel's scale names for the modes above.
-export const STRUDEL_MODE = { major: 'major', minor: 'minor', dorian: 'dorian', mixolydian: 'mixolydian', phrygian: 'phrygian', lydian: 'lydian', 'harmonic minor': 'harmonic minor' };
+export const STRUDEL_MODE = { major: 'major', minor: 'minor', dorian: 'dorian', mixolydian: 'mixolydian', phrygian: 'phrygian', lydian: 'lydian', 'harmonic minor': 'harmonic:minor' }; // a space would split the name in mini-notation
 
 // "F#" → 6, "Bb" → 10; null when it isn't a note name.
 export function pitchClass(name) {

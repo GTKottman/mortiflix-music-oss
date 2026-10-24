@@ -544,6 +544,12 @@ async function stepArrange(ctx) {
     notes[pid] = ['drums', 'perc'].includes(part.role) ? res.notes : fitRange(res.notes, part);
   }
   writeFileSync(join(d, 'notes.json'), JSON.stringify({ tpb, parts: notes }));
+  // a part that plays a section but sounds no note in it (a name Strudel doesn't know plays nothing, without an error)
+  let from = 0;
+  for (const sec of map.sections) {
+    for (const pid of sec.parts) if (!(notes[pid] || []).some((n) => n.t >= from * tpb && n.t < (from + sec.bars) * tpb)) problems.push(`${pid} plays ${sec.name} but sounds no note there`);
+    from += sec.bars;
+  }
   let at = 0;
   const rows = map.sections.map((s) => { const r = `| ${s.name} | ${at + 1}-${at + s.bars} | ${map.parts.map((p) => notes[p.id]?.filter((n) => n.t >= at * tpb && n.t < (at + s.bars) * tpb).length || '').join(' | ')} |`; at += s.bars; return r; });
   const md = `# ${map.title} · Arrangement v${version}\n\nThe whole song in plain Strudel (midi/song.strudel.js), ${total} bars. Notes per part and section:\n\n| Section | Bars | ${map.parts.map((p) => p.id).join(' | ')} |\n|---|---|${map.parts.map(() => '---').join('|')}|\n${rows.join('\n')}\n\n${checksMd([`${Object.values(notes).reduce((a, n) => a + n.length, 0)} notes`, 'every part ran', 'every part inside its range'], problems)}`;
