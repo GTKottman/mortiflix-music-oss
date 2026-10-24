@@ -186,7 +186,7 @@ function chordAt(prog, t, tpb) {
 }
 
 // Problems with one part's notes in one section: chord tones for harmony parts, scale tones for melodies, the range.
-export function noteProblems(notes, { role, part, map, prog, tpb }) {
+export function noteProblems(notes, { role, part, map, prog, tpb, voiced = {} }) {
   const out = [];
   const scale = scaleOf(map.tonic, map.mode);
   if (role === 'drums' || role === 'perc') return out;
@@ -195,7 +195,7 @@ export function noteProblems(notes, { role, part, map, prog, tpb }) {
   let strong = 0;
   for (const n of notes) {
     const sym = chordAt(prog, n.t, tpb);
-    const ct = chordTones(sym)?.tones || [];
+    const ct = [...(chordTones(sym)?.tones || []), ...(voiced[sym] || [])];
     const pc = ((n.key % 12) + 12) % 12;
     if (['lead', 'counter'].includes(role)) {
       if (!inScale(n.key, scale) && !ct.includes(pc)) off += 1;
@@ -217,6 +217,20 @@ export function fitRange(notes, part) {
     while (k > hi && k - 12 >= 0) k -= 12;
     return k === n.key ? n : { ...n, key: k };
   });
+}
+
+// The pitch classes Strudel's own voicing plays for each chord symbol (so a tone it voices is never "outside the chord").
+const VOICED = new Map();
+export async function voicedTones(root, symbols) {
+  const out = {};
+  for (const sym of new Set(symbols)) {
+    if (!VOICED.has(sym)) {
+      const r = await evaluator(root).run(`chord("${sym}").voicing()`, { bars: 1, ms: 8000 }).catch(() => null);
+      VOICED.set(sym, r?.ok ? [...new Set(r.notes.map((n) => ((n.key % 12) + 12) % 12))] : []);
+    }
+    out[sym] = VOICED.get(sym);
+  }
+  return out;
 }
 
 async function notesOf(root, code, { bars, tpb, drums }) {
@@ -374,7 +388,7 @@ async function stepChords(ctx) {
 }
 
 // One shape checked over the first section that plays it: it runs, it has notes, every pitch fits.
-async function shapeCheck(root, code, part, map, chords) {
+export async function shapeCheck(root, code, part, map, chords) {
   const sec = map.sections.find((s) => s.parts.includes(part.id)) || map.sections[0];
   const prog = chords.kinds.find((k) => k.kind === sec.kind) || chords.kinds[0];
   const tpb = tpbOf(map.meter);
@@ -383,7 +397,8 @@ async function shapeCheck(root, code, part, map, chords) {
   if (res.error) return [`${part.id}: ${res.error}`];
   if (!res.notes.length) return [`${part.id}: the shape plays no notes`];
   if (!drums && !/<CHORDS>|<SCALE>/.test(code)) return [`${part.id}: a harmony part must use <CHORDS> (or <SCALE>) instead of naming notes`];
-  return [...res.problems.slice(0, 2).map((p) => `${part.id}: ${p}`), ...noteProblems(res.notes, { role: part.role, part, map, prog, tpb })];
+  const voiced = await voicedTones(root, prog.chords);
+  return [...res.problems.slice(0, 2).map((p) => `${part.id}: ${p}`), ...noteProblems(res.notes, { role: part.role, part, map, prog, tpb, voiced })];
 }
 
 async function stepShapes(ctx) {
@@ -440,7 +455,7 @@ async function stepMelody(ctx) {
       const res = await notesOf(root, fill(x.code, { scale: scaleText(map, m.octave) }), { bars: lens[x.kind] || 8, tpb: tpbOf(map.meter), drums: false });
       if (res.error) { probs.push(`${x.kind}: ${res.error}`); continue; }
       if (!res.notes.length) probs.push(`${x.kind}: no notes`);
-      probs.push(...noteProblems(res.notes, { role: 'lead', part: { ...lead, id: x.kind }, map, prog, tpb: tpbOf(map.meter) }));
+      probs.push(...noteProblems(res.notes, { role: 'lead', part: { ...lead, id: x.kind }, map, prog, tpb: tpbOf(map.meter), voiced: await voicedTones(root, prog.chords) }));
       const steps = res.notes.slice(1).map((n, i) => Math.abs(n.key - res.notes[i].key));
       if (steps.length > 6 && steps.filter((s) => s <= 2).length / steps.length < 0.4) probs.push(`${x.kind}: under 40% of the moves are steps (it jumps around)`);
     }

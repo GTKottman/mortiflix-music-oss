@@ -28,16 +28,20 @@ const QUALITIES = [
   [/^(maj7|M7|\^7)/, [0, 4, 7, 11]], [/^(m7b5|ø)/, [0, 3, 6, 10]], [/^(dim7|o7)/, [0, 3, 6, 9]], [/^(dim|o)/, [0, 3, 6]],
   [/^(m9|-9)/, [0, 3, 7, 10, 2]], [/^(maj9|\^9)/, [0, 4, 7, 11, 2]], [/^(maj13|\^13)/, [0, 4, 7, 11, 2, 9]], [/^(maj|M)(?![0-9])/, [0, 4, 7]], [/^(m11)/, [0, 3, 7, 10, 5]], [/^(m7|-7)/, [0, 3, 7, 10]],
   [/^(m6)/, [0, 3, 7, 9]], [/^(m13)/, [0, 3, 7, 10, 2, 9]], [/^(m|-)/, [0, 3, 7]], [/^(9sus4|9sus)/, [0, 5, 7, 10, 2]], [/^(13sus4|13sus)/, [0, 5, 7, 10, 2, 9]], [/^(13)/, [0, 4, 7, 10, 2, 9]], [/^(11)/, [0, 7, 10, 2, 5]], [/^(9)/, [0, 4, 7, 10, 2]], [/^(7sus4|7sus)/, [0, 5, 7, 10]], [/^(7)/, [0, 4, 7, 10]],
-  [/^(6)/, [0, 4, 7, 9]], [/^(sus4|sus)/, [0, 5, 7]], [/^(sus2)/, [0, 2, 7]], [/^(add9|add2)/, [0, 4, 7, 2]], [/^(aug|\+)/, [0, 4, 8]], [/^$/, [0, 4, 7]],
+  [/^(m69)/, [0, 3, 7, 9, 2]], [/^(69)/, [0, 4, 7, 9, 2]], [/^(6)/, [0, 4, 7, 9]], [/^(sus4|sus)/, [0, 5, 7]], [/^(sus2)/, [0, 2, 7]], [/^(add9|add2)/, [0, 4, 7, 2]], [/^(aug|\+)/, [0, 4, 8]], [/^$/, [0, 4, 7]],
 ];
 export function chordTones(symbol) {
   const m = /^([A-G][#b]?)(.*)$/.exec(String(symbol).trim());
   if (!m) return null;
   const root = pitchClass(m[1]);
-  const rest = m[2].split('/')[0];
+  const rest = m[2].replace('6/9', '69').split('/')[0];
   const q = QUALITIES.find(([re]) => re.test(rest));
   if (!q) return null;
-  return { root, tones: q[1].map((i) => (root + i) % 12) };
+  // alterations and added tones after the quality (G7b9, F13b9, Bbmaj9#11, C7#5, Dm7b5, C6/9, Cadd11)
+  const m0 = q[0].exec(rest)?.[0] || '';
+  const ALT = { b5: 6, '#5': 8, b9: 1, '#9': 3, 9: 2, '#11': 6, 11: 5, b13: 8, 13: 9, 6: 9 };
+  const extra = [...rest.slice(m0.length).matchAll(/(b|#)?(5|6|9|11|13)/g)].map((x) => ALT[`${x[1] || ''}${x[2]}`]).filter((x) => x !== undefined);
+  return { root, tones: [...new Set([...q[1], ...extra])].map((i) => (root + i) % 12) };
 }
 
 export const inScale = (key, scale) => scale.includes(((key % 12) + 12) % 12);
