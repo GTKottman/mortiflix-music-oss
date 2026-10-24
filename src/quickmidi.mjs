@@ -5,7 +5,7 @@
 // Export are code only (no tokens). Every call's tokens are added to the project's usage; a song stops at its budget.
 import { runAs } from './models.mjs';
 import { execFile } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync, appendFileSync, mkdirSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, appendFileSync, mkdirSync, rmSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { paths } from './studio.mjs';
 import { loadProject, projectPaths, projectPipeline } from './projects.mjs';
@@ -617,7 +617,20 @@ async function stepFeel(ctx) {
 }
 
 const sh = (cmd, args) => new Promise((ok) => execFile(cmd, args, { timeout: 5 * 60_000 }, (e, so, se) => ok({ code: e ? e.code || 1 : 0, out: `${so}${se}`.slice(-600) })));
-export const SOUNDFONT = process.env.MFX_SOUNDFONT || '/mnt/storage/drive_1/mortiflix/soundfonts/GeneralUser-GS-9575028c.sf2';
+// The General MIDI soundfont for the preview: MFX_SOUNDFONT, the installer's bundled one, the studio's tools, then the
+// system's usual places. None found: the MIDI files are made all the same, without a preview.
+export function soundfont(root) {
+  const dirs = [process.env.MFX_BUNDLE && join(process.env.MFX_BUNDLE, 'soundfonts'), join(paths(root).run, '..', 'tools', 'soundfonts'),
+    '/usr/share/soundfonts', '/usr/share/sounds/sf2', '/usr/share/sounds/sf3', '/usr/local/share/soundfonts', '/opt/homebrew/share/soundfonts'].filter(Boolean);
+  if (process.env.MFX_SOUNDFONT && existsSync(process.env.MFX_SOUNDFONT)) return process.env.MFX_SOUNDFONT;
+  for (const d of dirs) {
+    try {
+      const f = readdirSync(d).filter((x) => /\.sf[23]$/i.test(x)).sort((a, b) => (/general|fluid|gm/i.test(b) ? 1 : 0) - (/general|fluid|gm/i.test(a) ? 1 : 0))[0];
+      if (f) return join(d, f);
+    } catch { /* not there */ }
+  }
+  return null;
+}
 
 async function stepExport(ctx) {
   const { root, id, version } = ctx;
@@ -645,17 +658,19 @@ async function stepExport(ctx) {
   const problems = [];
   // a preview to listen to: the General MIDI soundfont through FluidSynth, then MP3
   let preview = null;
-  if (existsSync(SOUNDFONT)) {
+  const sf = soundfont(root);
+  if (sf) {
     const wav = join(out, `${name}-preview.wav`);
-    const r1 = await sh('fluidsynth', ['-ni', '-g', '0.6', '-F', wav, '-r', '44100', SOUNDFONT, join(out, `${name}.mid`)]);
-    if (r1.code) problems.push(`the preview didn't render: ${r1.out}`);
+    const r1 = await sh('fluidsynth', ['-ni', '-g', '0.6', '-F', wav, '-r', '44100', sf, join(out, `${name}.mid`)]);
+    if (r1.code === 'ENOENT') problems.push('no preview: FluidSynth isn\'t installed (the MIDI files are all here)');
+    else if (r1.code) problems.push(`the preview didn't render: ${r1.out}`);
     else {
       const songSec = map.sections.reduce((n, x) => n + x.bars, 0) * (map.meter === '3/4' ? 3 : 4) * 60 / map.bpm;
       // FluidSynth renders until every voice dies (a long tail of near-silence): cut at the song's end plus 4 s
       const r2 = await sh('ffmpeg', ['-y', '-loglevel', 'error', '-i', wav, '-t', (songSec + 4).toFixed(2), '-af', 'loudnorm=I=-14:TP=-1.5:LRA=11', '-ar', '44100', '-b:a', '256k', join(out, `${name}-preview.mp3`)]);
       if (r2.code) problems.push(`the preview MP3 failed: ${r2.out}`); else { preview = `midi/out/${name}-preview.mp3`; rmSync(wav, { force: true }); }
     }
-  } else problems.push('no General MIDI soundfont for the preview');
+  } else problems.push('no preview: no General MIDI soundfont found (the MIDI files are all here)');
   const recent = readJson(recentFile(root), []);
   recent.push({ title: map.title, tonic: map.tonic, mode: map.mode, bpm: map.bpm, at: new Date().toISOString() });
   writeFileSync(recentFile(root), JSON.stringify(recent.slice(-30), null, 1));

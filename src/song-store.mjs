@@ -47,7 +47,9 @@ export function saveSong(root, id, song, text) {
 }
 
 export function strudelDirOf(root) {
-  const d = process.env.MFX_STRUDEL || join(toolsDir(root), 'strudel');
+  // MFX_STRUDEL, then the copy an installer bundles (Mortiflix Music ships Strudel), then the studio's own tools
+  const bundled = process.env.MFX_BUNDLE ? join(process.env.MFX_BUNDLE, 'strudel') : null;
+  const d = process.env.MFX_STRUDEL || (bundled && existsSync(join(bundled, 'node_modules', '@strudel', 'core')) ? bundled : join(toolsDir(root), 'strudel'));
   if (!existsSync(join(d, 'node_modules', '@strudel', 'core'))) throw new UserError('Strudel isn\'t installed: mortiflix setup music');
   return d;
 }
