@@ -95,7 +95,8 @@ pub enum Product {
     Midi,
 }
 
-/// `MFX_PRODUCT=apps` or `midi`, else a binary whose name has "apps" or "midi" in it, else Video. Decided once per run.
+/// `MFX_PRODUCT=video`, `apps` or `midi`, else a binary whose name has "apps" or "midi" in it, else Mortiflix Music
+/// (this repo's app). Decided once per run.
 pub fn product() -> Product {
     static PRODUCT: std::sync::OnceLock<Product> = std::sync::OnceLock::new();
     *PRODUCT.get_or_init(|| {
@@ -110,8 +111,14 @@ pub fn product() -> Product {
             }
         };
         match std::env::var("MFX_PRODUCT") {
-            Ok(v) => pick(&v).unwrap_or(Product::Video),
-            Err(_) => std::env::current_exe().ok().and_then(|p| p.file_stem().and_then(|s| pick(&s.to_string_lossy()))).unwrap_or(Product::Video),
+            Ok(v) if v.eq_ignore_ascii_case("video") => Product::Video,
+            Ok(v) => pick(&v).unwrap_or(Product::Midi),
+            // Mortiflix Music's own repo (mortiflix-music-oss): the app's binary is the music app unless MFX_PRODUCT says
+            // otherwise; anything else (test binaries) keeps Mortiflix Studio's default
+            Err(_) => {
+                let stem = std::env::current_exe().ok().and_then(|p| p.file_stem().map(|s| s.to_string_lossy().to_ascii_lowercase())).unwrap_or_default();
+                pick(&stem).unwrap_or(if stem.starts_with("mortiflix-music") || stem.starts_with("mortiflix-studio") { Product::Midi } else { Product::Video })
+            }
         }
     })
 }
