@@ -607,7 +607,9 @@ async function stepExport(ctx) {
     const r1 = await sh('fluidsynth', ['-ni', '-g', '0.6', '-F', wav, '-r', '44100', SOUNDFONT, join(out, `${name}.mid`)]);
     if (r1.code) problems.push(`the preview didn't render: ${r1.out}`);
     else {
-      const r2 = await sh('ffmpeg', ['-y', '-loglevel', 'error', '-i', wav, '-af', 'loudnorm=I=-14:TP=-1.5:LRA=11', '-ar', '44100', '-b:a', '256k', join(out, `${name}-preview.mp3`)]);
+      const songSec = map.sections.reduce((n, x) => n + x.bars, 0) * (map.meter === '3/4' ? 3 : 4) * 60 / map.bpm;
+      // FluidSynth renders until every voice dies (a long tail of near-silence): cut at the song's end plus 4 s
+      const r2 = await sh('ffmpeg', ['-y', '-loglevel', 'error', '-i', wav, '-t', (songSec + 4).toFixed(2), '-af', 'loudnorm=I=-14:TP=-1.5:LRA=11', '-ar', '44100', '-b:a', '256k', join(out, `${name}-preview.mp3`)]);
       if (r2.code) problems.push(`the preview MP3 failed: ${r2.out}`); else { preview = `midi/out/${name}-preview.mp3`; rmSync(wav, { force: true }); }
     }
   } else problems.push('no General MIDI soundfont for the preview');
