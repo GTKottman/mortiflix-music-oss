@@ -1,5 +1,5 @@
-// The MIDI studio v1 (MFX_PRODUCT=midi): its nine stages, only its own pipeline, its own studio folder, and nothing
-// runs yet (each stage's work comes one version at a time).
+// The MIDI studio (MFX_PRODUCT=midi): its nine stages, only its own pipeline, and on the demo backend nothing is made
+// (the stages run on Claude Code; test/midi-flow.test.mjs runs a whole song with a fake one).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { tempStudio } from './helpers.mjs';
@@ -14,7 +14,7 @@ const { listPipelines } = await import('../src/pipelines.mjs');
 
 const sleep = (ms) => new Promise((ok) => setTimeout(ok, ms));
 
-test('MIDI studio: nine stages, the song pipeline only, nothing runs', async (t) => {
+test('MIDI studio: nine stages, the song pipeline only, nothing made on the demo backend', async (t) => {
   assert.deepEqual(STAGE_NAMES, ['Idea', 'Genre', 'Song map', 'Chords', 'Shapes', 'Melody', 'Arrange', 'Feel', 'Export']);
   assert.equal(STAGES.length, 9);
   assert.equal(STAGE_EDIT, -1);
@@ -43,7 +43,7 @@ test('MIDI studio: nine stages, the song pipeline only, nothing runs', async (t)
   svc.poke(0);
   await sleep(30);
   const steps = stepView(loadProject(root, id), projectPipeline(root, id));
-  assert.equal(steps.length, 9);
+  assert.equal(steps.length, 10, 'questions + the nine stages');
   assert.ok(steps.every((s) => !s.version), 'no stage made anything');
   assert.notEqual(loadProject(root, id).state, 'queued');
 });
