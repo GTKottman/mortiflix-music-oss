@@ -2,7 +2,8 @@
 // videos). `apps` is the app-making studio: the same engine walks a full application through the industry's planning
 // stages, and the AI builds it last. `midi` (owner, 2026-10-23) is the MIDI studio: the same engine walks a song
 // through its stages and ends in MIDI files. Set by the app with MFX_PRODUCT=apps or midi; anything else is video.
-export const PRODUCT = ['apps', 'midi'].includes(process.env.MFX_PRODUCT) ? process.env.MFX_PRODUCT : 'video';
+// Mortiflix Music's own repo (mortiflix-music-oss): the music studio unless MFX_PRODUCT says otherwise.
+export const PRODUCT = ['apps', 'video'].includes(process.env.MFX_PRODUCT) ? process.env.MFX_PRODUCT : 'midi';
 export const APPS = PRODUCT === 'apps';
 export const MIDI = PRODUCT === 'midi';
 // The studios that walk their own stages (apps, midi) rather than the video's.

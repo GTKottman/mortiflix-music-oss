@@ -39,7 +39,7 @@ export const DEFAULT_CONFIG = {
 
 export function studioRoot(explicit) {
   // the app studio and the MIDI studio keep their own folders, so app projects, songs and videos never mix (src/product.mjs)
-  const folder = { apps: 'Mortifex', midi: 'MortiflixMidi' }[process.env.MFX_PRODUCT] || 'Mortiflix';
+  const folder = { apps: 'Mortifex', video: 'Mortiflix' }[process.env.MFX_PRODUCT] || 'MortiflixMidi';
   return resolve(explicit || process.env.MORTIFLIX_STUDIO || join(homedir(), folder));
 }
 
