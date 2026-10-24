@@ -433,6 +433,13 @@ fn load_history(ctx: &mut MfxCtx, st: &mut ChatUi, now: f64) {
         return;
     }
     st.history_for = ctx.state.project_id.clone();
+    // Answers and OK/Cut given here belong to the project they were given in: question ids repeat across projects
+    // (every MIDI song asks `purpose`, `feel`…), so another project's answers would show its card as answered.
+    st.answered.clear();
+    st.decided.clear();
+    st.custom_for = None;
+    st.custom_text.clear();
+    st.open_cards.clear();
     let id = ctx.service.request("chat.history", json!({"limit": crate::state::MAX_CHAT}));
     st.pending.push((id, Pending::History, now));
     let id = ctx.service.request("questions.list", json!({}));
