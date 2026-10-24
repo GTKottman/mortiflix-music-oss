@@ -34,6 +34,8 @@ pub struct MidiState {
     pub usage: u64,
     /// The MIDI files' folder, empty until Export wrote it.
     pub out: String,
+    /// Why the song stopped (paused, waiting for Resume), empty while it runs.
+    pub stopped: String,
 }
 
 impl MidiState {
@@ -90,6 +92,7 @@ fn apply(st: &mut MidiState, result: &Value) {
         .collect();
     st.usage = result.get("usage").and_then(Value::as_u64).unwrap_or(0);
     st.out = text(result, "out");
+    st.stopped = text(result, "stopped");
 }
 
 /// What each stage makes, in the plan's words. Index = stage.
@@ -138,6 +141,11 @@ fn making(step: &MidiStep) -> bool {
     matches!(step.state.as_str(), "ready" | "working" | "changes")
 }
 
+/// The status of a stage being made, or why the song stopped (then nothing is being made).
+fn now_line(midi: &MidiState, stage: u8, step: &MidiStep) -> String {
+    if midi.stopped.is_empty() { making_line(stage, step) } else { format!("Stopped: {}", midi.stopped) }
+}
+
 /// The one-line status while a stage's document is being made: "Making the song map…", "Making the song map v2…".
 fn making_line(stage: u8, step: &MidiStep) -> String {
     let (name, _) = MADE.get(usize::from(stage)).copied().unwrap_or(("stage", "is"));
@@ -150,7 +158,7 @@ fn idea_line(midi: &MidiState) -> String {
     match (questions, midi.step("idea")) {
         ("ready" | "working" | "changes", _) => "Reading your idea…".into(),
         ("in_review", _) => "The four questions are in the chat. Take the suggested answer, or type your own.".into(),
-        (_, Some(brief)) if making(brief) => making_line(0, brief),
+        (_, Some(brief)) if making(brief) => now_line(midi, 0, brief),
         _ => String::new(),
     }
 }
@@ -176,7 +184,7 @@ pub fn show_centre(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
             ui.label(RichText::new(about).size(14.0).color(t.text_dim));
             let now = match &step {
                 _ if stage == 0 => idea_line(&ctx.state.midi),
-                Some(s) if making(s) => making_line(stage, s),
+                Some(s) if making(s) => now_line(&ctx.state.midi, stage, s),
                 _ => String::new(),
             };
             if !now.is_empty() {
@@ -195,7 +203,7 @@ pub fn show_centre(ui: &mut egui::Ui, ctx: &mut MfxCtx) {
 fn doc(ui: &mut egui::Ui, ctx: &mut MfxCtx, stage: u8, step: &MidiStep) {
     let t = ctx.theme;
     if making(step) {
-        ui.label(RichText::new(making_line(stage, step)).size(12.0).color(t.text_faint));
+        ui.label(RichText::new(now_line(&ctx.state.midi, stage, step)).size(12.0).color(t.text_faint));
         ui.add_space(8.0);
     }
     crate::markdown::show(ui, &t, &step.doc);

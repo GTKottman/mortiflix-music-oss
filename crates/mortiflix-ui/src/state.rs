@@ -53,6 +53,7 @@ impl StageStatus {
             StatusKind::Making if self.total > 0 => format!("making {}/{}", self.done.min(self.total), self.total),
             StatusKind::Making => "making".into(),
             StatusKind::Ready => "ready to check".into(),
+            StatusKind::NeedsYou if self.need == 0 => "needs you".into(),
             StatusKind::NeedsYou if self.need == 1 => "1 needs you".into(),
             StatusKind::NeedsYou => format!("{} need you", self.need),
             StatusKind::Done => "done".into(),
