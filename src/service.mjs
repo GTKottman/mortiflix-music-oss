@@ -706,7 +706,7 @@ export function createService({ root = studioRoot(), send, runner: wantRunner = 
         return { queued: true, move: typed.move || null };
       }
       emit('chat.typing', { on: true });
-      quickReply(root, id, { text, context })
+      quickReply(root, id, { text, context, stage: state.stage })
         .then((r) => {
           const done = applyMove(root, id, r.move);
           chatRow(id, { role: 'ai', text: r.reply, refs: r.move?.node ? [String(r.move.node)] : [], ...(context !== 'video' ? { context } : {}) });

@@ -212,6 +212,12 @@ export function reopenStage(root, id, stage, text) {
   const step = view.at(-1);
   if (!step) throw new GateError(`nothing in ${STAGE_NAMES[i]} is approved yet: say what to change in the chat`);
   const r = reopen(root, id, step.key, { overall: String(text || '').slice(0, 4000) });
+  // The MIDI studio: every later stage is built on this one, so each is made again (owner confirmed in the chat first).
+  if (MIDI) {
+    const later = pipeline.steps.slice(pipeline.steps.findIndex((s) => s.key === step.key) + 1).map((s) => s.key);
+    update(root, id, (p) => { for (const k of later) delete p.steps[k]; });
+    r.remade = later.map((k) => pipeline.steps.find((s) => s.key === k).name);
+  }
   update(root, id, (p) => {
     p.mfx ||= {};
     upgradeMfx(p.mfx);

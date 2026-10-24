@@ -665,7 +665,7 @@ export function midiView(root, id) {
   const d = mp(root, id);
   const docs = { idea: 'brief.md', genre: 'genre.md', 'song-map': 'songmap.md', chords: 'chords.md', shapes: 'shapes.md', melody: 'melody.md', arrange: 'arrange.md', feel: 'feel.md', export: 'export.md' };
   return {
-    steps: steps.map((s) => ({ key: s.key, stage: s.stage, state: s.state, version: s.version || 0, doc: docs[s.key] && existsSync(join(d, docs[s.key])) ? readFileSync(join(d, docs[s.key]), 'utf8') : null })),
+    steps: steps.map((s) => ({ key: s.key, stage: s.stage, state: s.state, version: s.version || 0, doc: s.version && docs[s.key] && existsSync(join(d, docs[s.key])) ? readFileSync(join(d, docs[s.key]), 'utf8') : null })),
     usage: usedTokens(root, id),
     out: existsSync(join(d, 'out')) ? join(d, 'out') : null,
   };

@@ -11,6 +11,7 @@ process.env.MFX_STRUDEL ||= join(process.env.HOME, 'Mortiflix', 'tools', 'strude
 const { createProject, loadProject, projectPaths, projectPipeline } = await import('../src/projects.mjs');
 const { stepView, respond } = await import('../src/gates.mjs');
 const { quickMidi, quickMidiStep, applyFeel, chordProblems, mapProblems, closeMidi } = await import('../src/quickmidi.mjs');
+const { reopenStage } = await import('../src/svc/stages.mjs');
 test.after(() => closeMidi());
 
 const has = existsSync(join(process.env.MFX_STRUDEL, 'node_modules', '@strudel', 'core'));
@@ -81,6 +82,12 @@ test('MIDI flow: idea to MIDI files, every stage checked', { skip: !has && 'Stru
   const fin = JSON.parse(readFileSync(join(projectPaths(root, id).work, 'midi', 'final.json'), 'utf8'));
   assert.ok(fin.parts.lead.length > 10 && fin.parts.drums.length > 50);
   assert.ok(fin.parts.bass.every((n) => n.key >= 28 && n.key <= 55), 'bass inside its range');
+  // a confirmed change to the approved song map reopens it and every later stage is made again, in order
+  const r = reopenStage(root, id, 'songMap', 'one more chorus');
+  assert.deepEqual(r.remade, ['Chords', 'Shapes', 'Melody', 'Arrange', 'Feel', 'Export']);
+  assert.equal(quickMidiStep(root, id).key, 'song-map');
+  const after = stepView(loadProject(root, id), projectPipeline(root, id));
+  assert.ok(after.filter((s) => ['chords', 'export'].includes(s.key)).every((s) => !s.version));
   for (const step of ['shapes', 'melody', 'chords']) assert.doesNotMatch(readFileSync(join(projectPaths(root, id).work, 'midi', `${step === 'chords' ? 'chords' : step}.md`), 'utf8'), /✗/, `${step} passed its checks`);
 });
 

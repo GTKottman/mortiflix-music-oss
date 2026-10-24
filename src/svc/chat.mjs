@@ -15,7 +15,7 @@ import { submissions, answerQuestion, respond, stepView } from '../gates.mjs';
 import { APPS, MIDI } from '../product.mjs';
 import { PARENT_SESSION_VARS, leanArgs } from '../backends/claude-code.mjs';
 import { credentials, DEFAULT_MODEL } from '../backends/anthropic-api.mjs';
-import { stageOf, STAGE_NAMES } from './stages.mjs';
+import { stageOf, STAGE_NAMES, STAGES, reopenStage } from './stages.mjs';
 import { readLook } from './look.mjs';
 
 const ROLES = ['user', 'ai', 'system', 'action', 'stage'];
@@ -210,7 +210,7 @@ function appBriefFor(root, id, project, context) {
 
 const APP_SYSTEM = `You are the Mortifex assistant inside an app-making studio: the owner plans an app stage by stage, and the AI builds it last. The owner typed a message about their app. Reply in one or two short plain sentences, in plain words with no jargon. If the message asks for a change to the brief while it waits for the owner (step idea in_review), also pick the change move. If it answers an open question, pick the answer move. Never post or publish anything. Answer ONLY with JSON: {"reply": "...", "move": null | {"kind": "change", "text": "<what to change in the brief>"} | {"kind": "answer", "question": "<q id>", "value": "<answer>"}}.`;
 
-const MIDI_SYSTEM = `You are the assistant inside a MIDI studio: the owner makes a song stage by stage (Idea, Genre, Song map, Chords, Shapes, Melody, Arrange, Feel, Export), and the studio hands over MIDI files at the end. The owner typed a message about their song. Reply in one or two short plain sentences, in plain words. If the message asks for a change to the stage waiting for the owner (a step in_review), also pick the change move. If it answers an open question, pick the answer move. Never post or publish anything. Answer ONLY with JSON: {"reply": "...", "move": null | {"kind": "change", "text": "<what to change>"} | {"kind": "answer", "question": "<q id>", "value": "<answer>"}}.`;
+const MIDI_SYSTEM = `You are the assistant inside a MIDI studio: the owner makes a song stage by stage (Idea, Genre, Song map, Chords, Shapes, Melody, Arrange, Feel, Export), and the studio hands over MIDI files at the end. The owner typed a message about their song. Reply in one or two short plain sentences, in plain words. If the message asks for a change to the stage the owner is looking at while that stage waits for them (its step in_review), pick the change move. If that stage is already approved, do not change it yet: say plainly that changing it remakes every later stage (name them) and ask them to confirm; only when their message confirms a change you already described, pick the reopen move with the stage key and the full change. If it answers an open question, pick the answer move. Never post or publish anything. Answer ONLY with JSON: {"reply": "...", "move": null | {"kind": "change", "text": "<what to change>"} | {"kind": "reopen", "stage": "<stage key>", "text": "<the whole change>"} | {"kind": "answer", "question": "<q id>", "value": "<answer>"}}.`;
 
 const SYSTEM = `You are the Mortiflix assistant inside a video app. The owner typed a message about their video. Reply in one or two short plain sentences. If the message asks for a change to one piece, also pick a move. Never post or publish anything. Answer ONLY with JSON: {"reply": "...", "move": null | {"kind": "fix", "node": "<id>", "text": "<what to change>"} | {"kind": "answer", "question": "<q id>", "value": "<answer>"}}. Use node ids exactly as listed (b01, s03, t02, m01, sf01, line ids).`;
 
@@ -224,10 +224,11 @@ function parseReply(text) {
 
 // One short call to the user's own AI. Backends: claude-code (`claude -p`, no tools, no saved session), anthropic-api
 // (the fallback key), demo (canned, free). `config.chatBackend` overrides the studio's backend.
-export async function quickReply(root, id, { text, context }) {
+export async function quickReply(root, id, { text, context, stage = null }) {
   const config = loadConfig(root);
   const backend = config.chatBackend || loadProject(root, id).backend || config.backend;
-  const prompt = `${briefFor(root, id, context)}\n\nThe owner says:\n<<<\n${String(text).slice(0, 8000)}\n>>>`;
+  const viewing = MIDI && Number.isInteger(stage) && STAGE_NAMES[stage] ? `\nThe owner is looking at the ${STAGE_NAMES[stage]} stage (key ${STAGES[stage]}).` : '';
+  const prompt = `${briefFor(root, id, context)}${viewing}\n\nThe owner says:\n<<<\n${String(text).slice(0, 8000)}\n>>>`;
   if (backend === 'demo') {
     const m = String(text).match(/\b(s\d{2,3}|b\d{2,3}|t\d{2,3}|m\d{2,3}|sf\d{2,3})\b/i);
     return m ? { reply: `Demo: I'll change ${m[1].toUpperCase()} for you.`, move: { kind: 'fix', node: m[1].toLowerCase(), text } }
@@ -307,6 +308,13 @@ export function applyMove(root, id, move) {
     return { kind: 'fix', node: n.id, edit: r.edit.id, row: { role: 'system', text: `Sent as Fix on ${n.label} (${r.edit.id}).`, context: n.id, edit: r.edit.id, refs: [n.id] } };
   }
   // The app studio: a change to the brief waiting for the owner sends it back with their words (src/quickidea.mjs).
+  // The MIDI studio: the owner confirmed a change to an approved stage: it reopens, and every later stage is made again.
+  if (move.kind === 'reopen' && MIDI) {
+    const i = STAGES.indexOf(String(move.stage || ''));
+    if (i < 0 || !String(move.text || '').trim()) return null;
+    const r = reopenStage(root, id, i, String(move.text));
+    return { kind: 'reopen', edit: true, row: { role: 'system', text: `Reopened ${STAGE_NAMES[i]}: ${String(move.text).slice(0, 200)}. ${r.remade?.length ? `Made again after it: ${r.remade.join(', ')}.` : ''}`.trim() } };
+  }
   if (move.kind === 'change' && (APPS || MIDI)) {
     const step = stepView(loadProject(root, id), projectPipeline(root, id)).find((x) => (MIDI ? x.review === 'document' : x.key === 'idea') && x.state === 'in_review');
     if (!step || !String(move.text || '').trim()) return null;
