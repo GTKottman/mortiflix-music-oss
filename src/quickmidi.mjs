@@ -662,6 +662,16 @@ async function stepExport(ctx) {
   return { ok: true };
 }
 
+// Make the notes, the feel and the files again from the approved decisions (song map, chords, shapes, melody): code
+// only, no AI. For a song made before a fix to the studio's code; the stages' gates are left as they are.
+export async function rebuildFromDecisions(root, id) {
+  const ctx = { root, id, version: 1 };
+  for (const fn of [stepArrange, stepFeel, stepExport]) {
+    try { await fn(ctx); } catch (e) { if (!/already|waiting for review|approved/.test(e.message)) throw e; }
+  }
+  return readJson(join(mp(root, id), 'final.json'));
+}
+
 const STEP_FN = { questions: stepQuestions, idea: stepBrief, genre: stepGenre, 'song-map': stepSongMap, chords: stepChords, shapes: stepShapes, melody: stepMelody, arrange: stepArrange, feel: stepFeel, export: stepExport };
 
 // Run the MIDI step that's next, after checking the song's token budget.
