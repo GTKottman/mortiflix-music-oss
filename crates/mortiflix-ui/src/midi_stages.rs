@@ -136,6 +136,19 @@ const MADE: [(&str, &str); 9] = [
     ("MIDI files", "are"),
 ];
 
+/// Every step of the stage is made and nothing is being made: what Next needs (owner, 2026-10-24: "the same way as
+/// Mortiflix Studio", the stages after stay grey until then). The questions must be answered; a document waiting
+/// for a check is taken as it is. False while the steps are not read yet.
+pub fn finished(midi: &MidiState, stage_key: &str) -> bool {
+    let mut steps = midi.steps.iter().filter(|s| s.stage == stage_key).peekable();
+    steps.peek().is_some()
+        && steps.all(|s| match s.state.as_str() {
+            "approved" | "done" | "skipped" => true,
+            "in_review" => s.key != "questions",
+            _ => false,
+        })
+}
+
 /// True while the service is making (or remaking) a step.
 fn making(step: &MidiStep) -> bool {
     matches!(step.state.as_str(), "ready" | "working" | "changes")
@@ -279,6 +292,24 @@ mod tests {
             assert!(!hint(i).is_empty());
         }
         assert_eq!(MADE.len(), crate::MIDI_STAGES.len());
+    }
+
+    #[test]
+    fn a_stage_is_finished_only_when_all_its_steps_are() {
+        let step = |key: &str, stage: &str, state: &str| MidiStep { key: key.into(), stage: stage.into(), state: state.into(), ..MidiStep::default() };
+        let mut m = MidiState::default();
+        // not read yet: shut
+        assert!(!finished(&m, "idea"));
+        // questions waiting for answers: shut, whatever the brief does
+        m.steps = vec![step("questions", "idea", "in_review"), step("idea", "idea", "blocked")];
+        assert!(!finished(&m, "idea"));
+        // answered, brief being written: shut
+        m.steps = vec![step("questions", "idea", "approved"), step("idea", "idea", "working")];
+        assert!(!finished(&m, "idea"));
+        // answered, brief made and waiting for a check: open
+        m.steps = vec![step("questions", "idea", "approved"), step("idea", "idea", "in_review"), step("genre", "genre", "blocked")];
+        assert!(finished(&m, "idea"));
+        assert!(!finished(&m, "genre"));
     }
 
     #[test]

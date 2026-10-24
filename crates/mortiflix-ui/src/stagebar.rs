@@ -158,10 +158,10 @@ pub fn show(ui: &mut egui::Ui, rect: Rect, ctx: &mut MfxCtx) {
         let half = (right.width() - 12.0) / 2.0;
         let edit = Rect::from_min_size(pos2(right.min.x + 4.0, rect.min.y + 7.0), vec2(half - 4.0, rect.height() - 14.0));
         let get = Rect::from_min_size(pos2(edit.max.x + 6.0, rect.min.y + 7.0), vec2(half, rect.height() - 14.0));
-        if button(ui, ctx, edit, "Edit the video", false, "mfx.stagebar.editVideo").clicked() {
+        if button(ui, ctx, edit, "Edit the video", false, true, "mfx.stagebar.editVideo").clicked() {
             ctx.command("stages.editVideo", json!({}));
         }
-        if button(ui, ctx, get, "Get the video", true, "mfx.stagebar.getVideo").clicked() {
+        if button(ui, ctx, get, "Get the video", true, true, "mfx.stagebar.getVideo").clicked() {
             ctx.command("stages.getVideo", json!({}));
         }
     } else {
@@ -180,9 +180,21 @@ pub fn show(ui: &mut egui::Ui, rect: Rect, ctx: &mut MfxCtx) {
         } else {
             format!("Next: {}", stage_name(stage.saturating_add(1)))
         };
-        let resp = button(ui, ctx, next, &label, ready && !apps_last, "mfx.stagebar.next");
+        // the MIDI studio: shut until the stage is finished (owner, 2026-10-24: like Mortiflix Studio)
+        let finished = !crate::midi() || crate::midi_stages::finished(&ctx.state.midi, crate::stage_key(stage));
+        let resp = button(ui, ctx, next, &label, ready && !apps_last, finished, "mfx.stagebar.next");
         if (stage < STAGE_RENDER || crate::staged()) && !apps_last && !midi_last {
-            chevron(&p, pos2(next.max.x - 14.0, next.center().y), 1.0, if ready { Color32::WHITE } else { t.text_dim });
+            let col = if !finished {
+                t.text_faint
+            } else if ready {
+                Color32::WHITE
+            } else {
+                t.text_dim
+            };
+            chevron(&p, pos2(next.max.x - 14.0, next.center().y), 1.0, col);
+        }
+        if !finished {
+            resp.clone().on_hover_text(format!("Finish {} first.", stage_name(stage)));
         }
         if resp.clicked() && !apps_last {
             ctx.command(if stage >= STAGE_RENDER && !crate::staged() { "mortiflix.renderVideo" } else { "stages.next" }, json!({}));
@@ -229,18 +241,25 @@ pub fn show(ui: &mut egui::Ui, rect: Rect, ctx: &mut MfxCtx) {
     crate::look::popups(ui, ctx);
 }
 
-/// A stage-bar button: blue (the one accent) when `primary`, else grey. It always works.
-fn button(ui: &mut egui::Ui, ctx: &mut MfxCtx, r: Rect, label: &str, primary: bool, auto_id: &str) -> egui::Response {
+/// A stage-bar button: blue (the one accent) when `primary`, else grey.
+/// `open` false: drawn shut (faint, no hover) and never clicked.
+fn button(ui: &mut egui::Ui, ctx: &mut MfxCtx, r: Rect, label: &str, primary: bool, open: bool, auto_id: &str) -> egui::Response {
     let t = ctx.theme;
-    let resp = ui.interact(r, egui::Id::new(auto_id), Sense::click());
-    let fill = match (primary, resp.hovered()) {
+    let resp = ui.interact(r, egui::Id::new(auto_id), if open { Sense::click() } else { Sense::hover() });
+    let fill = match (primary && open, resp.hovered() && open) {
         (true, false) => t.accent,
         (true, true) => t.accent_hover,
         (false, false) => t.hover,
         (false, true) => t.separator.gamma_multiply(2.0),
     };
     ui.painter().rect_filled(r, 4.0, fill);
-    let col = if primary { Color32::WHITE } else { t.text };
+    let col = if !open {
+        t.text_faint
+    } else if primary {
+        Color32::WHITE
+    } else {
+        t.text
+    };
     ui.painter().with_clip_rect(r).text(r.center(), Align2::CENTER_CENTER, label, FontId::proportional(13.0), col);
     ctx.auto(auto_id, &resp, label);
     resp

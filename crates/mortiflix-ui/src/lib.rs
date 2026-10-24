@@ -374,6 +374,11 @@ impl Mortiflix {
         };
         let moved = |m: &mut Self, to: u8, done: bool| m.go_to(to, done).map_or(Nav::Stay, |from| Nav::Moved { from, to });
         let last = u8::try_from(stages().len().saturating_sub(1)).unwrap_or(STAGE_RENDER);
+        // the MIDI studio: a stage not finished yet doesn't go forward, from the bar, a shortcut or an agent
+        // (owner, 2026-10-24: like Mortiflix Studio)
+        if what == "next" && !force && midi() && !midi_stages::finished(&self.state.midi, stage_key(stage)) {
+            return Some(Nav::Stay);
+        }
         Some(match what {
             // the app studio has no Get the video / Edit the video
             "getVideo" | "editVideo" if apps() => Nav::Stay,
