@@ -294,6 +294,7 @@ export function mapProblems(m, { genre, brief, recent = [] }) {
   if (scaleOf(m.tonic, m.mode) === null) out.push(`the key "${m.tonic} ${m.mode}" isn't one the studio knows`);
   for (const s of m.sections) for (const p of s.parts) if (!ids.has(p)) out.push(`${s.name} plays "${p}", which isn't a part`);
   for (const s of m.sections) if (s.bars % 2) out.push(`${s.name} is ${s.bars} bars: use an even number`);
+  for (const p of m.parts) if (!m.sections.some((s) => s.parts.includes(p.id))) out.push(`${p.name} (${p.id}) never plays: give it the sections it plays in, or leave it out`);
   if (genre && (m.bpm < genre.bpm_min - 5 || m.bpm > genre.bpm_max + 5)) out.push(`${m.bpm} BPM is outside the genre's ${genre.bpm_min}-${genre.bpm_max}`);
   const sec = m.sections.reduce((a, s) => a + s.bars, 0) * (m.meter === '3/4' ? 3 : 4) * 60 / m.bpm;
   if (brief && Math.abs(sec - brief.length_sec) > brief.length_sec * 0.25) out.push(`the song is ${Math.round(sec)} s long; the brief asks for about ${brief.length_sec} s`);

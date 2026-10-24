@@ -87,7 +87,7 @@ test('MIDI flow: idea to MIDI files, every stage checked', { skip: !has && 'Stru
 test('song map and chord checks name the problems', () => {
   const bad = { ...MAP, parts: MAP.parts.slice(0, 4), sections: [{ ...MAP.sections[0], bars: 3, parts: ['nope'] }] };
   const p = mapProblems(bad, { genre: { bpm_min: 120, bpm_max: 130 }, brief: { length_sec: 300 } });
-  assert.ok(p.some((x) => /only 4 parts/.test(x)) && p.some((x) => /no lead/.test(x)) && p.some((x) => /isn't a part/.test(x)) && p.some((x) => /even number/.test(x)) && p.some((x) => /outside the genre/.test(x)));
+  assert.ok(p.some((x) => /only 4 parts/.test(x)) && p.some((x) => /no lead/.test(x)) && p.some((x) => /isn't a part/.test(x)) && p.some((x) => /even number/.test(x)) && p.some((x) => /outside the genre/.test(x)) && p.some((x) => /never plays/.test(x)));
   const c = chordProblems({ kinds: [{ kind: 'verse', chords: ['Am', 'F#', 'Xyz'], bars_per_chord: 1 }] }, { ...MAP, sections: [{ name: 'V', kind: 'verse', bars: 8, parts: [] }] });
   assert.ok(c.some((x) => /F# is outside/.test(x)) && c.some((x) => /Xyz/.test(x)) && c.some((x) => /doesn't fit/.test(x)));
 });
