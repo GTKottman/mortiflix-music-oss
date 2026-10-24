@@ -131,13 +131,13 @@ pub fn staged() -> bool {
     product() != Product::Video
 }
 
-/// The app's name on screen: the app studio is Mortifex (owner, 2026-10-21). The MIDI studio's name isn't
-/// picked yet: "MIDI Studio" is the plan's working title.
+/// The app's name on screen: the app studio is Mortifex (owner, 2026-10-21); the MIDI studio is Mortiflix Music
+/// (owner, 2026-10-24: its own app, the new version of mortiflix-music-oss).
 pub fn app_name() -> &'static str {
     match product() {
         Product::Video => "Mortiflix Studio",
         Product::Apps => "Mortifex",
-        Product::Midi => "MIDI Studio",
+        Product::Midi => "Mortiflix Music",
     }
 }
 

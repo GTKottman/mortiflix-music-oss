@@ -1536,8 +1536,8 @@ pub fn window_title(egui_ctx: &egui::Context) -> &'static str {
         (false, crate::Product::Video) => "Mortiflix Settings",
         (true, crate::Product::Apps) => "Mortifex Setup",
         (false, crate::Product::Apps) => "Mortifex Settings",
-        (true, crate::Product::Midi) => "MIDI Studio Setup",
-        (false, crate::Product::Midi) => "MIDI Studio Settings",
+        (true, crate::Product::Midi) => "Mortiflix Music Setup",
+        (false, crate::Product::Midi) => "Mortiflix Music Settings",
     }
 }
 
