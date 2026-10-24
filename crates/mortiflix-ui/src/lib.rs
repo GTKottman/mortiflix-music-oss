@@ -154,6 +154,10 @@ pub fn branded(text: &str) -> std::borrow::Cow<'_, str> {
     if !staged() || !text.contains("Mortiflix") {
         return std::borrow::Cow::Borrowed(text);
     }
+    // Mortiflix Music keeps the plain brand ("the Mortiflix service"): only Studio's own name changes, once
+    if app_name().starts_with("Mortiflix") {
+        return std::borrow::Cow::Owned(text.replace("Mortiflix Studio", app_name()));
+    }
     std::borrow::Cow::Owned(text.replace("Mortiflix Studio", app_name()).replace("Mortiflix", app_name()))
 }
 
