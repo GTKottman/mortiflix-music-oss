@@ -432,8 +432,11 @@ async function stepShapes(ctx) {
   let problems = await check();
   for (let i = 0; problems.length && i < MAX_FIXES; i++) {
     fixLog(ctx, 'Shapes', problems);
-    const f = await ask(ctx, 'fix', `The studio refused some of these shapes. Fix only the shapes named in the problems and keep everything else.\n\n${STRUDEL_RULES}\n\nKey ${map.tonic} ${map.mode}. Answer with {"answer": <the whole corrected JSON>}.\n\n## Problems\n${list(problems)}\n\n## The shapes\n${JSON.stringify(s)}`, FIX);
-    if (f.ok && f.structured?.answer?.parts) { s = f.structured.answer; problems = await check(); }
+    const bad = s.parts.filter((x) => problems.some((p) => p.startsWith(`${x.part}:`)));
+    const missing = parts.filter((p) => !s.parts.some((x) => x.part === p.id)).map((p) => `${p.id} (${p.role})`);
+    const f = await ask(ctx, 'fix', `The studio refused some of these shapes. Answer with only the parts named below, fixed (all their shapes); the other parts stay as they are.\n\n${STRUDEL_RULES}\n\nKey ${map.tonic} ${map.mode}. Answer with {"answer": {"parts": [<only the fixed or missing parts>]}}.\n\n## Problems\n${list(problems)}\n\n## The parts to fix\n${JSON.stringify(bad)}${missing.length ? `\n\n## Missing: write shapes for\n${missing.join(', ')}` : ''}`, FIX);
+    const got = f.ok ? f.structured?.answer?.parts : null;
+    if (Array.isArray(got) && got.length) { s.parts = [...s.parts.filter((x) => !got.some((g) => g.part === x.part)), ...got]; problems = await check(); }
   }
   for (const x of s.parts) x.picked = Math.min(Math.max(0, x.suggested | 0), x.shapes.length - 1);
   writeFileSync(join(d, 'shapes.json'), JSON.stringify(s, null, 1));
@@ -454,8 +457,11 @@ async function stepMelody(ctx) {
   const r = await ask(ctx, 'plan', base.join('\n\n'), MELODY);
   let m = r.ok ? r.structured : null;
   if (!m?.kinds) return { ...r, ok: false, error: r.error || 'the melody call gave no melody' };
+  // how stepwise each melody is: shown on the stage, never a fix round (blues and funk lines leap by nature)
+  let notes = [];
   const check = async () => {
     const probs = [];
+    notes = [];
     for (const k of kinds) if (!m.kinds.some((x) => x.kind === k)) probs.push(`no melody for the ${k}`);
     for (const x of m.kinds) {
       const prog = chords.kinds.find((c) => c.kind === x.kind);
@@ -466,18 +472,21 @@ async function stepMelody(ctx) {
       if (!res.notes.length) probs.push(`${x.kind}: no notes`);
       probs.push(...noteProblems(res.notes, { role: 'lead', part: { ...lead, id: x.kind }, map, prog, tpb: tpbOf(map.meter), voiced: await voicedTones(root, prog.chords) }));
       const steps = res.notes.slice(1).map((n, i) => Math.abs(n.key - res.notes[i].key));
-      if (steps.length > 6 && steps.filter((s) => s <= 2).length / steps.length < 0.4) probs.push(`${x.kind}: under 40% of the moves are steps (it jumps around)`);
+      if (steps.length > 6) notes.push(`${x.kind}: ${Math.round((steps.filter((s) => s <= 2).length / steps.length) * 100)}% of the moves are steps`);
     }
     return probs;
   };
   let problems = await check();
   for (let i = 0; problems.length && i < MAX_FIXES; i++) {
     fixLog(ctx, 'Melody', problems);
-    const f = await ask(ctx, 'fix', `The studio refused some of these melodies. Fix only what the problems name and keep everything else.\n\n${STRUDEL_RULES}\n\nKey ${map.tonic} ${map.mode}; chords per kind ${JSON.stringify(chords.kinds.map((c) => ({ kind: c.kind, chords: c.chords, bars_per_chord: c.bars_per_chord })))}. Answer with {"answer": <the whole corrected JSON>}.\n\n## Problems\n${list(problems)}\n\n## The melodies\n${JSON.stringify(m)}`, FIX);
-    if (f.ok && f.structured?.answer?.kinds) { m = f.structured.answer; problems = await check(); }
+    const bad = m.kinds.filter((x) => problems.some((p) => p.startsWith(`${x.kind}:`)));
+    const missing = kinds.filter((k) => !m.kinds.some((x) => x.kind === k));
+    const f = await ask(ctx, 'fix', `The studio refused some of these melodies. Answer with only the melodies named below, fixed; the others stay as they are.\n\n${STRUDEL_RULES}\n\nKey ${map.tonic} ${map.mode}; chords per kind ${JSON.stringify(chords.kinds.map((c) => ({ kind: c.kind, chords: c.chords, bars_per_chord: c.bars_per_chord })))}; section lengths ${JSON.stringify(lens)}. Answer with {"answer": {"kinds": [<only the fixed or missing melodies>]}}.\n\n## Problems\n${list(problems)}\n\n## The melodies to fix\n${JSON.stringify(bad)}${missing.length ? `\n\n## Missing: write these\n${missing.join(', ')}` : ''}`, FIX);
+    const got = f.ok ? f.structured?.answer?.kinds : null;
+    if (Array.isArray(got) && got.length) { m.kinds = [...m.kinds.filter((x) => !got.some((g) => g.kind === x.kind)), ...got]; problems = await check(); }
   }
   writeFileSync(join(d, 'melody.json'), JSON.stringify(m, null, 1));
-  const md = `# ${map.title} · Melody v${version}\n\n${lead.name}, tonic in octave ${m.octave}\n\n${m.kinds.map((x) => `## ${x.kind}\n\n${x.why}\n\n\`${x.code}\``).join('\n\n')}\n\n${checksMd(['every melody runs in Strudel', 'in the scale', 'strong beats mostly on chord tones', 'mostly stepwise'], problems)}`;
+  const md = `# ${map.title} · Melody v${version}\n\n${lead.name}, tonic in octave ${m.octave}\n\n${m.kinds.map((x) => `## ${x.kind}\n\n${x.why}\n\n\`${x.code}\``).join('\n\n')}\n\n${checksMd(['every melody runs in Strudel', 'in the scale', 'strong beats mostly on chord tones'], problems)}${notes.length ? `\n## Shape\n\n${list(notes)}\n` : ''}`;
   submitDoc(root, id, 'melody', { file: writeDoc(root, id, 'melody.md', md), label: `Melody v${version}`, note: m.note || 'The melody.' });
   return r;
 }

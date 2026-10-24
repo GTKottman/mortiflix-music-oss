@@ -108,3 +108,39 @@ test('feel: fills into a lift, swing on the off-beats, no overlaps', () => {
   assert.ok(parts.drums.some((n) => n.key === 49 && Math.abs(n.t - 4 * 3840) < 10), 'crash on the lift');
   assert.ok(stats.swung > 0);
 });
+
+test('a fix round sends back only the refused part and merges it', { skip: !has && 'Strudel not installed' }, async (t) => {
+  const root = tempStudio(t, { backend: 'claude-code' });
+  const { id } = createProject(root, { pipeline: 'midi-song', title: 'Test Song', answers: { idea: 'x' } });
+  const config = { backend: 'claude-code', models: {} };
+  const asked = [];
+  const run = async (args) => {
+    const r = await fakeRun(args);
+    const schema = JSON.parse(args.config.claudeArgs[args.config.claudeArgs.indexOf('--json-schema') + 1]);
+    if (schema.required.includes('parts') && !schema.required.includes('tonic')) {
+      // the keys part names notes instead of using <CHORDS>: refused
+      r.structured.parts.find((p) => p.part === 'keys').shapes[0].code = 'note("c4 e4 g4")';
+    }
+    if (schema.required[0] === 'answer') {
+      asked.push(args.prompt);
+      return { ok: true, structured: { answer: { parts: [{ part: 'keys', suggested: 0, shapes: [{ name: 'fixed', code: 'chord("<CHORDS>").voicing().struct("x ~")', why: 'w' }, { name: 'held', code: 'chord("<CHORDS>").voicing()', why: 'w' }] }] } }, usage: {} };
+    }
+    return r;
+  };
+  for (let guard = 0; guard < 6; guard++) {
+    const view = quickMidiStep(root, id);
+    if (!view) break;
+    const r = await quickMidi({ root, id, view, run, runArgs: {}, config, onActivity: () => {} });
+    assert.ok(r.ok, `${view.key}: ${r.error}`);
+    const sv = stepView(loadProject(root, id), projectPipeline(root, id)).find((s) => s.key === view.key);
+    respond(root, id, view.key, sv.version, { verdict: 'approve', answers: {} });
+    if (view.key === 'shapes') break;
+  }
+  assert.equal(asked.length, 1, 'one fix round');
+  assert.match(asked[0], /"part":"keys"/);
+  assert.doesNotMatch(asked[0], /"part":"drums"/, 'only the refused part is sent');
+  const shapes = JSON.parse(readFileSync(join(projectPaths(root, id).work, 'midi', 'shapes.json'), 'utf8'));
+  assert.equal(shapes.parts.length, 5, 'the other parts are kept');
+  assert.equal(shapes.parts.find((p) => p.part === 'keys').shapes[0].name, 'fixed');
+  assert.doesNotMatch(readFileSync(join(projectPaths(root, id).work, 'midi', 'shapes.md'), 'utf8'), /✗/);
+});
