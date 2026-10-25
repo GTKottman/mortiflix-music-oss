@@ -14,6 +14,7 @@ import { chatHistory } from './svc/chat.mjs';
 import { createEvaluator } from './strudel/evaluator.mjs';
 import { strudelDirOf } from './song-store.mjs';
 import { writeSmf, PPQ } from './midi/smf.mjs';
+import { decode, sectionPower, sectionBounds, barSeconds, balance, ccFor, isDense, DENSE_HIGHPASS, ANCHOR_ROLES } from './midi/balance.mjs';
 import { scaleOf, chordTones, inScale, strudelProgression, strudelChord, STRUDEL_MODE, MODES } from './midi/theory.mjs';
 
 export const MIDI_STEPS = ['questions', 'idea', 'genre', 'song-map', 'chords', 'shapes', 'melody', 'arrange', 'feel', 'export'];
@@ -90,11 +91,12 @@ const STRUDEL_RULES = `Notes are written in plain Strudel only (no helper functi
 
 const QSCHEMA = { type: 'object', required: MIDI_QUESTIONS.map((q) => q.id), properties: Object.fromEntries(MIDI_QUESTIONS.map((q) => [q.id, { type: 'string', description: `a suggested answer to "${q.text}", one short plain sentence` }])) };
 const BRIEF = {
-  type: 'object', required: ['title', 'summary', 'purpose', 'genre', 'feel', 'length_sec', 'like', 'must', 'never', 'note'],
+  type: 'object', required: ['title', 'summary', 'purpose', 'genre', 'feel', 'length_sec', 'like', 'energy_curve', 'must', 'never', 'note'],
   properties: {
     title: { type: 'string', description: 'the song\'s title exactly as the owner named it' }, summary: { type: 'string', description: 'one sentence: what the song is' },
     purpose: { type: 'string' }, genre: { type: 'string', description: 'the genre in a few words' }, feel: { type: 'string' },
     length_sec: { type: 'integer', minimum: 30, maximum: 600 }, like: { type: 'string', description: 'songs or artists it should sound like (never copy them)' },
+    energy_curve: { type: 'array', minItems: 4, maxItems: 12, description: 'this song\'s own rise and fall, drawn from its story (not the genre\'s usual build): points through the song from 0 (the start) to 100 (the end)', items: { type: 'object', required: ['at', 'energy', 'why'], properties: { at: { type: 'integer', minimum: 0, maximum: 100, description: 'percent of the way through the song' }, energy: { type: 'integer', minimum: 1, maximum: 5 }, why: { type: 'string', description: 'what happens in the story here, a few words' } } } },
     must: { type: 'array', items: { type: 'string' }, description: 'what the song must have' }, never: { type: 'array', items: { type: 'string' }, description: 'what it must never do' },
     note: { type: 'string', description: 'for the owner: what to check before pressing Next' },
   },
@@ -278,12 +280,13 @@ async function stepQuestions(ctx) {
 async function stepBrief(ctx) {
   const { root, id, view, version } = ctx;
   const d = mp(root, id);
-  const r = await ask(ctx, 'brief', [`You write the one-page brief for a song the owner is making in a MIDI studio. Every later stage (genre, song map, chords, shapes, melody) is planned from it. Plain words. Never copy a real song; "sounds like" means the feel. Answer with the JSON asked for, nothing else.`, ...ownerWords(root, id), ...changesAsked(root, id, view, join(d, 'brief.md'))].join('\n\n'), BRIEF);
+  const r = await ask(ctx, 'brief', [`You write the one-page brief for a song the owner is making in a MIDI studio. Every later stage (genre, song map, chords, shapes, melody) is planned from it. Plain words. Never copy a real song; "sounds like" means the feel. The energy curve is this song's own: where it starts, rises, falls and peaks comes from what the song is about, not from the genre's usual intro-build-drop. Answer with the JSON asked for, nothing else.`, ...ownerWords(root, id), ...changesAsked(root, id, view, join(d, 'brief.md'))].join('\n\n'), BRIEF);
   const s = r.ok ? r.structured : null;
   if (!s?.summary) return { ...r, ok: false, error: r.error || 'the brief call gave no brief' };
   s.title = loadProject(root, id).title;
+  s.energy_curve = curvePoints(s.energy_curve);
   writeFileSync(join(d, 'brief.json'), JSON.stringify(s, null, 1));
-  const md = `# ${s.title} · Brief v${version}\n\n${s.summary}\n\n## What it's for\n\n${s.purpose}\n\n## Genre\n\n${s.genre}\n\n## The feel\n\n${s.feel}\n\n## Length\n\nAbout ${Math.round(s.length_sec / 60 * 10) / 10} minutes (${s.length_sec} s)\n\n## Sounds like\n\n${s.like}\n\n## It must\n\n${list(s.must)}\n\n## It must never\n\n${list(s.never)}\n`;
+  const md = `# ${s.title} · Brief v${version}\n\n${s.summary}\n\n## What it's for\n\n${s.purpose}\n\n## Genre\n\n${s.genre}\n\n## The feel\n\n${s.feel}\n\n## Length\n\nAbout ${Math.round(s.length_sec / 60 * 10) / 10} minutes (${s.length_sec} s)\n\n## Sounds like\n\n${s.like}\n\n## Energy curve\n\n${curveMd(s.energy_curve)}\n\n## It must\n\n${list(s.must)}\n\n## It must never\n\n${list(s.never)}\n`;
   submitDoc(root, id, 'idea', { file: writeDoc(root, id, 'brief.md', md), label: `Brief v${version}`, note: s.note || 'The brief.' });
   return r;
 }
@@ -303,6 +306,42 @@ async function stepGenre(ctx) {
   return r;
 }
 
+// The brief's energy curve, sorted, running from 0 to 100.
+export function curvePoints(curve) {
+  const pts = (curve || []).filter((p) => Number.isFinite(p.at) && Number.isFinite(p.energy)).map((p) => ({ ...p, at: Math.min(100, Math.max(0, Math.round(p.at))) })).sort((a, b) => a.at - b.at);
+  if (!pts.length) return [];
+  if (pts[0].at > 0) pts.unshift({ ...pts[0], at: 0 });
+  if (pts.at(-1).at < 100) pts.push({ ...pts.at(-1), at: 100 });
+  return pts;
+}
+
+// The curve's energy at a percent of the song, read along the line between points.
+export function curveAt(curve, at) {
+  const pts = curvePoints(curve);
+  if (!pts.length) return null;
+  const j = pts.findIndex((p) => p.at >= at);
+  if (j <= 0) return pts[Math.max(0, j)].energy;
+  const a = pts[j - 1], b = pts[j];
+  return b.at === a.at ? b.energy : a.energy + (b.energy - a.energy) * (at - a.at) / (b.at - a.at);
+}
+
+const curveMd = (curve) => `| Where | Energy | What happens |\n|---|---|---|\n${curvePoints(curve).map((p) => `| ${p.at}% | ${'●'.repeat(p.energy)} | ${p.why || ''} |`).join('\n')}`;
+
+// Sections whose energy is more than 1 away from the brief's curve at their middle.
+export function curveProblems(m, curve) {
+  if (!curvePoints(curve).length) return [];
+  const total = m.sections.reduce((a, s) => a + s.bars, 0);
+  const out = [];
+  let start = 0;
+  for (const s of m.sections) {
+    const mid = (start + s.bars / 2) / total * 100;
+    const want = curveAt(curve, mid);
+    if (Math.abs(s.energy - want) > 1) out.push(`${s.name} (at ${Math.round(mid)}% of the song) has energy ${s.energy}, but the brief's energy curve is at ${Math.round(want * 10) / 10} there: follow the curve`);
+    start += s.bars;
+  }
+  return out;
+}
+
 export function mapProblems(m, { genre, brief, recent = [] }) {
   const out = [];
   const ids = new Set(m.parts.map((p) => p.id));
@@ -320,6 +359,7 @@ export function mapProblems(m, { genre, brief, recent = [] }) {
   if (brief && Math.abs(sec - brief.length_sec) > brief.length_sec * 0.25) out.push(`the song is ${Math.round(sec)} s long; the brief asks for about ${brief.length_sec} s`);
   const same = recent.find((r) => r.tonic === m.tonic && r.mode === m.mode && Math.abs(r.bpm - m.bpm) <= 2);
   if (same) out.push(`same key and tempo as the recent song "${same.title}": pick another key or tempo`);
+  out.push(...curveProblems(m, brief?.energy_curve));
   return out;
 }
 
@@ -331,7 +371,7 @@ async function stepSongMap(ctx) {
   const genre = readJson(join(d, 'genre.json'));
   const brief = readJson(join(d, 'brief.json'));
   const recent = readJson(recentFile(root), []);
-  const base = [`You map the song: tempo, key, meter, the parts (instruments with General MIDI programs, 0-based, and their note ranges) and the sections in order, each with its bars, energy (1-5) and which parts play. Build energy like the genre does; parts enter and leave. Answer with the JSON asked for, nothing else.`, ...sofar(root, id, 'song-map'), ...ownerWords(root, id),
+  const base = [`You map the song: tempo, key, meter, the parts (instruments with General MIDI programs, 0-based, and their note ranges) and the sections in order, each with its bars, energy (1-5) and which parts play. The sections follow the brief's energy curve: their lengths and energies trace its rise and fall where the curve puts them (section energy within 1 of the curve), not the genre's usual build; parts enter and leave. Answer with the JSON asked for, nothing else.`, ...sofar(root, id, 'song-map'), ...ownerWords(root, id),
     recent.length ? `## Recent songs (never the same key and tempo)\n${recent.slice(-8).map((r) => `- ${r.title}: ${r.tonic} ${r.mode}, ${r.bpm} BPM`).join('\n')}` : '', ...changesAsked(root, id, view, join(d, 'songmap.md'))].filter(Boolean);
   let r = await ask(ctx, 'plan', base.join('\n\n'), MAP);
   let m = r.ok ? r.structured : null;
@@ -643,40 +683,69 @@ async function stepExport(ctx) {
   const tpb = fin.tpb;
   const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'song';
   const name = slug(map.title);
-  const all = map.parts.map((p) => ({ name: p.name, program: p.program, drums: ['drums', 'perc'].includes(p.role), notes: fin.parts[p.id] || [] }));
+  const all = map.parts.map((p) => ({ id: p.id, name: p.name, program: p.program, drums: ['drums', 'perc'].includes(p.role), notes: fin.parts[p.id] || [] }));
   let at = 0;
   const markers = map.sections.map((s) => { const m = { t: at * tpb, text: s.name }; at += s.bars; return m; });
-  writeFileSync(join(out, `${name}.mid`), writeSmf({ bpm: map.bpm, meter: map.meter, parts: all, markers }));
-  for (const p of all) writeFileSync(join(out, 'parts', `${slug(p.name)}.mid`), writeSmf({ bpm: map.bpm, meter: map.meter, parts: [p] }));
-  at = 0;
-  for (const [i, s] of map.sections.entries()) {
-    const [a, b] = [at * tpb, (at + s.bars) * tpb];
-    at += s.bars;
-    const parts = all.map((p) => ({ ...p, notes: p.notes.filter((n) => n.t >= a && n.t < b).map((n) => ({ ...n, t: n.t - a, len: Math.min(n.len, b - n.t) })) })).filter((p) => p.notes.length);
-    writeFileSync(join(out, 'sections', `${String(i + 1).padStart(2, '0')}-${slug(s.name)}.mid`), writeSmf({ bpm: map.bpm, meter: map.meter, parts }));
-  }
+  const starts = markers.map((m) => m.t);
+  const writeAll = () => {
+    writeFileSync(join(out, `${name}.mid`), writeSmf({ bpm: map.bpm, meter: map.meter, parts: all, markers }));
+    for (const p of all) writeFileSync(join(out, 'parts', `${slug(p.name)}.mid`), writeSmf({ bpm: map.bpm, meter: map.meter, parts: [p] }));
+    let s0 = 0;
+    for (const [i, s] of map.sections.entries()) {
+      const [a, b] = [s0 * tpb, (s0 + s.bars) * tpb];
+      s0 += s.bars;
+      const parts = all.map((p) => ({ ...p, cc: (p.cc || []).filter((c) => c.t === a).map((c) => ({ ...c, t: 0 })), notes: p.notes.filter((n) => n.t >= a && n.t < b).map((n) => ({ ...n, t: n.t - a, len: Math.min(n.len, b - n.t) })) })).filter((p) => p.notes.length);
+      writeFileSync(join(out, 'sections', `${String(i + 1).padStart(2, '0')}-${slug(s.name)}.mid`), writeSmf({ bpm: map.bpm, meter: map.meter, parts }));
+    }
+  };
+  writeAll();
   const problems = [];
-  // a preview to listen to: the General MIDI soundfont through FluidSynth, then MP3
+  // the balance pass and a preview to listen to: each part alone through FluidSynth with the General MIDI soundfont,
+  // measured per section, turned down where it rises over its ceiling, then mixed and made an MP3
   let preview = null;
+  let cuts = [];
+  const dense = map.parts.filter((p) => isDense(p) && !ANCHOR_ROLES.includes(p.role));
   const sf = soundfont(root);
   if (sf) {
-    const wav = join(out, `${name}-preview.wav`);
-    const r1 = await sh('fluidsynth', ['-ni', '-g', '0.6', '-F', wav, '-r', '44100', sf, join(out, `${name}.mid`)]);
-    if (r1.code === 'ENOENT') problems.push('no preview: FluidSynth isn\'t installed (the MIDI files are all here)');
-    else if (r1.code) problems.push(`the preview didn't render: ${r1.out}`);
+    const stems = join(out, '.stems');
+    mkdirSync(stems, { recursive: true });
+    const render = (p) => sh('fluidsynth', ['-ni', '-g', '0.6', '-F', join(stems, `${slug(p.name)}.wav`), '-r', '48000', sf, join(out, 'parts', `${slug(p.name)}.mid`)]);
+    const results = [];
+    for (let i = 0; i < all.length; i += 4) results.push(...await Promise.all(all.slice(i, i + 4).map(render)));
+    const bad = results.find((r) => r.code);
+    if (bad?.code === 'ENOENT') problems.push('no preview: FluidSynth isn\'t installed (the MIDI files are all here)');
+    else if (bad) problems.push(`the preview didn't render: ${bad.out}`);
     else {
+      const bounds = sectionBounds(map);
+      const power = {};
+      for (const p of map.parts) power[p.id] = sectionPower(await decode(join(stems, `${slug(p.name)}.wav`)), bounds, 2 * barSeconds(map));
+      const { gains, rows } = balance(map, power);
+      cuts = rows;
+      for (const p of all) {
+        if (!gains[p.id].some((g) => g < 0)) continue;
+        p.cc = gains[p.id].map((g, i) => ({ t: starts[i], n: 11, v: ccFor(g) }));
+      }
+      if (cuts.length) writeAll();
       const songSec = map.sections.reduce((n, x) => n + x.bars, 0) * (map.meter === '3/4' ? 3 : 4) * 60 / map.bpm;
-      // FluidSynth renders until every voice dies (a long tail of near-silence): cut at the song's end plus 4 s
-      const r2 = await sh('ffmpeg', ['-y', '-loglevel', 'error', '-i', wav, '-t', (songSec + 4).toFixed(2), '-af', 'loudnorm=I=-14:TP=-1.5:LRA=11', '-ar', '44100', '-b:a', '256k', join(out, `${name}-preview.mp3`)]);
-      if (r2.code) problems.push(`the preview MP3 failed: ${r2.out}`); else { preview = `midi/out/${name}-preview.mp3`; rmSync(wav, { force: true }); }
+      // each stem with its cuts (section by section) and, for dense sounds, the lows taken out; summed as they are
+      const chains = map.parts.map((p, k) => {
+        const g = gains[p.id];
+        const vol = g.some((x) => x < 0) ? `volume='${bounds.map(([a, b], i) => `gte(t,${a.toFixed(3)})*lt(t,${b.toFixed(3)})*${(10 ** (g[i] / 20)).toFixed(4)}`).join('+')}+gte(t,${bounds.at(-1)[1].toFixed(3)})*${(10 ** (g.at(-1) / 20)).toFixed(4)}':eval=frame` : 'anull';
+        return `[${k}:a]${vol}${dense.includes(p) ? `,highpass=f=${DENSE_HIGHPASS}` : ''}[s${k}]`;
+      });
+      const graph = `${chains.join(';')};${map.parts.map((_, k) => `[s${k}]`).join('')}amix=inputs=${map.parts.length}:normalize=0,loudnorm=I=-14:TP=-1.5:LRA=11[m]`;
+      const args = ['-y', '-loglevel', 'error', ...map.parts.flatMap((p) => ['-i', join(stems, `${slug(p.name)}.wav`)]), '-filter_complex', graph, '-map', '[m]', '-t', (songSec + 4).toFixed(2), '-ar', '44100', '-b:a', '256k', join(out, `${name}-preview.mp3`)];
+      const r2 = await sh('ffmpeg', args);
+      if (r2.code) problems.push(`the preview MP3 failed: ${r2.out}`); else preview = `midi/out/${name}-preview.mp3`;
     }
+    rmSync(stems, { recursive: true, force: true });
   } else problems.push('no preview: no General MIDI soundfont found (the MIDI files are all here)');
   const recent = readJson(recentFile(root), []);
   recent.push({ title: map.title, tonic: map.tonic, mode: map.mode, bpm: map.bpm, at: new Date().toISOString() });
   writeFileSync(recentFile(root), JSON.stringify(recent.slice(-30), null, 1));
-  const cue = `# ${map.title} · Into your DAW\n\n${map.bpm} BPM · ${map.tonic} ${map.mode} · ${map.meter}\n\n## FL Studio\n\n1. Set the tempo to ${map.bpm}.\n2. File › Import › MIDI file… › ${name}.mid. Tick "Start new project" off, "Import notes" on: each part becomes a channel; drums land on one channel.\n3. Load an instrument per channel (the names say which: ${map.parts.map((p) => p.name).join(', ')}).\n4. Strata on the Master.\n\n## REAPER\n\n1. Drag ${name}.mid into the arrange view; choose "one track per MIDI channel" and "import tempo map".\n2. Put an instrument on each track.\n\nSection markers are in the file (${map.sections.map((s) => s.name).join(' · ')}).\n`;
+  const cue = `# ${map.title} · Into your DAW\n\n${map.bpm} BPM · ${map.tonic} ${map.mode} · ${map.meter}\n\n## FL Studio\n\n1. Set the tempo to ${map.bpm}.\n2. File › Import › MIDI file… › ${name}.mid. Tick "Start new project" off, "Import notes" on: each part becomes a channel; drums land on one channel.\n3. Load an instrument per channel (the names say which: ${map.parts.map((p) => p.name).join(', ')}).\n4. Strata on the Master.\n\n## REAPER\n\n1. Drag ${name}.mid into the arrange view; choose "one track per MIDI channel" and "import tempo map".\n2. Put an instrument on each track.\n\nSection markers are in the file (${map.sections.map((s) => s.name).join(' · ')}).\n${cuts.length ? `\n## Balance\n\nParts that rose over their ceiling are turned down with expression (CC11) at the start of those sections; it's in the MIDI, so leave CC11 on.\n` : ''}${dense.length ? `\n## Lows out of dense sounds\n\nPut a high-pass at ${DENSE_HIGHPASS} Hz on ${dense.map((p) => p.name).join(', ')} so they stay out of the bass.\n` : ''}`;
   writeFileSync(join(out, 'CUE-SHEET.md'), cue);
-  const md = `# ${map.title} · Export v${version}\n\n- **${name}.mid**: the whole song, ${all.length} parts, section markers\n- **parts/**: one file per part (${all.length})\n- **sections/**: one file per section (${map.sections.length})\n- **CUE-SHEET.md**: how to bring it into FL Studio or REAPER\n${preview ? `- **${name}-preview.mp3**: a quick General MIDI preview to listen to (not the final sound)\n` : ''}\nFiles: midi/out/\n\n${checksMd(['the MIDI files are written', 'one per part and per section'], problems)}`;
+  const md = `# ${map.title} · Export v${version}\n\n- **${name}.mid**: the whole song, ${all.length} parts, section markers\n- **parts/**: one file per part (${all.length})\n- **sections/**: one file per section (${map.sections.length})\n- **CUE-SHEET.md**: how to bring it into FL Studio or REAPER\n${preview ? `- **${name}-preview.mp3**: a quick General MIDI preview to listen to (not the final sound)\n` : ''}\n## Balance\n\n${cuts.length ? `Turned down where a part rose over its ceiling against the drums and bass (whose level never goes down; nothing is turned up):\n\n| Section | Part | Cut |\n|---|---|---|\n${cuts.map((c) => `| ${c.section} | ${map.parts.find((p) => p.id === c.part)?.name || c.part} | ${c.cut} dB |`).join('\n')}` : 'No part rose over its ceiling: nothing was turned down.'}${dense.length ? `\n\nLows out of dense sounds (high-pass ${DENSE_HIGHPASS} Hz): ${dense.map((p) => p.name).join(', ')}.` : ''}\n\nFiles: midi/out/\n\n${checksMd(['the MIDI files are written', 'one per part and per section'], problems)}`;
   const items = [{ path: writeDoc(root, id, 'export.md', md), label: `Export v${version}` }];
   if (preview) items.push({ path: preview, label: 'Preview (General MIDI)' });
   submit(root, id, 'export', { note: 'The MIDI files and a preview. Approve to finish the song.', questions: [], items, error_checks: [], pin_changes: [] });

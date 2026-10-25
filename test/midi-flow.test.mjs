@@ -10,7 +10,7 @@ process.env.MFX_PRODUCT = 'midi';
 process.env.MFX_STRUDEL ||= join(process.env.HOME, 'Mortiflix', 'tools', 'strudel');
 const { createProject, loadProject, projectPaths, projectPipeline } = await import('../src/projects.mjs');
 const { stepView, respond } = await import('../src/gates.mjs');
-const { quickMidi, quickMidiStep, applyFeel, chordProblems, mapProblems, closeMidi } = await import('../src/quickmidi.mjs');
+const { quickMidi, quickMidiStep, applyFeel, chordProblems, mapProblems, curveAt, closeMidi } = await import('../src/quickmidi.mjs');
 const { reopenStage } = await import('../src/svc/stages.mjs');
 test.after(() => closeMidi());
 
@@ -100,6 +100,33 @@ test('song map and chord checks name the problems', () => {
   assert.ok(p.some((x) => /only 4 parts/.test(x)) && p.some((x) => /no lead/.test(x)) && p.some((x) => /isn't a part/.test(x)) && p.some((x) => /even number/.test(x)) && p.some((x) => /outside the genre/.test(x)) && p.some((x) => /never plays/.test(x)));
   const c = chordProblems({ kinds: [{ kind: 'verse', chords: ['Am', 'F#', 'Xyz'], bars_per_chord: 1 }] }, { ...MAP, sections: [{ name: 'V', kind: 'verse', bars: 8, parts: [] }] });
   assert.ok(c.some((x) => /F# is outside/.test(x)) && c.some((x) => /Xyz/.test(x)) && c.some((x) => /doesn't fit/.test(x)));
+});
+
+test('song map follows the brief\'s own energy curve', () => {
+  const curve = [{ at: 10, energy: 4, why: 'cold open at full force' }, { at: 50, energy: 1, why: 'collapse' }, { at: 90, energy: 5, why: 'the climb pays off' }];
+  assert.equal(curveAt(curve, 0), 4);
+  assert.equal(curveAt(curve, 30), 2.5);
+  const sections = [{ name: 'Open', kind: 'intro', bars: 20, energy: 4, parts: ['drums'] }, { name: 'Fall', kind: 'break', bars: 40, energy: 5, parts: ['drums'] }, { name: 'Climb', kind: 'drop', bars: 40, energy: 4, parts: ['drums'] }];
+  const p = mapProblems({ ...MAP, sections }, { brief: { length_sec: 0, energy_curve: curve } });
+  assert.ok(p.some((x) => /^Fall .*energy 5.*follow the curve/.test(x)));
+  assert.ok(!p.some((x) => /^(Open|Climb) .*follow the curve/.test(x)));
+});
+
+test('balance: only turns down, never the drums or bass, looser at high energy', async () => {
+  const { balance, ccFor } = await import('../src/midi/balance.mjs');
+  const map = { parts: [{ id: 'drums', role: 'drums' }, { id: 'bass', role: 'bass' }, { id: 'gtr', role: 'counter', program: 30 }, { id: 'pad', role: 'pad' }],
+    sections: [{ name: 'Calm', energy: 2, parts: ['drums', 'bass', 'gtr', 'pad'] }, { name: 'Melt', energy: 5, parts: ['drums', 'bass', 'gtr', 'pad'] }] };
+  const db = (x) => 10 ** ((x + 0.691) / 10);
+  // anchor (drums + bass) ≈ -20 LUFS in both; the guitar at -24 (4 under), the pad at -30 (10 under)
+  const power = { drums: [db(-23), db(-23)], bass: [db(-23), db(-23)], gtr: [db(-24), db(-24)], pad: [db(-30), db(-30)] };
+  const { gains } = balance(map, power);
+  assert.deepEqual(gains.drums, [0, 0]);
+  assert.deepEqual(gains.bass, [0, 0]);
+  assert.deepEqual(gains.pad, [0, 0]);
+  assert.ok(gains.gtr[0] < -3.5 && gains.gtr[0] > -4.5, `calm cut ${gains.gtr[0]}`);
+  assert.ok(gains.gtr[1] < 0 && gains.gtr[1] > gains.gtr[0], 'the meltdown keeps more of the guitar');
+  assert.equal(ccFor(0), 127);
+  assert.equal(ccFor(-6), Math.round(127 * 10 ** (-6 / 40)));
 });
 
 test('feel: fills into a lift, swing on the off-beats, no overlaps', () => {

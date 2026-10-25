@@ -16,7 +16,8 @@ const chunk = (type, data) => {
 };
 const meta = (type, s) => { const b = [...Buffer.from(String(s).slice(0, 120), 'utf8')]; return [0xff, type, ...vlq(b.length), ...b]; };
 
-// parts: [{ name, program, drums, notes }]; markers: [{ t, text }] in ticks.
+// parts: [{ name, program, drums, notes, cc? }]; cc: [{ t, n, v }] controller changes (n 11 = expression); markers:
+// [{ t, text }] in ticks.
 export function writeSmf({ bpm, meter = '4/4', parts, markers = [] }) {
   const tempo = Math.round(60_000_000 / bpm);
   const [num, den] = String(meter).split('/').map(Number);
@@ -40,6 +41,7 @@ export function writeSmf({ bpm, meter = '4/4', parts, markers = [] }) {
       const vel = Math.max(1, Math.min(127, Math.round(n.vel * 127)));
       events.push({ tick: on, data: [0x90 | ch, n.key, vel], order: 1 }, { tick: off, data: [0x80 | ch, n.key, 0], order: 0 });
     }
+    for (const c of p.cc || []) events.push({ tick: Math.max(0, Math.round(c.t)), data: [0xb0 | ch, c.n & 0x7f, Math.max(0, Math.min(127, c.v | 0))], order: -1 });
     events.sort((a, b) => a.tick - b.tick || a.order - b.order);
     const bytes = [0, ...meta(0x03, p.name)];
     if (!p.drums) bytes.push(0, 0xc0 | ch, Math.max(0, Math.min(127, p.program | 0)));
