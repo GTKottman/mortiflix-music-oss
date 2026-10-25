@@ -16,7 +16,10 @@ import { makeVersion } from './song-store.mjs';
 
 export async function openBridge({ root, projectId, sessionId, workdir, renders, sessionEnv }) {
   const token = randomBytes(24).toString('hex');
-  const socket = join(tmpdir(), `mfx-${randomBytes(6).toString('hex')}.sock`);
+  // Windows has no socket files in a folder: there the same private channel is a named pipe.
+  const name = `mfx-${randomBytes(6).toString('hex')}`;
+  const pipe = process.platform === 'win32';
+  const socket = pipe ? `\\\\.\\pipe\\${name}` : join(tmpdir(), `${name}.sock`);
   const work = realpathSync(workdir);
 
   const commands = {
@@ -85,13 +88,13 @@ export async function openBridge({ root, projectId, sessionId, workdir, renders,
       }
     });
   });
-  if (existsSync(socket)) rmSync(socket);
+  if (!pipe && existsSync(socket)) rmSync(socket);
   await new Promise((ok, fail) => server.listen(socket, ok).on('error', fail));
   return {
     socket,
     token,
     env: { MFX_SOCKET: socket, MFX_TOKEN: token, MFX_PROJECT: projectId },
-    close: () => new Promise((ok) => { server.close(() => ok()); server.closeAllConnections?.(); rmSync(socket, { force: true }); }),
+    close: () => new Promise((ok) => { server.close(() => ok()); server.closeAllConnections?.(); if (!pipe) rmSync(socket, { force: true }); }),
   };
 }
 

@@ -3,7 +3,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { createWriteStream, existsSync, realpathSync, mkdirSync, readFileSync } from 'node:fs';
 import { createInterface } from 'node:readline';
-import { dirname, join } from 'node:path';
+import { delimiter, dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 import { REPO } from '../studio.mjs';
 import { craftDir, craftMcpFile } from '../craft.mjs';
@@ -30,7 +30,7 @@ export async function run({ root, workdir, prompt, env, transcript, onActivity, 
   const sessionEnv = {
     ...process.env,
     ...env,
-    PATH: `${join(REPO, 'bin')}:${process.env.PATH}`,
+    PATH: `${join(REPO, 'bin')}${delimiter}${process.env.PATH}`,
     // A one-shot session ends when its turn ends: anything backgrounded would be killed mid-job.
     CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: '1',
   };
