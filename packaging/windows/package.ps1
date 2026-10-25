@@ -102,14 +102,18 @@ New-Item -ItemType Directory -Force -Path $Stage | Out-Null
 # (crates/mortiflix-ui/src/lib.rs `product()`), and nothing clashes with an installed Mortiflix Studio.
 Copy-Item (Join-Path $Bin 'mortiflix-studio.exe') (Join-Path $Stage 'mortiflix-music.exe')
 Copy-Item (Join-Path $Bin 'mortiflix-studio-cli.exe') (Join-Path $Stage 'mortiflix-music-cli.exe')
+Copy-Item (Join-Path $Root 'LICENSE-MIT'), (Join-Path $Root 'LICENSE-APACHE') $Stage
 
 & (Join-Path $PSScriptRoot 'sign.ps1') (Join-Path $Stage 'mortiflix-music.exe') (Join-Path $Stage 'mortiflix-music-cli.exe')
 
-# The licence page of the wizard: the MIT licence, and where the bundle's licences are.
+# The licence page of the wizard: the MIT terms under the Mortiflix name, and where the full notices are.
+# The full LICENSE-MIT (with the upstream copyright line the MIT licence requires) is installed beside the exe.
 $LicenseRtf = Join-Path $TargetDir "windows-package\license-$Arch.rtf"
-$mit = (Get-Content -Raw (Join-Path $Root 'LICENSE-MIT')) -replace '\\', '\\' -replace '\{', '\{' -replace '\}', '\}' -replace "`r?`n", "\par`n"
-Set-Content -Encoding ascii -Path $LicenseRtf -Value ("{\rtf1\ansi\deff0{\fonttbl{\f0 Segoe UI;}}\f0\fs18 " + $mit +
-  "\par\par The mortiflix\\ folder holds separate programs (Node, Strudel, FluidSynth, ffmpeg, the GeneralUser GS soundfont) with their own licences: see mortiflix\\LICENSES.}")
+$mit = (Get-Content -Raw (Join-Path $Root 'LICENSE-MIT')) -replace '(?s)^.*?Copyright[^\r\n]*\r?\n\r?\n', ''
+$mit = $mit -replace '\\', '\\' -replace '\{', '\{' -replace '\}', '\}' -replace "`r?`n", "\par`n"
+Set-Content -Encoding ascii -Path $LicenseRtf -Value ("{\rtf1\ansi\deff0{\fonttbl{\f0 Segoe UI;}}\f0\fs18 Mortiflix Music\par\par Copyright (c) 2026 Mortiflix\par\par " + $mit +
+  "\par\par Mortiflix Music builds on other open-source code: the full notices are in LICENSE-MIT and LICENSE-APACHE in the install folder." +
+  " The mortiflix\\ folder holds separate programs (Node, Strudel, FluidSynth, ffmpeg, the GeneralUser GS soundfont) with their own licences: see mortiflix\\LICENSES.}")
 
 # ---- Mortiflix bundle ----------------------------------------------------------------------------
 # Found by the app as mortiflix\ beside mortiflix-music.exe (crates/mortiflix-ui/src/service.rs).

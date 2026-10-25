@@ -70,6 +70,14 @@
       <Component Id="MusicCli">
         <File Id="MusicCliExe" Source="$(var.BinDir)\mortiflix-music-cli.exe" KeyPath="yes" />
       </Component>
+
+      <Component Id="MusicLicenseMit">
+        <File Id="LicenseMit" Source="$(var.BinDir)\LICENSE-MIT" KeyPath="yes" />
+      </Component>
+
+      <Component Id="MusicLicenseApache">
+        <File Id="LicenseApache" Source="$(var.BinDir)\LICENSE-APACHE" KeyPath="yes" />
+      </Component>
     </ComponentGroup>
   </Fragment>
 <?ifdef MfxDir?>
