@@ -42,8 +42,8 @@ jobs:
     # The oldest supported glibc (2.35) so the binaries run on newer distros.
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           repository: ${{ inputs.service-repo }}
           ref: ${{ inputs.service-ref }}
@@ -59,7 +59,7 @@ jobs:
         run: |
           curl -fsSL -o nfpm.deb https://github.com/goreleaser/nfpm/releases/download/v2.48.0/nfpm_2.48.0_amd64.deb
           sudo dpkg -i nfpm.deb
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
       - name: Sound engine
@@ -75,7 +75,7 @@ jobs:
         run: |
           tar -tzf dist/release/mortiflix-music-*-linux-x86_64.tar.gz | grep -q 'lib/mortiflix-music/strudel/node_modules/@strudel/core/package.json'
           tar -tzf dist/release/mortiflix-music-*-linux-x86_64.tar.gz | grep -q 'lib/mortiflix-music/soundfonts/GeneralUser-GS.sf2'
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: mortiflix-music-linux
           path: dist/release/*
@@ -92,13 +92,13 @@ jobs:
       AZURE_SIGNING_ACCOUNT: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
       AZURE_CERT_PROFILE: ${{ secrets.AZURE_CERT_PROFILE }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           repository: ${{ inputs.service-repo }}
           ref: ${{ inputs.service-ref }}
           path: mortiflix-service
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
       - name: WiX
@@ -140,7 +140,7 @@ jobs:
             if (-not (Test-Path (Join-Path $dir $f))) { Write-Output "missing $f"; exit 1 }
           }
           & (Join-Path $dir 'mortiflix\bin\fluidsynth.exe') --version | Select-Object -First 1
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: mortiflix-music-windows
           path: |
